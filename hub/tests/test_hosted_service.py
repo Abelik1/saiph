@@ -302,6 +302,24 @@ def test_beta_bruteforce_accounting_commits_failures_and_expires(service):
     assert error.value.status_code == 429
 
 
+def test_other_accounts_failures_cannot_lock_out_a_valid_code(service):
+    registry = service['registry']
+    with registry.connect() as db:
+        db.executemany('INSERT INTO beta_attempts VALUES(?,?)',
+                       [(f'synthetic-{n}', int(time.time())) for n in range(1000)])
+    with pytest.raises(HTTPException) as error:
+        registry.redeem(identity(service, 'auth0|guesser'), 'SAIPH-' + 'A' * 32)
+    assert error.value.status_code == 429
+    code = registry.issue_code(int(time.time()) + 1800)
+    assert registry.redeem(identity(service, 'auth0|friend'), code)['entitled']
+    for _ in range(4):
+        with pytest.raises(HTTPException):
+            registry.redeem(identity(service, 'auth0|guesser'), 'SAIPH-' + 'A' * 32)
+    with pytest.raises(HTTPException) as error:
+        registry.redeem(identity(service, 'auth0|guesser'), registry.issue_code(int(time.time()) + 1800))
+    assert error.value.status_code == 429
+
+
 def test_web_redemption_and_native_device_authorization_stay_separate(service):
     auth = service['auth']
     web_tokens = AccessTokens(ServiceAuth0Config(auth.issuer, auth.audience, ('web-client',)),

@@ -132,22 +132,25 @@ class AccountRegistry:
         with self.connect() as db:
             db.execute('BEGIN IMMEDIATE')
             db.execute('DELETE FROM beta_attempts WHERE attempted_at<=?', (now - 900,))
-            if (db.execute('SELECT count(*) FROM beta_attempts WHERE identity=?', (key,)).fetchone()[0] >= 5
-                    or db.execute('SELECT count(*) FROM beta_attempts').fetchone()[0] >= 1000):
+            if db.execute('SELECT count(*) FROM beta_attempts WHERE identity=?', (key,)).fetchone()[0] >= 5:
                 reject(429)
+            busy = db.execute('SELECT count(*) FROM beta_attempts').fetchone()[0] >= 1000
             db.execute('INSERT INTO beta_attempts VALUES(?,?)', (key, now))
+        # Codes carry 192 random bits, so the global limit only throttles failures:
+        # other accounts' failed attempts must not lock out a holder of a valid code.
+        failed = 429 if busy else 403
         if not isinstance(code, str) or not re.fullmatch(r'SAIPH-[A-Za-z0-9_-]{32}', code):
-            reject(403)
+            reject(failed)
         digest = hashlib.sha256(code.encode()).hexdigest()
         with self.connect() as db:
             db.execute('BEGIN IMMEDIATE')
             row = db.execute('SELECT * FROM beta_codes WHERE digest=? AND revoked=0 AND expires_at>?', (digest, now)).fetchone()
             if row is None:
-                reject(403)
+                reject(failed)
             # Account creation, single-use consumption and entitlement are one transaction.
             identifier = self._account(db, identity['subject'])
             if row['redeemed_by'] is not None and row['redeemed_by'] != identifier:
-                reject(403)
+                reject(failed)
             db.execute('UPDATE beta_codes SET redeemed_by=? WHERE digest=?', (identifier, digest))
             db.execute("INSERT OR IGNORE INTO access_grants VALUES(?,'beta',?,?,0)", (identifier, digest, row['expires_at']))
             return {'entitled': True, 'until': row['expires_at']}
