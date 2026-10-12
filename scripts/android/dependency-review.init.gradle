@@ -52,20 +52,21 @@ gradle.projectsEvaluated {
             println("Security version comparator: ${cases.size()} regression cases passed.")
         }
     }
-    rootProject.tasks.register('verifyDependencySecurity') {
-        dependsOn(comparatorCheck)
-        group = 'verification'
-        description = 'Check resolved Maven security floors in app and build-tool configurations.'
-        doLast {
-            def floors = gradle.ext.saiphSecurityFloors
-            def rows = new TreeSet<String>()
-            def failures = new TreeSet<String>()
-            rootProject.allprojects.each { project ->
+    // Gradle 9 only lets a project's own tasks resolve its configurations, so
+    // each project reports its graph and the root task combines the reports.
+    def collectors = rootProject.allprojects.collect { project ->
+        project.tasks.register('collectDependencySecurity') {
+            def part = project.layout.buildDirectory.file('reports/dependency-security-part.json')
+            outputs.upToDateWhen { false }
+            doLast {
+                def floors = gradle.ext.saiphSecurityFloors
+                def rows = new TreeSet<String>()
+                def failures = new TreeSet<String>()
                 [[project.configurations, ''], [project.buildscript.configurations, 'buildscript:']].each { pair ->
                     pair[0].findAll { it.canBeResolved }.each { configuration ->
                         def graph = configuration.incoming.resolutionResult
                         graph.allDependencies.findAll { it instanceof UnresolvedDependencyResult }.each {
-                            failures.add("${project.path}|${pair[1]}${configuration.name}|unresolved:${it.attempted.displayName}")
+                            failures.add("${project.path}|${pair[1]}${configuration.name}|unresolved:${it.attempted.displayName}".toString())
                         }
                         graph.allComponents.each { component ->
                             def id = component.id
@@ -81,6 +82,24 @@ gradle.projectsEvaluated {
                         }
                     }
                 }
+                def file = part.get().asFile
+                file.parentFile.mkdirs()
+                file.text = JsonOutput.toJson([dependencies: rows, failures: failures])
+            }
+        }
+    }
+    rootProject.tasks.register('verifyDependencySecurity') {
+        dependsOn(comparatorCheck, collectors)
+        group = 'verification'
+        description = 'Check resolved Maven security floors in app and build-tool configurations.'
+        doLast {
+            def rows = new TreeSet<String>()
+            def failures = new TreeSet<String>()
+            rootProject.allprojects.each { project ->
+                def part = new groovy.json.JsonSlurper().parse(
+                    project.layout.buildDirectory.file('reports/dependency-security-part.json').get().asFile)
+                rows.addAll(part.dependencies)
+                failures.addAll(part.failures)
             }
             def report = rootProject.layout.buildDirectory.file('reports/dependency-security.json').get().asFile
             report.parentFile.mkdirs()
