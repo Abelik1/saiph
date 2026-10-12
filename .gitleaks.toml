@@ -1,0 +1,51 @@
+title = "Saiph public source: upstream rules plus exact reviewed synthetic exceptions"
+
+[extend]
+useDefault = true
+
+# Exact synthetic Seafile token; all other tokens in this file remain scanned.
+[[allowlists]]
+description = "Synthetic repeated hexadecimal test token"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''(^|[\\/])tests[\\/]test_cloud_client\.py$''']
+regexTarget = "secret"
+regexes = ['''^0123456789abcdef$''']
+
+# This exact URL is public upstream Chromium documentation in both versioned
+# attribution reports. Do not suppress resource keys in other files or URLs.
+[[allowlists]]
+description = "Public Chromium documentation URL retained verbatim upstream"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = [
+  '''(^|[\\/])scripts[\\/]packaging[\\/]notices[\\/]qt-6\.8\.3[\\/]qtwebengine-everywhere-src-6\.8\.3-ATTRIBUTIONS\.txt$''',
+  '''(^|[\\/])scripts[\\/]packaging[\\/]notices[\\/]qt-6\.11\.2[\\/]qtwebengine-everywhere-src-6\.11\.2-ATTRIBUTIONS\.txt$''',
+]
+regexTarget = "secret"
+regexes = ['''^0-yLkX6DGPwNFn1ARMpM-zLQ$''']
+
+# Generated source inventories contain content hashes beside paths whose names
+# include API/token-provider keywords. Exempt only hash-shaped inventory lines
+# for the three rules that misidentify them, not other content in this file.
+[[allowlists]]
+description = "SHA-256 content inventory entries"
+targetRules = ["generic-api-key", "sentry-access-token", "discord-api-token"]
+condition = "AND"
+paths = ['''(^|[\\/])PUBLIC_EXPORT\.json$''']
+regexTarget = "line"
+regexes = ['''^\s*"[^"\r\n]+": "[a-f0-9]{64}",?\s*$''']
+
+# Exact fake Stripe values used by synthetic SDK/HTTP tests. Other values in
+# these same files remain scanned; these fixtures cannot authenticate to Stripe.
+[[allowlists]]
+description = "Exact synthetic billing credentials"
+targetRules = ["generic-api-key", "stripe-access-token"]
+condition = "AND"
+paths = [
+  '''(^|[\\/])account-web[\\/]tests[\\/]billing-routes\.test\.mjs$''',
+  '''(^|[\\/])account-web[\\/]tests[\\/]billing-lifecycle\.test\.mjs$''',
+  '''(^|[\\/])account-web[\\/]tests[\\/]http-smoke\.mjs$''',
+]
+regexTarget = "secret"
+regexes = ['''^rk_test_synthetic123$''', '''^whsec_synthetic123$''']

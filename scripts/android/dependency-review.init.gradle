@@ -1,0 +1,93 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Run against Android and its included build; see docs/DEPENDENCY_REVIEW.md.
+import groovy.json.JsonOutput
+import org.gradle.api.artifacts.component.ModuleComponentIdentifier
+import org.gradle.api.artifacts.result.UnresolvedDependencyResult
+
+// Compare numeric bases first, then qualifiers. A candidate at the patched
+// stable base must itself be stable; RC/Beta/SNAPSHOT/unknown qualifiers fail.
+// Netty's .Final spelling denotes a stable release.
+def compareVersion = { actual, minimum ->
+    def parseVersion = { value ->
+        def match = value =~ /^(\d+(?:\.\d+)*)(?:[.-]([A-Za-z][A-Za-z0-9.-]*))?$/
+        if (!match.matches()) throw new GradleException("Unsupported Maven version: $value")
+        [numbers: match[0][1].tokenize('.').collect { it.toInteger() },
+         stable: match[0][2] == null || match[0][2].equalsIgnoreCase('Final')]
+    }
+    def a = parseVersion(actual)
+    def b = parseVersion(minimum)
+    for (int i = 0; i < Math.max(a.numbers.size(), b.numbers.size()); i++) {
+        int difference = (i < a.numbers.size() ? a.numbers[i] : 0) <=>
+                         (i < b.numbers.size() ? b.numbers[i] : 0)
+        if (difference != 0) return difference
+    }
+    return a.stable <=> b.stable
+}
+
+gradle.projectsEvaluated {
+    def comparatorCheck = rootProject.tasks.register('checkDependencySecurityComparator') {
+        group = 'verification'
+        doLast {
+            def cases = [
+                ['1.85', '1.85', true],
+                ['1.85.0', '1.85', true],
+                ['1.86', '1.85', true],
+                ['1.84.99', '1.85', false],
+                ['1.85-RC1', '1.85', false],
+                ['1.85-Beta1', '1.85', false],
+                ['1.85-alpha', '1.85', false],
+                ['1.85-SNAPSHOT', '1.85', false],
+                ['1.85-unknown', '1.85', false],
+                ['4.1.137.Final', '4.1.137.Final', true],
+                ['4.1.138.Final', '4.1.137.Final', true],
+                ['4.1.136.Final', '4.1.137.Final', false],
+                ['4.1.137.CR1', '4.1.137.Final', false],
+                ['4.1.137.Final-SNAPSHOT', '4.1.137.Final', false],
+            ]
+            cases.each { test ->
+                if ((compareVersion(test[0], test[1]) >= 0) != test[2]) {
+                    throw new GradleException("Security version regression: $test")
+                }
+            }
+            println("Security version comparator: ${cases.size()} regression cases passed.")
+        }
+    }
+    rootProject.tasks.register('verifyDependencySecurity') {
+        dependsOn(comparatorCheck)
+        group = 'verification'
+        description = 'Check resolved Maven security floors in app and build-tool configurations.'
+        doLast {
+            def floors = gradle.ext.saiphSecurityFloors
+            def rows = new TreeSet<String>()
+            def failures = new TreeSet<String>()
+            rootProject.allprojects.each { project ->
+                [[project.configurations, ''], [project.buildscript.configurations, 'buildscript:']].each { pair ->
+                    pair[0].findAll { it.canBeResolved }.each { configuration ->
+                        def graph = configuration.incoming.resolutionResult
+                        graph.allDependencies.findAll { it instanceof UnresolvedDependencyResult }.each {
+                            failures.add("${project.path}|${pair[1]}${configuration.name}|unresolved:${it.attempted.displayName}")
+                        }
+                        graph.allComponents.each { component ->
+                            def id = component.id
+                            if (id instanceof ModuleComponentIdentifier) {
+                                def module = "${id.group}:${id.module}".toString()
+                                if (floors.containsKey(module) || module == 'org.jetbrains.kotlin:kotlin-gradle-plugin') {
+                                    rows.add("${project.path}|${pair[1]}${configuration.name}|$module|${id.version}".toString())
+                                    if (floors.containsKey(module) && compareVersion(id.version, floors[module]) < 0) {
+                                        failures.add("$module:${id.version} is below ${floors[module]}".toString())
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            def report = rootProject.layout.buildDirectory.file('reports/dependency-security.json').get().asFile
+            report.parentFile.mkdirs()
+            report.text = JsonOutput.prettyPrint(JsonOutput.toJson([schema: 1, dependencies: rows, failures: failures])) + '\n'
+            println("Dependency security: ${rows.size()} resolved module/configuration entries; ${failures.size()} failures.")
+            println('Kotlin KAPT advisory remains documented; its version is reported but not waived as patched.')
+            if (!failures.empty) throw new GradleException(failures.join('\n'))
+        }
+    }
+}

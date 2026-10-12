@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-sdk tools:overrideLibrary="sefirah.worker" />
+
+    <application>
+        <activity
+            android:name="sefirah.communication.bluetooth.BluetoothDiscoverableActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <activity
+            android:name="sefirah.playsound.PlaySoundActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop"
+            android:theme="@android:style/Theme.Material.NoActionBar" />
+
+        <receiver
+            android:name="sefirah.playsound.PlaySoundReceiver"
+            android:exported="false" />
+
+        <receiver
+            android:name="sefirah.communication.sms.SmsSentReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="sefirah.communication.sms.SMS_SENT" />
+            </intent-filter>
+        </receiver>
+
+        <provider
+            android:name="sefirah.worker.WorkerBridgeProvider"
+            android:authorities="${applicationId}.worker.bridge"
+            android:exported="true"
+            android:grantUriPermissions="false"
+            tools:ignore="ExportedContentProvider" />
+
+        <!-- Used by SmsManager.sendMultimediaMessage to read the composed PDU from cache. -->
+        <provider
+            android:name="com.klinker.android.send_message.MmsFileProvider"
+            android:authorities="${applicationId}.MmsFileProvider"
+            android:enabled="true"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+    </application>
+</manifest>

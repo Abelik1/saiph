@@ -1,0 +1,58 @@
+name: Android
+on:
+  workflow_dispatch:
+  pull_request:
+    paths: ['android/**', 'scripts/android/**', '.github/workflows/android.yml']
+  push:
+    branches: [main]
+    paths: ['android/**', 'scripts/android/**', '.github/workflows/android.yml']
+permissions:
+  contents: read
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '22'
+      - name: Use isolated build directories
+        run: |
+          "GRADLE_USER_HOME=$env:RUNNER_TEMP/saiph-gradle" >> $env:GITHUB_ENV
+      - name: Android platform, build tools and NDK
+        run: '& "$env:ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager.bat" "platforms;android-37.0" "build-tools;36.0.0" "ndk;28.2.13676358"'
+      - name: Generate native restic inputs from pinned source
+        run: python scripts/build-restic.py --android-root . --sdk "$env:ANDROID_HOME"
+      - name: Verify resolved Maven security floors
+        run: ./gradlew.bat verifyDependencySecurity :build-logic:verifyDependencySecurity --init-script ../scripts/android/dependency-review.init.gradle -PorionFirebase=false -PorionIndependent=true -PorionPush=false -PorionVersionCode=1 --no-configuration-cache --stacktrace
+      - name: Compile, test and lint independent Android build
+        run: ./gradlew.bat :app:assembleDebug :app:assembleBeta :app:testDebugUnitTest :core:network:testDebugUnitTest :restic-android:testDebugUnitTest :app:lintDebug :app:lintBeta -PorionPush=false -PorionFirebase=false -PorionIndependent=true -PorionVersionCode=1 --no-configuration-cache --stacktrace
+  dependency-graph:
+    # Publishes Android dependencies to GitHub's dependency graph so vulnerability
+    # alerts cover Gradle. Never runs for pull requests.
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '22'
+      - uses: gradle/actions/dependency-submission@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          build-root-directory: android

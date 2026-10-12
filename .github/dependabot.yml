@@ -1,0 +1,29 @@
+version: 2
+# Prepared for later version maintenance; enable grouped PRs after initial audit.
+# Dependency vulnerability alerts and CI audits remain enabled now.
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    open-pull-requests-limit: 0
+    schedule:
+      interval: weekly
+  - package-ecosystem: pip
+    directory: /
+    open-pull-requests-limit: 0
+    schedule:
+      interval: weekly
+  - package-ecosystem: pip
+    directory: /hub
+    open-pull-requests-limit: 0
+    schedule:
+      interval: weekly
+  - package-ecosystem: npm
+    directory: /frontend
+    open-pull-requests-limit: 0
+    schedule:
+      interval: weekly
+  - package-ecosystem: gradle
+    directory: /android
+    open-pull-requests-limit: 0
+    schedule:
+      interval: weekly

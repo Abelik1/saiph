@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="referrer" content="no-referrer">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Saiph: phone, laptop and desktop as one</title>
+  <meta name="description" content="Saiph connects your Android phone to your laptop and desktop: texts, calls, notifications, clipboard, photos, files and webcam. In development for Windows, Linux and Android.">
+  <meta name="theme-color" content="#0a0e13">
+  <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="btn skip-link" href="#main">Skip to content</a>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="index.html" aria-label="Saiph home">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="15" fill="#0f1a22" stroke="#22d3ee" stroke-opacity=".35"/><path d="M8 21 16 16 24 11" stroke="#22d3ee" stroke-opacity=".35" stroke-width="1.2"/><circle cx="8.5" cy="20.7" r="2.4" fill="#67e8f9"/><circle cx="16" cy="16" r="2.4" fill="#e7edf4"/><circle cx="23.5" cy="11.3" r="2.4" fill="#67e8f9"/></svg>
+      Saiph
+    </a>
+    <nav class="nav-links" aria-label="Main">
+      <a class="hide-sm" href="#features">Features</a>
+      <a class="hide-sm" href="#download">Download</a>
+      <a href="self-host.html">Self-host</a>
+      <a href="hosted.html">Hosted</a>
+      <a data-link="github" href="#" aria-label="Source code on GitHub">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+  <section class="hero">
+    <div class="wrap center">
+      <span class="pill"><span class="dot"></span>In development &middot; Windows, Linux &amp; Android</span>
+      <h1>Your phone, laptop and desktop, <em>as one.</em></h1>
+      <p class="lede">Texts, calls, notifications and files, on whichever screen you're using.</p>
+      <div class="btn-row" style="margin-top:28px">
+        <a class="btn primary" href="#download">Release status</a>
+        <a class="btn" href="self-host.html">Self-host it</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="showcase" aria-labelledby="demo-title">
+    <div class="wrap">
+      <h2 id="demo-title" class="sr-only">Illustrated feature preview</h2>
+      <div class="feature-tabs" role="tablist" aria-label="Feature demos">
+        <button role="tab" data-scene="notifications" data-label="Animation: a phone notification appears on a laptop and desktop, and is answered from the desktop.">Notifications</button>
+        <button role="tab" data-scene="clipboard" data-label="Animation: text copied on the laptop is pasted on the phone and appears in the desktop clipboard history.">Clipboard</button>
+        <button role="tab" data-scene="messages" data-label="Animation: a text message is typed on the desktop and sent from the phone.">Texts</button>
+        <button role="tab" data-scene="calls" data-label="Animation: an incoming phone call appears on both computers and is answered from the laptop.">Calls</button>
+        <button role="tab" data-scene="files" data-label="Animation: a photo taken on the phone appears on the laptop, and a PDF dropped on the desktop arrives on the phone.">Photos &amp; files</button>
+        <button role="tab" data-scene="webcam" data-label="Animation: the phone camera becomes the desktop webcam in a video call.">Webcam</button>
+        <button role="tab" data-scene="cloud" data-label="Animation: a document saved on the laptop syncs to the desktop.">Cloud</button>
+      </div>
+
+      <div class="stage" data-stage>
+        <div class="stage-inner" role="img" aria-label="Animated demo of Saiph features across a laptop, desktop and phone">
+          <div class="dev dev-laptop" aria-hidden="true">
+            <div class="bezel"><div class="screen"><div class="scr-body"></div><div class="layer"></div></div></div>
+            <div class="base"></div><div class="dev-label">Laptop</div>
+          </div>
+          <div class="dev dev-desktop" aria-hidden="true">
+            <div class="bezel"><div class="screen"><div class="scr-body"></div><div class="layer"></div></div></div>
+            <div class="neck"></div><div class="foot"></div><div class="dev-label">Desktop</div>
+          </div>
+          <div class="dev dev-phone" aria-hidden="true">
+            <div class="bezel"><div class="screen"><div class="scr-body"></div><div class="layer"></div></div></div>
+            <div class="dev-label">Phone</div>
+          </div>
+        </div>
+        <div class="stage-caption">
+          <button class="stage-pause" data-stage-pause aria-label="Pause animation"></button>
+          <p data-stage-caption>Your devices, working together.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section alt" id="features" aria-labelledby="features-title">
+    <div class="wrap">
+      <h2 id="features-title" class="center">Everything your phone knows, on the screen you're using.</h2>
+      <div class="grid c3 feature-cards">
+        <button class="card" data-goto-scene="notifications">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></div>
+          <h3>Notifications</h3>
+          <p class="muted">Reply or dismiss from any screen.</p>
+        </button>
+        <button class="card" data-goto-scene="messages">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+          <h3>Texts</h3>
+          <p class="muted">A real keyboard, still your number.</p>
+        </button>
+        <button class="card" data-goto-scene="calls">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/></svg></div>
+          <h3>Calls</h3>
+          <p class="muted">See who's calling. Answer from your desk.</p>
+        </button>
+        <button class="card" data-goto-scene="clipboard">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg></div>
+          <h3>Clipboard</h3>
+          <p class="muted">Copy here, paste there.</p>
+        </button>
+        <button class="card" data-goto-scene="files">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></svg></div>
+          <h3>Photos &amp; files</h3>
+          <p class="muted">New photos appear. Files go both ways.</p>
+        </button>
+        <button class="card" data-goto-scene="webcam">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 8-6 4 6 4V8z"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg></div>
+          <h3>Webcam</h3>
+          <p class="muted">Your phone camera in video calls.</p>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="download" aria-labelledby="dl-title">
+    <div class="wrap">
+      <h2 id="dl-title">Download</h2>
+      <p class="muted" style="margin-bottom:28px">Releases are being prepared. <span data-source-notice>The GitHub repository is private for now.</span></p>
+      <div class="grid c3">
+        <a class="card dl" data-download="windows" href="#">
+          <div class="os">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 5.5 10.5 4.5v7H3zM11.5 4.3 21 3v8.5h-9.5zM3 12.5h7.5v7L3 18.5zM11.5 12.5H21V21l-9.5-1.3z"/></svg>
+            <div><strong>Windows</strong><span>10 / 11 &middot; x64</span></div>
+          </div>
+          <span class="go">Download for Windows &rarr;</span>
+        </a>
+        <a class="card dl" data-download="linux" href="#">
+          <div class="os">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="m6 9 4 3-4 3M12 15h6"/></svg>
+            <div><strong>Linux</strong><span>x86_64 &middot; Ubuntu tested</span></div>
+          </div>
+          <span class="go">Download for Linux &rarr;</span>
+        </a>
+        <a class="card dl" data-download="android" href="#">
+          <div class="os">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 10h12v7.5a1.5 1.5 0 0 1-1.5 1.5H16v2.5a1.25 1.25 0 0 1-2.5 0V19h-3v2.5a1.25 1.25 0 0 1-2.5 0V19h-.5A1.5 1.5 0 0 1 6 17.5zM3.75 10A1.25 1.25 0 0 1 5 11.25v5a1.25 1.25 0 0 1-2.5 0v-5A1.25 1.25 0 0 1 3.75 10zm16.5 0a1.25 1.25 0 0 1 1.25 1.25v5a1.25 1.25 0 0 1-2.5 0v-5A1.25 1.25 0 0 1 20.25 10zM6.1 9a6 6 0 0 1 3.2-4.6l-1-1.6a.4.4 0 1 1 .7-.4l1 1.7a6 6 0 0 1 4 0l1-1.7a.4.4 0 1 1 .7.4l-1 1.6A6 6 0 0 1 17.9 9zM9.5 6.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5zm5 0a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5z"/></svg>
+            <div><strong>Android</strong><span>Phones &middot; .apk</span></div>
+          </div>
+          <span class="go">Download for Android &rarr;</span>
+        </a>
+      </div>
+      <div class="callout info" data-android-beta hidden style="margin-top:22px"><strong>Android beta:</strong> open the invite on your phone. Google asks for your email, then installs it. <br><a class="btn" data-link="android-beta" rel="noreferrer" style="margin-top:12px">Join the Android beta</a></div>
+      <p class="muted" style="margin-top:18px;font-size:.92rem"><a href="downloads.html">Release status and checksums</a></p>
+    </div>
+  </section>
+
+  <section class="section alt" id="pricing" aria-labelledby="pricing-title">
+    <div class="wrap">
+      <h2 id="pricing-title" class="center" style="margin-bottom:36px">Run it your way.</h2>
+      <div class="plans">
+        <div class="card plan">
+          <h3>Self-hosted</h3>
+          <div class="price">Free</div>
+          <ul class="checks">
+            <li>Every feature</li>
+            <li>Raspberry Pi, home server or any Debian box</li>
+            <li>Synced Cloud folder on your storage</li>
+          </ul>
+          <a class="btn" href="self-host.html">Self-hosting guide</a>
+        </div>
+        <div class="card plan featured">
+          <h3>Saiph Hosted <span class="tag cyan">Coming soon</span></h3>
+          <div class="price" data-price>Early access <small>pricing at launch</small></div>
+          <ul class="checks">
+            <li>We run your Hub</li>
+            <li>Planned: encrypted on your devices first</li>
+            <li>Export any time</li>
+          </ul>
+          <a class="btn primary" data-link="subscribe" data-live-text="Subscribe to Saiph Hosted" href="#">Join the early-access list</a>
+          <a href="hosted.html" style="margin-top:12px;font-size:.92rem;text-align:center">Design and current limits &rarr;</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="security" aria-labelledby="sec-title">
+    <div class="wrap center">
+      <h2 id="sec-title">Your keys. Your devices.</h2>
+      <ul class="pillars">
+        <li>Keys stay on each device</li>
+        <li>Every request signed</li>
+        <li>Revoke a lost device in one click</li>
+      </ul>
+      <p class="muted" style="font-size:.92rem">Licensed <span data-license="core">AGPL-3.0</span> (desktop, Hub) and <span data-license="android">GPL-3.0</span> (Android). Source publication is planned.</p>
+      <div class="btn-row" style="margin-top:20px">
+        <a class="btn" href="hosted.html#trust">Security model</a>
+        <a class="btn" data-link="github" href="#">GitHub</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div>
+      <strong style="color:var(--text)">Saiph</strong> &middot; &copy; <span data-year>2026</span> Alexander Belik<br>
+      <span style="font-size:.85rem" data-analytics-status>Analytics is disabled.</span>
+    </div>
+    <nav aria-label="Footer">
+      <a href="index.html#features">Features</a>
+      <a href="index.html#download">Download</a>
+      <a href="self-host.html">Self-host</a>
+      <a href="hosted.html">Hosted</a>
+      <a href="privacy.html">Privacy</a>
+      <a href="account-privacy.html">Account privacy</a>
+      <a href="terms.html">Terms</a>
+      <a href="refunds.html">Refunds</a>
+      <a href="contact.html">Contact</a>
+      <a href="waitlist.html">Launch updates</a>
+      <a data-link="github" href="#">GitHub</a>
+    </nav>
+  </div>
+</footer>
+
+<script src="assets/config.js"></script>
+<script src="assets/site.js"></script>
+<script src="assets/analytics.js"></script>
+<script src="assets/stage.js"></script>
+</body>
+</html>

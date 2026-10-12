@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later
+     Reference SignPath artifact configuration "saiph-installer". Paste it into the
+     SignPath project after acceptance and keep both copies identical.
+     Input: the GitHub artifact holding only Saiph-Link-VERSION-windows-x86_64.exe.
+     The installer reads its payload from just before the certificate table, so it
+     must be signed once, after packaging, and never modified afterwards. -->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <parameters>
+    <parameter name="version" />
+  </parameters>
+  <zip-file>
+    <pe-file path="Saiph-Link-${version}-windows-x86_64.exe" product-name="Saiph" product-version="${version}">
+      <authenticode-sign />
+    </pe-file>
+  </zip-file>
+</artifact-configuration>

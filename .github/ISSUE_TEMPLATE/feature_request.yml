@@ -1,0 +1,13 @@
+name: Feature request
+description: Explain the task you want Saiph to help with.
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Suggested behavior and alternatives

@@ -1,0 +1,30 @@
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+/.idea
+.DS_Store
+build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+/app/debug
+/app/release
+
+# Orion secrets and local build state
+.kotlin/
+**/google-services.json
+*.keystore
+*.jks
+.env
+
+# Reproducible native restic build outputs and toolchain cache
+.restic-build/
+/restic-android/src/main/jniLibs/
+__pycache__/

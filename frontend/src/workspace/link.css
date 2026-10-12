@@ -1,0 +1,82 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Shared Link shell. Personal pages reuse these quiet, neutral surfaces. */
+:root { color-scheme: dark; --muted: #a0a6b2; --line: #35383f; --accent: #62c4ef; --panel: #26282d; color: #edf0f5; background: #1b1c20; }
+body { min-width: 760px; background: #1b1c20; }
+button { background: #2c3038; border-color: #424751; color: #e7ebf2; }
+button:hover { background: #373d48; }
+button.primary { background: #69c8ef; border-color: #69c8ef; color: #112737; }
+button.primary:hover { background: #96dcf7; }
+.text-button, summary { color: #85cdf2; }
+input, select, textarea { background: #202228; border-color: #414650; color: #edf0f5; }
+input:focus, textarea:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 2px #62c4ef20; }
+input[type="checkbox"] { accent-color: var(--accent); }
+button:focus-visible, summary:focus-visible, .phone-photo-image:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.link-shell { display: block; }
+.link-header { min-height: 88px; display: flex; align-items: center; gap: 62px; padding: 0 40px; border-bottom: 1px solid #303238; background: #1e2024; position: relative; z-index: 20; }
+.link-header .brand { padding: 0; font-size: 27px; gap: 12px; letter-spacing: -1px; }
+.link-header .brand b { font-weight: 500; }
+.link-header .brand-mark { display: grid; width: 38px; height: 38px; border-radius: 12px; background: #293743; color: #83d0f3; }
+.link-header nav { display: flex; align-items: center; gap: 30px; align-self: stretch; }
+.link-header nav > button, .workspace-navigation > summary { height: 100%; padding: 0 4px; border: 0; border-radius: 0; background: transparent; color: var(--muted); font-size: 13px; font-weight: 500; gap: 9px; position: relative; }
+.link-header nav > button:hover, .workspace-navigation > summary:hover { color: #f3f5f9; }
+.link-header nav > button[aria-current], .workspace-navigation > summary.active { color: #f3f5f9; }
+.link-header nav > button[aria-current]::after, .workspace-navigation > summary.active::after { content: ""; position: absolute; width: 26px; height: 3px; border-radius: 4px; background: var(--accent); bottom: 17px; left: 50%; transform: translateX(-50%); }
+.workspace-navigation { position: relative; margin: 0; }
+.workspace-navigation > summary { list-style: none; display: flex; cursor: pointer; }
+.workspace-navigation > summary::-webkit-details-marker { display: none; }
+.workspace-nav-menu { position: absolute; top: 77px; left: -20px; width: 210px; padding: 9px; display: grid; gap: 3px; background: #25282e; border: 1px solid #41454e; border-radius: 12px; box-shadow: 0 16px 40px #0005; }
+.workspace-nav-menu button { justify-content: flex-start; background: transparent; border: 0; color: #bdc6d4; padding: 12px 14px; }
+.workspace-nav-menu button:hover, .workspace-nav-menu button[aria-current] { background: #303b49; color: #e7f5fc; }
+.computer-name { margin-left: auto; color: #929baa; font-size: 12px; max-width: 190px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
+.page-content { max-width: 1640px; margin: 0 auto; padding: 32px 40px 64px; }
+.page-header { margin-bottom: 30px; }
+.page-header h1 { font-size: 27px; font-weight: 500; letter-spacing: -.65px; margin-bottom: 8px; }
+.page-header p { color: var(--muted); font-size: 12px; }
+.phone-layout { grid-template-columns: 292px minmax(0, 1fr); gap: 32px; min-height: 650px; }
+.phone-rail { padding: 0 24px 0 0; border-color: var(--line); }
+.phone-device { align-items: flex-start; gap: 19px; margin-bottom: 20px; padding-top: 5px; }
+.phone-silhouette { width: 60px; min-width: 60px; height: 102px; background: linear-gradient(155deg,#344c65,#252c3c 65%,#293238); border-color: #5b6b80; border-radius: 11px; color: #a5daf4; box-shadow: inset 0 0 0 4px #242830; }
+.phone-device h2 { font-size: 18px; font-weight: 600; margin: 2px 0 9px; }
+.phone-device p { font-size: 12px; margin-bottom: 9px; }
+.phone-online { color: #b9dff2; }
+.phone-battery { font-size: 11px; color: #b9c1cb; }
+.phone-camera { border-bottom: 1px solid var(--line); margin: 0 0 28px; padding-bottom: 16px; }
+.phone-camera p { font-size: 11px; margin: 4px 0 0; }
+.phone-rail > .section-head { margin-bottom: 18px; }
+.phone-notification { border: 1px solid #393d45; background: #292c32; border-radius: 11px; padding: 18px; margin-bottom: 16px; }
+.phone-notification > .section-head { margin-bottom: 10px; }
+.phone-notification h3 { font-size: 13px; font-weight: 600; line-height: 1.45; margin: 0 0 8px; }
+.phone-notification p { font-size: 12px; color: #bdc4ce; line-height: 1.6; }
+.phone-notification .text-button { font-size: 11px; padding: 6px 0; margin-right: 8px; }
+.phone-detail { background: #202226; border: 1px solid #30333a; border-radius: 15px; overflow: hidden; }
+.phone-detail > .card { margin: 26px; }
+.phone-tabs { gap: 35px; padding: 0 28px; min-height: 68px; }
+.phone-tabs button { font-size: 13px; padding: 20px 3px; }
+.phone-tabs button[aria-current] { border-bottom-color: var(--accent); color: #edf0f5; }
+.phone-tab-content { padding: 28px; min-height: 500px; }
+.phone-photo-grid { grid-template-columns: repeat(auto-fill,minmax(160px,1fr)); gap: 22px; }
+.phone-photo-image { border-radius: 9px; background: #30343d; }
+.phone-photo-grid article > small { color: #bdc4ce; }
+.phone-handoff { margin: 0; border-top: 1px solid var(--line); padding: 22px 28px; }
+.phone-handoff > summary { font-size: 12px; }
+.phone-handoff .card { margin: 22px 0 0; padding: 0; border: 0; background: none; }
+.phone-rail .card { padding: 20px 0; background: none; border: 0; border-top: 1px solid var(--line); border-radius: 0; }
+.card { background: #25282e; border-color: #363b44; }
+.empty-state { color: #9da7b6; padding: 58px 20px; }
+.empty-state h3 { color: #d0d8e4; font-size: 16px; }
+.empty-state p { color: #a2acba; line-height: 1.8; }
+.tabs { border-color: var(--line); }
+.tabs button { color: var(--muted); }
+.tabs button.selected { color: #e3f4ff; border-color: var(--accent); }
+.workspace-tools { margin-bottom: 28px; }
+.workspace-tools .topbar-actions { justify-content: flex-end; padding-bottom: 20px; }
+.cloud-page { max-width: 1050px; }
+.cloud-page > .card { padding: 36px; }
+.cloud-page .cloud-symbol { color: var(--accent); margin: 12px 0 24px; }
+.cloud-page > .card > p { max-width: 570px; color: #b8c2d0; }
+.cloud-page > .card > p:last-child { font-size: 12px; margin-top: 20px; margin-bottom: 0; }
+.cloud-folders { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.cloud-folders svg { color: #91cce8; }
+.cloud-folders p { margin: 20px 0; color: var(--muted); }
+@media(max-width:1100px) { .link-header { padding: 0 28px; gap: 38px; }.link-header nav { gap: 22px; }.page-content { padding: 28px; }.phone-layout { grid-template-columns: 255px minmax(0,1fr); gap: 24px; }.phone-rail { padding-right: 20px; }.phone-tabs { gap: 20px; padding: 0 20px; }.phone-tab-content { padding: 24px; }.phone-photo-grid { grid-template-columns: repeat(auto-fill,minmax(140px,1fr));gap:16px; } }
+@media(max-width:850px) { .computer-name { display: none; }.link-header { gap: 32px; }.phone-layout { grid-template-columns: 230px minmax(0,1fr);gap:20px; }.phone-tabs { gap:12px; }.phone-tabs button { font-size:12px;gap:5px; }.phone-tabs svg { width:15px; }.phone-tab-content { padding:20px; }.phone-messages { grid-template-columns:1fr; }.phone-messages aside { max-height:170px;overflow:auto; }.columns { grid-template-columns:1fr; } }

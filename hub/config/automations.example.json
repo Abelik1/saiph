@@ -1,0 +1,23 @@
+{
+  "automations": [
+    {
+      "id": "orion-health",
+      "name": "Orion health check",
+      "description": "A harmless example proving the allowlisted runner works.",
+      "enabled": true,
+      "command": ["/usr/bin/python3", "-c", "print('Orion Hub worker OK')"],
+      "timeout_seconds": 30,
+      "pass_env": []
+    },
+    {
+      "id": "claude-example",
+      "name": "Claude Code task (disabled example)",
+      "description": "Enable only after setting an explicit working directory and safe prompt wrapper.",
+      "enabled": false,
+      "command": ["/usr/local/bin/claude", "--print", "Summarise repository status; do not modify files."],
+      "cwd": "/srv/orion/workspace",
+      "timeout_seconds": 300,
+      "pass_env": []
+    }
+  ]
+}

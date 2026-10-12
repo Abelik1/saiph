@@ -1,0 +1,24 @@
+name: Bug report
+description: Report a reproducible Saiph problem using synthetic data.
+body:
+  - type: markdown
+    attributes:
+      value: "For security vulnerabilities use Security → Advisories, not this form. Never attach keys, invitations, tokens or real messages."
+  - type: input
+    id: version
+    attributes:
+      label: Saiph version and operating systems
+      description: Include desktop OS, Android version and phone model when relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps, expected behavior and actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Sanitized evidence
+      description: Use synthetic examples and metadata-only logs.

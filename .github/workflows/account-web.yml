@@ -1,0 +1,38 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+name: Account website
+on:
+  push:
+    paths: ["account-web/**", ".github/workflows/account-web.yml"]
+  pull_request:
+    paths: ["account-web/**", ".github/workflows/account-web.yml"]
+permissions:
+  contents: read
+concurrency:
+  group: account-web-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+    defaults:
+      run:
+        working-directory: account-web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: account-web/package-lock.json
+      - run: npm ci --ignore-scripts --no-fund
+      - run: npm test
+      - run: npm run db:plan
+      - run: npm run test:billing-db
+      - run: npm run build
+      - run: npm run test:integration
+      - run: npm run test:beta-integration
+      - run: npm audit --omit=dev --audit-level=high

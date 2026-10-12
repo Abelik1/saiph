@@ -1,0 +1,175 @@
+name: Saiph checks
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: public-checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows-x86_64
+            qt: '6.11.2'
+          - os: ubuntu-22.04
+            platform: linux-x86_64
+            qt: '6.8.3'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    env:
+      QT_QPA_PLATFORM: offscreen
+      VITE_ORION_PROFILE: link
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Linux native build libraries
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y xvfb libegl1 libgtk-3-0 libnss3 libxkbcommon-x11-0 libxcb-cursor0 libdbus-1-3 libx11-xcb1 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxtst6 libasound2 libxdamage1 libxrandr2 libxcomposite1 libgbm1
+      - name: Desktop dependencies with reviewed Qt notice version
+        run: python -m pip install -e ".[dev,hosted]" "PySide6==${{ matrix.qt }}" -r hub/requirements-hosted.txt httpx
+      - run: npm --prefix frontend ci
+      - name: Public fixture and delegate boundary
+        run: python scripts/public-release/check-public-data.py
+      - name: Exported Python unit suite
+        run: python scripts/public-release/verify-public.py
+      - run: npm --prefix frontend run test:unit
+      - name: Build Link on its actual operating system
+        if: github.event_name == 'workflow_dispatch'
+        shell: python
+        env:
+          SAIPH_HOSTED_CONFIG: ${{ vars.SAIPH_HOSTED_CONFIG }}
+        run: |
+          import os, subprocess, sys
+          from pathlib import Path
+          command = [sys.executable, 'scripts/build-native.py', '--profile', 'link', '--version', '0.1.0-beta.2', '--build-number', '2']
+          if os.environ.get('SAIPH_HOSTED_CONFIG'):
+              config = Path('build/hosted-input.json')
+              config.parent.mkdir(exist_ok=True)
+              config.write_text(os.environ['SAIPH_HOSTED_CONFIG'], encoding='utf-8')
+              command += ['--hosted-config', str(config)]
+          subprocess.run(command, check=True)
+      - name: Wrap and audit unsigned native distribution
+        if: github.event_name == 'workflow_dispatch'
+        run: python scripts/packaging/build-desktop-distribution.py --platform ${{ matrix.platform }} --version 0.1.0-beta.2 --output build/ci-distribution ${{ matrix.platform == 'linux-x86_64' && '--linux-setup' || '' }}
+      - name: Check the Linux setup wraps the identical archive and installs in isolation
+        if: github.event_name == 'workflow_dispatch' && runner.os == 'Linux'
+        run: |
+          set -eu
+          setup=build/ci-distribution/Saiph-Link-0.1.0-beta.2-linux-x86_64.run
+          archive=build/ci-distribution/Saiph-Link-0.1.0-beta.2-linux-x86_64.tar.gz
+          sh "$setup" --extract "$RUNNER_TEMP/saiph-setup-extract"
+          cmp "$archive" "$RUNNER_TEMP/saiph-setup-extract/$(basename "$archive")"
+          ORION_INSTALL_ISOLATED=1 ORION_INSTALL_ROOT="$RUNNER_TEMP/saiph-setup-install" XDG_CACHE_HOME="$RUNNER_TEMP/saiph-setup-cache" sh "$setup" --text
+          installed="$RUNNER_TEMP/saiph-setup-install/current"
+          cmp "$installed/package-manifest.json" build/ci-distribution/package-0.1.0-beta.2-linux-x86_64/package-manifest.json
+          cmp "$installed/app/OrionMini" build/ci-distribution/package-0.1.0-beta.2-linux-x86_64/app/OrionMini
+      - name: Retain exact source and unsigned artifact evidence
+        if: github.event_name == 'workflow_dispatch'
+        shell: python
+        run: |
+          import json, os, shutil, subprocess, sys
+          from pathlib import Path
+          commit = os.environ['GITHUB_SHA']
+          platform = '${{ matrix.platform }}'
+          output = Path('build/ci-artifacts')
+          output.mkdir(parents=True, exist_ok=False)
+          distribution = Path('build/ci-distribution')
+          packages = list(distribution.glob('Saiph-*.exe')) + list(distribution.glob('Saiph-*.tar.gz'))
+          if len(packages) != 1:
+              raise SystemExit('Exactly one native package is required')
+          setups = list(distribution.glob('Saiph-*.run'))
+          if len(setups) != (1 if platform.startswith('linux') else 0):
+              raise SystemExit('Linux builds require exactly one no-terminal setup wrapper')
+          for package in packages + setups:
+              shutil.copyfile(package, output / package.name)
+          subprocess.run(['git', 'archive', '--format=tar.gz', '--output=' + str(output / 'Saiph-source.tar.gz'), commit], check=True)
+          package = distribution / ('package-0.1.0-beta.2-' + platform)
+          shutil.copyfile(package / 'package-manifest.json', output / 'package-manifest.json')
+          shutil.copyfile(package / 'licenses/inventory.json', output / 'dependency-inventory.json')
+          origins = Path('build/profile/native-build-origins.json')
+          if origins.is_file():
+              shutil.copyfile(origins, output / origins.name)
+          defaults = Path('build/profile/hosted-defaults.json')
+          if defaults.is_file():
+              shutil.copyfile(defaults, output / defaults.name)
+          evidence = {'schema': 1, 'source_commit': commit, 'platform': platform,
+                      'release_state': 'unsigned-development', 'run_id': os.environ['GITHUB_RUN_ID'],
+                      'runtime': sys.version, 'qt_version': '${{ matrix.qt }}',
+                      'limits': ['No signing, independent security review, Qt replacement acceptance or physical installation acceptance']}
+          (output / 'build-evidence.json').write_text(json.dumps(evidence, indent=2) + '\n', encoding='utf-8')
+          command = [sys.executable, 'scripts/public-release/release-checksums.py', str(output), '--source-commit', commit]
+          subprocess.run(command, check=True)
+          subprocess.run(command + ['--verify'], check=True)
+      - if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: unsigned-development-${{ matrix.platform }}
+          retention-days: 7
+          if-no-files-found: error
+          path: build/ci-artifacts/
+  hub:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    env:
+      PYTHONPATH: hub
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r hub/requirements-hosted.txt pytest httpx
+      - run: python -m pytest hub/tests -q
+  secrets:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.24'
+          cache: false
+      - name: Install pinned upstream gitleaks CLI
+        run: go install github.com/zricethezav/gitleaks/v8@v8.30.1
+      - name: Scan public source and public history
+        run: |
+          gitleaks dir . --config .gitleaks.toml --redact --no-banner
+          gitleaks git . --config .gitleaks.toml --redact --no-banner
+  dependencies:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+      - run: python -m pip install -e ".[hosted]" -r hub/requirements-hosted.txt "pip-audit==2.10.1"
+      - name: Audit installed Python dependency closure
+        run: python -m pip_audit --local --skip-editable
+      - run: npm --prefix frontend ci
+      - name: Audit frontend dependencies, including build tools
+        run: npm --prefix frontend audit --audit-level=high

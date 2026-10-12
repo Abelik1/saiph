@@ -1,0 +1,47 @@
+name: DCO
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+permissions:
+  contents: read
+  pull-requests: read
+jobs:
+  sign-off:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - name: Check every commit author sign-off
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        shell: bash
+        run: |
+          gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/commits?per_page=100" > "$RUNNER_TEMP/dco-commits.json"
+          gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" --jq '.commits' > "$RUNNER_TEMP/dco-count.txt"
+          python - <<'PY'
+          import json, os, re
+          from pathlib import Path
+          # gh --paginate emits adjacent JSON arrays; handle every page, not only
+          # the first 100 commits. Pull-request source code is never checked out.
+          text = (Path(os.environ['RUNNER_TEMP']) / 'dco-commits.json').read_text()
+          decoder = json.JSONDecoder()
+          failures = []
+          checked = 0
+          while text.strip():
+              page, end = decoder.raw_decode(text.lstrip())
+              text = text.lstrip()[end:]
+              for item in page:
+                  checked += 1
+                  commit = item['commit']
+                  author = commit['author']
+                  expected = f"{author['name']} <{author['email']}>"
+                  trailers = re.findall(r'^Signed-off-by: (.+)$', commit['message'], re.MULTILINE | re.IGNORECASE)
+                  if not any(trailer.strip().casefold() == expected.casefold() for trailer in trailers):
+                      failures.append(item['sha'][:12])
+          if failures:
+              raise SystemExit('Missing matching author DCO sign-off: ' + ', '.join(failures))
+          expected_count = int((Path(os.environ['RUNNER_TEMP']) / 'dco-count.txt').read_text())
+          if checked != expected_count:
+              raise SystemExit('Commit API did not return every commit; split this pull request for complete DCO verification.')
+          print('All pull-request commits carry matching author sign-offs.')
+          PY

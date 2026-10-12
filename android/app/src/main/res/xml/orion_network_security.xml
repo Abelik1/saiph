@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Android XML cannot express mesh CIDRs. Api, Link and direct peers validate
+         numeric 100.64/10 or fd7a:115c:a1e0::/48 origins before opening connections,
+         and disable redirects. Tailscale provides transport encryption. -->
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

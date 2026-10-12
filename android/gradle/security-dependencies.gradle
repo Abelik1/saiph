@@ -1,0 +1,47 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Constraints do not introduce a module or prevent selecting a newer version.
+def floors = [
+    'org.bouncycastle:bcprov-jdk18on': '1.85',
+    'org.bouncycastle:bcpkix-jdk18on': '1.85',
+    'org.bouncycastle:bcutil-jdk18on': '1.85',
+    'org.apache.commons:commons-lang3': '3.18.0',
+    'org.apache.mina:mina-core': '2.2.8',
+    'org.bitbucket.b_c:jose4j': '0.9.6',
+    'org.jdom:jdom2': '2.0.6.1',
+    'org.apache.httpcomponents:httpclient': '4.5.14',
+]
+// UTP's gRPC transport is host test tooling, not APK runtime. Keep its
+// mutually dependent Netty modules aligned within the existing 4.1 family.
+['buffer', 'codec', 'codec-http', 'codec-http2', 'codec-socks', 'common',
+ 'handler', 'handler-proxy', 'resolver', 'transport',
+ 'transport-native-unix-common'].each { module ->
+    floors["io.netty:netty-$module".toString()] = '4.1.137.Final'
+}
+gradle.ext.saiphSecurityFloors = floors
+
+gradle.beforeProject { project ->
+    [[project.configurations, project.dependencies],
+     [project.buildscript.configurations, project.buildscript.dependencies]].each { pair ->
+        pair[0].configureEach { configuration ->
+            if (configuration.canBeDeclared) {
+                floors.each { module, version ->
+                    pair[1].constraints.add(configuration.name, "$module:$version") {
+                        because('Patched security floor; see docs/DEPENDENCY_REVIEW.md')
+                    }
+                }
+            }
+        }
+    }
+}
+
+// CVE-2026-53914 is in KAPT's incremental deserialization cache. This build
+// uses KSP. Do not allow KAPT to be added until the compiler/toolchain upgrade
+// described in docs/DEPENDENCY_REVIEW.md has been validated.
+gradle.projectsEvaluated {
+    gradle.rootProject.allprojects.each { project ->
+        if (project.plugins.hasPlugin('org.jetbrains.kotlin.kapt') ||
+            project.plugins.hasPlugin('kotlin-kapt')) {
+            throw new GradleException('KAPT is disabled pending the Kotlin security upgrade; use KSP.')
+        }
+    }
+}

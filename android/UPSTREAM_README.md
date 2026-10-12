@@ -1,0 +1,115 @@
+<p align="center">
+  <img alt="Hero image" src="./fastlane/metadata/android/en-US/images/featureGraphic.png" />
+</p>
+
+<p align="center">
+  <a style="text-decoration:none" href="https://github.com/shrimqy/Sefirah"><img src="https://img.shields.io/badge/desktop-repo-sefirah?logo=github" alt="Sefirah Desktop" /></a>
+  <a style="text-decoration:none" href="https://discord.gg/MuvMqv4MES"><img src="https://img.shields.io/discord/1310140719138340925?label=Discord&color=7289da" alt="Sefirah Discord" /></a>
+</p>
+
+**Sefirah** is designed to enhance your workflow by enabling seamless clipboard and notification sharing between your Windows PC and Android device. It's an alternative to existing solutions, tailored for users who want a straightforward and efficient way to keep their devices in sync.
+
+If you have any feature requests as a whole or a bug report, open the issue in the repo for the Windows app, unless you're sure that this only concerns the Android version.
+
+## Features
+
+- **Clipboard Sharing**: Seamlessly share clipboard content between your Android device and Windows PC, with automatic detection on Android 10+ via Shizuku or desktop ADB.
+- **Play Sound**: Ring your phone from the desktop to help locate it.
+- **Media Control**: Control media playback and volume of your PC from Android.
+- **File Sharing**: Share files between your devices easily.
+- **Storage Integration**: Integrate your Android storage into the Windows Explorer.
+- **Notification**: Allows toasting the notifications from your Android on desktop.
+- **Screen mirroring**: Mirror and control the Android device via scrcpy.
+- **SMS Texting**: Send and receive SMS texts from your Android device on your Windows PC.
+- **Phone Call**: View and answer phone calls from your Android device on your Windows PC.
+
+## Linux Status
+
+Support for Linux is limited. Some features available on Windows may not be available on Linux.
+
+## Limitations
+
+### **Notification Sync**
+- Due to Android's restrictions, sensitive notifications are no longer visible from Android 15 onwards.
+- To work around this limitation, grant the necessary permission using ADB:
+
+  ```sh
+  adb shell appops set com.castle.sefirah RECEIVE_SENSITIVE_NOTIFICATIONS allow
+  ```
+
+- On some devices (e.g. OnePlus), this may fail until you disable **system optimization** or **Disable permission monitoring** for apps in **Developer options** → **Apps**. After that, run the command again.
+- If ADB is connected, the desktop app will attempt to grant this permission automatically when the device comes online.
+
+## Installation
+
+### Windows App
+<p align="left">
+  <!-- Store Badge -->
+  <a style="text-decoration:none" href="https://apps.microsoft.com/detail/9PJV6D1JPG0H?launch=true&mode=full" target="_blank" rel="noopener noreferrer">
+    <picture>
+      <source media="(prefers-color-scheme: light)" srcset=".github/./readme-images/StoreBadge-dark.png" width="220" />
+      <img src=".github/./readme-images/StoreBadge-light.png" width="200" />
+    </picture>
+  </a>
+</p>
+
+### Android App
+
+[<img alt="Get it on Google Play" height="80" src="https://play.google.com/intl/en_us/badges/images/generic/en_badge_web_generic.png">](https://play.google.com/store/apps/details?id=com.castle.sefirah)
+[<img alt="Get it on IzzyOnDroid" height="80" src="https://gitlab.com/IzzyOnDroid/repo/-/raw/master/assets/IzzyOnDroid.png">](https://apt.izzysoft.de/fdroid/index/apk/com.castle.sefirah)
+
+## How to Use
+
+1. **Setting Up**:
+   - On the Android device, allow the necessary permissions on the onboarding page. (**Note:** Allow restricted settings from App Info after attempting to grant notification access or accessibility permission, as Android blocks side-loaded apps from requesting sensitive permissions.) For automatic clipboard sync on Android 10+, also grant **Shizuku** if you use it, or keep ADB connected from the desktop app.
+   - Ensure both your Android device and Windows PC are connected to the same network.
+   - Launch the app on your Windows PC and wait for the devices to show up on both.
+   - Initiate the connection on your Android device using either manual connect or auto connect. Manual connect is faster, while auto connect takes a bit more time to determine which IP address works for you.
+   - Once the connection is initiated, Windows will receive a pop-up to accept or decline the connection. Ensure that the keys match on both devices.
+   - After the authentication is done, you should be navigated to the home screens on both devices, wait a bit for the notifications on Windows to load up for the first time.
+
+   **Note:** If the devices can't connect even though both discover each other, make sure to check your firewall settings and that these ports are open: 5149 to 5169.
+
+2. **Clipboard Sharing**:
+   - When you copy content on your desktop, it will automatically sync with your Android device (provided you have enabled this feature in the device settings). If you have also enabled image syncing, images should be sent as well. **Note:** You must enable the 'Add received images to clipboard' option for received images to be placed on the Android clipboard.
+   - To automatically share the clipboard **from Android to desktop** on Android 10+:
+     1. Enable **Clipboard sync** preference in the device settings.
+     2. Enable **Auto-detect clipboard** in the app Settings page.
+     3. Prefer granting **Shizuku** access, or keep the device connected over **ADB** from the desktop app. The app prefers Shizuku when available and falls back to ADB.
+     4. Accessibility remains a fallback when Shizuku/ADB are unavailable and you have granted accessibility permission, but it may not work in every scenario.
+   - To manually share the clipboard, use the persistent device status notification, the Quick Settings tile, or the share sheet.
+3. **File Transfer**:
+   - Use the share sheet on your Android or Windows device and select the app to share files between the devices.
+4. **Android Storage**:
+   - You would need Android 11 or higher.
+   - Enable storage access permission in Android app's settings and the desktop app will create a link to the Android storage in the File Explorer.
+   - **Note:** This feature is still a bit experimental and may not work on all Windows versions especially older versions of Windows 10 and other unofficial debloated Windows 11 versions.
+   - **WARNING**: DO NOT set the remote storage location to a pre-existing folder as it will delete the contents of that folder.
+5. **SMS Texting**:
+   - Grant all the permissions required from the permissions page in Android. After that, reconnect and the messages should appear in the Messages tab in the Desktop app. You can now view and send texts as SMS. You can also switch SIMs if your device has dual SIMs. Attachments have not been implemented yet.
+6. **Bluetooth calling**:
+   - Remove your Bluetooth device if you have already registered it with another app.
+   - Pair your Bluetooth device to the PC either through the in-app Bluetooth pairing or through the Windows settings.
+7. **Screen Mirroring using [Scrcpy](https://github.com/Genymobile/scrcpy)**:
+   - You would need to [download](https://github.com/Genymobile/scrcpy/releases), extract and set the scrcpy location in App settings.
+   - You can specify your preferences for the scrcpy to launch with in the screen mirroring section.
+   - For initiating screen mirroring, the easiest way would be to plug your device through USB and start it by clicking on Phone frame.
+   - Sefirah will try to connect to your device if the default tcpip port is open for subsequent connections.
+   - If you have any doubts or problems in connecting scrcpy, refer [scrcpy docs](https://github.com/Genymobile/scrcpy/blob/master/doc/connection.md) and [Scrcpy FAQ](https://github.com/Genymobile/scrcpy/blob/master/FAQ.md).
+   - If you like their project, please consider supporting the author [rom1v](https://blog.rom1v.com/about/#support-my-open-source-work)
+
+## Screenshots
+
+![screenshots of app](./.github/readme-images/Screenshot.png)
+
+## Support
+
+Feel free to open an issue if you want to report a bug, provide feedback, or ask a question. Pull requests are very welcome!
+
+If you have any specific questions or need further details, please reach out on [the Discord server](https://discord.gg/MuvMqv4MES) or by email, I would be happy to help.
+
+## Special Thanks
+- **Clipboard Detection with Accessibility Service**: [XClipper](https://github.com/KaustubhPatange/XClipper)
+- **Shell clipboard worker** (Shizuku / ADB): approaches inspired by [scrcpy](https://github.com/Genymobile/scrcpy) and [Shizuku](https://github.com/RikkaApps/Shizuku)
+- **SFTP Server**: [Kdeconnect-android](https://github.com/KDE/kdeconnect-android)
+- **Screen mirroring**: [@rom1v](https://github.com/rom1v) / [Scrcpy](https://github.com/Genymobile/scrcpy)

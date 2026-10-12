@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "saiph-app"
+version = "0.1.0"
+description = "Saiph: a self-hosted phone and desktop companion (beta)."
+requires-python = ">=3.12,<3.13"
+license = {text = "AGPL-3.0-or-later"}
+dependencies = [
+  "PySide6>=6.8,<7", "platformdirs>=4.3,<5", "python-dateutil>=2.9,<3",
+  "requests>=2.32,<3", "cryptography>=50.0.2,<51", "websockets>=14,<18",
+  "desktop-notifier>=6.2,<7", "tzdata>=2025.2", "qrcode>=8,<9",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-qt>=4.5", "pyinstaller>=6.11"]
+hosted = ["tink==1.16.1", "Authlib==1.8.0", "SecretStorage==3.5.0; sys_platform == 'linux'"]
+
+[project.scripts]
+orion-mini = "orion_mini.app:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "hub"]

@@ -1,0 +1,4 @@
+• Auto clipboard + image sync on Android 10+ via Shizuku or desktop ADB
+• Play Sound: ring your phone from the desktop to find it
+• Custom desktop action icons, bulk action sync, and label visibility setting
+• In-app changelog for Android and Desktop releases

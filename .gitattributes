@@ -1,0 +1,7 @@
+# Canonical public source bytes and POSIX scripts survive Windows checkout.
+* text=auto eol=lf
+*.png -text
+*.ico -text
+*.jpg -text
+*.jpeg -text
+*.webp -text

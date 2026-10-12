@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="referrer" content="no-referrer">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Saiph release downloads</title>
+  <meta name="description" content="Saiph release downloads. Current release and launch preparation status.">
+  <meta name="theme-color" content="#0a0e13">
+  <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="index.html" aria-label="Saiph home">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="15" fill="#0f1a22" stroke="#22d3ee" stroke-opacity=".35"/><path d="M8 21 16 16 24 11" stroke="#22d3ee" stroke-opacity=".35" stroke-width="1.2"/><circle cx="8.5" cy="20.7" r="2.4" fill="#67e8f9"/><circle cx="16" cy="16" r="2.4" fill="#e7edf4"/><circle cx="23.5" cy="11.3" r="2.4" fill="#67e8f9"/></svg>
+      Saiph
+    </a>
+    <nav class="nav-links" aria-label="Main">
+      <a class="hide-sm" href="index.html#features">Features</a>
+      <a class="hide-sm" href="index.html#download">Download</a>
+      <a href="self-host.html">Self-host</a>
+      <a href="hosted.html">Hosted</a>
+      <a data-link="github" href="#">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+<section class="section"><div class="wrap reading">
+<h1>Download <em>Saiph.</em></h1>
+<p class="lede" data-release-status>Installers are coming soon.</p>
+<div class="callout info" data-friends-beta hidden><strong>Friends beta:</strong> use your own account and invitation code. Installers, matching source archives, licences and checksums are in your account downloads. No subscription payment is required. <a class="btn" data-link="beta-account">Open beta account</a></div>
+<div class="grid c2" style="margin-top:28px"><a class="card dl" data-download="windows"><h2>Windows</h2><span class="go">Download installer</span></a><a class="card dl" data-download="linux"><h2>Linux</h2><span class="go">Download desktop archive</span></a><a class="card dl" data-download="android"><h2>Android</h2><span class="go">Download APK</span></a><a class="card dl" data-download="server"><h2>Self-hosted Hub</h2><span class="go">Download server archive</span></a></div>
+<div class="callout info" data-android-beta hidden style="margin-top:22px"><strong>Android beta:</strong> open the invite on your phone. Google asks for your email, then installs it. <br><a class="btn" data-link="android-beta" rel="noreferrer" style="margin-top:12px">Join the Android beta</a></div>
+<div data-release-details hidden><h2>Check your download</h2><p>Version: <strong data-release-tag></strong>. Exact source: <code data-release-commit></code>.</p><div class="btn-row"><a class="btn" data-link="checksums">SHA256SUMS</a><a class="btn" data-link="source-metadata">Source and file metadata</a><a class="btn" data-link="release-source">Exact source revision</a><a class="btn" data-link="releases">Release notes</a></div>
+<p>Compare your file with its line in SHA256SUMS:</p><pre><code># Windows PowerShell
+Get-FileHash -Algorithm SHA256 ./downloaded-file
+
+# Linux
+sha256sum ./downloaded-file</code></pre><p class="muted">A checksum proves the file wasn't changed, not who published it. Don't skip signature warnings.</p></div>
+<h2>Before upgrading</h2><p>Back up your Saiph data and read the release notes.</p><p><a href="waitlist.html">Launch updates</a> · <a href="self-host.html">Self-hosting guide</a> · <a href="privacy.html">Website privacy</a></p>
+</div></section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div>
+      <strong style="color:var(--text)">Saiph</strong> · © <span data-year>2026</span> Alexander Belik<br>
+      <span style="font-size:.85rem" data-analytics-status>Analytics is disabled.</span>
+    </div>
+    <nav aria-label="Footer">
+      <a href="index.html#features">Features</a>
+      <a href="index.html#download">Download</a>
+      <a href="self-host.html">Self-host</a>
+      <a href="hosted.html">Hosted</a>
+      <a href="privacy.html">Privacy</a>
+      <a href="account-privacy.html">Account privacy</a>
+      <a href="terms.html">Terms</a>
+      <a href="refunds.html">Refunds</a>
+      <a href="contact.html">Contact</a>
+      <a href="waitlist.html">Launch updates</a>
+      <a data-link="github" href="#">GitHub</a>
+    </nav>
+  </div>
+</footer>
+<script src="assets/config.js"></script>
+<script src="assets/site.js"></script>
+<script src="assets/analytics.js"></script>
+</body>
+</html>

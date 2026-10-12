@@ -1,0 +1,22 @@
+{
+  "format": "orion-supporting-components",
+  "schema": 1,
+  "tailscale": {
+    "purpose": "Secure connection between approved devices",
+    "official_windows_package": "Tailscale.Tailscale",
+    "official_windows_source": "winget",
+    "official_download": "https://tailscale.com/download",
+    "official_linux_instructions": "https://tailscale.com/kb/1031/install-linux",
+    "enrollment": "Official browser login into the owner's own network; custom HTTPS login server only from the authenticated enrollment profile",
+    "consent": "Operating-system installation approval and browser authentication are required once"
+  },
+  "seafile": {
+    "optional": true,
+    "purpose": "Share selected normal folders",
+    "official_download": "https://www.seafile.com/en/download/",
+    "detect_first": true,
+    "preserve_existing_library": true,
+    "credentials": "Provision scoped user credentials through authenticated enrollment; never bundle administrator credentials"
+  },
+  "optional_services_block_setup": false
+}

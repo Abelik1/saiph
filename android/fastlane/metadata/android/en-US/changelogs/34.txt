@@ -1,0 +1,4 @@
+• Throttle file transfer progress notifications
+• Skip incomplete contacts during sync
+• Skip sending empty clipboard texts when using accessibility service
+• Update permission handling and Ui

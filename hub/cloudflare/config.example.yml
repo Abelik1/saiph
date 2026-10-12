@@ -1,0 +1,6 @@
+tunnel: YOUR_TUNNEL_UUID
+credentials-file: /home/orion/.cloudflared/YOUR_TUNNEL_UUID.json
+ingress:
+  - hostname: orion.example.com
+    service: http://127.0.0.1:8765
+  - service: http_status:404

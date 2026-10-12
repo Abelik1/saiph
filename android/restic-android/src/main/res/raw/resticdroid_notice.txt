@@ -1,0 +1,26 @@
+ResticDroid
+Copyright (C) 2026 The ResticDroid contributors
+
+Licensed under the GNU General Public License v3.0 or later. See LICENSE.
+
+
+Third-party components
+----------------------
+
+restic (https://restic.net), by Alexander Neumann and contributors, is
+distributed under the BSD 2-Clause License and is bundled in released APKs as
+the executable `librestic.so`. Its full licence text is in
+third_party/restic/LICENSE, is reproduced inside the APK, and is shown in
+the app under Settings -> About -> restic.
+
+restic is compiled unmodified from the pinned upstream commit and is executed as
+a separate process; ResticDroid links no restic code into itself.
+
+assets/badges/get-it-on-fdroid.png is an official F-Droid badge (https://f-droid.org/en/2016/05/29/get-it-on-f-droid-badges.html).
+
+assets/badges/get-it-on-github.svg is derived from the F-Droid badge by Andrew
+Nayenko (https://f-droid.org), licensed CC BY-SA 3.0
+(https://creativecommons.org/licenses/by-sa/3.0/).
+
+assets/badges/get-it-on-obtainium.png is the Obtainium project's badge
+(https://github.com/ImranR98/Obtainium), GPL-3.0.

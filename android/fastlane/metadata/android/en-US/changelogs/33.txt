@@ -1,0 +1,7 @@
+• Unlocks new desktop app features: Bluetooth calling, low battery alerts, app shortcuts
+• Send Clipboard via Quick Settings
+• Share multiple remote storage folders with Windows + Recycle Bin support
+• Added tablet layouts, volume button remote control, and nested media settings
+• Sync call logs and handle desktop Bluetooth pairing requests
+• Fix file transfer overwrites, Spotify media sessions, pairing UI freezes, and media time formatting
+• Deep-link pairing support

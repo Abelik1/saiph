@@ -1,0 +1,12 @@
+[
+  {
+    "version": 1,
+    "file": "0001_billing.sql",
+    "sha256": "1dcf27bc1a7e8b5b617dbea9a55afd8fabf1829d2854c9b9dda5072aaca8345f"
+  },
+  {
+    "version": 2,
+    "file": "0002_billing_lifecycle.sql",
+    "sha256": "3c11e9eae5bfaae7e7e473dadde4a88c15ff8e078e654d6fd7829d533616c36a"
+  }
+]

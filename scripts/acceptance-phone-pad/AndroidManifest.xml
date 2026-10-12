@@ -1,0 +1,10 @@
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="ie.orion.acceptance.pad">
+    <uses-sdk android:minSdkVersion="29" android:targetSdkVersion="36" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <application android:label="Saiph Acceptance Pad" android:theme="@android:style/Theme.Material.Light.NoActionBar" android:allowBackup="false">
+        <activity android:name=".Pad" android:exported="true" />
+        <provider android:name=".Fixtures" android:authorities="ie.orion.acceptance.pad.fixtures" android:exported="true" android:grantUriPermissions="true" />
+        <receiver android:name=".FixtureAction" android:exported="false" />
+    </application>
+</manifest>

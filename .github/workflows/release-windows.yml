@@ -1,0 +1,174 @@
+name: Signed Windows release
+# Maintainer-started only. Builds the reviewed main revision, signs the project
+# executable before packaging and the installer after packaging through SignPath,
+# then verifies both signatures. Pull requests never reach this workflow or its
+# protected environment, and no signing key exists on the runner.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Semantic version, for example 0.1.0-beta.2
+        required: true
+      build_number:
+        description: Increasing Windows build number (0-65535)
+        required: true
+permissions:
+  contents: read
+  actions: read # SignPath reads this run's details and downloads the uploaded artifact.
+concurrency:
+  group: signed-windows-release
+  cancel-in-progress: false
+jobs:
+  windows:
+    if: github.ref == 'refs/heads/main'
+    runs-on: windows-latest
+    timeout-minutes: 120
+    # Configure required reviewers on this environment; it holds SIGNPATH_API_TOKEN.
+    environment: windows-signing
+    env:
+      QT_QPA_PLATFORM: offscreen
+      VITE_ORION_PROFILE: link
+      RELEASE_VERSION: ${{ inputs.version }}
+      RELEASE_BUILD: ${{ inputs.build_number }}
+    steps:
+      - name: Require complete signing configuration and a valid version
+        shell: python
+        env:
+          SIGNPATH_ORGANIZATION_ID: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          SIGNPATH_PROJECT_SLUG: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          SIGNPATH_SIGNING_POLICY_SLUG: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          SIGNPATH_APP_CONFIGURATION: ${{ vars.SIGNPATH_APP_CONFIGURATION }}
+          SIGNPATH_INSTALLER_CONFIGURATION: ${{ vars.SIGNPATH_INSTALLER_CONFIGURATION }}
+          SAIPH_SIGNING_PUBLISHER: ${{ vars.SAIPH_SIGNING_PUBLISHER }}
+          SAIPH_SIGNING_CERTIFICATE_SHA256: ${{ vars.SAIPH_SIGNING_CERTIFICATE_SHA256 }}
+          HAS_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN != '' }}
+        run: |
+          import os, re
+          names = ['SIGNPATH_ORGANIZATION_ID', 'SIGNPATH_PROJECT_SLUG', 'SIGNPATH_SIGNING_POLICY_SLUG',
+                   'SIGNPATH_APP_CONFIGURATION', 'SIGNPATH_INSTALLER_CONFIGURATION',
+                   'SAIPH_SIGNING_PUBLISHER', 'SAIPH_SIGNING_CERTIFICATE_SHA256']
+          missing = [name for name in names if not os.environ.get(name)]
+          if os.environ.get('HAS_TOKEN') != 'true':
+              missing.append('SIGNPATH_API_TOKEN (environment secret)')
+          if missing:
+              raise SystemExit('Signing is not configured; see docs/CODE_SIGNING.md. Missing: ' + ', '.join(missing))
+          if not re.fullmatch(r'[0-9a-f]{64}', os.environ['SAIPH_SIGNING_CERTIFICATE_SHA256']):
+              raise SystemExit('SAIPH_SIGNING_CERTIFICATE_SHA256 must be 64 lowercase hex characters')
+          if not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.-]+)?', os.environ['RELEASE_VERSION']):
+              raise SystemExit('Version must be an explicit semantic version')
+          if not re.fullmatch(r'[0-9]{1,5}', os.environ['RELEASE_BUILD']) or int(os.environ['RELEASE_BUILD']) > 65535:
+              raise SystemExit('Build number must be 0-65535')
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+      - name: Desktop dependencies with reviewed Qt notice version
+        run: python -m pip install -e ".[dev,hosted]" "PySide6==6.11.2" -r hub/requirements-hosted.txt httpx
+      - run: npm --prefix frontend ci
+      - name: Public fixture and delegate boundary
+        run: python scripts/public-release/check-public-data.py
+      - name: Exported Python unit suite
+        run: python scripts/public-release/verify-public.py
+      - run: npm --prefix frontend run test:unit
+      - name: Build Link on Windows
+        run: python scripts/build-native.py --profile link --version "$env:RELEASE_VERSION" --build-number "$env:RELEASE_BUILD"
+
+      # 1. Sign the project executable before packaging; package-manifest.json hashes it.
+      - id: unsigned-app
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: unsigned-app-${{ inputs.version }}
+          retention-days: 1
+          if-no-files-found: error
+          path: dist/OrionMini/
+      - name: Request executable signature (maintainer approves in SignPath)
+        uses: signpath/github-action-submit-signing-request@c92b958760219087e01f8d67a1669ed57afe2627 # v2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_APP_CONFIGURATION }}
+          github-artifact-id: ${{ steps.unsigned-app.outputs.artifact-id }}
+          parameters: |
+            version: ${{ toJSON(inputs.version) }}
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: build/signed-app
+      - name: Accept the signed bundle only if just the project executable changed
+        run: python scripts/public-release/check-signed-bundle.py --unsigned dist/OrionMini --signed build/signed-app
+
+      # 2. Package the signed executable, then sign the finished installer.
+      - name: Wrap and audit the signed bundle
+        run: python scripts/packaging/build-desktop-distribution.py --bundle build/signed-app --platform windows-x86_64 --version "$env:RELEASE_VERSION" --output build/release-distribution
+      - id: unsigned-installer
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: unsigned-installer-${{ inputs.version }}
+          retention-days: 1
+          if-no-files-found: error
+          path: build/release-distribution/Saiph-Link-${{ inputs.version }}-windows-x86_64.exe
+      - name: Request installer signature (maintainer approves in SignPath)
+        uses: signpath/github-action-submit-signing-request@c92b958760219087e01f8d67a1669ed57afe2627 # v2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_INSTALLER_CONFIGURATION }}
+          github-artifact-id: ${{ steps.unsigned-installer.outputs.artifact-id }}
+          parameters: |
+            version: ${{ toJSON(inputs.version) }}
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: build/signed-installer
+
+      # 3. Verify both signatures against independently configured publisher values.
+      - name: Verify signatures, publisher, timestamp and version
+        env:
+          SAIPH_SIGNING_PUBLISHER: ${{ vars.SAIPH_SIGNING_PUBLISHER }}
+          SAIPH_SIGNING_CERTIFICATE_SHA256: ${{ vars.SAIPH_SIGNING_CERTIFICATE_SHA256 }}
+        run: |
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\10.*\x64\signtool.exe" | Sort-Object FullName | Select-Object -Last 1
+          if (-not $signtool) { throw 'Windows SDK SignTool is absent' }
+          New-Item -ItemType Directory -Force build/signed-release | Out-Null
+          python scripts/public-release/verify-windows-signatures.py `
+            --installer "build/signed-installer/Saiph-Link-$env:RELEASE_VERSION-windows-x86_64.exe" `
+            --executable "build/release-distribution/package-$env:RELEASE_VERSION-windows-x86_64/app/OrionMini.exe" `
+            --publisher "$env:SAIPH_SIGNING_PUBLISHER" --certificate-sha256 "$env:SAIPH_SIGNING_CERTIFICATE_SHA256" `
+            --version "$env:RELEASE_VERSION" --signtool $signtool.FullName --output build/signed-release/windows-signatures.json
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Retain exact source, signed artifact and evidence
+        shell: python
+        run: |
+          import json, os, shutil, subprocess, sys
+          from pathlib import Path
+          commit, version = os.environ['GITHUB_SHA'], os.environ['RELEASE_VERSION']
+          output = Path('build/signed-release')
+          installer = Path('build/signed-installer') / f'Saiph-Link-{version}-windows-x86_64.exe'
+          shutil.copyfile(installer, output / installer.name)
+          package = Path('build/release-distribution') / f'package-{version}-windows-x86_64'
+          shutil.copyfile(package / 'package-manifest.json', output / 'package-manifest.json')
+          shutil.copyfile(package / 'licenses/inventory.json', output / 'dependency-inventory.json')
+          origins = Path('build/profile/native-build-origins.json')
+          if origins.is_file():
+              shutil.copyfile(origins, output / origins.name)
+          subprocess.run(['git', 'archive', '--format=tar.gz', '--output=' + str(output / 'Saiph-source.tar.gz'), commit], check=True)
+          evidence = {'schema': 1, 'source_commit': commit, 'platform': 'windows-x86_64', 'version': version,
+                      'build': int(os.environ['RELEASE_BUILD']), 'release_state': 'signed-candidate',
+                      'run_id': os.environ['GITHUB_RUN_ID'], 'runtime': sys.version, 'qt_version': '6.11.2',
+                      'limits': ['Signature verified on the CI runner only; no clean-machine installation, '
+                                 'SmartScreen reputation, independent security review or physical acceptance']}
+          (output / 'build-evidence.json').write_text(json.dumps(evidence, indent=2) + '\n', encoding='utf-8')
+          command = [sys.executable, 'scripts/public-release/release-checksums.py', str(output), '--source-commit', commit]
+          subprocess.run(command, check=True)
+          subprocess.run(command + ['--verify'], check=True)
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: signed-candidate-windows-${{ inputs.version }}
+          retention-days: 30
+          if-no-files-found: error
+          path: build/signed-release/

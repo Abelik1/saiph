@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Account and billing privacy · Saiph</title>
+  <meta name="description" content="Privacy information for Saiph account sign-in, Auth0, Stripe and Hosted preparation.">
+  <meta name="theme-color" content="#0a0e13">
+  <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="index.html" aria-label="Saiph home">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="15" fill="#0f1a22" stroke="#22d3ee" stroke-opacity=".35"/><path d="M8 21 16 16 24 11" stroke="#22d3ee" stroke-opacity=".35" stroke-width="1.2"/><circle cx="8.5" cy="20.7" r="2.4" fill="#67e8f9"/><circle cx="16" cy="16" r="2.4" fill="#e7edf4"/><circle cx="23.5" cy="11.3" r="2.4" fill="#67e8f9"/></svg>
+      Saiph
+    </a>
+    <nav class="nav-links" aria-label="Main">
+      <a class="hide-sm" href="index.html#features">Features</a>
+      <a class="hide-sm" href="index.html#download">Download</a>
+      <a href="self-host.html">Self-host</a>
+      <a href="hosted.html">Hosted</a>
+      <a data-link="github" href="#">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+<section class="section"><div class="wrap reading">
+<h1>Account and billing privacy.</h1>
+<p class="lede">How the development account portal handles identity and sandbox billing, and what must be settled before public Hosted accounts open.</p>
+<div class="callout"><strong>Development notice · prepared 11 October 2026.</strong> The portal is restricted to its configured owner. Paid Hosted and public account registration are not open. The public contact, provider settings and retention/deletion process still need confirmation; this draft must be completed before public onboarding.</div>
+<h2>Who is responsible</h2><p>Alexander Belik, operating as Abelik1, Ireland, is the controller for Saiph account administration. See <a href="contact.html">contact details and their current status</a>. The <a href="privacy.html">website notice</a> separately covers landing pages and the optional launch-update list.</p>
+<h2>Sign-in and essential cookies</h2><p>Auth0 (Okta) authenticates the account. Depending on the configured sign-in connection, it receives login details, an email address/profile and network, device and authentication-event information. A social identity provider may also process the login when that connection is enabled. The actual enabled connections, tenant region and provider log-retention settings need confirmation.</p><p>The portal requests the openid, profile and email sign-in scopes, but saves only the authenticated subject in its session user profile to verify its owner. It uses a secure, HTTP-only, host-only, SameSite Lax session cookie that is non-rolling, transient and expires within one hour. The sign-in flow also uses temporary transaction cookies. Auth0 maintains its own sign-in session and essential cookies on its domain; signing out locally does not erase provider records. These cookies support authentication, rather than advertising.</p><p>The proposed legal basis is taking requested steps to provide an account and, when available, performing the service contract. Login protection and abuse prevention rely on legitimate interests, subject to a documented assessment. An account cannot be provided without the authentication data needed to secure it.</p>
+<h2>Payments and subscription records</h2><p>Stripe Checkout and its billing portal collect payment and billing details directly on Stripe's pages. Saiph's development handlers accept test-mode resources only; use only Stripe test payment details, never real card or bank details. The account application does not receive or store full payment-card numbers or security codes.</p><p>Saiph's billing database stores the Auth0 subject, Stripe account/customer/subscription/price identifiers, creation and observation times, subscription status, cancellation and billing-period dates, and a minimal event receipt used to prevent duplicate processing. Stripe metadata contains a derived account reference; hashing that reference does not make the linked billing records anonymous. Full webhook payloads are not stored by this billing schema.</p><p>The proposed bases are contract administration for requested billing, legal obligations for records that must be retained, and legitimate interests for fraud prevention, reconciliation and disputes. Stripe acts as processor for some merchant-directed activities and as an independent controller for its own regulated, fraud-prevention and other purposes described in <a href="https://stripe.com/privacy" rel="noreferrer">Stripe's privacy policy</a>. Cancelling a subscription, deleting an account and asking for a refund are separate requests.</p>
+<h2>Providers and international transfers</h2><p>Auth0 supplies identity services, Vercel hosts the portal, Neon supplies its PostgreSQL database, and Stripe handles checkout, billing and payments. Mail providers process correspondence when a contact channel is configured. Authorized administrators may access records needed to run the service or answer requests; authorities and professional advisers may receive information where legally required or necessary for a dispute.</p><p>Actual hosting/database/identity regions, subprocessors, provider retention and any transfers outside the EEA must be recorded before public onboarding. A selected EU region alone does not establish EU-only processing. Confirm the applicable contracts and safeguards, such as a valid adequacy decision or standard contractual clauses with any required supplementary measures; do not assume a safeguard without checking it.</p><p>Provider references: <a href="https://auth0.com/docs/secure/data-privacy-and-compliance/data-processing" rel="noreferrer">Auth0 data processing</a>, <a href="https://www.okta.com/privacy-policy/" rel="noreferrer">Okta privacy</a>, <a href="https://vercel.com/legal/privacy-policy" rel="noreferrer">Vercel privacy</a>, <a href="https://neon.com/privacy-policy" rel="noreferrer">Neon privacy</a> and <a href="https://stripe.com/privacy" rel="noreferrer">Stripe privacy</a>.</p>
+<h2 id="retention">Retention and account deletion</h2><p>The current development portal has no self-service account deletion or automatic billing-record purge. Customer identity records are protected against deletion by the current database schema; a reviewed maintenance process is needed to erase or minimize them safely. Deleting an Auth0 user does not automatically erase Saiph, Neon, Stripe, support or backup records. Provider records have their own deletion processes and legal duties.</p><p>The proposed operational rules are: remove account/profile data within 30 days after account closure, security logs after 30 days, and resolved routine correspondence after 12 months. Retain only accounting records required by law for the applicable statutory period; Irish Revenue generally requires business tax records for six years. These are proposed policy targets, not deployed cleanup guarantees. Provider backup windows, specific accounting triggers, dispute holds and technical deletion steps remain to be approved and tested before these periods become a service promise.</p><p>A legal hold must identify its reason, narrowly scoped data, responsible person and review date. Records kept under a hold or statutory duty must be restricted to that purpose, then deleted when it ends. Closing a paid account must also address future renewal; erasure alone is not a cancellation mechanism.</p>
+<h2>Hosted content is a separate boundary</h2><p>The account portal does not receive clipboard, message or file content, and successful payment or login does not approve devices or supply encryption keys. The isolated Hosted prototype can observe account/device identifiers, routing metadata, sizes and timing even where payloads are sealed. The ordinary self-hosted Hub can process readable content. Public Hosted retention, recovery, security and provider arrangements need a separate verified description before release; the prototype is not a reviewed production service.</p>
+<h2>Your choices and rights</h2><p>Where applicable, request access, correction, erasure, restriction or portability; object to legitimate-interests processing; or withdraw any optional consent without affecting earlier lawful processing. Account and billing data are not added to the launch-update list without separate consent. No advertising or analytics is included in the development portal.</p><p>Use the <a href="contact.html">verified controller contact</a> once published. Requests are normally answered within one month; any lawful extension must be explained within that month. You may complain to the <a href="https://www.dataprotection.ie/en/individuals/exercising-your-rights/complaints-handling-investigations-and-enforcement-individuals" rel="noreferrer">Irish Data Protection Commission</a> or your local supervisory authority. Account authorization is automated access control; no credit or eligibility profiling is implemented by this account application. Stripe's own fraud and payment decisions are described in its notice.</p>
+</div></section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div>
+      <strong style="color:var(--text)">Saiph</strong> &middot; &copy; <span data-year>2026</span> Alexander Belik<br>
+      <span style="font-size:.85rem" data-analytics-status>Analytics is disabled.</span>
+    </div>
+    <nav aria-label="Footer">
+      <a href="index.html#features">Features</a>
+      <a href="index.html#download">Download</a>
+      <a href="self-host.html">Self-host</a>
+      <a href="hosted.html">Hosted</a>
+      <a href="privacy.html">Privacy</a>
+      <a href="account-privacy.html">Account privacy</a>
+      <a href="terms.html">Terms</a>
+      <a href="refunds.html">Refunds</a>
+      <a href="contact.html">Contact</a>
+      <a href="waitlist.html">Launch updates</a>
+      <a data-link="github" href="#">GitHub</a>
+    </nav>
+  </div>
+</footer>
+<script src="assets/config.js"></script>
+<script src="assets/site.js"></script>
+<script src="assets/analytics.js"></script>
+</body>
+</html>

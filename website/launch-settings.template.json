@@ -1,0 +1,42 @@
+{
+  "sourceVisibility": "private",
+  "githubUrl": "https://github.com/Abelik1/saiph",
+  "releasesUrl": "",
+  "downloads": {
+    "windows": "",
+    "linux": "",
+    "android": "",
+    "server": ""
+  },
+  "release": {},
+  "androidBetaUrl": "",
+  "waitlistUrl": "",
+  "waitlistPrivacyUrl": "privacy.html#waitlist",
+  "waitlistNotice": "I agree to receive the Saiph launch announcement and occasional launch updates by email. I can unsubscribe or ask for my email to be deleted at any time.",
+  "privacy": {
+    "status": "draft",
+    "controllerName": "Alexander Belik, operating as Abelik1",
+    "controllerCountry": "Ireland",
+    "contactEmail": "",
+    "updatedAt": "",
+    "hostingRetention": "",
+    "hostingTransfers": "",
+    "contactProcessing": ""
+  },
+  "waitlist": {
+    "processorName": "Tally",
+    "processorPrivacyUrl": "https://tally.so/help/privacy-policy",
+    "processingLocations": "Tally lists Google Cloud hosting/storage in Belgium and form data stored in Europe. Optional form email notifications use SendGrid in the United States; EU storage does not establish EU-only processing.",
+    "transferSafeguards": "",
+    "retention": "",
+    "withdrawal": "",
+    "consentText": "I agree to receive the Saiph launch announcement and occasional launch updates by email. I can unsubscribe or ask for my email to be deleted at any time.",
+    "noticeVersion": "2026-10-11",
+    "optInMode": "single",
+    "consentRequired": true,
+    "partialSubmissionsDisabled": true,
+    "confirmationEmailDisabled": true,
+    "trackingDisabled": false,
+    "emailRequired": true
+  }
+}

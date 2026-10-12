@@ -1,0 +1,17 @@
+[Unit]
+Description=Orion Hub database backup
+
+[Service]
+Type=oneshot
+User=orion
+Group=orion
+WorkingDirectory=/opt/orion-mini/hub
+EnvironmentFile=-/etc/orion-hub.env
+ExecStart=/opt/orion-mini/hub/.venv/bin/python -m orion_hub.cli backup
+UMask=0077
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateNetwork=true
+NoNewPrivileges=true
+ReadWritePaths=/var/lib/orion-hub

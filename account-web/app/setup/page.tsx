@@ -1,0 +1,19 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+import Link from "next/link";
+
+export default function Setup() {
+  return <>
+    <p className="eyebrow">Friends beta</p>
+    <h1>Connect your computer and phone.</h1>
+    <p className="lede">You need an Android phone and a Windows or Linux computer. Saiph hosts the connection for you. You do not need a server or Tailscale.</p>
+    <ol className="setup-steps">
+      <li><h2>Activate your invitation</h2><p><Link href="/account">Sign in to your account</Link> and enter your invitation code. Use the same sign-in account on both devices. Your code provides temporary access without payment.</p></li>
+      <li><h2>Install the beta apps</h2><p>Download the desktop installer and Android APK from your account. Use those builds: they include the connection settings. Keep existing Saiph installations until you have checked how to preserve their pairing and keys.</p><p>Windows beta installers do not yet have a trusted publisher signature. Check the supplied checksum before installing.</p></li>
+      <li><h2>Set up your computer</h2><p>Open Saiph → Settings → Advanced → Saiph Hosted preview. Turn on Hosted and sign in with your browser. Choose “Set up this computer as root”, then show its root approval code.</p><p>Your computer approves devices and renews their access. Keep it online regularly; syncing stops after 12 hours without renewal.</p></li>
+      <li><h2>Connect your phone</h2><p>Open Saiph Hosted preview on your phone, turn it on and sign in with the same account. Paste the computer’s root code. Compare every group of the full fingerprint on the phone with the computer before confirming.</p><p>Show the phone’s device request and enter it in the computer’s “Phone request code” field. Compare the phone fingerprint, give it a name and approve it. Account sign-in alone never approves a device.</p></li>
+      <li><h2>Choose what to share</h2><p>Enable phone notification access if you want notifications on your computer. Allow Saiph’s own notifications to see its connection status. Android can restrict background clipboard access and battery use; follow the phone’s permission guidance.</p><p>Start with harmless clipboard text in both directions, then a test notification and a small file. Files and photos are shared by explicitly choosing them. Calls, SMS, image clipboard and photo-library browsing are outside this beta.</p></li>
+    </ol>
+    <section className="card"><h2>If setup stops</h2><p>Check that all three sign-ins use the same account, your invitation is still active and both devices have internet access. Expired approval codes can be regenerated on the computer. If Android asks for deployment identifiers, use the Hosted beta build from your account.</p><p>For a bug report, note your device, app version, the step and the error text. Keep invitation codes, approval codes, fingerprints, tokens and personal content out of public reports. Contact the person who invited you.</p><p>Keep your computer’s keys: lost root-key recovery and transferring the root to another computer are not available yet. Uninstalling or deleting app data can remove device keys.</p></section>
+    <p><Link className="button" href="/account">Back to your account</Link></p>
+  </>;
+}
