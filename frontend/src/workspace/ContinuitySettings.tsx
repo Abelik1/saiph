@@ -3,7 +3,7 @@ import { useState } from "react";
 import type { Client } from "./types";
 import { Action, Card, Form } from "./ui";
 
-type Config = { cloud?: { path?: string; enabled?: boolean; recordings?: boolean }; link?: { focus?: boolean; dnd_sync?: boolean; clipboard?:boolean; timezone?: string; wake_hour?: number; wake_minute?: number } };
+type Config = { cloud?: { path?: string; enabled?: boolean; recordings?: boolean }; link?: { focus?: boolean; dnd_sync?: boolean; auto_copy_codes?: boolean; battery_alerts?: boolean; pause_media_on_calls?: boolean; clipboard?:boolean; timezone?: string; wake_hour?: number; wake_minute?: number } };
 type Backup = { configured: boolean; targets: Record<string, { ok?: boolean; completed_at?: number; error?: string }>; error?: string };
 
 export function ContinuitySettings({ settings, backup, client, workspace = true }: { settings: Config; backup?: Backup; client: Client; workspace?: boolean }) {
@@ -11,15 +11,21 @@ export function ContinuitySettings({ settings, backup, client, workspace = true 
   const [focus, setFocus] = useState(settings.link?.focus !== false);
   const [clipboard, setClipboard] = useState(settings.link?.clipboard !== false);
   const [dnd, setDnd] = useState(settings.link?.dnd_sync !== false);
+  const [codes, setCodes] = useState(settings.link?.auto_copy_codes === true);
+  const [battery, setBattery] = useState(settings.link?.battery_alerts !== false);
+  const [calls, setCalls] = useState(settings.link?.pause_media_on_calls !== false);
   const [timezone, setTimezone] = useState(settings.link?.timezone || "Europe/London");
   const [wakeHour, setWakeHour] = useState(settings.link?.wake_hour ?? 7);
   return <Card title="Cloud and continuity" subtitle="These preferences belong to this computer.">
-    <Form submit={() => client.call("settings.save", { cloud: workspace ? cloud : {path:cloud.path,enabled:cloud.enabled}, link: { ...(workspace ? settings.link : {}), focus, dnd_sync: dnd, clipboard, timezone, wake_hour: wakeHour, wake_minute: settings.link?.wake_minute ?? 0 } })}>
+    <Form submit={() => client.call("settings.save", { cloud: workspace ? cloud : {path:cloud.path,enabled:cloud.enabled}, link: { ...(workspace ? settings.link : {}), focus, dnd_sync: dnd, auto_copy_codes: codes, battery_alerts: battery, pause_media_on_calls: calls, clipboard, timezone, wake_hour: wakeHour, wake_minute: settings.link?.wake_minute ?? 0 } })}>
       <label>Cloud folder<input value={cloud.path || ""} placeholder="Cloud in your home folder" onChange={e => setCloud({ ...cloud, path: e.target.value })} /></label>
       <label className="check"><input type="checkbox" checked={cloud.enabled !== false} onChange={e => setCloud({ ...cloud, enabled: e.target.checked })} />Use Cloud folders</label>
       {workspace && <label className="check"><input type="checkbox" checked={cloud.recordings !== false} onChange={e => setCloud({ ...cloud, recordings: e.target.checked })} />Transcribe finished Cloud recordings automatically</label>}
       <label className="check"><input type="checkbox" checked={focus} onChange={e => setFocus(e.target.checked)} />Follow the shared sleep plan for quiet notifications</label>
       <label className="check"><input type="checkbox" checked={dnd} onChange={e => setDnd(e.target.checked)} />Sync Do Not Disturb with my devices</label>
+      <label className="check"><input type="checkbox" checked={codes} onChange={e => setCodes(e.target.checked)} />Copy verification codes from my phone automatically</label>
+      <label className="check"><input type="checkbox" checked={battery} onChange={e => setBattery(e.target.checked)} />Tell me when my phone's battery is low</label>
+      <label className="check"><input type="checkbox" checked={calls} onChange={e => setCalls(e.target.checked)} />Pause music and videos here during phone calls</label>
       <label className="check"><input type="checkbox" checked={clipboard} onChange={e => setClipboard(e.target.checked)} />Share clipboard across my devices</label>
       <div className="form-grid"><label>Focus timezone<input value={timezone} onChange={e => setTimezone(e.target.value)} /></label><label>Quiet hours end<input aria-label="Quiet hours end" type="number" min={0} max={23} value={wakeHour} onChange={e => setWakeHour(Number(e.target.value))} /></label></div>
       <button>Save preferences</button>

@@ -19,13 +19,18 @@ from .adb_worker import AdbWorker
 from .continuity import Continuity
 from .agent_grants import ensure as ensure_grants
 from .phone_features import MAX_FILE
+from .codes import verification_code
+from .callpause import CallPause
 
 MESH_ORIGIN = "http://100.64.0.1:8765"
+LOW_BATTERY = 20  # Alert once at or below this level; re-arm after charging or above RECOVERED.
+RECOVERED = 30
 
 def capabilities(settings):
     result = ['notifications', 'files', 'handoff', 'focus']
     if (settings.get('link') or {}).get('clipboard',True):result.append('clipboard')
     if (settings.get('cloud') or {}).get('enabled', True): result.append('cloud.files')
+    if ((settings.get('link') or {}).get('remote') or {}).get('enabled') is True: result.append('remote')
     return result
 
 def notification_id(device: str, key: str) -> str:
@@ -44,7 +49,8 @@ class PhoneState:
         with self.lock:
             devices = [{**d, "online": self.connected and d.get("online", False)} for d in self.devices]
             state = {"devices": devices, "status": self.status, "error": self.error}
-        return {**state, "notifications": self.store.all("phone_notification")[:1000]}
+        notices = [{**n, "code": verification_code(n.get("title"), n.get("text"))} for n in self.store.all("phone_notification")[:1000]]
+        return {**state, "notifications": notices}
 
     def restore(self, state: dict):
         current = {notification_id(n["device_id"], n["key"]): n for n in state["notifications"]}
@@ -95,6 +101,7 @@ class NativeNotifications:
             _windows_notification_display_name()
             self.notifier.app_name = "Saiph"
         self.command = command
+        self.copy = None  # Set by the runtime: places a verification code on the clipboard.
         self.ids = {}
         self.suppressed = set()
 
@@ -107,7 +114,9 @@ class NativeNotifications:
                 self.command(row, operation, **extra)
             except ValueError:
                 pass  # Stale/offline native actions never execute later unexpectedly.
-        buttons = [Button(title=a["label"], on_pressed=lambda index=a["index"]: invoke("action", index=index)) for a in row["actions"][:4]]
+        code = verification_code(row.get("title"), row.get("text")) if self.copy else None
+        buttons = [Button(title="Copy " + code, on_pressed=lambda: self.copy(code))] if code else []
+        buttons += [Button(title=a["label"], on_pressed=lambda index=a["index"]: invoke("action", index=index)) for a in row["actions"][:4 - len(buttons)]]
         # All platforms support buttons; Linux inline reply is unavailable. The feed
         # remains the reply editor there, while Windows uses its native input field.
         import sys
@@ -156,7 +165,34 @@ class PhoneRuntime:
         self.features.changed = changed
         self.features.capture_ready = self.capture_ready
         self.native = None
+        self.low_battery = set()
+        self.copied_codes = set()  # (notification, code) already copied automatically.
+        self.call_pause = CallPause(workspace.settings)
         self.continuity = Continuity(workspace,self.publish)
+
+    def battery_notice(self, source, body):
+        """A one-time low-battery message for a phone that is draining, or None."""
+        if (self.workspace.settings.get('link') or {}).get('battery_alerts') is False:
+            return None
+        level, charging = body.get('battery_level'), body.get('is_charging')
+        if type(level) is not int or not isinstance(charging, bool):
+            return None
+        if charging or level >= RECOVERED:
+            self.low_battery.discard(source)
+            return None
+        if level > LOW_BATTERY or source in self.low_battery:
+            return None
+        self.low_battery.add(source)
+        with self.state.lock:
+            name = next((d['name'] for d in self.state.devices if d['id'] == source), 'Your phone')
+        return f'{name} battery is low ({level}%). Charge it soon.'
+
+    def copy_code(self, code):
+        """A verification code from the phone, placed on this computer's clipboard."""
+        if not isinstance(code, str) or not code.isdigit() or not 4 <= len(code) <= 8:
+            return
+        self.clipboard_cache.claim('text/plain', code.encode())
+        self.clipboard_received('text/plain', code.encode())
 
     def capture_ready(self, row, mime, data):
         """A photo taken on the phone for this computer: ready to paste, with a notice."""
@@ -308,6 +344,8 @@ class PhoneRuntime:
         native = None
         try:
             native = self.native = self.notifier_factory(self.command)
+            if native is not None:
+                native.copy = self.copy_code
         except Exception:
             self.state.error = "Native notifications are unavailable; phone items remain in Saiph."
         running = None
@@ -376,6 +414,10 @@ class PhoneRuntime:
                         self.changed()
                     async def event(frame):
                         if await asyncio.to_thread(self.continuity.event,frame):self.changed();return
+                        remote = getattr(self.workspace, 'remote', None)
+                        if remote and await asyncio.to_thread(remote.event,frame):self.changed();return
+                        if frame['type'] == 'call.state' and isinstance(frame['payload'], dict):
+                            await asyncio.to_thread(self.call_pause.call, frame['payload'].get('state'))
                         if await asyncio.to_thread(self.features.event,frame,mesh):
                             self.changed();return
                         if frame['type'] == 'clipboard':
@@ -387,7 +429,17 @@ class PhoneRuntime:
                                 self.discard_clipboard_publication()
                                 self.clipboard_received(mime,data)
                             return
+                        notice = self.battery_notice(frame['source'], frame['payload']) if frame['type'] == 'battery' else None
+                        if notice and native and not self.continuity.focus.quiet:
+                            try: await native.announce('Phone battery low', notice)
+                            except Exception: pass
                         row = self.state.event(frame)
+                        if row and (self.workspace.settings.get('link') or {}).get('auto_copy_codes') is True:
+                            code = verification_code(row.get('title'), row.get('text'))
+                            # Updates to the same notification must not overwrite the clipboard again.
+                            if code and (row['id'], code) not in self.copied_codes:
+                                self.copied_codes = {*list(self.copied_codes)[-99:], (row['id'], code)}
+                                self.copy_code(code)
                         if native:
                             try:
                                 if row and not row.get("silent") and not self.continuity.focus.quiet:

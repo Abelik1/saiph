@@ -6,7 +6,7 @@ import type { Client } from "./types";
 
 const settings = {
   cloud: {path:"C:/Cloud",enabled:true,recordings:true},
-  link: {focus:true,dnd_sync:false,clipboard:false,timezone:"Europe/London",wake_hour:8,wake_minute:15,deskflow:{enabled:true},camera:{enabled:true}},
+  link: {focus:true,dnd_sync:false,auto_copy_codes:false,battery_alerts:true,pause_media_on_calls:true,clipboard:false,timezone:"Europe/London",wake_hour:8,wake_minute:15,deskflow:{enabled:true},camera:{enabled:true}},
 };
 
 describe("continuity edition boundaries", () => {
@@ -17,7 +17,7 @@ describe("continuity edition boundaries", () => {
     fireEvent.click(screen.getByRole("button",{name:"Save preferences"}));
     await waitFor(() => expect(call).toHaveBeenCalledWith("settings.save",{
       cloud:{path:"C:/Cloud",enabled:true},
-      link:{focus:true,dnd_sync:false,clipboard:false,timezone:"Europe/London",wake_hour:8,wake_minute:15},
+      link:{focus:true,dnd_sync:false,auto_copy_codes:false,battery_alerts:true,pause_media_on_calls:true,clipboard:false,timezone:"Europe/London",wake_hour:8,wake_minute:15},
     }));
   });
 

@@ -11,6 +11,22 @@ function state(online = true): State {
   } } as unknown as State;
 }
 describe("Phone page", () => {
+  it("rings a phone that supports it", async () => {
+    const call = vi.fn().mockResolvedValue({ queued: true });
+    const fixture = state();
+    fixture.phone!.devices[0].capabilities.push("ring");
+    render(<Phone state={fixture} client={{ call, subscribe: () => () => {} } as Client} />);
+    fireEvent.click(screen.getByRole("button", { name: "Ring Galaxy A55" }));
+    await waitFor(() => expect(call).toHaveBeenCalledWith("phone.ring", { device_id: "phone" }));
+  });
+  it("copies a verification code from a phone notification, even offline", async () => {
+    const call = vi.fn().mockResolvedValue({ copied: true });
+    const fixture = state(false);
+    fixture.phone!.notifications[0] = { ...fixture.phone!.notifications[0], text: "Your code is 918273", code: "918273" };
+    render(<Phone state={fixture} client={{ call, subscribe: () => () => {} } as Client} />);
+    fireEvent.click(screen.getByRole("button", { name: "Copy code 918273" }));
+    await waitFor(() => expect(call).toHaveBeenCalledWith("phone.code.copy", { id: "n" }));
+  });
   it("names the device that turned on shared Do Not Disturb and toggles it everywhere", async () => {
     const call = vi.fn().mockResolvedValue({ active: false, shared: true });
     const fixture = { ...state(), settings: { hub: { paired: true, device_id: "desktop", base_url: "" }, link: { camera: { enabled: false } } },

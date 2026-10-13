@@ -312,3 +312,12 @@ def test_capture_never_places_non_image_files_on_the_clipboard(tmp_path,monkeypa
     features.event({'id':str(uuid4()),'type':'capture.insert','source':'phone','payload':{'sha256':digest}},None)
     store.save('phone_transfer',{'id':offer['id'],'event':offer,'received':time.time()});features._transfer_once()
     assert ready==[] and store.get('phone_file',offer['id'])['path'].endswith('notes.txt')
+def test_ring_is_sent_only_to_an_online_phone_that_can_ring(tmp_path):
+    published=[]
+    runtime=SimpleNamespace(client=SimpleNamespace(publish=published.append),loop=SimpleNamespace(call_soon_threadsafe=lambda fn,event:fn(event)))
+    devices=[{'id':'phone','online':True,'capabilities':['ring']},{'id':'old','online':True,'capabilities':[]}]
+    workspace=SimpleNamespace(root=tmp_path,store=Store(tmp_path),phone_runtime=runtime,phone=SimpleNamespace(connected=True,snapshot=lambda:{'devices':devices}))
+    features=f.PhoneFeatures(workspace)
+    assert features.dispatch('phone.ring',{'device_id':'phone'})['queued']
+    assert published[0]['type']=='phone.ring' and published[0]['targets']==['phone'] and published[0]['payload']=={}
+    with pytest.raises(ValueError):features.dispatch('phone.ring',{'device_id':'old'})

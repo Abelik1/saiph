@@ -16,6 +16,24 @@ The desktop keeps identity, settings and pairing state in its private applicatio
 data directory, separate from installed releases. Enrollment invitations contain
 private setup material. Never commit or publicly upload these files.
 
+### Phone remote control
+
+Phone remote lets an approved paired phone press fixed controls on a computer:
+media keys, presentation and web-video keys, locking the computer, and
+(separately opted in) typing text into the app in front. It is off by default.
+The computer's owner turns it on, chooses which phones may use it and which
+adapters are offered. Each control maps to one predefined key press or system
+action; there is no shell, no raw key code and no screen sharing. Presentation
+and video keys are sent only when a recognised presenter or browser is in front.
+Typed text is limited to 500 printable characters on one line, and commands are
+rate-limited per phone. Wayland sessions cannot receive generated keys.
+
+The computer trusts the sending device identity that the Hub attaches to each
+event, as it does for other Link commands. A compromised Hub or a stolen,
+unrevoked phone can therefore press the enabled controls. Keep the lock and
+typing adapters off unless you trust both, and revoke a lost phone promptly.
+Windows does not let Saiph send input to elevated windows.
+
 ## Isolated hosted development components
 
 `orion_hub.hosted` is a separate application with a separate database and a

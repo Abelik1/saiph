@@ -57,6 +57,28 @@ has no other network. Wi-Fi passwords stay with Windows or NetworkManager.
 Android doesn't let apps switch the hotspot on, so **Hotspot settings** in the
 phone app opens the right Android page.
 
+**Phone remote** turns your phone into a remote for apps on a computer. Turn it
+on in Settings → Advanced → Phone remote on the computer, choose which phones may
+use it, and choose the apps offered: media, presentations, web video, locking the
+computer, and typing into the app in front. Lock and typing are off unless you
+turn them on. On the phone, open **Remote for computer apps**, pick the computer
+and an app, and use its buttons or text box. Presentation and video controls
+work only when that app is in front on the computer. Wayland does not allow apps
+to send keys, so only media controls work there. See the
+[security model](SECURITY_MODEL.md#phone-remote-control) before enabling typing.
+
+Smaller conveniences, each with a switch in Settings → Advanced:
+
+- **Verification codes:** a phone notification containing a one-time code shows
+  **Copy code** on the computer. Automatic copying is off unless you turn it on.
+- **Ring your phone:** the Phone page rings an online phone at alarm volume for
+  up to 30 seconds; tap the phone's notification to stop it.
+- **Low battery:** the computer tells you once when a phone drops to 20% and is
+  not charging.
+- **Calls pause media:** music or video playing on the computer pauses while the
+  phone rings or is in a call, and only what was playing resumes afterwards. On
+  Linux this needs playerctl; on Windows the optional WinRT media binding.
+
 Cloud connects to separately configured services; it does not automatically
 provision storage. Optional tools and services should not block basic phone
 pairing. Deskflow is optional and requires a separate installation; see the

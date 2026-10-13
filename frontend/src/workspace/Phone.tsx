@@ -22,6 +22,7 @@ function Notification({ row, client, online }: { row: PhoneNotification; client:
     <h3>{row.title}</h3><p>{row.text}</p>
     <div className="phone-notification-actions">
       {row.actions.map((action) => <Action key={action.index} className="text-button" disabled={!online} run={() => command("action", { index: action.index })}>{action.label}</Action>)}
+      {row.code && <Action className="text-button" run={() => client.call("phone.code.copy", { id: row.id })}>Copy code {row.code}</Action>}
       <Action className="text-button" disabled={!online} run={() => command("open")}>Open on phone</Action>
     </div>
     {row.reply_key && <Form submit={async () => { await command("reply", { reply_key: row.reply_key, text: reply }); setReply(""); setSent(true); }}>
@@ -88,6 +89,7 @@ export function Phone({ state, client }: { state: State; client: Client }) {
           {phones.length > 1 && <label>Phone<select value={phone?.id} onChange={(e) => setSelected(e.target.value)}>{phones.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</select></label>}
           <p className={phone?.online ? "phone-online" : "muted"}>{phone?.online ? "Online" : phone ? "Offline" : "Pair once to get started"}</p>
           <DoNotDisturb state={state} client={client} />
+          {phone?.online && phone.capabilities.includes("ring") && <Action className="text-button" run={() => client.call("phone.ring", { device_id: phone.id })}>Ring {phone.name}</Action>}
           {phone?.battery && <small className="phone-battery"><Battery size={16} />{phone.battery.battery_level}%{phone.battery.is_charging ? " · charging" : ""}{!phone.online ? " · last reported" : ""}</small>}
           {state.settings?.hub?.paired && <div className="add-device" role="group" aria-label="Add a device">
             <small>Add a device</small>

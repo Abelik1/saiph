@@ -337,6 +337,7 @@ class OrionActivity : ComponentActivity() {
         all.filter { it.getString("status") != "new" }.take(10).forEach { root.addView(itemCard(it)) }
         root.addView(section("Continuity"))
         root.addView(buttonRow(button("Photo to computer") { startActivity(Intent(this, OrionCaptureActivity::class.java)) }, button("Hotspot settings") { hotspotSettings() }))
+        root.addView(buttonRow(button("Remote for computer apps") { startActivity(Intent(this, OrionRemoteActivity::class.java)) }))
         val wake = runCatching { JSONArray(getSharedPreferences("orion_continuity",0).getString("wake_targets","[]")) }.getOrNull()
         if(wake != null && wake.length()>0) {
             root.addView(section("Computers"))

@@ -168,8 +168,10 @@
 
         <activity android:name="com.orionmini.mobile.OrionQrActivity" android:exported="false" />
         <activity android:name="com.orionmini.mobile.OrionCaptureActivity" android:exported="false" />
+        <activity android:name="com.orionmini.mobile.OrionRemoteActivity" android:exported="false" />
         <activity android:name="com.orionmini.mobile.UpdateActivity" android:exported="false" />
         <receiver android:name="com.orionmini.mobile.DecisionReceiver" android:exported="false" />
+        <receiver android:name="sefirah.network.orion.OrionRingReceiver" android:exported="false" />
         <receiver android:name="com.orionmini.mobile.InstallResultReceiver" android:exported="false" />
         <service android:name="com.orionmini.mobile.OrionMessagingService" android:exported="false"
             android:enabled="${orionFirebasePushEnabled}">

@@ -24,7 +24,7 @@ class OrionLink @Inject constructor(private val context: Context) {
     fun refreshCapabilities() {
         // Settings changes discard private intent even while disconnected.
         protocol.discardDenied(OrionPermissions.read(context)::allowsPublication)
-        val caps = mutableListOf("battery", "inbox", "focus")
+        val caps = mutableListOf("battery", "inbox", "focus", "ring")
         caps += OrionPermissions.read(context).capabilities()
         if(context.getSharedPreferences("orion",0).getBoolean("worker_ready",false) && context.getSharedPreferences("orion",0).getBoolean("clipboard_enabled",true)) caps += "clipboard"
         socket?.send(buildJsonObject { put("op", "hello"); put("capabilities", JsonArray(caps.map(::JsonPrimitive))) }.toString())

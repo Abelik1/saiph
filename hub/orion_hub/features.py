@@ -62,13 +62,37 @@ class PhotoRequest(Payload):
     id: str = Field(pattern='^[0-9]{1,20}$')
 class CaptureInsert(Payload):
     sha256: str = Field(pattern='^[a-f0-9]{64}$')
+class RemoteRequest(Payload):
+    pass
+class RemoteCommand(Payload):
+    app: str = Field(pattern='^[a-z_]{1,32}$')
+    control: str = Field(pattern='^[a-z_]{1,32}$')
+    text: str | None = Field(default=None,min_length=1,max_length=500)
+class RemoteControl(Payload):
+    id: str = Field(pattern='^[a-z_]{1,32}$')
+    label: str = Field(min_length=1,max_length=60)
+    kind: Literal['button','text']
+    max: int | None = Field(default=None,ge=1,le=500)
+class RemoteApp(Payload):
+    id: str = Field(pattern='^[a-z_]{1,32}$')
+    name: str = Field(min_length=1,max_length=60)
+    available: bool
+    controls: list[RemoteControl] = Field(max_length=16)
+class RemoteCatalog(Payload):
+    apps: list[RemoteApp] = Field(max_length=16)
+class RemoteResult(Payload):
+    app: str = Field(max_length=32)
+    control: str = Field(max_length=32)
+    ok: bool
+    message: str = Field(max_length=200)
 class PhotoOriginal(File):
     photo_id: str = Field(pattern='^[0-9]{1,20}$')
 
 MODELS={'sms.thread':Conversation,'sms.messages':Messages,'sms.remove':Thread,'sms.index':MessageIndex,
         'sms.open':Thread,'sms.send':SmsSend,'call.state':Call,'call.command':CallCommand,
         'photos.index':Photos,'photos.sync':PhotoKeys,'photo.request':PhotoRequest,'photo.original':PhotoOriginal,'file.offer':File,
-        'capture.insert':CaptureInsert}
+        'capture.insert':CaptureInsert,'remote.catalog.request':RemoteRequest,'phone.ring':RemoteRequest,'remote.command':RemoteCommand,
+        'remote.catalog':RemoteCatalog,'remote.result':RemoteResult}
 def ensure(connection):
     connection.execute(SCHEMA)
 def _put(c,device,kind,key,data,now,limit):
@@ -100,16 +124,23 @@ def apply(c,source,event,now):
         for target in event.targets:
             row=c.execute('SELECT capabilities_json FROM link_devices WHERE device_id=?',(target,)).fetchone()
             if not row or 'cloud.files' not in json.loads(row[0]):raise ValueError('Cloud destination unavailable')
+    if event.type.startswith('remote.'):
+        # Phone remote: one named computer, which must currently offer remote control.
+        if event.targets is None or len(event.targets)!=1:raise ValueError('Remote control names one device')
+        if event.type in {'remote.catalog.request','remote.command'}:
+            row=c.execute('SELECT capabilities_json FROM link_devices WHERE device_id=?',(event.targets[0],)).fetchone()
+            if not row or 'remote' not in json.loads(row[0]):raise ValueError('Remote control unavailable')
+        return
     if event.type=='capture.insert':
         # Names one computer that receives the matching photo offer; never stored.
         if event.targets is None or len(event.targets)!=1:raise ValueError('Capture requires one destination computer')
         return
-    if event.type in {'sms.open','sms.send','call.command','photo.request'}:
+    if event.type in {'sms.open','sms.send','call.command','photo.request','phone.ring'}:
         if event.targets is None or len(event.targets)!=1:raise ValueError('Phone command requires one owning phone')
         owner=event.targets[0]
         row=c.execute('SELECT capabilities_json FROM link_devices WHERE device_id=?',(owner,)).fetchone()
         caps=json.loads(row[0]) if row else []
-        required={'sms.open':'sms','sms.send':'sms','call.command':'call-control','photo.request':'photos'}[event.type]
+        required={'sms.open':'sms','sms.send':'sms','call.command':'call-control','photo.request':'photos','phone.ring':'ring'}[event.type]
         if required not in caps:raise ValueError('Phone capability unavailable')
         if isinstance(value,Thread) and _get(c,owner,'thread',value.thread) is None:raise ValueError('Conversation unavailable')
         if isinstance(value,SmsSend) and len((_get(c,owner,'thread',value.thread) or {}).get('recipients',[]))!=1:raise ValueError('Group messaging remains on the phone')

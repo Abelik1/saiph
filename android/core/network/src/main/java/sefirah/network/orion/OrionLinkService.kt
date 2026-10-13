@@ -54,8 +54,10 @@ class OrionLinkService : Service() {
         val receipts = CommandReceipts(this)
         scope.launch { link.run(onConnected = { controls.sendDeviceStatus(""); notifications.sendActiveNotifications(""); scope.launch { phoneFeatures.connected() };scope.launch { runCatching { continuity.restore() } } }, onEvent = { event ->
             continuity.event(event)
+            runCatching { OrionRemote.receive(event) }
             if(event["type"]?.jsonPrimitive?.content in setOf("sms.open","sms.send","call.command","photo.request","file.offer")) phoneFeatures.receive(event)
             if(event["type"]?.jsonPrimitive?.content=="clipboard" && getSharedPreferences("orion",0).getBoolean("clipboard_enabled",true)) peer.receiveClipboard(event,clipboard)
+            if (event["type"]?.jsonPrimitive?.content == "phone.ring" && receipts.claim(event.getValue("id").jsonPrimitive.content)) OrionRing.start(this@OrionLinkService)
             if (event["type"]?.jsonPrimitive?.content == "notification.command") {
                 val payload = event.getValue("payload").jsonObject
                 val key = payload.getValue("key").jsonPrimitive.content

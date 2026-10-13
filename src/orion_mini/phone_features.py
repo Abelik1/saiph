@@ -389,7 +389,7 @@ class PhoneFeatures:
     def command(self,device,kind,payload):
         runtime=self.workspace.phone_runtime
         if not runtime or not runtime.client or not runtime.loop or not self.workspace.phone.connected:raise ValueError('Saiph is offline. This action has not been sent.')
-        capability={'sms.open':'sms','sms.send':'sms','photo.request':'photos','call.command':'call-control','file.offer':'files'}[kind]
+        capability={'sms.open':'sms','sms.send':'sms','photo.request':'photos','call.command':'call-control','file.offer':'files','phone.ring':'ring'}[kind]
         phone=next((d for d in self.workspace.phone.snapshot()['devices'] if d['id']==device and d.get('online') and capability in d.get('capabilities',[])),None)
         if phone is None:raise ValueError('This feature is unavailable on that device.')
         event={'id':str(uuid4()),'type':kind,'ttl_seconds':30 if kind!='file.offer' else 300,'targets':[device],'payload':payload}
@@ -418,6 +418,7 @@ class PhoneFeatures:
             if not text.strip() or len(text)>4096:raise ValueError('Enter a message up to 4096 characters.')
             return self.command(args['device_id'],'sms.send',{'thread':int(args['thread']),'text':text})
         if method=='phone.call':return self.command(args['device_id'],'call.command',{'operation':args['operation']})
+        if method=='phone.ring':return self.command(args['device_id'],'phone.ring',{})
         if method=='phone.photo.save':return self.photo_request(args['device_id'],args['photo_id'])
         if method=='phone.photo.prefetch':return self.photo_request(args['device_id'],args['photo_id'],'prefetch')
         raise ValueError('Unknown phone action.')

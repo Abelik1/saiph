@@ -87,15 +87,13 @@ their inclusion is not a delivery-date commitment.
   rule; the desktop reads Windows DND (read-only) and GNOME banners and has a
   Phone page toggle. Needs acceptance on real Android, Windows and GNOME devices,
   including the Android 15+ limit on ending DND started on the phone.
-- [ ] **Phone remote for desktop apps — design needed:** choose an app on the
-  phone from a list and get buttons and a text box for it, not a screen-share
-  view. The desktop publishes a fixed catalog of adapters (`remote.catalog`)
-  when the phone requests it. The phone sends `remote.command` with an app,
-  control and optional text. First adapters: media (play/pause, next, volume),
-  presentations (next/previous slide, start, end), browser video, lock the
-  computer and an opt-in "type into the focused app" text box. Off by default,
-  enabled per adapter and per phone, fixed actions only, no shell, rate-limited,
-  and documented in the security model. Wayland input injection is unavailable.
+- [ ] **Phone remote for desktop apps — acceptance:** the phone requests a
+  computer's catalog (`remote.catalog.request`), shows its apps as a table and
+  sends `remote.command` with fixed controls or bounded text. Adapters: media,
+  presentation, web video, lock and opt-in typing. Off by default, per-phone and
+  per-adapter, rate-limited, foreground-checked; see the security model. Needs
+  real-app acceptance on Windows and X11; Wayland only supports media. More
+  adapters (for example terminal/assistant sessions) need their own scope.
 - [ ] **Phone photo into a desktop task — acceptance:** "Photo to computer" on
   Android sends the photo with `file.offer` plus a `capture.insert` digest, so
   older Hubs still relay it; the desktop verifies it and puts it on the
@@ -132,12 +130,17 @@ their inclusion is not a delivery-date commitment.
   a specific workflow inconvenience.
 - [ ] Media streaming and richer cross-device activity/widgets, after core
   sharing is dependable.
-- [ ] Offer "Copy code" for one-time verification codes that arrive in phone
-  notifications or SMS, with optional automatic copying (off by default).
-- [ ] Ring my phone from the desktop using the retained play-sound feature.
-- [ ] Desktop alert when the phone battery is low and not charging.
-- [ ] Pause desktop media automatically while a phone call rings or is active
-  (uses the media remote adapter).
+- [ ] **Acceptance:** "Copy code" for one-time codes in phone notifications,
+  with optional automatic copying (off by default).
+- [ ] **Acceptance:** ring my phone from the desktop at alarm volume for up to 30
+  seconds (new `phone.ring` event and `ring` capability).
+- [ ] **Acceptance:** one desktop alert when a phone drops to 20% and is not charging.
+- [ ] **Acceptance:** pause playing desktop media during phone calls and resume
+  only what was paused (playerctl on Linux; Windows needs the optional
+  `winrt-Windows.Media.Control` binding, which is not yet a dependency).
+- [ ] Document scanning with edge correction for "Photo to computer".
+- [ ] Remote adapters for terminal/assistant sessions and per-app layouts
+  (for example a meeting app's mute/camera/leave buttons).
 
 For signing, public installers and other release gates, see
 [release status](docs/RELEASE_STATUS.md). To propose an idea or pick up an item,

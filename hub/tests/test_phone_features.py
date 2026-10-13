@@ -70,3 +70,24 @@ def test_capture_insert_names_one_computer_and_a_digest_only(hub):
                             ({'sha256':'a'*64,'path':'C:/private'},[computer])):
         with pytest.raises(ValueError):apply(hub,phone,'capture.insert',payload,targets)
     assert features.snapshot(hub.DB)=={'threads':[],'messages':[],'calls':[],'photos':[]}
+def test_remote_control_targets_one_computer_that_offers_it(hub):
+    c=client(hub);_,phone=pair(hub,c);_,computer=pair(hub,c)
+    with pytest.raises(ValueError):apply(hub,phone,'remote.command',{'app':'media','control':'next'},[computer])
+    caps(hub,computer,['remote'])
+    apply(hub,phone,'remote.catalog.request',{},[computer])
+    apply(hub,phone,'remote.command',{'app':'keyboard','control':'type','text':'hello'},[computer])
+    for payload,targets in (({'app':'media','control':'next'},None),({'app':'Media','control':'next'},[computer]),
+                            ({'app':'media','control':'next','shell':'calc'},[computer]),({'app':'keyboard','control':'type','text':'x'*501},[computer])):
+        with pytest.raises(ValueError):apply(hub,phone,'remote.command',payload,targets)
+    with pytest.raises(ValueError):apply(hub,phone,'remote.catalog.request',{'all':True},[computer])
+    catalog={'apps':[{'id':'media','name':'Media','available':True,'controls':[{'id':'next','label':'Next','kind':'button'}]}]}
+    apply(hub,computer,'remote.catalog',catalog,[phone])
+    apply(hub,computer,'remote.result',{'app':'media','control':'next','ok':True,'message':''},[phone])
+    with pytest.raises(ValueError):apply(hub,computer,'remote.catalog',{'apps':[{**catalog['apps'][0],'controls':[{'id':'x','label':'X','kind':'script'}]}]},[phone])
+def test_ring_targets_one_phone_that_can_ring(hub):
+    c=client(hub);_,phone=pair(hub,c);_,computer=pair(hub,c)
+    with pytest.raises(ValueError):apply(hub,computer,'phone.ring',{},[phone])
+    caps(hub,phone,['ring'])
+    apply(hub,computer,'phone.ring',{},[phone])
+    with pytest.raises(ValueError):apply(hub,computer,'phone.ring',{'volume':100},[phone])
+    with pytest.raises(ValueError):apply(hub,computer,'phone.ring',{})

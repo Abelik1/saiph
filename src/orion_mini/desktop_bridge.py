@@ -175,6 +175,12 @@ class DesktopBridge(QObject):
                 result={"cancelled":True}
             elif method in {"phone.file.send","phone.photo.save","phone.photo.prefetch"}:
                 self.background(request_id,lambda:self.window.workspace.dispatch(method,args));return
+            elif method == "phone.code.copy":
+                from .codes import verification_code
+                row = self.window.workspace.store.get("phone_notification", str(args["id"]))
+                code = verification_code(row.get("title"), row.get("text"))
+                if not code: raise ValueError("This notification has no verification code.")
+                QApplication.clipboard().setText(code); result = {"copied": True}
             elif method == "phone.file.open":
                 row=self.window.workspace.store.get("phone_file",args["id"])
                 if not row.get("path") or not Path(row["path"]).is_file():raise ValueError("This file is unavailable.")
