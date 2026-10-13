@@ -45,7 +45,7 @@ android {
 
         versionCode = providers.gradleProperty("orionVersionCode").orNull?.toInt()
             ?: ((System.currentTimeMillis() / 60000L) - 26297280L).toInt()
-        versionName = "0.8.7"
+        versionName = "0.8.8"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         externalNativeBuild {

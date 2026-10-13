@@ -9,6 +9,8 @@ identity and content, not for behaviour on a tester's phone.
 Firebase project IDs, tester emails, group aliases, keystore paths, signer
 fingerprints and owner hostnames are private operating values. Keep them in the
 private operations repository or a local file, never in this repository.
+The owner records where each of them lives, and the release history, in the
+private operations repository's `docs/ANDROID_PUBLISHING.md`.
 
 ## What a tester build contains
 
