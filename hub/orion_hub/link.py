@@ -387,7 +387,10 @@ class Bus:
             if socket.headers.get("origin"):
                 raise HTTPException(403, "Browser connections are not supported")
             principal = await asyncio.to_thread(verify_device_request, self.db, socket, b"")
-        except HTTPException:
+        except HTTPException as error:
+            # The detail is one of a fixed set of phrases, never request data. "Expired
+            # request" usually means this Hub's or the device's clock is wrong.
+            log.warning("rejected link connection reason=%s", error.detail)
             await socket.close(code=1008)
             return
         device_id = principal["id"]

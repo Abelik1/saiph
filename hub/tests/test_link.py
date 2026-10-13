@@ -850,3 +850,17 @@ def test_server_only_binds_loopback_and_configured_mesh(monkeypatch):
         monkeypatch.setenv("ORION_HUB_MESH_IP", value)
         with pytest.raises(ValueError):
             listener_hosts()
+
+
+def test_rejected_link_logs_the_fixed_reason_such_as_a_stale_clock(hub, caplog):
+    # A Raspberry Pi that booted with a stale clock sees every device's signed time as wrong.
+    caplog.set_level("INFO", logger="orion_hub.link")
+    with client(hub) as c:
+        key, device = pair(hub, c)
+        url = str(c.base_url).replace("http", "ws", 1).rstrip("/") + "/v1/link"
+        stale = headers(key, device, "GET", "/v1/link", ts=int(time.time()) - 600)
+        with pytest.raises(WebSocketDisconnect):
+            with c.websocket_connect(url, headers=stale) as ws:
+                ws.receive_json()
+    assert "rejected link connection reason=Expired request" in caplog.text
+    assert stale["X-Orion-Signature"] not in caplog.text
