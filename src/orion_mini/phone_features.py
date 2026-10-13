@@ -465,8 +465,10 @@ class PhoneFeatures:
         capability={'sms.open':'sms','sms.send':'sms','photo.request':'photos','call.command':'call-control','file.offer':'files','phone.ring':'ring',
                     'media.command':'media','contacts.search':'contacts','sms.compose':'sms','phone.ringer':'ringer','call.dial':'call-dial','calls.log.request':'call-log',
                     'sms.attachment.request':'sms'}[kind]
-        phone=next((d for d in self.workspace.phone.snapshot()['devices'] if d['id']==device and d.get('online') and capability in d.get('capabilities',[])),None)
-        if phone is None:raise ValueError('This feature is unavailable on that device.')
+        phone=next((d for d in self.workspace.phone.snapshot()['devices'] if d['id']==device),None)
+        # Nothing is queued for an offline device; say so rather than blaming the feature.
+        if phone is not None and not phone.get('online'):raise ValueError(f"{phone.get('name') or 'That device'} is offline. Nothing was sent; try again when it reconnects.")
+        if phone is None or capability not in phone.get('capabilities',[]):raise ValueError('This feature is unavailable on that device.')
         event={'id':str(uuid4()),'type':kind,'ttl_seconds':30 if kind!='file.offer' else 300,'targets':[device],'payload':payload}
         runtime.loop.call_soon_threadsafe(runtime.client.publish,event);return {'queued':True,'id':event['id']}
     def send_file(self,device,path):

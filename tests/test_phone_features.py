@@ -321,3 +321,16 @@ def test_ring_is_sent_only_to_an_online_phone_that_can_ring(tmp_path):
     assert features.dispatch('phone.ring',{'device_id':'phone'})['queued']
     assert published[0]['type']=='phone.ring' and published[0]['targets']==['phone'] and published[0]['payload']=={}
     with pytest.raises(ValueError):features.dispatch('phone.ring',{'device_id':'old'})
+
+
+def test_commands_to_an_offline_device_say_it_is_offline(tmp_path):
+    devices = [{'id': 'laptop', 'name': 'Laptop', 'online': False, 'capabilities': ['files']},
+               {'id': 'phone', 'name': 'Phone', 'online': True, 'capabilities': ['sms']}]
+    phone = SimpleNamespace(connected=True, snapshot=lambda: {'devices': devices})
+    runtime = SimpleNamespace(client=object(), loop=object())
+    workspace = SimpleNamespace(root=tmp_path, store=Store(tmp_path), settings={}, phone=phone, phone_runtime=runtime)
+    features = f.PhoneFeatures(workspace)
+    with pytest.raises(ValueError, match='^Laptop is offline. Nothing was sent'):
+        features.command('laptop', 'file.offer', {})
+    with pytest.raises(ValueError, match='unavailable on that device'):
+        features.command('phone', 'file.offer', {})
