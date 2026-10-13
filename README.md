@@ -117,19 +117,34 @@ their inclusion is not a delivery-date commitment.
   selected terminal or assistant session from the phone, with explicit access,
   revocation and disconnect handling. GUI app control needs its own scope.
 
-### Later ideas to evaluate
+### Phone Link replacement
 
-- [ ] Capture a photo or scan a document on the phone and insert it into a
-  desktop task.
-- [ ] Guided phone-hotspot connection and reconnection.
-- [ ] Nearby device discovery and file sharing without requiring the existing
-  private mesh setup.
-- [ ] Further Deskflow keyboard/mouse setup and recovery polish; the optional
-  integration already exists.
-- [ ] Optional OneDrive/Google and other provider integrations where they remove
-  a specific workflow inconvenience.
-- [ ] Media streaming and richer cross-device activity/widgets, after core
-  sharing is dependable.
+Saiph should make Microsoft Phone Link unnecessary on Windows, and offer the
+same on Linux, for any phone brand and without a Microsoft account. The full
+checklist, design and order are in the
+[Phone Link replacement plan](docs/PHONE_LINK_PARITY.md).
+
+- [ ] Phone media controls on the computer (D).
+- [ ] New messages with contact search (A1); MMS pictures (A2); group replies (A3).
+- [ ] Phone panel with ringer mode and quick toggles (C).
+- [ ] Lock this PC from the phone (E).
+- [ ] Dial from the computer and call history (B1).
+- [ ] New screenshots and photos offered on the computer (G).
+- [ ] Send to phone from File Explorer and Linux file managers (H).
+- [ ] Phone apps in their own windows (J).
+- [ ] Calls through the computer's audio: research spike first (B2).
+- [ ] Phone storage in File Explorer and Linux file managers (F).
+
+Apple-style continuity, from the same plan:
+
+- [ ] Sketch and markup to the computer (K).
+- [ ] Batteries for all devices on the phone (L).
+- [ ] Phone as touchpad and keyboard (M).
+- [ ] Find this computer: ring it from the phone (N).
+- [ ] Lock this computer when the phone leaves, on Linux (O).
+
+### Smaller conveniences
+
 - [ ] **Acceptance:** "Copy code" for one-time codes in phone notifications,
   with optional automatic copying (off by default).
 - [ ] **Acceptance:** ring my phone from the desktop at alarm volume for up to 30
@@ -138,9 +153,17 @@ their inclusion is not a delivery-date commitment.
 - [ ] **Acceptance:** pause playing desktop media during phone calls and resume
   only what was paused (playerctl on Linux; Windows needs the optional
   `winrt-Windows.Media.Control` binding, which is not yet a dependency).
-- [ ] Document scanning with edge correction for "Photo to computer".
 - [ ] Remote adapters for terminal/assistant sessions and per-app layouts
   (for example a meeting app's mute/camera/leave buttons).
+- [ ] Nearby discovery and file sharing without the private mesh, for Linux
+  (Quick Share already covers Windows).
+- [ ] Optional OneDrive/Google and other provider integrations where they remove
+  a specific workflow inconvenience.
+
+Not planned, because phones and browsers already do it well: locating, locking
+or erasing a lost phone (Google Find My Device, Samsung SmartThings Find),
+continuing browser tabs (browser sync), document scanning (Google Drive/Lens,
+Samsung Notes) and sharing Wi-Fi by QR code (Android settings).
 
 For signing, public installers and other release gates, see
 [release status](docs/RELEASE_STATUS.md). To propose an idea or pick up an item,
