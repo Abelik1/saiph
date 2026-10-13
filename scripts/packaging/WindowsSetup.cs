@@ -24,6 +24,8 @@ using Microsoft.Win32;
 public sealed class FileItem { public string path; public long bytes; public string sha256; }
 public sealed class Package { public string format; public int schema; public string version; public string platform; public string profile; public long build; public string entrypoint; public string release_state; public string license_inventory; public FileItem[] files; }
 public sealed class Installation { public string format = "orion-desktop-install"; public int schema = 1; public string root; public string current; public bool isolated; public bool removed; public List<string> versions = new List<string>(); }
+// Something the person can resolve. Its message is shown as-is instead of the generic failure.
+public sealed class SetupBlocked : Exception { public SetupBlocked(string message) : base(message) { } }
 
 public static class Setup {
     static readonly JavaScriptSerializer Json = new JavaScriptSerializer { MaxJsonLength = 32 * 1024 * 1024 };
@@ -36,6 +38,8 @@ public static class Setup {
     static bool silent, isolated, uninstall, noStartup, noLaunch, noSendTo;
     // Set only by the options page: an explicit untick also removes the owned integration.
     static bool removeStartup;
+    // Set only after the person agrees to replace a startup entry Saiph did not create.
+    static bool replaceStartup;
     static string destination;
     static Label status;
     static string phase = "arguments";
@@ -62,7 +66,11 @@ public static class Setup {
             Application.EnableVisualStyles(); Application.SetCompatibleTextRenderingDefault(false);
             if (!uninstall) { RunWizard(); return 0; }
             RunRemoval(); return 0;
-        } catch (Exception failure) { Console.Error.WriteLine("Saiph installer failed: " + phase + "; " + failure.GetType().Name + "; " + failure.HResult); if (!silent) MessageBox.Show("Saiph could not complete installation. No user data was removed.", "Saiph"); return 1; }
+        } catch (Exception failure) {
+            Console.Error.WriteLine("Saiph installer failed: " + phase + "; " + failure.GetType().Name + "; " + failure.HResult + (failure is SetupBlocked ? "; " + failure.Message : ""));
+            if (!silent) MessageBox.Show(failure is SetupBlocked ? failure.Message : "Saiph could not complete installation. No user data was removed.", "Saiph");
+            return 1;
+        }
     }
 
     static WaveSurface surface;
@@ -162,15 +170,24 @@ public static class Setup {
         next.Click += delegate {
             if (page == 0) { page = 1; show(); return; }
             if (page == 3) { window.Close(); return; }
-            noStartup = removeStartup = !startup.Checked; noSendTo = !sendTo.Checked; noLaunch = !launch.Checked;
+            noStartup = removeStartup = !startup.Checked; noSendTo = !sendTo.Checked; noLaunch = !launch.Checked; replaceStartup = false;
+            string foreign = startup.Checked ? ForeignStartup() : null;
+            if (foreign != null) {
+                // For example a copy run from source. Never replace it without asking.
+                var answer = MessageBox.Show("Another startup entry named OrionMini starts a different copy of Saiph or Orion:\n\n" + foreign
+                    + "\n\nReplace it so this Saiph starts when you sign in? Choose No to install without starting at sign-in.",
+                    "Saiph setup", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+                if (answer == DialogResult.Cancel) return;
+                if (answer == DialogResult.Yes) replaceStartup = true; else { noStartup = true; removeStartup = false; startup.Checked = false; }
+            }
             page = 2; installing = true; status.Text = ""; surface.Progress = 0.02; surface.Working = true; show();
             var worker = new Thread(delegate() {
-                bool done = false;
-                try { Perform(); done = true; } catch { }
+                bool done = false; string reason = null;
+                try { Perform(); done = true; } catch (Exception failure) { reason = SetupMessages.Describe(failure, phase); }
                 window.BeginInvoke((Action)delegate {
                     installing = false; surface.Working = false;
                     if (done) { page = 3; status.Text = ""; surface.Progress = 1; surface.Celebrate(); }
-                    else { page = 1; surface.Progress = -1; status.Text = "The installation could not finish. Your existing release and data were retained."; }
+                    else { page = 1; surface.Progress = -1; status.Text = reason; }
                     show();
                 });
             });
@@ -373,20 +390,34 @@ public static class Setup {
     }
     static void PreflightIntegration(List<string> targets) {
         CheckParents(MenuShortcut, destination);
-        if (Directory.Exists(MenuShortcut) || (File.Exists(MenuShortcut) && !OwnShortcut(MenuShortcut, targets))) throw new InvalidDataException();
+        if (Directory.Exists(MenuShortcut) || (File.Exists(MenuShortcut) && !OwnShortcut(MenuShortcut, targets)))
+            throw new SetupBlocked("A Start menu shortcut that Saiph did not create is in the way: " + MenuShortcut + ". Move or rename it, then try again.");
         CheckParents(SendToShortcut, destination);
-        if (Directory.Exists(SendToShortcut) || (File.Exists(SendToShortcut) && !OwnShortcut(SendToShortcut, targets, SendFilesArgument))) throw new InvalidDataException();
+        if (Directory.Exists(SendToShortcut) || (File.Exists(SendToShortcut) && !OwnShortcut(SendToShortcut, targets, SendFilesArgument)))
+            throw new SetupBlocked("A \"Saiph (phone)\" Send to shortcut that Saiph did not create is in the way. Untick the Send to option, or remove that shortcut, then try again.");
         using (var key = Registry.CurrentUser.OpenSubKey(RunKey)) {
             object value = key == null ? null : key.GetValue("OrionMini", null, RegistryValueOptions.DoNotExpandEnvironmentNames);
-            if (value != null && !IntegrationPolicy.OwnRun(value, targets)) throw new InvalidDataException();
+            string conflict = IntegrationPolicy.StartupConflict(value, targets, !noStartup, replaceStartup);
+            if (conflict != null) throw new SetupBlocked(conflict);
         }
         var uninstallValues = ReadTree(UninstallKey);
-        if (uninstallValues != null && !IntegrationPolicy.OwnUninstall(uninstallValues, destination)) throw new InvalidDataException();
+        if (uninstallValues != null && !IntegrationPolicy.OwnUninstall(uninstallValues, destination))
+            throw new SetupBlocked("Windows lists another program under Saiph's uninstall entry (OrionMini). Uninstall that program first, then try again.");
         var extension = ReadTree(EnrollmentExtension);
         var command = ReadTree(EnrollmentClass);
         // A bare extension owned by another application is never overwritten.
-        if (extension != null && (command == null || !IntegrationPolicy.Matches(extension, IntegrationPolicy.Extension()))) throw new InvalidDataException();
-        if (command != null && !targets.Any(exe => IntegrationPolicy.Matches(command, IntegrationPolicy.Enrollment(exe)))) throw new InvalidDataException();
+        if (extension != null && (command == null || !IntegrationPolicy.Matches(extension, IntegrationPolicy.Extension())) ||
+            command != null && !targets.Any(exe => IntegrationPolicy.Matches(command, IntegrationPolicy.Enrollment(exe))))
+            throw new SetupBlocked("Another program opens .orion-enrollment invitation files. Remove that file association, then try again.");
+    }
+    // A startup entry named OrionMini that no installed release owns, e.g. a copy run from source.
+    static string ForeignStartup() {
+        try {
+            using (var key = Registry.CurrentUser.OpenSubKey(RunKey)) {
+                string value = key == null ? null : key.GetValue("OrionMini", null, RegistryValueOptions.DoNotExpandEnvironmentNames) as string;
+                return value != null && !IntegrationPolicy.OwnRun(value, OwnedExecutables(Existing())) ? value : null;
+            }
+        } catch { return null; }  // An unreadable installation is reported by the install itself.
     }
     static void Integrate(string release, bool first, List<string> targets) {
         // Check again immediately before integration, including on rollback.
@@ -641,10 +672,25 @@ sealed class WaveSurface : Control {
 }
 
 // Pure policy: tests can inject registry snapshots without changing HKCU.
+public static class SetupMessages {
+    // What the window shows when installation stops. The existing release is never touched before activation.
+    public static string Describe(Exception failure, string phase) {
+        if (failure is SetupBlocked) return failure.Message;
+        if (failure is IOException && failure.Message == "Another Saiph installation is running.")
+            return "Another Saiph setup is already running. Finish or close it, then try again.";
+        return "The installation could not finish (step: " + phase + "). Your existing release and data were retained.";
+    }
+}
+
 public static class IntegrationPolicy {
     public static bool OwnRun(object value, IEnumerable<string> targets) {
         string command = value as string;
         return command != null && targets.Any(exe => String.Equals(command, "\"" + exe + "\"", StringComparison.OrdinalIgnoreCase));
+    }
+    // Another program's startup entry blocks only when Saiph would write its own and the person has not agreed to replace it.
+    public static string StartupConflict(object value, IEnumerable<string> targets, bool startupWanted, bool replaceApproved) {
+        if (value == null || !startupWanted || replaceApproved || OwnRun(value, targets)) return null;
+        return "Another startup entry named OrionMini starts a different program. Untick \"Start Saiph when I sign in\", or choose Replace when asked, then try again.";
     }
     public static bool Matches(Dictionary<string, object> actual, Dictionary<string, object> expected) {
         if (actual == null || actual.Count != expected.Count) return false;

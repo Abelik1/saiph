@@ -273,6 +273,40 @@ def test_authenticode_signed_installer_still_finds_its_payload(native_fixture_ro
     assert not (install / 'releases/0.2.0-preview.2').exists() and not (install / 'releases/0.2.0-preview.3').exists()
 
 
+def test_installer_explains_blocked_setup_and_only_replaces_startup_when_asked(tmp_path):
+    compiler = Path('C:/Windows/Microsoft.NET/Framework64/v4.0.30319/csc.exe')
+    if not compiler.is_file(): pytest.skip('Windows Framework compiler absent')
+    references = ['/reference:System.Windows.Forms.dll', '/reference:System.Drawing.dll', '/reference:System.IO.Compression.dll',
+                  '/reference:System.IO.Compression.FileSystem.dll', '/reference:System.Web.Extensions.dll']
+    setup = tmp_path / 'setup.exe'
+    subprocess.run([str(compiler), '/nologo', '/target:winexe', '/platform:x64', '/out:' + str(setup), *references,
+                    str(ROOT / 'scripts/packaging/WindowsSetup.cs')], check=True, capture_output=True)
+    probe = tmp_path / 'Probe.cs'
+    probe.write_text(r'''
+using System; using System.IO;
+public static class Probe {
+    public static void Main() {
+        var owned = new[] { @"C:\Saiph\releases\1\app\OrionMini.exe" };
+        string source = "\"E:\\src\\.venv\\Scripts\\pythonw.exe\" -m orion_mini";
+        Console.WriteLine(IntegrationPolicy.StartupConflict(source, owned, true, false) != null);   // blocks
+        Console.WriteLine(IntegrationPolicy.StartupConflict(source, owned, true, true) == null);    // replace approved
+        Console.WriteLine(IntegrationPolicy.StartupConflict(source, owned, false, false) == null);  // startup unticked
+        Console.WriteLine(IntegrationPolicy.StartupConflict("\"" + owned[0] + "\"", owned, true, false) == null);
+        Console.WriteLine(SetupMessages.Describe(new SetupBlocked("Move the shortcut."), "integration-preflight"));
+        Console.WriteLine(SetupMessages.Describe(new IOException("Another Saiph installation is running."), "installation-lock"));
+        Console.WriteLine(SetupMessages.Describe(new InvalidDataException(), "payload"));
+    }
+}''')
+    checker = tmp_path / 'probe.exe'
+    subprocess.run([str(compiler), '/nologo', '/platform:x64', '/out:' + str(checker), '/reference:' + str(setup), str(probe)],
+                   check=True, capture_output=True)
+    lines = subprocess.run([str(checker)], capture_output=True, text=True, timeout=30, cwd=tmp_path, check=True).stdout.splitlines()
+    assert lines[:4] == ['True'] * 4
+    assert lines[4] == 'Move the shortcut.'
+    assert lines[5] == 'Another Saiph setup is already running. Finish or close it, then try again.'
+    assert lines[6] == 'The installation could not finish (step: payload). Your existing release and data were retained.'
+
+
 def test_installer_alignment_padding():
     assert [packaging.aligned_padding(length) for length in (0, 1, 7, 8, 13, 16)] == [0, 7, 1, 0, 3, 0]
 
