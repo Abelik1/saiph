@@ -23,8 +23,8 @@ public builds have no Hosted endpoint or tenant defaults.
 2. Explicit desktop root setup creates separate OS-protected keys, initializes
    genesis through the account API, and displays a signed root QR/code plus its
    full fingerprint. The server cannot provide the initial trust pin.
-3. Android accepts a pasted fresh signed root code only after full fingerprint
-   comparison on the trusted desktop screen. It displays its own signed request
+3. Android accepts a scanned or pasted fresh signed root code only after full
+   fingerprint comparison on the trusted desktop screen. It displays its own signed request
    and full device fingerprint. Desktop checks the request and requires explicit
    fingerprint confirmation before approval; it also exposes revocation.
 4. The desktop worker renews 12-hour rosters when four hours remain, retries
@@ -65,9 +65,10 @@ restart, expiry and sign-out; initial root setup; approval/refusal/revocation;
 root offline past TTL then recovery; clipboard repeat/echo/network-loss cases;
 notification permission changes; and file/photo integrity, expired offers,
 interrupted saves and duplicate saves. Android foreground-service/battery limits
-and browser return/process recreation require device acceptance. QR scanning is
-not added to Android in this preview: code entry plus full comparison is the
-supported enrollment route. Independent review is required before paid/public use.
+and browser return/process recreation require device acceptance. Android scans
+the root QR with the pairing camera scanner or accepts the pasted code; both
+routes require the same full fingerprint comparison. QR scanning still needs
+physical-device acceptance. Independent review is required before paid/public use.
 
 ## Verification
 

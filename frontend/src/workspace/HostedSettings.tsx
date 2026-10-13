@@ -44,7 +44,7 @@ export function HostedSettings({hosted, client}: {hosted?: HostedState; client: 
         {hosted.account?.error && <p role="alert">{hosted.account.error}</p>}
         {signedIn && <Action run={() => showRoot(hosted.identity ? "hosted.root_code" : "hosted.setup_root")}>{hosted.identity ? "Show root approval code" : "Set up this computer as root"}</Action>}
         {root && signedIn && <div>
-          <p>On your phone, paste this root code and compare the full fingerprint on both screens. The code expires at {new Date(root.expires_at).toLocaleTimeString()}.</p>
+          <p>On your phone, scan this QR or paste the root code, then compare the full fingerprint on both screens. The code expires at {new Date(root.expires_at).toLocaleTimeString()}.</p>
           <svg role="img" aria-label="Hosted root approval QR code" viewBox={`0 0 ${root.modules.length} ${root.modules.length}`} width="264" height="264" shapeRendering="crispEdges"><rect width="100%" height="100%" fill="white" /><path fill="black" d={root.modules.map((row, y) => [...row].map((cell, x) => cell === "1" ? `M${x} ${y}h1v1h-1z` : "").join("")).join("")} /></svg>
           <label>Root code<textarea readOnly value={root.code} /></label><p className="muted">Full root fingerprint</p><code>{root.fingerprint}</code>
           <button type="button" onClick={() => setRoot(null)}>Hide root code</button>

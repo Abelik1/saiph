@@ -48,7 +48,7 @@ devices or disposable OS profiles for the first acceptance pass.
    installer supplies public service settings. Turn on Hosted and sign in through the system browser. Initialize
    the desktop root and display its signed code and full fingerprint.
 4. On Android open pairing or Advanced → Saiph Hosted preview. Sign in with the
-   same account; the hosted beta APK supplies its service settings on opt-in. Paste the root code and compare its
+   same account; the hosted beta APK supplies its service settings on opt-in. Scan the root QR (or paste the root code) and compare its
    full fingerprint on the trusted desktop. Compare the phone request fingerprint
    and explicitly approve it on desktop. Login alone must never approve a device.
 5. Stop Tailscale on every test device. Use mobile data on Android and an unrelated

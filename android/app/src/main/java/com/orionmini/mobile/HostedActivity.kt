@@ -29,7 +29,10 @@ class HostedActivity : ComponentActivity() {
         val response = result.data?.let(AuthorizationResponse::fromIntent)
         if (response == null) message("Sign-in did not complete.") else action { account.complete(response) }
     }
-    private val sendFile = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if (uri != null) action { runtime.sendFile(uri) } }
+    private val scanRoot = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        result.data?.getStringExtra(OrionQrActivity.HOSTED_ROOT_CODE)?.let(::checkRoot)
+    }
+    private val sendFile =registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if (uri != null) action { runtime.sendFile(uri) } }
     private val saveFile = registerForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
         if (uri != null && saving.isNotEmpty()) { val id = saving; saving = ""; action { runtime.saveFile(id, uri) } }
     }
@@ -44,6 +47,15 @@ class HostedActivity : ComponentActivity() {
     private fun message(value: String) = Toast.makeText(this, value, Toast.LENGTH_LONG).show()
     private fun action(run: suspend () -> Unit) {
         lifecycleScope.launch { try { withContext(Dispatchers.IO) { run() }; render() } catch (_: Exception) { message("Hosted could not complete this step. Check sign-in, the root device and your connection, then retry.") } }
+    }
+    /** Scanned and pasted codes take the same path: nothing is trusted until every fingerprint group is confirmed. */
+    private fun checkRoot(value: String) {
+        runCatching {
+            val inspected = HostedApprovalCodes.inspect(value)
+            val fingerprint = HostedApprovalCodes.displayFingerprint(inspected.fingerprint())
+            android.app.AlertDialog.Builder(this).setTitle("Compare the full root fingerprint").setMessage("Compare every group with the trusted screen on your computer:\n\n$fingerprint")
+                .setNegativeButton("Cancel", null).setPositiveButton("The full fingerprint matches") { _, _ -> action { runtime.enroll(value, fingerprint) } }.show()
+        }.onFailure { message("Invalid or expired root code. Ask your computer for a new code.") }
     }
     private fun field(label: String, value: String = ""): EditText { root.addView(text(label)); return EditText(this).apply { setText(value); setTextColor(Palette.TEXT); contentDescription = label; root.addView(this) } }
     private fun render() {
@@ -89,13 +101,9 @@ class HostedActivity : ComponentActivity() {
                 try { login.launch(service.getAuthorizationRequestIntent(account.request())) } finally { service.dispose() }
             }.onFailure { message("Could not open sign-in. Check deployment settings.") } })
             if (!prefs.contains("device_id")) {
-                val code = field("Paste the root approval code from your computer")
-                root.addView(button("Check root code") { runCatching {
-                    val value = code.text.toString(); val inspected = HostedApprovalCodes.inspect(value)
-                    val fingerprint = HostedApprovalCodes.displayFingerprint(inspected.fingerprint())
-                    android.app.AlertDialog.Builder(this).setTitle("Compare the full root fingerprint").setMessage("Compare every group with the trusted screen on your computer:\n\n$fingerprint")
-                        .setNegativeButton("Cancel", null).setPositiveButton("The full fingerprint matches") { _, _ -> action { runtime.enroll(value, fingerprint) } }.show()
-                }.onFailure { message("Invalid or expired root code. Ask your computer for a new code.") } })
+                root.addView(button("Scan root QR from your computer") { scanRoot.launch(OrionQrActivity.hostedRoot(this)) })
+                val code = field("Or paste the root approval code from your computer")
+                root.addView(button("Check root code") { checkRoot(code.text.toString()) })
             } else {
                 root.addView(text("Your phone's full device fingerprint:\n${runtime.fingerprint}"))
                 root.addView(button("Show a fresh device request") { action { runtime.freshRequest() } })
