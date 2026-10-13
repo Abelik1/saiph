@@ -267,6 +267,8 @@ export type HostedConfig = {service_url: string; issuer: string; audience: strin
 export type HostedState = {available: boolean; enabled: boolean; status: string; identity: boolean; configured?: boolean; config?: HostedConfig; self_hosted_paired?: boolean; error?: string; account?: {status: string; error: string; refresh_tokens: boolean}; fingerprint?: string | null; roster?: {expires_at: number; version: number; clock_warning: boolean; members: {id: string; label: string; root: boolean; fingerprint: string}[]} | null; offers?: {id: string; name: string; size: number}[]; notifications?: {id: string; app: string; title: string; text: string}[]; user_verification?: UserVerification; security_events?: {id: string; kind: "added" | "removed"; device_id: string; label: string; at: number}[]};
 /** Whether the operating system confirms the person before a device is added. */
 export type UserVerification = "windows_hello" | "unavailable" | "checking";
+export type SetupStatus = {completed:boolean;connected:boolean;show:boolean;mode:"hub"|"hosted"|null;platform:string;
+  tools:Record<string,{found:boolean;purpose:string;link:string}>;linux:Record<string,{found:boolean;package:string;purpose:string}>};
 export type BluetoothLockStatus = {supported:boolean;enabled:boolean;device:string;seconds:number;devices:{address:string;name:string}[];error:string;windows:boolean};
 export type RemoteStatus = {enabled:boolean;devices:string[];adapters:Record<string,{name:string;enabled:boolean;available:boolean}>;wayland:boolean;last:{device_id:string;app:string;control:string;at:number}|null};
 export type HotspotStatus = {profiles:string[];profile:string;auto:boolean;active:string|null;error:string;supported:boolean};
@@ -284,6 +286,7 @@ export type State = {
   hotspot?: HotspotStatus;
   remote?: RemoteStatus;
   bt_lock?: BluetoothLockStatus;
+  setup?: SetupStatus;
   camera?: CameraStatus;
   microphone?: MicrophoneStatus;
   handoffs?: import("./Handoff").HandoffItem[];

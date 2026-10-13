@@ -121,6 +121,28 @@ already_installed() {
   [ -L "$root/current" ] && [ "$(readlink "$root/current")" = "releases/$version" ] && [ -d "$root/releases/$version" ]
 }
 
+# Defaults for the options checklist reflect what is installed now, so an upgrade
+# never silently re-enables something the person turned off.
+autostart_default() {
+  entry=${XDG_CONFIG_HOME:-$HOME/.config}/autostart/orion.desktop
+  if [ -f "$entry" ]; then
+    grep -q '^X-GNOME-Autostart-enabled=false' "$entry" && echo FALSE || echo TRUE
+  elif [ -e "$HOME/.local/lib/orion/integration-created" ]; then echo FALSE
+  else echo TRUE; fi
+}
+
+file_actions_default() {
+  scripts=${XDG_DATA_HOME:-$HOME/.local/share}/nautilus/scripts/"Send to phone (Saiph)"
+  if [ -e "$HOME/.local/lib/orion/integration-created" ] && [ ! -f "$scripts" ]; then echo FALSE; else echo TRUE; fi
+}
+
+# Exports SAIPH_AUTOSTART and SAIPH_FILE_ACTIONS (on|off) for install.sh from the ticked options.
+apply_choices() {
+  case "$1" in *autostart*) SAIPH_AUTOSTART=on ;; *) SAIPH_AUTOSTART=off ;; esac
+  case "$1" in *fileactions*) SAIPH_FILE_ACTIONS=on ;; *) SAIPH_FILE_ACTIONS=off ;; esac
+  export SAIPH_AUTOSTART SAIPH_FILE_ACTIONS
+}
+
 failure_text() {
   printf 'Saiph could not be installed.\n\n%s\n\nDetails were saved to %s.' "$(tail -n 6 -- "$work/install.log" 2>/dev/null)" "$saved_log"
 }
@@ -130,7 +152,12 @@ zenity_install() {
     if zenity --question --no-markup --width=440 --title="$title" --ok-label="Open Saiph" --cancel-label=Close --text="$installed_text"; then launch_app; fi
     return 0
   fi
-  zenity --question --no-markup --width=440 --title="$title" --ok-label=Install --cancel-label=Cancel --text="$intro" || return 0
+  zenity --question --no-markup --width=440 --title="$title" --ok-label=Next --cancel-label=Cancel --text="$intro" || return 0
+  choices=$(zenity --list --checklist --width=480 --height=250 --title="$title" --text="Choose options" --ok-label=Install --cancel-label=Cancel \
+    --column=Use --column=Key --column=Option --hide-column=2 --print-column=2 --separator=" " \
+    "$(autostart_default)" autostart "Start Saiph when I sign in" \
+    "$(file_actions_default)" fileactions "Add \"Send to phone\" to GNOME Files and Dolphin") || return 0
+  apply_choices "$choices"
   : > "$work/status"
   (
     if install_steps > "$work/install.log" 2>&1; then echo 0 > "$work/status"; else echo "$?" > "$work/status"; fi
@@ -151,7 +178,12 @@ kdialog_install() {
     if kdialog --title "$title" --yes-label "Open Saiph" --no-label Close --yesno "$installed_text"; then launch_app; fi
     return 0
   fi
-  kdialog --title "$title" --yes-label Install --no-label Cancel --yesno "$intro" || return 0
+  kdialog --title "$title" --yes-label Next --no-label Cancel --yesno "$intro" || return 0
+  on() { [ "$1" = TRUE ] && echo on || echo off; }
+  choices=$(kdialog --title "$title" --checklist "Choose options" \
+    autostart "Start Saiph when I sign in" "$(on "$(autostart_default)")" \
+    fileactions "Add \"Send to phone\" to GNOME Files and Dolphin" "$(on "$(file_actions_default)")") || return 0
+  apply_choices "$choices"
   kdialog --title "$title" --passivepopup "Installing Saiph $version. This can take a minute." 10 >/dev/null 2>&1 || true
   if install_steps > "$work/install.log" 2>&1; then status=0; else status=$?; fi
   save_log

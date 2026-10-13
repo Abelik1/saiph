@@ -93,12 +93,16 @@ class LinkWorkspace(LinkOperations):
                 'enrollment': {**invitation, 'approved': invitation['id'] is not None and self.enrollment_approved == invitation['id']},
                 'components': self.components.snapshot(), 'phone': self.phone.snapshot(),
                 'phone_features': self.phone_features.snapshot(), 'handoffs': self.store.all('handoff')[:100],
-                'deskflow': {**self.deskflow.status(), 'setup': self.deskflow.setup()}, 'dnd': self.dnd_status(), 'hotspot': self.hotspot.status(), 'remote': self.remote.status(), 'bt_lock': self.bt_lock.status(), 'camera': self.camera.status(), 'microphone': self.microphone.status(),
+                'deskflow': {**self.deskflow.status(), 'setup': self.deskflow.setup()}, 'dnd': self.dnd_status(), 'hotspot': self.hotspot.status(), 'remote': self.remote.status(), 'bt_lock': self.bt_lock.status(), 'setup': self.setup_state(), 'camera': self.camera.status(), 'microphone': self.microphone.status(),
                 'api': self.api_info, 'hub_inbox': self.hub_inbox(), 'hosted': self.hosted_state(), 'user_verification': user_verification(self),
                 'projects': [], 'transcripts': [], 'reminders': [], 'tasks': [], 'jobs': [],
                 'messages': [], 'emails': [], 'providers': [], 'skills': [], 'plugins': [], 'ticker': [],
                 'google': {'signed_in': False}, 'calendar': {'events': [], 'synced_at': None, 'error': ''},
                 'agenda': {'items': []}, 'backup_status': {'configured': False}}
+
+    def setup_state(self):
+        from .setup_guide import status, tools
+        return {**status(self), **tools()}
 
     def _remote_publish(self, event):
         if not self.phone_runtime:
@@ -116,7 +120,7 @@ class LinkWorkspace(LinkOperations):
             return self.dispatch_link(method, args)
         if method != 'settings.save':
             raise ValueError('Install the optional Workspace edition to use personal tools.')
-        if not isinstance(args, dict) or set(args) - {'start_with_windows', 'close_to_tray', 'machine', 'hub', 'cloud', 'link'}:
+        if not isinstance(args, dict) or set(args) - {'start_with_windows', 'close_to_tray', 'machine', 'hub', 'cloud', 'link', 'setup'}:
             raise ValueError('This setting belongs to the optional Workspace edition.')
         for flag in ('start_with_windows', 'close_to_tray'):
             if flag in args and type(args[flag]) is not bool:
@@ -179,6 +183,9 @@ class LinkWorkspace(LinkOperations):
             args = {**args, 'link': link}
         if 'hub' in args:
             raise ValueError('Use an invitation to change server setup.')
+        if 'setup' in args:
+            from .setup_guide import validate_options as validate_setup_options
+            args = {**args, 'setup': {**(self.settings.get('setup') or {}), **validate_setup_options(args['setup'])}}
         self.settings.update(args)
         if not (self.settings.get('link') or {}).get('deskflow', {}).get('enabled', False):
             self.deskflow.stop()

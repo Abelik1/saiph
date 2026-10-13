@@ -181,6 +181,11 @@ class DesktopBridge(QObject):
                 code = verification_code(row.get("title"), row.get("text"))
                 if not code: raise ValueError("This notification has no verification code.")
                 QApplication.clipboard().setText(code); result = {"copied": True}
+            elif method == "setup.open":
+                # Official release pages only, from a fixed list.
+                from .setup_guide import LINKS
+                if set(args) != {"link"} or args["link"] not in LINKS:raise ValueError("Unknown setup link.")
+                open_target(LINKS[args["link"]]);result={"opened":True}
             elif method == "phone.sms.attachment.open":
                 row=self.window.workspace.phone_features._attachment(args)
                 open_target(Path(row["path"]));result={"opened":True}

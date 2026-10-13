@@ -71,6 +71,10 @@ manifest-owned and upgrade-safe `install.sh` behaviour. Options considered:
 Testers download the `.run`, allow it to run as a program (file Properties →
 Permissions, or "Run as a Program" from the right-click menu, depending on the
 desktop) and open it. When started from a file manager it asks for confirmation,
+then shows an options checklist (start at sign-in and the file-manager Send to phone
+actions, defaulting to what is installed now) and passes the choices to
+`install.sh` as `SAIPH_AUTOSTART` and `SAIPH_FILE_ACTIONS` (`on`/`off`; unset
+keeps the previous behaviour). It then
 shows progress and reports the result with `zenity` or `kdialog`, then offers to
 open Saiph. Without either tool it reopens itself in a terminal window. The
 latest dialog-mode output is kept in `~/.cache/saiph-setup.log`. Started from a

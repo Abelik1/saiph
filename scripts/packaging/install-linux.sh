@@ -204,8 +204,14 @@ if [ "$isolated" != 1 ]; then
   mkdir -p "$HOME/.local/bin" "$data_root/applications" "$data_root/mime/packages" "$config_root/autostart"
   write_integration launcher "$launcher"
   write_integration desktop "$desktop"
-  # Never restore an opt-out (removed or disabled) on upgrade.
-  if [ -f "$autostart" ]; then
+  # SAIPH_AUTOSTART=on|off is an explicit choice from the setup dialog; unset keeps
+  # the long-standing rule: never restore an opt-out (removed or disabled) on upgrade.
+  if [ "${SAIPH_AUTOSTART:-}" = off ]; then
+    cp "$integration_work/autostart-disabled" "$integration_work/autostart"
+    write_integration autostart "$autostart"
+  elif [ "${SAIPH_AUTOSTART:-}" = on ]; then
+    write_integration autostart "$autostart"
+  elif [ -f "$autostart" ]; then
     if cmp -s "$autostart" "$integration_work/autostart-disabled" || cmp -s "$autostart" "$integration_work/orion-autostart-disabled"; then
       cp "$integration_work/autostart-disabled" "$integration_work/autostart"
     fi
@@ -214,9 +220,15 @@ if [ "$isolated" != 1 ]; then
     write_integration autostart "$autostart"
   fi
   write_integration mime "$mime"
-  mkdir -p "$data_root/nautilus/scripts" "$data_root/kio/servicemenus"
-  write_integration nautilus "$nautilus"
-  write_integration servicemenu "$servicemenu"
+  if [ "${SAIPH_FILE_ACTIONS:-on}" = off ]; then
+    # Declined in the setup dialog: remove only Saiph's own previously written actions.
+    if owned_integration nautilus "$nautilus"; then rm -- "$nautilus"; fi
+    if owned_integration servicemenu "$servicemenu"; then rm -- "$servicemenu"; fi
+  else
+    mkdir -p "$data_root/nautilus/scripts" "$data_root/kio/servicemenus"
+    write_integration nautilus "$nautilus"
+    write_integration servicemenu "$servicemenu"
+  fi
 fi
 # Refuse unrelated active pointers and stale temporary links before activation.
 if [ -e "$install_root/current.new" ] || [ -L "$install_root/current.new" ]; then echo "Existing activation staging retained." >&2; exit 1; fi

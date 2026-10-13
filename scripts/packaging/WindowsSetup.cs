@@ -31,7 +31,9 @@ public static class Setup {
     const string UninstallKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\OrionMini";
     const string EnrollmentExtension = @"Software\Classes\.orion-enrollment";
     const string EnrollmentClass = @"Software\Classes\Orion.Enrollment";
-    static bool silent, isolated, uninstall, noStartup, noLaunch;
+    static bool silent, isolated, uninstall, noStartup, noLaunch, noSendTo;
+    // Set only by the options page: an explicit untick also removes the owned integration.
+    static bool removeStartup;
     static string destination;
     static Label status;
     static string phase = "arguments";
@@ -45,6 +47,7 @@ public static class Setup {
                     case "--uninstall": uninstall = true; break;
                     case "--no-startup": noStartup = true; break;
                     case "--no-launch": noLaunch = true; break;
+                    case "--no-send-to": noSendTo = true; break;
                     case "--destination": destination = arguments[++i]; break;
                     default: throw new InvalidDataException();
                 }
@@ -55,6 +58,7 @@ public static class Setup {
                 throw new InvalidDataException(); // Arbitrary paths are accepted only in explicit no-integration test mode.
             if (silent) { Perform(); return 0; }
             Application.EnableVisualStyles(); Application.SetCompatibleTextRenderingDefault(false);
+            if (!uninstall) { RunWizard(); return 0; }
             var window = new Form { Text = "Saiph", ClientSize = new Size(570, 285), StartPosition = FormStartPosition.CenterScreen,
                                     FormBorderStyle = FormBorderStyle.FixedDialog, MaximizeBox = false, Font = new Font("Segoe UI", 10) };
             window.Controls.Add(new Label { Left = 28, Top = 24, Width = 500, Height = 34, Text = uninstall ? "Remove Saiph" : "Install Saiph", Font = new Font("Segoe UI", 19) });
@@ -80,6 +84,47 @@ public static class Setup {
             return @"Global\OrionSetup-" + BitConverter.ToString(hash.ComputeHash(Encoding.UTF8.GetBytes(key))).Replace("-", "");
         }
     }
+    // Welcome → Options → Installing → Done. Options map onto the same flags as silent mode.
+    static void RunWizard() {
+        var window = new Form { Text = "Saiph setup", ClientSize = new Size(600, 360), StartPosition = FormStartPosition.CenterScreen,
+                                FormBorderStyle = FormBorderStyle.FixedDialog, MaximizeBox = false, Font = new Font("Segoe UI", 10) };
+        var heading = new Label { Left = 28, Top = 22, Width = 540, Height = 38, Font = new Font("Segoe UI", 19) };
+        var body = new Label { Left = 30, Top = 72, Width = 540, Height = 90 };
+        bool upgrade = File.Exists(Path.Combine(destination, "orion-install.json"));
+        bool startupNow = false;
+        try { using (var key = Registry.CurrentUser.OpenSubKey(RunKey)) startupNow = key != null && key.GetValue("OrionMini") != null; } catch { }
+        var startup = new CheckBox { Left = 32, Top = 72, Width = 540, Height = 28, Text = "Start Saiph when I sign in", Checked = !upgrade || startupNow, Visible = false };
+        var sendTo = new CheckBox { Left = 32, Top = 104, Width = 540, Height = 28, Text = "Add \"Saiph (phone)\" to the Send to menu in File Explorer",
+                                    Checked = !upgrade || File.Exists(SendToShortcut), Visible = false };
+        var launch = new CheckBox { Left = 32, Top = 136, Width = 540, Height = 28, Text = "Open Saiph when setup finishes", Checked = !noLaunch, Visible = false };
+        var location = new Label { Left = 30, Top = 178, Width = 540, Height = 44, Text = "Installs for your Windows account only, in " + destination, Visible = false };
+        status = new Label { Left = 30, Top = 236, Width = 540, Height = 50, Text = "Internal preview · publisher signing and clean-device acceptance pending." };
+        var back = new Button { Left = 300, Top = 304, Width = 130, Height = 36, Text = "Back", Visible = false };
+        var next = new Button { Left = 440, Top = 304, Width = 130, Height = 36, Text = "Next" };
+        int page = 0;
+        Action show = delegate {
+            heading.Text = page == 0 ? (upgrade ? "Update Saiph" : "Install Saiph") : page == 1 ? "Choose options" : page == 2 ? "Installing…" : "Saiph is ready";
+            body.Visible = page != 1; startup.Visible = sendTo.Visible = launch.Visible = location.Visible = page == 1;
+            body.Text = page == 0 ? "Saiph connects your Android phone and your computers. Your existing settings and device pairing are kept."
+                + " After setup, Saiph's guide helps you sign in and add your phone."
+                : page == 2 ? "Installing Saiph. This takes a moment." : page == 3 ? "Saiph is installed. Open it from the Start menu any time." : "";
+            back.Visible = page == 1; next.Enabled = page != 2;
+            next.Text = page == 1 ? (upgrade ? "Update" : "Install") : page == 3 ? "Finish" : "Next";
+        };
+        back.Click += delegate { page = 0; show(); };
+        next.Click += delegate {
+            if (page == 0) { page = 1; show(); return; }
+            if (page == 3) { window.Close(); return; }
+            noStartup = removeStartup = !startup.Checked; noSendTo = !sendTo.Checked; noLaunch = !launch.Checked;
+            page = 2; show(); window.Refresh();
+            try { Perform(); page = 3; status.Text = ""; }
+            catch { page = 1; status.Text = "The installation could not finish. Your existing release and data were retained."; }
+            show();
+        };
+        foreach (Control control in new Control[] { heading, body, startup, sendTo, launch, location, status, back, next }) window.Controls.Add(control);
+        show(); Application.Run(window);
+    }
+
     static void Perform() {
         phase = "installation-lock";
         using (var mutex = new Mutex(false, LockName())) {
@@ -291,13 +336,15 @@ public static class Setup {
         string exe = Path.Combine(release, "app", "OrionMini.exe"); string icon = Path.Combine(release, "app", "_internal", "assets", "orion-mini-icon.ico");
         string menu = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "Saiph"); Directory.CreateDirectory(menu);
         Shortcut.Create(MenuShortcut, exe, icon, "OrionMini.Desktop");
-        Directory.CreateDirectory(Path.GetDirectoryName(SendToShortcut));
-        Shortcut.Create(SendToShortcut, exe, icon, "OrionMini.Desktop", SendFilesArgument);
+        if (noSendTo) { if (OwnShortcut(SendToShortcut, targets, SendFilesArgument)) File.Delete(SendToShortcut); }
+        else { Directory.CreateDirectory(Path.GetDirectoryName(SendToShortcut)); Shortcut.Create(SendToShortcut, exe, icon, "OrionMini.Desktop", SendFilesArgument); }
         // Only remove the old label when its target proves installer ownership.
         if (OwnShortcut(LegacyMenuShortcut, targets)) File.Delete(LegacyMenuShortcut);
         using (var key = Registry.CurrentUser.CreateSubKey(RunKey)) {
             // Existing opt-out is retained on upgrade. The app's own setting remains authoritative.
             if (!noStartup && (first || key.GetValue("OrionMini") != null)) key.SetValue("OrionMini", "\"" + exe + "\"");
+            // An explicit untick in the options page removes only Saiph's own entry.
+            if (removeStartup) { object value = key.GetValue("OrionMini", null, RegistryValueOptions.DoNotExpandEnvironmentNames); if (IntegrationPolicy.OwnRun(value, targets)) key.DeleteValue("OrionMini"); }
         }
         using (var key = Registry.CurrentUser.CreateSubKey(UninstallKey)) {
             key.SetValue("DisplayName", "Saiph"); key.SetValue("InstallLocation", destination); key.SetValue("Publisher", "Saiph local preview");

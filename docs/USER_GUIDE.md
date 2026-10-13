@@ -6,6 +6,28 @@ a Windows or Linux desktop, and the separately maintained Android app. Hosted is
 planned; these instructions do not create a hosted account.
 Beta testers can follow the step-by-step [beta tester setup guide](BETA_TESTER_GUIDE.md).
 
+## Install and first-run setup
+
+The Windows installer asks, before installing, whether Saiph should start when you
+sign in, add "Saiph (phone)" to File Explorer's Send to menu, and open when setup
+finishes. The Linux `.run` asks the same about start-up and the GNOME Files and
+Dolphin "Send to phone" actions. On an update the choices start from what is
+installed now; unticking one removes only what Saiph added.
+
+When Saiph opens for the first time, a setup guide walks you through:
+
+1. **How to connect:** a Saiph account, or your own Hub.
+2. **Connect this computer:** account sign-in and setting it up as the device that
+   approves your others, or your Hub invitation and the secure connection.
+3. **Add your phone:** the QR code, approval and confirmation that it connected.
+4. **Choose features:** plain-language switches with safe defaults. With a Saiph
+   account only the features Hosted supports are offered.
+5. **Optional tools:** which helpers are installed, links to each project's
+   official download, and on Linux the package command for missing helpers.
+
+"Set up later" closes it. Run it again from Settings → General → Setup guide.
+Computers that are already connected never see it automatically.
+
 ## Pair your devices
 
 Install and configure your private Tailscale or Headscale network using its own

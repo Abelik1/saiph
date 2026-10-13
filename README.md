@@ -58,8 +58,10 @@ their inclusion is not a delivery-date commitment.
 
 ### Finish and validate
 
-- [ ] **Unified setup — in progress:** finish clean Windows/Linux/Android setup,
-  guided permissions and pairing, optional-tool installation, updates and recovery.
+- [ ] **Unified setup — in progress:** the desktop now has installer option pages
+  (Windows and Linux) and a first-run setup guide (connect, add your phone, choose
+  features, optional tools) — acceptance pending on clean machines. Still to do:
+  Android-side guided setup alignment, updates and recovery.
 - [ ] **Everyday reliability — acceptance:** verify background clipboard and
   notifications, sleep/reboot recovery, network changes, interrupted transfers
   and sustained use across supported Android, Windows and Linux/Wayland devices.

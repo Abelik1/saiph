@@ -6,6 +6,7 @@ import type { Client, Page, State } from "./workspace/types";
 import { Phone } from "./workspace/Phone";
 import { Cloud } from "./workspace/Cloud";
 import { Settings } from "./workspace/Settings";
+import { SetupWizard } from "./workspace/SetupWizard";
 import { Workspace } from "./workspace/edition";
 import "./workspace/workspace.css";
 import "./workspace/link.css";
@@ -21,6 +22,7 @@ export default function App({ providedClient }: { providedClient?: Client } = {}
   const [state, setState] = useState<State | null>(null);
   const [page, setPage] = useState<Page>("Phone");
   const [error, setError] = useState("");
+  const [guide, setGuide] = useState(false);
   const fetching = useRef(false), last = useRef("");
   useEffect(() => {
     if (providedClient) return;
@@ -43,6 +45,9 @@ export default function App({ providedClient }: { providedClient?: Client } = {}
   useEffect(() => { if (!hasWorkspace && workspacePages.includes(page)) setPage("Phone"); }, [hasWorkspace, page]);
   useEffect(() => { if (state?.enrollment?.ready && !state.settings.hub?.paired) setPage("Phone"); }, [state?.enrollment?.id, state?.enrollment?.ready, state?.settings.hub?.paired]);
   if (!state || !client) return <div className="connection-screen"><MoonStar size={44} /><h1>Saiph</h1><p role={error ? "alert" : "status"}>{error || "Opening Saiph…"}</p></div>;
+  // First run, or re-run from Settings: the setup guide takes the whole window.
+  if (guide || state.setup?.show) return <div className="workspace-shell link-shell"><main className="page-content">
+    <SetupWizard state={state} client={client} close={() => { setGuide(false); void refresh(); }} /></main></div>;
   const workspacePage = workspacePages.includes(page) || (page === "Settings" && hasWorkspace);
   return <div className="workspace-shell link-shell">
     <header className="link-header">
@@ -60,7 +65,7 @@ export default function App({ providedClient }: { providedClient?: Client } = {}
       {error && <p role="alert" className="inline-error">{error}</p>}
       {page === "Phone" && <Phone state={state} client={client} />}
       {page === "Cloud" && <Cloud state={state} client={client} />}
-      {page === "Settings" && !hasWorkspace && <Settings state={state} client={client} />}
+      {page === "Settings" && !hasWorkspace && <Settings state={state} client={client} openSetup={() => setGuide(true)} />}
       {hasWorkspace && Workspace && <div hidden={!workspacePage}><Suspense fallback={<p role="status">Opening Workspace…</p>}><Workspace state={state} client={client} page={page} navigate={setPage} /></Suspense></div>}
     </main>
   </div>;

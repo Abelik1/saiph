@@ -22,6 +22,7 @@ SPEC.loader.exec_module(packaging)
 
 SYNTHETIC_INSTALLER = b'''#!/bin/sh
 printf '%s\\n' "$(cd "$(dirname "$0")" && pwd -P)" > "$SAIPH_TEST_MARKER"
+printf '%s %s\\n' "${SAIPH_AUTOSTART:-unset}" "${SAIPH_FILE_ACTIONS:-unset}" > "$SAIPH_TEST_MARKER.choices"
 echo "synthetic installer output"
 if [ "${SAIPH_TEST_FAIL:-0}" != 0 ]; then echo "synthetic failure reason" >&2; exit 3; fi
 '''
@@ -30,6 +31,7 @@ FAKE_TOOL = '''#!/bin/sh
 count=$(cat "$FAKE_LOG.count" 2>/dev/null || echo 0); count=$((count + 1)); echo "$count" > "$FAKE_LOG.count"
 printf '%s %s\\n' "$(basename "$0")" "$(printf '%s ' "$@" | tr '\\n' ' ')" >> "$FAKE_LOG"
 answer=$(echo "${FAKE_ANSWERS:-}" | cut -d ' ' -f "$count")
+case " $* " in *" --list "*|*" --checklist "*) printf '%s\\n' "${FAKE_CHOICES:-}" ;; esac
 case "$(basename "$0"):${1:-}" in
   zenity:--progress) cat > /dev/null ;;
   x-terminal-emulator:-e) shift; printf '\\n\\n' | "$@"; exit $? ;;
@@ -93,7 +95,8 @@ def profile(tmp_path):
                                      'SAIPH_TEST_MARKER': shell_path(paths['marker']),
                                      'FAKE_LOG': shell_path(paths['log']), 'FAKE_PATH': shell_path(paths['fake'])})
     for name in ('DISPLAY', 'WAYLAND_DISPLAY', 'RESTRICTED_PATH',
-                 'ORION_INSTALL_ROOT', 'ORION_INSTALL_ISOLATED', 'FAKE_ANSWERS', 'SAIPH_TEST_FAIL'):
+                 'ORION_INSTALL_ROOT', 'ORION_INSTALL_ISOLATED', 'FAKE_ANSWERS', 'FAKE_CHOICES', 'SAIPH_TEST_FAIL',
+                 'SAIPH_AUTOSTART', 'SAIPH_FILE_ACTIONS'):
         environment.pop(name, None)
     return environment, paths
 
@@ -237,12 +240,12 @@ def test_extract_recovers_the_identical_archive_and_retains_existing_folders(she
     assert [path.name for path in existing.iterdir()] == ['user.txt']
 
 
-@pytest.mark.parametrize('answers, installs, failure', [('0 0 1', True, False), ('1', False, False), ('0 0 0', True, True)])
+@pytest.mark.parametrize('answers, installs, failure', [('0 0 0 1', True, False), ('1', False, False), ('0 0 0 0', True, True)])
 def test_file_manager_launch_uses_zenity_dialogs(shell, tmp_path, profile, answers, installs, failure):
     environment, paths = profile
     _, setup, _ = setup_file(tmp_path)
     fake(paths, 'zenity')
-    environment.update({'DISPLAY': ':0', 'FAKE_ANSWERS': answers})
+    environment.update({'DISPLAY': ':0', 'FAKE_ANSWERS': answers, 'FAKE_CHOICES': 'autostart fileactions'})
     if failure:
         environment['SAIPH_TEST_FAIL'] = '1'
     result = run(shell, setup, environment)
@@ -252,6 +255,9 @@ def test_file_manager_launch_uses_zenity_dialogs(shell, tmp_path, profile, answe
     if not installs:
         assert result.returncode == 0 and len(log) == 1
         return
+    assert log[1].startswith('zenity --list --checklist') and 'Start Saiph when I sign in' in log[1]
+    assert (paths['marker'].parent / (paths['marker'].name + '.choices')).read_text().split() == ['on', 'on']
+    log = log[:1] + log[2:]
     assert log[1].startswith('zenity --progress')
     saved = (paths['cache'] / 'saiph-setup.log').read_text()
     assert 'synthetic installer output' in saved
@@ -268,13 +274,25 @@ def test_kdialog_is_used_without_zenity(shell, tmp_path, profile):
     _, setup, _ = setup_file(tmp_path)
     restrict(shell, tmp_path, environment)
     fake(paths, 'kdialog')
-    environment.update({'WAYLAND_DISPLAY': 'wayland-0', 'FAKE_ANSWERS': '0 0 1'})
+    environment.update({'WAYLAND_DISPLAY': 'wayland-0', 'FAKE_ANSWERS': '0 0 0 1', 'FAKE_CHOICES': '"fileactions"'})
     result = run(shell, setup, environment)
     assert result.returncode == 0, result.stderr.decode(errors='replace')
     log = calls(paths)
-    assert [line.split(' ')[0] for line in log] == ['kdialog'] * 3
-    assert '--yesno' in log[0] and '--passivepopup' in log[1] and 'Open Saiph' in log[2]
+    assert [line.split(' ')[0] for line in log] == ['kdialog'] * 4
+    assert '--yesno' in log[0] and '--checklist' in log[1] and '--passivepopup' in log[2] and 'Open Saiph' in log[3]
     assert paths['marker'].exists()
+    # Unticked start-up is passed as an explicit choice, not left to the default.
+    assert (paths['marker'].parent / (paths['marker'].name + '.choices')).read_text().split() == ['off', 'on']
+
+
+def test_cancelling_the_options_installs_nothing(shell, tmp_path, profile):
+    environment, paths = profile
+    _, setup, _ = setup_file(tmp_path)
+    fake(paths, 'zenity')
+    environment.update({'DISPLAY': ':0', 'FAKE_ANSWERS': '0 1'})
+    result = run(shell, setup, environment)
+    assert result.returncode == 0 and not paths['marker'].exists()
+    assert [line.split(' ')[1] for line in calls(paths)] == ['--question', '--list']
 
 
 def test_terminal_window_opens_when_no_dialog_tool_exists(shell, tmp_path, profile):
