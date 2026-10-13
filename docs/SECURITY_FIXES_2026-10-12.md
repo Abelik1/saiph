@@ -56,6 +56,15 @@ Logical SQLite deletion does not securely erase freed pages, backups, replicas
 or exports. Roster and immutable device-ownership records are retained. Production
 retention and account-erasure procedures still require separate verification.
 
+## Beta-code lockout (13 October)
+
+Any signed-in account could make five failed redemption attempts, so accounts
+created through open sign-up could fill the global 1,000-attempt window and block
+every invitation redemption. Codes carry 192 random bits, so since `b1fd50b`
+the global limit only throttles failed attempts; a valid code still redeems
+while it is full. The per-account limit of five attempts applies to every
+request. Restricting account sign-up remains a separate provider setting.
+
 ## Operations and verification
 
 The private operations repository adds registry-driven backup inventory checks.

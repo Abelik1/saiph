@@ -5,6 +5,13 @@ are prepared in source with offline regression tests. Updating installed desktop
 and hosted service releases, production load checks and off-host recovery remain
 separate work; this entry does not claim a deployed remediation.
 
+2026-10-13: a hosted service bundle from `b1fd50b` (the four fixes plus beta-code
+lockout protection) and desktop 0.1.0-beta.4 installers from `bf7105c` are built
+and verified locally. They are not deployed yet; the hosted service still runs a
+release from before the fixes. Deployment, restricted account sign-up and an
+independent review of friends-beta mode must finish before this repository is
+published.
+
 2026-10-11. Reliability, Linux packaging/updater, desktop pairing QR, independent
 Android beta, development website and guarded sandbox billing work are integrated
 on private main. See [the integration record](INTEGRATION_2026-10-11.md).
@@ -66,9 +73,12 @@ Repository separation and passing unit checks do not establish release readiness
   deployment URLs still need a Vercel team login. Real browser login on the new
   domain is not yet verified. Public waitlist and checkout remain disabled.
 - Account website security to do: limit or protect Auth0 sign-up (Attack
-  Protection or invited emails only), since strangers can use up the global
-  code-redemption limit; leave one public account hostname; add a
-  Content-Security-Policy; independent review of friends-beta mode.
+  Protection or invited emails only); independent review of friends-beta mode.
+  Since `b1fd50b` the global code-redemption limit only throttles failed
+  attempts, so other accounts can no longer lock out a valid code once that
+  service release is deployed. The account site already sends a nonce-based
+  Content-Security-Policy and redirects alias hostnames to the single canonical
+  account origin (POSTs to aliases are refused); confirm both on the live site.
   Guarded Stripe sandbox checkout/webhook and durable billing code is integrated,
   but production activation, database migration and real provider acceptance are
   incomplete. Paid Hosted launch retains company, policy, payment and security

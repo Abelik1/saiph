@@ -70,6 +70,11 @@ their inclusion is not a delivery-date commitment.
   approval/revocation, encrypted sharing and recovery after the root goes offline.
   See [Hosted preview scope](docs/HOSTED_PREVIEW.md) and
   [friends-beta acceptance](docs/HOSTED_FRIENDS_BETA.md).
+- [ ] **Security release — deployment:** roll out the October 2026 hosted fixes
+  to the hosted service and desktop 0.1.0-beta.4, restrict account sign-up, and
+  complete an independent review of friends-beta mode before publishing this
+  repository. See [release status](docs/RELEASE_STATUS.md) and the
+  [public release checklist](docs/PUBLIC_RELEASE_CHECKLIST.md).
 
 ### Feature backlog
 
