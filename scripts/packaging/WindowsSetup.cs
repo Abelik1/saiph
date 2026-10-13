@@ -61,21 +61,7 @@ public static class Setup {
             if (silent) { Perform(); return 0; }
             Application.EnableVisualStyles(); Application.SetCompatibleTextRenderingDefault(false);
             if (!uninstall) { RunWizard(); return 0; }
-            var window = new Form { Text = "Saiph", ClientSize = new Size(570, 285), StartPosition = FormStartPosition.CenterScreen,
-                                    FormBorderStyle = FormBorderStyle.FixedDialog, MaximizeBox = false, Font = new Font("Segoe UI", 10) };
-            window.Controls.Add(new Label { Left = 28, Top = 24, Width = 500, Height = 34, Text = uninstall ? "Remove Saiph" : "Install Saiph", Font = new Font("Segoe UI", 19) });
-            window.Controls.Add(new Label { Left = 30, Top = 78, Width = 505, Height = 70,
-                Text = uninstall ? "Saiph's files will be removed. Your settings, paired device keys, notes and Cloud files will be retained."
-                                 : "Saiph installs for your Windows account. Your existing settings and device pairing are preserved. Supporting components are guided in Saiph setup." });
-            status = new Label { Left = 30, Top = 155, Width = 505, Height = 55, Text = "Internal preview · publisher signing and clean-device acceptance pending." };
-            var action = new Button { Left = 355, Top = 225, Width = 180, Height = 36, Text = uninstall ? "Remove Saiph" : "Install Saiph" };
-            action.Click += delegate {
-                if (action.Text == "Close") { window.Close(); return; }
-                action.Enabled = false;
-                try { Perform(); status.Text = uninstall ? "Saiph removed. Your data is retained." : "Saiph is installed. Open it from the Start menu."; action.Text = "Close"; action.Enabled = true; }
-                catch { status.Text = "The installation could not finish. Your existing release and data were retained."; action.Enabled = true; }
-            };
-            window.Controls.Add(action); Application.Run(window); return 0;
+            RunRemoval(); return 0;
         } catch (Exception failure) { Console.Error.WriteLine("Saiph installer failed: " + phase + "; " + failure.GetType().Name + "; " + failure.HResult); if (!silent) MessageBox.Show("Saiph could not complete installation. No user data was removed.", "Saiph"); return 1; }
     }
 
@@ -95,6 +81,48 @@ public static class Setup {
             return @"Global\OrionSetup-" + BitConverter.ToString(hash.ComputeHash(Encoding.UTF8.GetBytes(key))).Replace("-", "");
         }
     }
+    // Confirm → Removing → Removed, in the same look as the setup wizard.
+    static void RunRemoval() {
+        var window = new Form { Text = "Remove Saiph", ClientSize = new Size(640, 340), StartPosition = FormStartPosition.CenterScreen,
+                                FormBorderStyle = FormBorderStyle.FixedDialog, MaximizeBox = false, Font = new Font("Segoe UI", 10),
+                                BackColor = WaveSurface.Footer };
+        window.HandleCreated += delegate { WaveSurface.DarkTitleBar(window.Handle); };
+        surface = new WaveSurface { Bounds = new Rectangle(0, 0, 640, 268), Hero = true, Heading = "Remove Saiph",
+            Body = "Saiph's files will be removed. Your settings, paired device keys, notes and Cloud files will be retained." };
+        status = new Label { Left = 24, Top = 282, Width = 340, Height = 48, Text = "Internal preview · publisher signing and clean-device acceptance pending.",
+                             BackColor = WaveSurface.Footer, ForeColor = WaveSurface.Muted, Font = new Font("Segoe UI", 9) };
+        var action = WaveSurface.Button("Remove Saiph", 452, 286, true);
+        action.Width = 164;
+        bool removing = false, removed = false;
+        // Removal runs on its own thread; the window cannot close until it ends.
+        window.FormClosing += (sender, e) => { if (removing) e.Cancel = true; };
+        action.Click += delegate {
+            if (removed) { window.Close(); return; }
+            removing = true; action.Enabled = false; status.Text = "";
+            surface.Heading = "Removing Saiph…"; surface.Working = true; surface.Invalidate();
+            var worker = new Thread(delegate() {
+                bool done = false;
+                try { Perform(); done = true; } catch { }
+                window.BeginInvoke((Action)delegate {
+                    removing = false; surface.Working = false; action.Enabled = true;
+                    if (done) {
+                        removed = true; action.Text = "Close"; surface.Heading = "Saiph removed"; surface.Body = "Saiph removed. Your data is retained."; surface.Celebrate();
+                    } else {
+                        surface.Heading = "Remove Saiph";
+                        status.Text = "Saiph could not be removed. Your settings and data were retained.";
+                    }
+                    surface.AccessibleName = surface.Heading; surface.AccessibleDescription = surface.Body; surface.Invalidate();
+                });
+            });
+            // COM shell links are read on this thread.
+            worker.SetApartmentState(ApartmentState.STA);
+            worker.Start();
+        };
+        surface.AccessibleName = surface.Heading; surface.AccessibleDescription = surface.Body;
+        foreach (Control control in new Control[] { surface, status, action }) window.Controls.Add(control);
+        Application.Run(window);
+    }
+
     // Welcome → Options → Installing → Done. Options map onto the same flags as silent mode.
     static void RunWizard() {
         var window = new Form { Text = "Saiph setup", ClientSize = new Size(640, 420), StartPosition = FormStartPosition.CenterScreen,
@@ -112,8 +140,8 @@ public static class Setup {
                                    BackColor = WaveSurface.Card, ForeColor = WaveSurface.Muted, Font = new Font("Segoe UI", 9) };
         status = new Label { Left = 24, Top = 362, Width = 340, Height = 48, Text = "Internal preview · publisher signing and clean-device acceptance pending.",
                              BackColor = WaveSurface.Footer, ForeColor = WaveSurface.Muted, Font = new Font("Segoe UI", 9) };
-        var back = WaveSurface.Button("Back", 372, false);
-        var next = WaveSurface.Button("Next", 500, true);
+        var back = WaveSurface.Button("Back", 372, 366, false);
+        var next = WaveSurface.Button("Next", 500, 366, true);
         int page = 0;
         bool installing = false;
         Action show = delegate {
@@ -443,7 +471,7 @@ sealed class WaveSurface : Control {
     readonly List<double[]> plucks = new List<double[]>(); // x, y, strength, start
     readonly Font headingFont = new Font("Segoe UI Semilight", 21), bodyFont = new Font("Segoe UI", 10), brandFont = new Font("Segoe UI Semibold", 15);
     double shown, knot, last;
-    const int Strings = 24, BarLeft = 40, BarRight = 600, BarY = 236;
+    const int Strings = 24, BarLeft = 40, BarRight = 600, BarY = 236, HeroX = 520, HeroY = 190;
 
     public WaveSurface() {
         SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint | ControlStyles.ResizeRedraw, true);
@@ -466,19 +494,28 @@ sealed class WaveSurface : Control {
         return new CheckBox { Left = 44, Top = top, Width = 552, Height = 28, Text = text, Checked = on, Visible = false,
                               FlatStyle = FlatStyle.Flat, BackColor = Card, ForeColor = Color.FromArgb(227, 238, 251) };
     }
-    public static Button Button(string text, int left, bool primary) {
-        var button = new Button { Left = left, Top = 366, Width = 116, Height = 36, Text = text, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand,
+    public static Button Button(string text, int left, int top, bool primary) {
+        var button = new Button { Left = left, Top = top, Width = 116, Height = 36, Text = text, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand,
                                   BackColor = primary ? Cyan : Color.FromArgb(18, 33, 62), ForeColor = primary ? Color.FromArgb(4, 16, 31) : Color.FromArgb(227, 238, 251),
                                   Font = new Font("Segoe UI Semibold", 10) };
         button.FlatAppearance.BorderColor = primary ? Cyan : Color.FromArgb(34, 55, 92);
         button.FlatAppearance.MouseOverBackColor = primary ? Light : Color.FromArgb(28, 50, 90);
+        // Flat buttons keep their colour when disabled; dim them so busy states read clearly.
+        Color back = button.BackColor, border = button.FlatAppearance.BorderColor;
+        button.EnabledChanged += delegate {
+            button.BackColor = button.Enabled ? back : Color.FromArgb(22, 38, 66);
+            button.FlatAppearance.BorderColor = button.Enabled ? border : Color.FromArgb(34, 55, 92);
+        };
         return button;
     }
 
     double Seconds { get { return clock.Elapsed.TotalSeconds; } }
     void Pluck(double x, double y, double strength) { plucks.Add(new double[] { x, y, strength, Seconds }); if (plucks.Count > 16) plucks.RemoveAt(0); }
-    // Ripples run out along the finished string.
-    public void Celebrate() { for (int i = 0; i < 5; i++) Pluck(BarLeft + i * (BarRight - BarLeft) / 4.0, BarY, 1.2); }
+    // Ripples run out along the finished string, or from the mark.
+    public void Celebrate() {
+        if (Progress < 0) { Pluck(HeroX, HeroY, 1.4); return; }
+        for (int i = 0; i < 5; i++) Pluck(BarLeft + i * (BarRight - BarLeft) / 4.0, BarY, 1.2);
+    }
 
     protected override void OnPaint(PaintEventArgs e) {
         var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
@@ -492,7 +529,8 @@ sealed class WaveSurface : Control {
         // Progress and the "working" knot ease toward their targets.
         if (Progress < 0) shown = 0; else shown += (Progress - shown) * Math.Min(1, elapsed * 4);
         knot += ((Working ? 1 : 0) - knot) * Math.Min(1, elapsed * 3);
-        double headX = BarLeft + (BarRight - BarLeft) * shown;
+        // The working knot rings at the progress head, or around the large mark.
+        double headX = Progress >= 0 ? BarLeft + (BarRight - BarLeft) * shown : HeroX, headY = Progress >= 0 ? BarY : HeroY;
         plucks.RemoveAll(p => t - p[3] > 4);
 
         float gap = height / (float)(Strings + 1);
@@ -509,12 +547,13 @@ sealed class WaveSurface : Control {
                     double front = Math.Abs(dx) - age * 420;
                     y += Math.Sin(dx * 0.05 - age * 18) * 14 * p[2] * Math.Exp(-dy * dy / (2 * 80.0 * 80.0)) * Math.Exp(-front * front / 7000) * Math.Exp(-age * 1.3);
                 }
-                if (knot > 0.01 && Progress >= 0) {
-                    // While installing, the strings near the head of the progress ring hard.
-                    double dx = x - headX, dy = baseY - BarY;
-                    double near = Math.Exp(-dx * dx / (2 * 70.0 * 70.0)) * Math.Exp(-dy * dy / (2 * 90.0 * 90.0));
+                if (knot > 0.01) {
+                    double dx = x - headX, dy = baseY - headY;
+                    // Around the large mark the knot is wider, so it reads without a progress string.
+                    double spread = Progress >= 0 ? 70 : 105, swing = Progress >= 0 ? 6 : 9;
+                    double near = Math.Exp(-dx * dx / (2 * spread * spread)) * Math.Exp(-dy * dy / (2 * 90.0 * 90.0));
                     y -= dy * 0.35 * near * knot;
-                    y += Math.Sin(t * 17 + i * 1.9 + dx * 0.06) * 6 * near * knot;
+                    y += Math.Sin(t * 17 + i * 1.9 + dx * 0.06) * swing * near * knot;
                 }
                 points[n] = new PointF((float)x, (float)y);
             }
@@ -531,7 +570,7 @@ sealed class WaveSurface : Control {
         using (var white = new SolidBrush(Color.FromArgb(240, 246, 252))) g.DrawString(Heading, headingFont, white, 26, 74);
         if (Body.Length > 0) using (var muted = new SolidBrush(Color.FromArgb(185, 203, 226)))
             g.DrawString(Body, bodyFont, muted, new RectangleF(29, 124, Hero ? 400 : 580, 90));
-        if (Hero) { Glow(g, 520, 190, 90, Light, 40); Mark(g, 452, 122, 136, t); }
+        if (Hero) { Glow(g, HeroX, HeroY, 90, Light, 40); Mark(g, HeroX - 68, HeroY - 68, 136, t); }
         if (ShowCard) {
             using (var path = Rounded(new RectangleF(24, 124, 592, 184), 16))
             using (var fill = new SolidBrush(Card)) using (var edge = new Pen(Color.FromArgb(60, Light), 1f)) { g.FillPath(fill, path); g.DrawPath(edge, path); }
