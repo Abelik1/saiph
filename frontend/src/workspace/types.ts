@@ -284,6 +284,7 @@ export type State = {
   usage?: UsageState;
   insights?: {enabled: boolean};
   user_verification?: UserVerification;
+  platform?: string;
   update_status?: {state: string; code: string};
   cloud_status?: {installed: boolean; profile_present: boolean; inspection_complete: boolean; prepared: boolean; selected_libraries: number; state: string; installation_supported?: boolean; management_available?: boolean; service_state?: 'not_managed' | 'reachable' | 'unavailable' | 'needs_attention'};
   modules?: { workspace: { installed: boolean; enabled: boolean } };

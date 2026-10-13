@@ -1,7 +1,9 @@
 /* SPDX-License-Identifier: AGPL-3.0-or-later */
 .phone-tabs { display:flex;gap:32px;border-bottom:1px solid var(--line);padding:0 20px; }
-.phone-tabs button { background:transparent;border:0;border-radius:0;padding:18px 4px;display:flex;gap:9px;color:var(--muted); }
-.phone-tabs button[aria-current] { color:#e4e9e9;border-bottom:2px solid var(--accent); }
+.phone-tabs > button { position:relative;background:transparent;border:0;border-radius:8px;padding:18px 4px;display:flex;gap:9px;color:var(--muted); }
+.phone-tabs > button:hover, .phone-tabs > button:active { background:transparent;color:#edf0f5;transform:none; }
+.phone-tabs > button[aria-current] { background:transparent;color:var(--accent);border:0; }
+.phone-tabs > button[aria-current]::after { content:"";position:absolute;bottom:9px;left:50%;width:26px;height:3px;transform:translateX(-50%);border-radius:999px;background:var(--accent); }
 .phone-tab-content { padding:28px;min-height:480px; }
 .phone-messages { display:grid;grid-template-columns:235px 1fr;gap:28px; }
 .phone-messages aside { display:flex;flex-direction:column;gap:8px; }

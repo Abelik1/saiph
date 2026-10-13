@@ -1,0 +1,239 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+.settings-layout {
+  display: grid;
+  grid-template-columns: 210px minmax(0, 780px);
+  gap: 40px;
+  align-items: start;
+}
+.settings-sidebar {
+  position: sticky;
+  top: 0;
+  padding: 3px 20px 0 0;
+  border-right: 1px solid var(--line);
+}
+.settings-sidebar-title {
+  margin: 0 12px 24px;
+  font-size: 21px;
+  font-weight: 500;
+  line-height: 1.3;
+  letter-spacing: -0.35px;
+  color: #edf0f5;
+}
+.settings-sidebar [role="tablist"] {
+  display: grid;
+  gap: 5px;
+}
+.settings-sidebar button {
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 13px 14px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #aeb9ca;
+  font-size: 13px;
+  border-radius: 10px;
+}
+.settings-sidebar button:hover {
+  background: #ffffff06;
+  color: #edf0f5;
+}
+.settings-sidebar button[aria-selected="true"] {
+  background: #62c4ef12;
+  border-color: #62c4ef28;
+  color: #a0ddf7;
+}
+.settings-sidebar > p {
+  color: #8590a1;
+  font-size: 10px;
+  padding: 18px 12px;
+}
+.settings-section-title {
+  padding: 3px 0 20px;
+}
+.settings-section-title h2 {
+  font-size: 21px;
+  font-weight: 500;
+  line-height: 1.3;
+  margin: 0 0 8px;
+}
+.settings-section-title p {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0;
+}
+.settings-content {
+  min-width: 0;
+}
+.settings-content .columns {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.settings-content .card {
+  padding: 26px 28px;
+  border-radius: 14px;
+  margin-bottom: 20px;
+}
+.settings-content .section-head {
+  margin-bottom: 22px;
+}
+.settings-content .section-head h2 {
+  font-size: 15px;
+  font-weight: 600;
+}
+.settings-content .section-head p {
+  line-height: 1.6;
+}
+.settings-content form {
+  gap: 18px;
+}
+.settings-content label {
+  gap: 9px;
+  font-size: 12px;
+  color: #bec7d4;
+}
+.settings-content input:not([type="checkbox"]),
+.settings-content select {
+  min-height: 40px;
+  border-radius: 8px;
+}
+.settings-content form fieldset > button {
+  align-self: start;
+  padding: 10px 18px;
+  background: #334652;
+  border-color: #4d6b7a;
+  color: #dbf3ff;
+}
+.settings-content .check,
+.settings-content .switch-row {
+  padding: 12px 0;
+  align-items: center;
+  line-height: 1.6;
+}
+.settings-content .list-row {
+  padding: 18px 0;
+}
+.settings-content .list-row:first-child {
+  padding-top: 0;
+}
+.settings-content .list-row:last-child {
+  border-bottom: 0;
+}
+.settings-content .list-row small {
+  margin-top: 6px;
+  line-height: 1.6;
+}
+.settings-content details {
+  border: 1px solid #ffffff10;
+  padding: 14px;
+  border-radius: 10px;
+}
+.settings-content .notice {
+  border: 1px solid #62c4ef35;
+  background: #62c4ef0b;
+  border-radius: 10px;
+  padding: 12px 16px;
+}
+@media (max-width: 1000px) {
+  .settings-layout {
+    grid-template-columns: 170px minmax(0, 1fr);
+    gap: 24px;
+  }
+  .settings-content .card {
+    padding: 22px;
+  }
+  .settings-sidebar {
+    padding-right: 12px;
+  }
+}
+
+.settings-content button[role="switch"] {
+  width: 42px;
+  height: 24px;
+  flex-shrink: 0;
+  padding: 3px;
+  justify-content: flex-start;
+  border-radius: 20px;
+  background: #434c5a;
+  border: 1px solid #697588;
+}
+.settings-content button[role="switch"][aria-checked="true"] {
+  background: #62c4ef;
+  border-color: #62c4ef;
+  justify-content: flex-end;
+}
+.settings-switch-thumb {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #f0f5fc;
+  box-shadow: 0 1px 3px #0003;
+}
+.settings-content
+  button[role="switch"][aria-checked="true"]
+  .settings-switch-thumb {
+  background: #163046;
+}
+
+.settings-content form fieldset {
+  display: grid;
+  gap: 18px;
+}
+.settings-content .settings-saved {
+  display: block;
+  color: #99d5ba;
+  margin-top: 10px;
+}
+.settings-content .form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 18px;
+}
+.settings-content .device-setup-guide {
+  margin: 0 0 24px;
+}
+.settings-content .device-setup-guide[open] summary {
+  margin-bottom: 18px;
+}
+/* Cards fill the content column; checkbox preferences stay in compact rows. */
+.settings-content .columns {
+  align-items: stretch;
+}
+.settings-content .columns > div {
+  width: 100%;
+}
+.settings-content label.check,
+.settings-content label.switch-row {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+}
+.settings-content label.check input,
+.settings-content label.switch-row input {
+  flex: 0 0 16px;
+}
+.settings-content form fieldset > button {
+  justify-self: start;
+}
+
+.settings-content .settings-unsaved {
+  display: block;
+  margin-top: 10px;
+  color: #e2c58e;
+}
+.settings-content input[type="time"] {
+  color-scheme: dark;
+}
+.settings-content .settings-folder-picker {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+}
+.settings-content .settings-folder-picker button {
+  min-height: 40px;
+}
