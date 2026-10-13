@@ -111,7 +111,11 @@ def test_fresh_nested_secret_storage_is_private_with_group_writable_umask(tmp_pa
 
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX directory modes")
-def test_existing_group_writable_parent_is_rejected_without_repair(tmp_path):
+def test_existing_group_writable_parent_is_rejected_without_repair(tmp_path, monkeypatch):
+    import grp
+    import types
+    # A group shared with another account; a user private group is accepted (see test_hosted_keys).
+    monkeypatch.setattr(grp, "getgrgid", lambda gid: types.SimpleNamespace(gr_gid=gid, gr_mem=["synthetic-other"]))
     parent = tmp_path / "shared"
     parent.mkdir()
     parent.chmod(0o770)

@@ -220,14 +220,20 @@ if [ "$isolated" != 1 ]; then
     write_integration autostart "$autostart"
   fi
   write_integration mime "$mime"
-  if [ "${SAIPH_FILE_ACTIONS:-on}" = off ]; then
+  # SAIPH_FILE_ACTIONS=on|off is the same explicit dialog choice. Unset (terminal,
+  # install.sh directly, in-app update) adds the actions only on a first install and
+  # otherwise refreshes just those still present, so a removed action stays removed.
+  if [ "${SAIPH_FILE_ACTIONS:-}" = off ]; then
     # Declined in the setup dialog: remove only Saiph's own previously written actions.
     if owned_integration nautilus "$nautilus"; then rm -- "$nautilus"; fi
     if owned_integration servicemenu "$servicemenu"; then rm -- "$servicemenu"; fi
-  else
+  elif [ "${SAIPH_FILE_ACTIONS:-}" = on ] || [ ! -f "$install_root/integration-created" ]; then
     mkdir -p "$data_root/nautilus/scripts" "$data_root/kio/servicemenus"
     write_integration nautilus "$nautilus"
     write_integration servicemenu "$servicemenu"
+  else
+    [ ! -e "$nautilus" ] || write_integration nautilus "$nautilus"
+    [ ! -e "$servicemenu" ] || write_integration servicemenu "$servicemenu"
   fi
 fi
 # Refuse unrelated active pointers and stale temporary links before activation.

@@ -11,6 +11,7 @@ import argparse
 import hashlib
 import importlib.util
 import json
+import os
 import re
 import shlex
 import subprocess
@@ -28,6 +29,14 @@ NOTICE = 'ORION-ACCEPTANCE-NOTICE'
 spec = importlib.util.spec_from_file_location('desktop_call', Path(__file__).with_name('desktop-call.py'))
 desktop = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(desktop)
+from orion_mini.platform import qt_platform_for_background_clipboard  # noqa: E402  (src path set by desktop-call)
+
+
+def same_pixels(image, expected):
+    """Pixel equality; QImage == also compares colour spaces, and a pasted PNG arrives tagged sRGB."""
+    image = image.convertToFormat(QImage.Format.Format_RGB32)
+    image.setColorSpace(expected.colorSpace())
+    return image == expected
 
 
 class NativeEditor(QTextEdit):
@@ -54,6 +63,11 @@ class Run:
         self.root = args.output.resolve()
         self.root.mkdir(parents=True, exist_ok=True)
         self.tag = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')
+        # GNOME/Wayland lets only the focused client set or read the clipboard, so an
+        # unfocused native Wayland editor silently drops copies. Use the app's choice.
+        platform = qt_platform_for_background_clipboard()
+        if platform and not QApplication.instance():
+            os.environ['QT_QPA_PLATFORM'] = platform
         self.app = QApplication.instance() or QApplication([])
         self.editor = NativeEditor()
         self.editor.setWindowTitle('Saiph automated acceptance — synthetic fixtures')
@@ -135,7 +149,7 @@ class Run:
                     value = self.editor.document().resource(QTextDocument.ResourceType.ImageResource, QUrl(fmt.name()))
                     if hasattr(value, 'toImage'):
                         value = value.toImage()
-                    if isinstance(value, QImage) and value.convertToFormat(QImage.Format.Format_RGB32) == self.image():
+                    if isinstance(value, QImage) and same_pixels(value, self.image()):
                         return True
                 iterator += 1
             block = block.next()

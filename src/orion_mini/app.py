@@ -119,6 +119,18 @@ class DashboardView(QWebEngineView):
     def dropEvent(self, event):
         self.handle_drag(event)
 
+def apply_startup_setting(workspace):
+    """Re-apply start at sign-in; a refusal is reported, never fatal at launch.
+
+    Linux refuses with ValueError when the installed launcher is missing (an
+    extracted archive run directly) or an unrelated autostart entry exists."""
+    try:
+        set_startup(bool(workspace.settings['start_with_windows']))
+    except ValueError as error:
+        workspace.store.save('job', {'kind': 'startup', 'status': 'failed', 'error': str(error)})
+    except OSError:
+        workspace.store.save('job', {'kind': 'startup', 'status': 'failed', 'error': 'This computer denied the startup setting. Check Settings → Advanced.'})
+
 class MainWindow(QMainWindow):
     phone_changed = Signal()
     clipboard_received = Signal(str, object)
@@ -146,10 +158,7 @@ class MainWindow(QMainWindow):
         self.closing = False
         if bootstrap:
             self.workspace.bootstrap()
-            try:
-                set_startup(bool(self.workspace.settings['start_with_windows']))
-            except OSError:
-                self.workspace.store.save('job', {'kind': 'startup', 'status': 'failed', 'error': 'This computer denied the startup setting. Check Settings → Advanced.'})
+            apply_startup_setting(self.workspace)
         for job in self.workspace.store.all('job'):
             if job['status'] == 'running':
                 self.workspace.store.save('job', {**job, 'status': 'interrupted', 'progress': 'Stopped during the previous session; resume when ready.'})

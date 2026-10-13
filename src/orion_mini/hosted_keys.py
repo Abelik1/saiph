@@ -38,8 +38,32 @@ def _no_links(path):
         if os.name != "nt":
             if value.st_uid not in {0, os.getuid()}:
                 raise KeyStorageError()
-            if stat.S_ISDIR(value.st_mode) and value.st_mode & 0o022 and not value.st_mode & stat.S_ISVTX:
-                raise KeyStorageError()
+            if stat.S_ISDIR(value.st_mode) and not value.st_mode & stat.S_ISVTX:
+                if value.st_mode & 0o002:
+                    raise KeyStorageError()
+                if value.st_mode & 0o020 and not (value.st_uid == os.getuid() and _private_group(value.st_gid)):
+                    raise KeyStorageError()
+
+
+def _private_group(gid):
+    """True for a user private group: the umask 0002 default on Debian/Ubuntu.
+
+    Group write is then owner write. Like Debian's OpenSSH user-group-modes, the
+    group must belong to this user alone: no other member and no other account's
+    primary group. An unknown or shared group stays untrusted."""
+    import grp
+    import pwd
+    try:
+        user = pwd.getpwuid(os.getuid())
+        group = grp.getgrgid(gid)
+        accounts = pwd.getpwall()
+    except (KeyError, OSError):
+        return False
+    if any(member != user.pw_name for member in group.gr_mem):
+        return False
+    if any(account.pw_gid == gid and account.pw_uid != user.pw_uid for account in accounts):
+        return False
+    return user.pw_gid == gid or user.pw_name in group.gr_mem
 
 
 def _private_mode(value, directory=False):

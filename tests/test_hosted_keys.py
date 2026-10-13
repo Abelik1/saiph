@@ -337,6 +337,67 @@ def test_other_user_writable_parent_rejected(tmp_path):
     assert not vault.folder.exists()
 
 
+def _groups(monkeypatch, *, members=(), other_primary=False, known=True):
+    """Describe this user's primary group to the ancestor check."""
+    import grp
+    import pwd
+    me = types.SimpleNamespace(pw_name="synthetic-owner", pw_uid=os.getuid(), pw_gid=os.getgid())
+    accounts = [me] + ([types.SimpleNamespace(pw_name="synthetic-other", pw_uid=os.getuid() + 1, pw_gid=os.getgid())]
+                       if other_primary else [])
+    def group(gid):
+        if not known:
+            raise KeyError(gid)
+        return types.SimpleNamespace(gr_gid=gid, gr_mem=list(members))
+    monkeypatch.setattr(pwd, "getpwuid", lambda uid: me)
+    monkeypatch.setattr(pwd, "getpwall", lambda: accounts)
+    monkeypatch.setattr(grp, "getgrgid", group)
+
+
+def _vault_under(parent):
+    return keys.RecipientVault(parent / "vault", str(uuid4()), "dev_" + uuid4().hex,
+                               public_signing_key(ec.generate_private_key(ec.SECP256R1()).public_key()),
+                               _protection=Protection())
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX ancestor permissions")
+def test_user_private_group_writable_parent_accepted(tmp_path, monkeypatch):
+    # Ubuntu's umask 0002 makes the existing data folder 775 with the user's own
+    # single-member group; that is owner-only in effect and must not block Hosted.
+    parent = tmp_path / "data"
+    parent.mkdir()
+    parent.chmod(0o775)
+    os.chown(parent, -1, os.getgid())
+    _groups(monkeypatch)
+    vault = _vault_under(parent)
+    public = export_public(vault.create())
+    assert vault.folder.stat().st_mode & 0o777 == 0o700
+    assert export_public(vault.load(public)) == public
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX ancestor permissions")
+@pytest.mark.parametrize("groups", [{"members": ("synthetic-other",)}, {"other_primary": True}, {"known": False}],
+                         ids=["other-member", "other-primary-account", "unknown-group"])
+def test_shared_group_writable_parent_rejected(tmp_path, monkeypatch, groups):
+    parent = tmp_path / "shared"
+    parent.mkdir()
+    parent.chmod(0o775)
+    _groups(monkeypatch, **groups)
+    vault = _vault_under(parent)
+    with pytest.raises(keys.KeyStorageError):
+        vault.create()
+    assert not vault.folder.exists()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX ancestor permissions")
+def test_private_group_never_excuses_world_writable_parent(tmp_path, monkeypatch):
+    parent = tmp_path / "open"
+    parent.mkdir()
+    parent.chmod(0o777)
+    _groups(monkeypatch)
+    with pytest.raises(keys.KeyStorageError):
+        _vault_under(parent).create()
+
+
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX directory fsync")
 def test_marker_directory_sync_failure_prevents_master_creation(setup, monkeypatch):
     vault, backend, _ = setup

@@ -235,3 +235,40 @@ def test_linux_same_version_reinstall_explains_nothing_changed(tmp_path, shell, 
     result = install()
     assert result.returncode == 1 and b'was installed here before' in result.stderr
     assert not (root / 'current').exists() and not paths['launcher'].exists()
+
+
+@pytest.mark.skipif(sys.platform != 'linux', reason='Real Linux shell/flock install lifecycle')
+def test_linux_file_actions_follow_choice_and_never_return_unasked(tmp_path, shell, profile):
+    # Physical acceptance: a beta.5 -> beta.6 upgrade without the setup dialog
+    # (terminal --text, and the in-app updater) re-added declined Send to phone actions.
+    home, paths, environment = profile
+    data = Path(environment['XDG_DATA_HOME'])
+    actions = [data / 'nautilus/scripts/Send to phone (Saiph)', data / 'kio/servicemenus/saiph-send-to-phone.desktop']
+    foreign = data / 'nautilus/scripts/Synthetic own script'
+    package = tmp_path / 'package'; package.mkdir()
+    shutil.copyfile(SCRIPT, package / 'install.sh')
+    (package / 'app').mkdir(); (package / 'app/OrionMini').write_bytes(b'#!/bin/sh\nexit 0\n')
+    (package / 'licenses').mkdir(); (package / 'licenses/notice').write_text('synthetic notice')
+    (package / 'package-manifest.json').write_text('{}')
+    (package / 'LINUX_COMPATIBILITY').write_text('linux-x86_64 glibc 2.17\n')
+    def install(version, choice=None):
+        (package / 'VERSION').write_text(version + '\n')
+        files = ['VERSION', 'LINUX_COMPATIBILITY', 'package-manifest.json', 'app/OrionMini', 'licenses/notice', 'install.sh']
+        (package / 'SHA256SUMS').write_text(''.join(hashlib.sha256((package / name).read_bytes()).hexdigest() + '  ' + name + '\n' for name in files))
+        env = PrivateEnvironment({key: value for key, value in environment.items() if key != 'SAIPH_FILE_ACTIONS'})
+        if choice:
+            env['SAIPH_FILE_ACTIONS'] = choice
+        assert subprocess.run([shell, str(package / 'install.sh')], env=env, capture_output=True, timeout=15).returncode == 0
+        return [path.exists() for path in actions]
+
+    assert install('1.0.0') == [True, True]  # first install: on by default
+    owned = [path.read_bytes() for path in actions]
+    foreign.write_text('#!/bin/sh\necho synthetic\n')
+    assert install('1.0.1', 'off') == [False, False]  # declined: only Saiph's own actions go
+    assert foreign.read_text() == '#!/bin/sh\necho synthetic\n'
+    assert install('1.0.2') == [False, False]  # upgrade without a choice keeps them off
+    assert install('1.0.3', 'on') == [True, True]
+    assert [path.read_bytes() for path in actions] == owned
+    actions[0].unlink()  # removed by hand in the file manager
+    assert install('1.0.4') == [False, True]  # unset refreshes what is present, adds nothing
+    assert foreign.exists()
