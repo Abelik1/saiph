@@ -194,28 +194,28 @@ remote, hotspot reconnection, ring my phone and verification codes. Not planned,
 because native tools cover them: locating or erasing a lost phone, continuing
 browser tabs, document scanning and Wi-Fi sharing by QR code.
 
-### K. Sketch and markup to the computer — S/M
+### K. Sketch and markup to the computer — built, acceptance pending
 
 Draw on the phone, or mark up a photo, and it lands on the computer's clipboard
 with a ready-to-paste notice, through the Photo to computer path.
 
-### L. Batteries for all devices — S
+### L. Batteries for all devices — built, acceptance pending (widget not yet)
 
 Computers publish their own battery level; the phone shows every device's
 battery on its home screen and in an optional widget.
 
-### M. Phone as touchpad and keyboard — M
+### M. Phone as touchpad and keyboard — built, acceptance pending
 
 A phone remote adapter (off by default, like typing) for pointer movement,
 clicks and scrolling, with the existing text box as the keyboard. Windows and
 X11; Wayland does not allow generated input.
 
-### N. Find this computer — S
+### N. Find this computer — built, acceptance pending
 
 The phone rings a paired computer for up to 30 seconds, with a Stop window on the
 computer. Windows' own Find my device does not play a sound.
 
-### O. Lock this computer when the phone leaves (Linux) — M
+### O. Lock this computer when the phone leaves (Linux) — built, acceptance pending
 
 Opt-in: lock the session when the Bluetooth-paired phone has been gone for a
 while; never unlock automatically. Windows already has Dynamic Lock.

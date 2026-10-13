@@ -10,6 +10,7 @@ import { HostedSettings } from "./HostedSettings";
 import { DeskflowSettings } from "./DeskflowSettings";
 import { HotspotSettings } from "./HotspotSettings";
 import { RemoteSettings } from "./RemoteSettings";
+import { BluetoothLockSettings } from "./BluetoothLockSettings";
 
 export function WorkspaceModule({ installed = false }: { installed?: boolean }) {
   return <Card title="Workspace" subtitle="Optional personal tools."><p>Projects, transcripts, calendar, reminders and assistant tools live in the separate Workspace edition.</p><p className="muted">{installed ? "The Workspace edition is installed on this computer." : "Saiph Link works on its own. Install the Workspace edition separately when a trusted installer is available."}</p></Card>;
@@ -30,6 +31,7 @@ export function Settings({ state, client }: { state: State; client: Client }) {
       <DeskflowSettings settings={state.settings} error={state.deskflow?.error} status={state.deskflow} client={client} defaultEnabled={false} />
       <HotspotSettings hotspot={state.hotspot} client={client} />
       <RemoteSettings remote={state.remote} state={state} client={client} />
+      <BluetoothLockSettings status={state.bt_lock} client={client} />
       <HostedSettings hosted={state.hosted} client={client} />
       <Card title="Saiph Hub"><Form submit={async () => {await client.call("hub.pair", {base_url:hub,code,name:state.settings.machine?.name || "Saiph desktop"});setCode("");}}><label>Hub address<input aria-label="Saiph Hub address" value={hub} onChange={event => setHub(event.target.value)} /></label><label>One-time pairing code<input aria-label="Saiph Hub pairing code" value={code} inputMode="numeric" maxLength={8} onChange={event => setCode(event.target.value)} /></label><button>Pair desktop</button></Form><p className="muted">{state.settings.hub?.paired ? "This computer is paired." : "Pair once using your server invitation."}</p>{state.phone?.error && <p className="inline-error">{state.phone.error}</p>}</Card>
     </div>}

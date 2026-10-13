@@ -6,6 +6,7 @@ import { Card, Form } from "./ui";
 const warnings: Record<string, string> = {
   system: "Lets the phone lock this computer.",
   keyboard: "Lets the phone type into whichever app is in front. Turn this on only for phones you fully trust.",
+  touchpad: "Lets the phone move the pointer and click. Turn this on only for phones you fully trust.",
 };
 
 /** Off by default. The owner chooses the phones and the fixed controls a phone may use. */

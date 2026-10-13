@@ -42,7 +42,7 @@ object OrionRemote {
                     val control = item.jsonObject
                     require(control.keys - setOf("max") == setOf("id", "label", "kind"))
                     val kind = text(control, "kind", 6)
-                    require(kind == "button" || kind == "text")
+                    require(kind == "button" || kind == "text" || kind == "pad")
                     RemoteControl(text(control, "id", 32).also { require(ident.matches(it)) }, text(control, "label", 60), kind,
                         control["max"]?.jsonPrimitive?.int?.coerceIn(1, 500) ?: 500)
                 })
@@ -50,5 +50,9 @@ object OrionRemote {
     }
     fun command(app: String, control: String, text: String? = null) = buildJsonObject {
         put("app", app); put("control", control); text?.let { put("text", it) }
+    }
+    /** Touchpad movement, clamped to what the computer accepts in one command. */
+    fun pad(app: String, control: String, dx: Int, dy: Int) = buildJsonObject {
+        put("app", app); put("control", control); put("dx", dx.coerceIn(-2000, 2000)); put("dy", dy.coerceIn(-2000, 2000))
     }
 }

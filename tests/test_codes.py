@@ -54,7 +54,7 @@ def test_low_battery_alerts_once_until_charged():
     import threading
     runtime = PhoneRuntime.__new__(PhoneRuntime)
     runtime.workspace = SimpleNamespace(settings={"link": {}})
-    runtime.state = SimpleNamespace(lock=threading.RLock(), devices=[{"id": "phone", "name": "Galaxy A55"}])
+    runtime.state = SimpleNamespace(lock=threading.RLock(), devices=[{"id": "phone", "name": "Galaxy A55", "capabilities": ["battery"]}])
     runtime.low_battery = set()
     notice = lambda level, charging=False: runtime.battery_notice("phone", {"battery_level": level, "is_charging": charging})
     assert notice(45) is None

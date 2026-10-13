@@ -68,10 +68,12 @@ class RemoteCommand(Payload):
     app: str = Field(pattern='^[a-z_]{1,32}$')
     control: str = Field(pattern='^[a-z_]{1,32}$')
     text: str | None = Field(default=None,min_length=1,max_length=500)
+    dx: int | None = Field(default=None,ge=-2000,le=2000)
+    dy: int | None = Field(default=None,ge=-2000,le=2000)
 class RemoteControl(Payload):
     id: str = Field(pattern='^[a-z_]{1,32}$')
     label: str = Field(min_length=1,max_length=60)
-    kind: Literal['button','text']
+    kind: Literal['button','text','pad']
     max: int | None = Field(default=None,ge=1,le=500)
 class RemoteApp(Payload):
     id: str = Field(pattern='^[a-z_]{1,32}$')
@@ -150,7 +152,7 @@ class PhotoOriginal(File):
 MODELS={'sms.thread':Conversation,'sms.messages':Messages,'sms.remove':Thread,'sms.index':MessageIndex,
         'sms.open':Thread,'sms.send':SmsSend,'call.state':Call,'call.command':CallCommand,
         'photos.index':Photos,'photos.sync':PhotoKeys,'photo.request':PhotoRequest,'photo.original':PhotoOriginal,'file.offer':File,
-        'capture.insert':CaptureInsert,'remote.catalog.request':RemoteRequest,'phone.ring':RemoteRequest,'remote.command':RemoteCommand,
+        'capture.insert':CaptureInsert,'remote.catalog.request':RemoteRequest,'phone.ring':RemoteRequest,'computer.ring':RemoteRequest,'remote.command':RemoteCommand,
         'remote.catalog':RemoteCatalog,'remote.result':RemoteResult,'media.state':MediaState,'media.command':MediaCommand,
         'contacts.search':ContactsSearch,'contacts.results':ContactsResults,'sms.compose':SmsCompose,'ringer.state':Ringer,
         'phone.ringer':Ringer,'call.dial':Dial,'calls.log.request':RemoteRequest,'calls.log':CallLog,
@@ -203,12 +205,12 @@ def apply(c,source,event,now):
         # Names one computer that receives the matching photo offer; never stored.
         if event.targets is None or len(event.targets)!=1:raise ValueError('Capture requires one destination computer')
         return
-    if event.type in {'sms.open','sms.send','call.command','photo.request','phone.ring','media.command','contacts.search','sms.compose','phone.ringer','call.dial','calls.log.request','sms.attachment.request'}:
+    if event.type in {'sms.open','sms.send','call.command','photo.request','phone.ring','computer.ring','media.command','contacts.search','sms.compose','phone.ringer','call.dial','calls.log.request','sms.attachment.request'}:
         if event.targets is None or len(event.targets)!=1:raise ValueError('Phone command requires one owning phone')
         owner=event.targets[0]
         row=c.execute('SELECT capabilities_json FROM link_devices WHERE device_id=?',(owner,)).fetchone()
         caps=json.loads(row[0]) if row else []
-        required={'sms.open':'sms','sms.send':'sms','call.command':'call-control','photo.request':'photos','phone.ring':'ring','media.command':'media',
+        required={'sms.open':'sms','sms.send':'sms','call.command':'call-control','photo.request':'photos','phone.ring':'ring','computer.ring':'ring','media.command':'media',
                   'contacts.search':'contacts','sms.compose':'sms','phone.ringer':'ringer','call.dial':'call-dial','calls.log.request':'call-log','sms.attachment.request':'sms'}[event.type]
         if required not in caps:raise ValueError('Phone capability unavailable')
         if isinstance(value,Thread) and _get(c,owner,'thread',value.thread) is None:raise ValueError('Conversation unavailable')

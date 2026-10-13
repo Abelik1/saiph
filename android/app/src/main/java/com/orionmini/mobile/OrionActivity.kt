@@ -41,7 +41,7 @@ class OrionActivity : ComponentActivity() {
     private var screen = "home"
     private var lastRender = ""
     private var pairingInProgress = false
-    private var computers: List<Pair<String, String>> = emptyList()
+    private var devices: List<LinkDevice> = emptyList()
     private val prefs by lazy { getSharedPreferences("orion", MODE_PRIVATE) }
     private val lock = AppLock(this)
     private var showingLock = false
@@ -342,8 +342,8 @@ class OrionActivity : ComponentActivity() {
         poll = lifecycleScope.launch {
             while (isActive) {
                 val items = withContext(Dispatchers.IO) { runCatching { Api.inbox(this@OrionActivity) }.getOrNull() }
-                computers = withContext(Dispatchers.IO) { runCatching { OrionComputers.remote(this@OrionActivity) }.getOrDefault(emptyList()) }
-                val state = link.status.value; val fingerprint = state + items?.toString() + computers
+                devices = withContext(Dispatchers.IO) { runCatching { OrionComputers.devices(this@OrionActivity) }.getOrDefault(emptyList()) }
+                val state = link.status.value; val fingerprint = state + items?.toString() + devices
                 if (fingerprint != lastRender) { render(items, state); lastRender = fingerprint }
                 delay(5000)
             }
@@ -359,11 +359,22 @@ class OrionActivity : ComponentActivity() {
         all.filter { it.getString("status") != "new" }.take(10).forEach { root.addView(itemCard(it)) }
         root.addView(section("Continuity"))
         root.addView(buttonRow(button("Photo to computer") { startActivity(Intent(this, OrionCaptureActivity::class.java)) }, button("Hotspot settings") { hotspotSettings() }))
-        root.addView(buttonRow(button("Remote for computer apps") { startActivity(Intent(this, OrionRemoteActivity::class.java)) }))
-        // Opt-in on each computer: Phone remote with "This computer" turned on.
-        computers.forEach { (id, name) -> root.addView(buttonRow(button("Lock $name") {
-            Toast.makeText(this, if (OrionComputers.lock(link, id)) "Locking $name…" else "Saiph is reconnecting. Nothing was sent.", Toast.LENGTH_SHORT).show()
-        })) }
+        root.addView(buttonRow(button("Remote for computer apps") { startActivity(Intent(this, OrionRemoteActivity::class.java)) },
+            button("Sketch to computer") { startActivity(Intent(this, OrionSketchActivity::class.java)) }))
+        // Batteries and quick actions for every other paired device.
+        if (devices.isNotEmpty()) root.addView(section("Your devices"))
+        devices.forEach { device -> root.addView(card().apply {
+            addView(text(OrionComputers.summary(device), 15f))
+            val actions = mutableListOf<Button>()
+            if (device.online && device.computer && "ring" in device.capabilities) actions += button("Ring") {
+                Toast.makeText(this@OrionActivity, if (OrionComputers.ring(link, device.id)) "Ringing ${device.name}…" else "Saiph is reconnecting. Nothing was sent.", Toast.LENGTH_SHORT).show()
+            }
+            // Opt-in on each computer: Phone remote with "This computer" turned on.
+            if (device.online && "remote" in device.capabilities) actions += button("Lock") {
+                Toast.makeText(this@OrionActivity, if (OrionComputers.lock(link, device.id)) "Locking ${device.name}…" else "Saiph is reconnecting. Nothing was sent.", Toast.LENGTH_SHORT).show()
+            }
+            if (actions.isNotEmpty()) addView(buttonRow(*actions.toTypedArray()))
+        }) }
         val wake = runCatching { JSONArray(getSharedPreferences("orion_continuity",0).getString("wake_targets","[]")) }.getOrNull()
         if(wake != null && wake.length()>0) {
             root.addView(section("Computers"))

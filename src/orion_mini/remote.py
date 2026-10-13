@@ -18,6 +18,7 @@ import time
 from uuid import uuid4
 
 MAX_TEXT = 500
+MAX_DELTA = 2000  # Largest pointer movement in one touchpad command, in pixels.
 NO_WINDOW = {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}
 BROWSERS = {"chrome", "msedge", "firefox", "brave", "opera", "vivaldi", "chromium", "chromium-browser", "google-chrome", "firefox-esr"}
 PRESENTERS = {"powerpnt", "soffice", "soffice.bin", "acrord32", "acrobat", "sumatrapdf", "okular", "evince", "libreoffice", *BROWSERS}
@@ -47,6 +48,11 @@ ADAPTERS = {
         button("fullscreen", "Full screen", "f"), button("captions", "Captions", "c"), button("mute", "Mute", "m")]},
     "system": {"name": "This computer", "default": False, "scope": None, "controls": [
         button("lock", "Lock computer", action="lock")]},
+    "touchpad": {"name": "Touchpad", "default": False, "scope": None, "controls": [
+        {"id": "move", "label": "Move the pointer", "kind": "pad", "key": None, "action": "move"},
+        {"id": "scroll", "label": "Scroll", "kind": "pad", "key": None, "action": "scroll"},
+        button("click", "Click", action="click"), button("right_click", "Right-click", action="right_click"),
+        button("double_click", "Double-click", action="double_click")]},
     "keyboard": {"name": "Type into the focused app", "default": False, "scope": None, "controls": [
         {"id": "type", "label": "Text to type", "kind": "text", "max": MAX_TEXT, "key": None, "action": "type"},
         button("enter", "Enter", "return"), button("tab", "Tab", "tab"), button("backspace", "Backspace", "backspace"),
@@ -108,6 +114,16 @@ class INPUT(ctypes.Structure):
         _fields_ = [("ki", KEYBDINPUT), ("mi", MOUSEINPUT)]
     _anonymous_ = ("union",)
     _fields_ = [("type", ctypes.c_ulong), ("union", _Union)]
+
+
+def _send_mouse(events):
+    """Windows mouse input: (dx, dy, wheel, flags) per event, relative movement."""
+    inputs = (INPUT * len(events))()
+    for index, (dx, dy, wheel, flags) in enumerate(events):
+        inputs[index].type = 0  # INPUT_MOUSE
+        inputs[index].mi = MOUSEINPUT(dx, dy, ctypes.c_ulong(wheel & 0xFFFFFFFF).value, flags, 0, 0)
+    if ctypes.windll.user32.SendInput(len(events), inputs, ctypes.sizeof(INPUT)) != len(events):
+        raise ValueError("This computer did not accept the input. Elevated windows cannot be controlled.")
 
 
 def _send_windows(events):
@@ -178,6 +194,24 @@ class SystemControls:
         else:
             raise ValueError("Install playerctl and PulseAudio/PipeWire tools to use media controls.")
 
+    def pointer(self, action, dx=0, dy=0):
+        if sys.platform == "win32":
+            buttons = {"click": [(0, 0, 0, 0x0002), (0, 0, 0, 0x0004)], "right_click": [(0, 0, 0, 0x0008), (0, 0, 0, 0x0010)]}
+            if action == "move":
+                _send_mouse([(dx, dy, 0, 0x0001)])  # MOUSEEVENTF_MOVE, relative.
+            elif action == "scroll":
+                _send_mouse([(0, 0, max(-1200, min(1200, -dy * 4)), 0x0800)])  # MOUSEEVENTF_WHEEL.
+            else:
+                _send_mouse(buttons["click"] * 2 if action == "double_click" else buttons[action])
+            return
+        if action == "move":
+            self._run(["xdotool", "mousemove_relative", "--", str(dx), str(dy)])
+        elif action == "scroll":
+            notches = min(10, max(1, abs(dy) // 30))
+            self._run(["xdotool", "click", "--repeat", str(notches), "4" if dy < 0 else "5"])
+        else:
+            self._run(["xdotool", "click", *(["--repeat", "2"] if action == "double_click" else []), "3" if action == "right_click" else "1"])
+
     def lock(self):
         if sys.platform == "win32":
             if not ctypes.windll.user32.LockWorkStation():
@@ -202,7 +236,7 @@ class Remote:
         self.controls = controls or SystemControls()
         self.clock = clock
         self.lock = threading.Lock()
-        self.recent = {}  # (device, typing) -> recent command times, for rate limiting.
+        self.recent = {}  # (device, control kind) -> recent command times, for rate limiting.
         self.last = None  # Most recent command, shown on the settings page.
 
     def options(self):
@@ -253,7 +287,7 @@ class Remote:
         return True
 
     def command(self, source, payload):
-        if not isinstance(payload, dict) or set(payload) - {"app", "control", "text"} or not {"app", "control"} <= set(payload):
+        if not isinstance(payload, dict) or set(payload) - {"app", "control", "text", "dx", "dy"} or not {"app", "control"} <= set(payload):
             raise ValueError("Invalid remote command.")
         app, control = payload["app"], payload["control"]
         adapter = ADAPTERS.get(app) if isinstance(app, str) else None
@@ -268,7 +302,13 @@ class Remote:
                 raise ValueError(f"Type up to {MAX_TEXT} characters on one line.")
         elif "text" in payload:
             raise ValueError("Invalid remote command.")
-        self._rate_limit(source, spec["kind"] == "text")
+        if spec["kind"] == "pad":
+            dx, dy = payload.get("dx", 0), payload.get("dy", 0)
+            if type(dx) is not int or type(dy) is not int or not -MAX_DELTA <= dx <= MAX_DELTA or not -MAX_DELTA <= dy <= MAX_DELTA:
+                raise ValueError("Invalid touchpad movement.")
+        elif "dx" in payload or "dy" in payload:
+            raise ValueError("Invalid remote command.")
+        self._rate_limit(source, spec["kind"])
         if not self.controls.available(app):
             raise ValueError("This control is unavailable on this computer." + (" Wayland does not allow apps to send keys." if self.controls.wayland else ""))
         scope = adapter["scope"]
@@ -278,6 +318,8 @@ class Remote:
                 raise ValueError("Bring the " + adapter["name"].lower() + " window to the front on the computer first.")
         if spec["action"] == "lock":
             self.controls.lock()
+        elif app == "touchpad":
+            self.controls.pointer(spec["action"], payload.get("dx", 0), payload.get("dy", 0))
         elif spec["action"] == "type":
             self.controls.type(text)
         elif app == "media" and sys.platform != "win32":
@@ -286,12 +328,12 @@ class Remote:
             self.controls.key(spec["key"])
         self.last = {"device_id": source, "app": app, "control": control, "at": time.time()}
 
-    def _rate_limit(self, source, typing):
+    def _rate_limit(self, source, kind):
         now = self.clock()
         with self.lock:
-            key = (source, typing)  # Button presses and typed text have separate budgets.
+            key = (source, kind)  # Buttons, typed text and touchpad movement have separate budgets.
             times = [t for t in self.recent.get(key, []) if now - t < 1]
-            if len(times) >= (2 if typing else 10):
+            if len(times) >= {"text": 2, "pad": 60}.get(kind, 10):
                 raise ValueError("Too many controls at once. Try again in a moment.")
             self.recent[key] = times + [now]
 

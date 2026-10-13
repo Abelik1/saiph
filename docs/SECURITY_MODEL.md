@@ -36,8 +36,9 @@ The computer's owner turns it on, chooses which phones may use it and which
 adapters are offered. Each control maps to one predefined key press or system
 action; there is no shell, no raw key code and no screen sharing. Presentation
 and video keys are sent only when a recognised presenter or browser is in front.
-Typed text is limited to 500 printable characters on one line, and commands are
-rate-limited per phone. Wayland sessions cannot receive generated keys.
+Typed text is limited to 500 printable characters on one line, touchpad movement
+to 2000 pixels per command, and commands are rate-limited per phone (touchpad
+movement has its own budget). The touchpad, like typing, is off by default. Wayland sessions cannot receive generated keys.
 
 The computer trusts the sending device identity that the Hub attaches to each
 event, as it does for other Link commands. A compromised Hub or a stolen,

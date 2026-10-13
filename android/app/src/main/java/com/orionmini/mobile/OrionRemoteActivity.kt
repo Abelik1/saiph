@@ -3,6 +3,10 @@ package com.orionmini.mobile
 
 import android.os.Bundle
 import android.text.InputFilter
+import android.view.MotionEvent
+import android.view.View
+import android.view.ViewGroup
+import kotlin.math.abs
 import android.widget.*
 import androidx.activity.ComponentActivity
 import androidx.lifecycle.lifecycleScope
@@ -91,11 +95,45 @@ class OrionRemoteActivity : ComponentActivity() {
                 if (value.isNotBlank()) { send(remote, control, value); input.setText("") }
             }))
         }
+        // Touchpad surfaces: movement is batched about every 30 ms; a quick tap clicks.
+        val pads = remote.controls.filter { it.kind == "pad" }.map { control ->
+            Pad(control).also { root.addView(it, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(if (control.id == "scroll") 72 else 260)).apply { bottomMargin = dp(10) }) }
+        }
+        if (pads.isNotEmpty()) watch = lifecycleScope.launch {
+            while (isActive) {
+                pads.forEach { pad -> pad.flush(remote) }
+                delay(30)
+            }
+        }
         // Two buttons per row: a simple table of the app's controls.
         remote.controls.filter { it.kind == "button" }.chunked(2).forEach { pair ->
             root.addView(buttonRow(*pair.map { control -> button(control.label) { send(remote, control) } }.toTypedArray()))
         }
         root.addView(button("All apps") { computer?.let(::catalog) })
+    }
+    private inner class Pad(val control: RemoteControl) : View(this@OrionRemoteActivity) {
+        private var lastX = 0f; private var lastY = 0f; private var dx = 0f; private var dy = 0f
+        private var downAt = 0L; private var travelled = 0f; private var tapped = false
+        init { background = outline(Palette.FIELD, Palette.LINE, 12); contentDescription = control.label }
+        override fun onTouchEvent(event: MotionEvent): Boolean {
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> { lastX = event.x; lastY = event.y; downAt = event.eventTime; travelled = 0f; parent.requestDisallowInterceptTouchEvent(true) }
+                MotionEvent.ACTION_MOVE -> {
+                    val stepX = event.x - lastX; val stepY = event.y - lastY
+                    synchronized(this) { dx += stepX; dy += stepY }
+                    travelled += abs(stepX) + abs(stepY); lastX = event.x; lastY = event.y
+                }
+                MotionEvent.ACTION_UP -> if (control.id == "move" && travelled < 12 && event.eventTime - downAt < 250) synchronized(this) { tapped = true }
+            }
+            return true
+        }
+        fun flush(remote: RemoteApp) {
+            val device = computer?.first ?: return
+            val (moveX, moveY, click) = synchronized(this) { Triple(dx.toInt(), dy.toInt(), tapped).also { dx -= it.first; dy -= it.second; tapped = false } }
+            if (link.status.value != "Online") return
+            if (moveX != 0 || moveY != 0) link.publish("remote.command", OrionRemote.pad(remote.id, control.id, if (control.id == "scroll") 0 else moveX * 3 / 2, moveY * 3 / 2), device)
+            if (click) remote.controls.firstOrNull { it.id == "click" }?.let { link.publish("remote.command", OrionRemote.command(remote.id, it.id), device) }
+        }
     }
     override fun onDestroy() { watch?.cancel(); super.onDestroy() }
 }

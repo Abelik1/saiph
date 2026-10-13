@@ -105,6 +105,23 @@ one in its own window through scrcpy; Pin adds it to the Start menu or the
 applications menu. It needs authorised wireless or USB debugging (as the phone
 preview does) and Android 10 or later.
 
+**Your devices on the phone:** the phone's home screen lists your other devices
+with their battery. Computers with a battery share it every minute or when it
+changes. From there you can **Ring** a computer to find it (it plays an alert for
+up to 30 seconds with a Stop window; switch it off with Let my phone ring this
+computer) and **Lock** it if you allowed that in Phone remote.
+
+**Sketch to computer:** draw on the phone, or mark up a photo, and it arrives on
+the computer's clipboard ready to paste.
+
+**Touchpad:** the phone remote's Touchpad adapter (off by default) turns the phone
+into a touchpad with click, right-click, double-click and scrolling, alongside the
+typing text box. Windows and X11 only.
+
+**Lock when my phone leaves (Linux):** in Settings → Advanced, choose your
+Bluetooth-paired phone; the session locks once it has been gone for the chosen
+time. It never unlocks. On Windows, use Dynamic Lock in sign-in options instead.
+
 Smaller conveniences, each with a switch in Settings → Advanced:
 
 - **Verification codes:** a phone notification containing a one-time code shows

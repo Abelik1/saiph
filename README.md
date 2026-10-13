@@ -137,11 +137,11 @@ checklist, design and order are in the
 
 Apple-style continuity, from the same plan:
 
-- [ ] Sketch and markup to the computer (K).
-- [ ] Batteries for all devices on the phone (L).
-- [ ] Phone as touchpad and keyboard (M).
-- [ ] Find this computer: ring it from the phone (N).
-- [ ] Lock this computer when the phone leaves, on Linux (O).
+- [ ] **Acceptance:** sketch and markup to the computer (K).
+- [ ] **Acceptance:** batteries for all devices on the phone (L); a home-screen widget is not built yet.
+- [ ] **Acceptance:** phone as touchpad and keyboard (M).
+- [ ] **Acceptance:** find this computer: ring it from the phone (N).
+- [ ] **Acceptance:** lock this computer when the phone leaves, on Linux (O).
 
 ### Smaller conveniences
 

@@ -10,6 +10,13 @@ class OrionRemoteTest {
         val apps = OrionRemote.parse(json("""{"apps":[{"id":"keyboard","name":"Type","available":true,"controls":[{"id":"type","label":"Text","kind":"text","max":500},{"id":"enter","label":"Enter","kind":"button"}]}]}"""))
         assertEquals(listOf(RemoteControl("type", "Text", "text", 500), RemoteControl("enter", "Enter", "button", 500)), apps.single().controls)
     }
+    @Test fun touchpadControlsAndMovementAreBounded() {
+        val apps = OrionRemote.parse(json("""{"apps":[{"id":"touchpad","name":"Touchpad","available":true,"controls":[{"id":"move","label":"Move","kind":"pad"}]}]}"""))
+        assertEquals("pad", apps.single().controls.single().kind)
+        val move = OrionRemote.pad("touchpad", "move", 9000, -5)
+        assertEquals(2000, move.getValue("dx").jsonPrimitive.int)
+        assertEquals(-5, move.getValue("dy").jsonPrimitive.int)
+    }
     @Test fun malformedCatalogsAreRefused() {
         for (bad in listOf("""{"apps":[{"id":"Media","name":"M","available":true,"controls":[]}]}""",
                 """{"apps":[{"id":"media","name":"M","available":true,"controls":[{"id":"x","label":"X","kind":"script"}]}]}""",

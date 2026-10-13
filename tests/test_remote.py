@@ -142,7 +142,7 @@ def test_preferences_validate_and_merge():
     for options in ({"enabled": "yes"}, {"adapters": {"shell": True}}, {"adapters": {"media": 1}}, {"devices": "phone"}, {"commands": []}):
         with pytest.raises(ValueError):
             validate_options(options)
-    assert set(ADAPTERS) == {"media", "presentation", "video", "system", "keyboard"}
+    assert set(ADAPTERS) == {"media", "presentation", "video", "system", "touchpad", "keyboard"}
 
 
 def test_malformed_payloads_from_older_hubs_are_refused_without_raising():
@@ -150,3 +150,31 @@ def test_malformed_payloads_from_older_hubs_are_refused_without_raising():
     service, published, _ = setup(controls=controls)
     assert service.event({"type": "remote.command", "source": "phone", "payload": ["media", "next"]})
     assert controls.calls == [] and results(published)[-1][1] is False
+
+
+class Pointer(Controls):
+    def pointer(self, action, dx=0, dy=0):
+        self.calls.append(("pointer", action, dx, dy))
+
+
+def test_touchpad_is_opt_in_bounded_and_has_its_own_rate_budget():
+    controls = Pointer()
+    service, published, now = setup(controls=controls)
+    service.event(command("touchpad", "move", dx=5, dy=-3))
+    assert controls.calls == []  # Off by default.
+    service.workspace.settings["link"]["remote"]["adapters"] = {"touchpad": True}
+    service.event(command("touchpad", "move", dx=5, dy=-3))
+    service.event(command("touchpad", "click"))
+    service.event(command("touchpad", "scroll", dy=60))
+    assert controls.calls == [("pointer", "move", 5, -3), ("pointer", "click", 0, 0), ("pointer", "scroll", 0, 60)]
+    for bad in ({"dx": 5000, "dy": 0}, {"dx": 1.5, "dy": 0}, {"dx": True, "dy": 0}):
+        service.event(command("touchpad", "move", **bad))
+    service.event(command("touchpad", "click", dx=1))
+    service.event(command("media", "next", dx=1))
+    assert len(controls.calls) == 3
+    now["value"] += 1
+    for _ in range(70):
+        service.event(command("touchpad", "move", dx=1, dy=1))
+    assert sum(1 for call in controls.calls if call[1] == "move") == 61  # 60 per second, plus the first.
+    catalog = [app for app in service.catalog()["apps"] if app["id"] == "touchpad"][0]
+    assert {c["kind"] for c in catalog["controls"]} == {"pad", "button"}

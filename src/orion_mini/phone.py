@@ -31,6 +31,7 @@ def capabilities(settings):
     if (settings.get('link') or {}).get('clipboard',True):result.append('clipboard')
     if (settings.get('cloud') or {}).get('enabled', True): result.append('cloud.files')
     if ((settings.get('link') or {}).get('remote') or {}).get('enabled') is True: result.append('remote')
+    if (settings.get('link') or {}).get('ring_computer', True) is not False: result.append('ring')
     return result
 
 def notification_id(device: str, key: str) -> str:
@@ -170,6 +171,7 @@ class PhoneRuntime:
         self.native = None
         self.low_battery = set()
         self.copied_codes = set()  # (notification, code) already copied automatically.
+        self.battery_sent = (None, 0)
         self.call_pause = CallPause(workspace.settings)
         self.continuity = Continuity(workspace,self.publish)
 
@@ -177,6 +179,10 @@ class PhoneRuntime:
         """A one-time low-battery message for a phone that is draining, or None."""
         if (self.workspace.settings.get('link') or {}).get('battery_alerts') is False:
             return None
+        with self.state.lock:
+            # Computers publish their battery too; only phones raise this alert.
+            if not any(d['id'] == source and 'battery' in d.get('capabilities', []) for d in self.state.devices):
+                return None
         level, charging = body.get('battery_level'), body.get('is_charging')
         if type(level) is not int or not isinstance(charging, bool):
             return None
@@ -189,6 +195,19 @@ class PhoneRuntime:
         with self.state.lock:
             name = next((d['name'] for d in self.state.devices if d['id'] == source), 'Your phone')
         return f'{name} battery is low ({level}%). Charge it soon.'
+
+    def share_battery(self, reading, now):
+        """Publishes this computer's battery on change, and at least every ten minutes."""
+        if not reading or not self.state.connected:
+            return False
+        if reading == self.battery_sent[0] and now - self.battery_sent[1] < 600:
+            return False
+        try:
+            self.publish({'id': str(uuid4()), 'type': 'battery', 'ttl_seconds': 300, 'payload': reading})
+        except ValueError:
+            return False
+        self.battery_sent = (reading, now)
+        return True
 
     def copy_code(self, code):
         """A verification code from the phone, placed on this computer's clipboard."""
@@ -374,7 +393,7 @@ class PhoneRuntime:
         next_config_attempt = 0
         next_enrollment = 0
         component_poll = None
-        worker = self.worker_factory(); next_worker = next_peer = next_focus = next_local = next_auxiliary = next_deskflow = next_dnd = next_hotspot = 0
+        worker = self.worker_factory(); next_worker = next_peer = next_focus = next_local = next_auxiliary = next_deskflow = next_dnd = next_hotspot = next_battery = next_bt_lock = 0
         while not self.stop_requested.is_set():
             components = getattr(self.workspace, 'components', None)
             if components and not os.environ.get('ORION_MINI_TEST'):
@@ -434,6 +453,14 @@ class PhoneRuntime:
                         self.changed()
                     async def event(frame):
                         if await asyncio.to_thread(self.continuity.event,frame):self.changed();return
+                        if frame['type'] == 'computer.ring':
+                            # "Find this computer" from a paired phone: a sound and a Stop window, nothing else.
+                            ring = getattr(self.workspace, 'ring_requested', None)
+                            if ring and (self.workspace.settings.get('link') or {}).get('ring_computer', True) is not False:
+                                with self.state.lock:
+                                    name = next((d['name'] for d in self.state.devices if d['id'] == frame['source']), 'your phone')
+                                ring(name)
+                            return
                         remote = getattr(self.workspace, 'remote', None)
                         if remote and await asyncio.to_thread(remote.event,frame):self.changed();return
                         if frame['type'] == 'call.state' and isinstance(frame['payload'], dict):
@@ -506,6 +533,15 @@ class PhoneRuntime:
                     # Device discovery/launch is isolated from the mesh receive loop.
                     asyncio.create_task(asyncio.to_thread(worker.poll,{d['id'] for d in self.state.devices}))
                     next_worker = time.monotonic() + 15
+            bt_lock = getattr(self.workspace, 'bt_lock', None)
+            if bt_lock and time.monotonic() >= next_bt_lock and not os.environ.get('ORION_MINI_TEST'):
+                # Works offline too: it only needs the phone's Bluetooth connection.
+                if await asyncio.to_thread(bt_lock.poll): self.changed()
+                next_bt_lock = time.monotonic() + 5
+            if identity and time.monotonic() >= next_battery and not os.environ.get('ORION_MINI_TEST'):
+                from .platform import battery
+                await asyncio.to_thread(lambda: self.share_battery(battery(), time.monotonic()))
+                next_battery = time.monotonic() + 60
             if identity and getattr(self.workspace, 'hotspot', None) and time.monotonic() >= next_hotspot and not os.environ.get('ORION_MINI_TEST'):
                 if await asyncio.to_thread(self.workspace.hotspot.poll, self.state.connected): self.changed()
                 next_hotspot = time.monotonic() + 15

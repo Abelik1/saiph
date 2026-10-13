@@ -129,6 +129,30 @@ def _startup_plain_path(path):
             raise ValueError("A redirected or unrelated startup path was preserved. Review startup in Advanced.")
 
 
+class _POWER_STATUS(ctypes.Structure):
+    _fields_ = [("ACLineStatus", ctypes.c_ubyte), ("BatteryFlag", ctypes.c_ubyte), ("BatteryLifePercent", ctypes.c_ubyte),
+                ("SystemStatusFlag", ctypes.c_ubyte), ("BatteryLifeTime", ctypes.c_ulong), ("BatteryFullLifeTime", ctypes.c_ulong)]
+
+
+def battery(power_supply=Path("/sys/class/power_supply")):
+    """This computer's battery as {battery_level, is_charging}, or None without a battery."""
+    if sys.platform == "win32":
+        status = _POWER_STATUS()
+        if not hasattr(ctypes, "windll") or not ctypes.windll.kernel32.GetSystemPowerStatus(ctypes.byref(status)):
+            return None
+        if status.BatteryFlag & 128 or status.BatteryFlag == 255 or status.BatteryLifePercent > 100:
+            return None  # No system battery, or unknown.
+        return {"battery_level": int(status.BatteryLifePercent), "is_charging": status.ACLineStatus == 1}
+    try:
+        for supply in sorted(Path(power_supply).glob("BAT*")):
+            level = int((supply / "capacity").read_text().strip())
+            state = (supply / "status").read_text().strip()
+            return {"battery_level": max(0, min(100, level)), "is_charging": state in {"Charging", "Full"}}
+    except (OSError, ValueError):
+        pass
+    return None
+
+
 class LASTINPUTINFO(ctypes.Structure):
     _fields_ = [("cbSize", ctypes.c_uint), ("dwTime", ctypes.c_uint)]
 

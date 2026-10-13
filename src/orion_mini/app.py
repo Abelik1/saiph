@@ -128,6 +128,7 @@ class MainWindow(QMainWindow):
     security_alert = Signal(str)
     send_files_requested = Signal(object)
     open_phone_app_requested = Signal(str)
+    ring_requested = Signal(str)
 
     def __init__(self, data_dir=None, bootstrap=True):
         super().__init__()
@@ -212,6 +213,8 @@ class MainWindow(QMainWindow):
         self.send_files_requested.connect(self.confirm_send_files)
         self.workspace.request_send_files = self.send_files_requested.emit
         self.open_phone_app_requested.connect(self.open_phone_app)
+        self.ring_requested.connect(self.ring_computer)
+        self.workspace.ring_requested = self.ring_requested.emit
         self.workspace.request_open_phone_app = self.open_phone_app_requested.emit
         self.automation_requested.connect(self.run_automation)
         self.workspace.automation_call = Automation(self.workspace, self.run_on_gui, self.bridge.changed.emit)
@@ -311,6 +314,31 @@ class MainWindow(QMainWindow):
         start_update()
         QTimer.singleShot(400, self.quit_app)
         return {'ok': True}
+
+    def ring_computer(self, phone_name):
+        """Find this computer: an alert sound for up to 30 seconds and a window with Stop."""
+        from PySide6.QtWidgets import QMessageBox
+        from .platform import beep
+        if getattr(self, 'ring_box', None):
+            return
+        box = self.ring_box = QMessageBox(QMessageBox.Icon.Information, 'Saiph', f'{phone_name} is looking for this computer.', QMessageBox.StandardButton.NoButton, self)
+        box.addButton('Stop', QMessageBox.ButtonRole.AcceptRole)
+        timer = QTimer(self); timer.setInterval(1200); ticks = {'left': 25}
+        def ring():
+            ticks['left'] -= 1
+            if ticks['left'] <= 0:
+                box.done(0)
+                return
+            try:
+                beep(urgent=True)
+            except Exception:
+                pass
+        def finished(_result):
+            timer.stop(); timer.deleteLater(); self.ring_box = None
+        timer.timeout.connect(ring)
+        box.finished.connect(finished)
+        self.showNormal(); self.raise_(); self.activateWindow()
+        box.open(); ring(); timer.start()
 
     def open_phone_app(self, package, attempts=0):
         """A pinned phone app: open it from the first online phone over authorised debugging."""

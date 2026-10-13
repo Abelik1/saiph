@@ -152,3 +152,15 @@ def test_group_replies_need_a_phone_that_sends_them_as_mms(hub):
     with pytest.raises(ValueError):apply(hub,computer,'sms.send',{'thread':8,'text':'x'},[phone])
     hub.DB.execute('UPDATE link_devices SET capabilities_json=? WHERE device_id=?',(json.dumps(['sms','sms-group']),phone))
     apply(hub,computer,'sms.send',{'thread':8,'text':'x'},[phone])
+def test_a_phone_can_ring_a_computer_that_allows_it(hub):
+    c=client(hub);_,phone=pair(hub,c);_,computer=pair(hub,c)
+    with pytest.raises(ValueError):apply(hub,phone,'computer.ring',{},[computer])
+    caps(hub,computer,['ring'])
+    apply(hub,phone,'computer.ring',{},[computer])
+    with pytest.raises(ValueError):apply(hub,phone,'computer.ring',{'loud':True},[computer])
+def test_touchpad_commands_carry_bounded_movement(hub):
+    c=client(hub);_,phone=pair(hub,c);_,computer=pair(hub,c)
+    caps(hub,computer,['remote'])
+    apply(hub,phone,'remote.command',{'app':'touchpad','control':'move','dx':-40,'dy':12},[computer])
+    with pytest.raises(ValueError):apply(hub,phone,'remote.command',{'app':'touchpad','control':'move','dx':5000,'dy':0},[computer])
+    apply(hub,computer,'remote.catalog',{'apps':[{'id':'touchpad','name':'Touchpad','available':True,'controls':[{'id':'move','label':'Move','kind':'pad'}]}]},[phone])
