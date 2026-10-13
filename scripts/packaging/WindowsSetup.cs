@@ -109,15 +109,15 @@ public static class Setup {
             removing = true; action.Enabled = false; status.Text = "";
             surface.Heading = "Removing Saiph…"; surface.Working = true; surface.Invalidate();
             var worker = new Thread(delegate() {
-                bool done = false;
-                try { Perform(); done = true; } catch { }
+                bool done = false; string reason = null;
+                try { Perform(); done = true; } catch (Exception failure) { reason = SetupMessages.DescribeRemoval(failure, phase); }
                 window.BeginInvoke((Action)delegate {
                     removing = false; surface.Working = false; action.Enabled = true;
                     if (done) {
                         removed = true; action.Text = "Close"; surface.Heading = "Saiph removed"; surface.Body = "Saiph removed. Your data is retained."; surface.Celebrate();
                     } else {
                         surface.Heading = "Remove Saiph";
-                        status.Text = "Saiph could not be removed. Your settings and data were retained.";
+                        status.Text = reason;
                     }
                     surface.AccessibleName = surface.Heading; surface.AccessibleDescription = surface.Body; surface.Invalidate();
                 });
@@ -679,6 +679,10 @@ public static class SetupMessages {
         if (failure is IOException && failure.Message == "Another Saiph installation is running.")
             return "Another Saiph setup is already running. Finish or close it, then try again.";
         return "The installation could not finish (step: " + phase + "). Your existing release and data were retained.";
+    }
+    public static string DescribeRemoval(Exception failure, string phase) {
+        if (failure is SetupBlocked || failure is IOException && failure.Message == "Another Saiph installation is running.") return Describe(failure, phase);
+        return "Saiph could not be removed (step: " + phase + "). Your settings and data were retained.";
     }
 }
 

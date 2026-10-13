@@ -295,6 +295,7 @@ public static class Probe {
         Console.WriteLine(SetupMessages.Describe(new SetupBlocked("Move the shortcut."), "integration-preflight"));
         Console.WriteLine(SetupMessages.Describe(new IOException("Another Saiph installation is running."), "installation-lock"));
         Console.WriteLine(SetupMessages.Describe(new InvalidDataException(), "payload"));
+        Console.WriteLine(SetupMessages.DescribeRemoval(new InvalidDataException(), "uninstall"));
     }
 }''')
     checker = tmp_path / 'probe.exe'
@@ -305,6 +306,7 @@ public static class Probe {
     assert lines[4] == 'Move the shortcut.'
     assert lines[5] == 'Another Saiph setup is already running. Finish or close it, then try again.'
     assert lines[6] == 'The installation could not finish (step: payload). Your existing release and data were retained.'
+    assert lines[7] == 'Saiph could not be removed (step: uninstall). Your settings and data were retained.'
 
 
 def test_installer_alignment_padding():
