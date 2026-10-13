@@ -6,11 +6,12 @@ import { Action, Card, Form } from "./ui";
 import { Enrollment } from "./Enrollment";
 import { HostedApproveDevice, HostedRootCode } from "./HostedSettings";
 import { PairingQr, validQr, type PairingQrCode } from "./PairingQr";
+import { UsageChoice, UsageExplanation } from "./UsageSharing";
 
 type Mode = "hosted" | "hub";
-type Step = "welcome" | "connect" | "phone" | "features" | "tools" | "done";
-const steps: Step[] = ["welcome", "connect", "phone", "features", "tools", "done"];
-const titles: Record<Step, string> = { welcome: "Welcome", connect: "Connect this computer", phone: "Add your phone", features: "Choose features", tools: "Optional tools", done: "All set" };
+type Step = "welcome" | "connect" | "phone" | "features" | "tools" | "privacy" | "done";
+const steps: Step[] = ["welcome", "connect", "phone", "features", "tools", "privacy", "done"];
+const titles: Record<Step, string> = { welcome: "Welcome", connect: "Connect this computer", phone: "Add your phone", features: "Choose features", tools: "Optional tools", privacy: "Usage statistics", done: "All set" };
 
 type Feature = { key: string; label: string; detail: string; default: boolean; hosted?: boolean };
 // Plain-language choices with the same defaults the settings use.
@@ -26,8 +27,9 @@ const features: Feature[] = [
   { key: "deskflow", label: "Share keyboard and mouse with another computer", detail: "Needs Deskflow on both computers.", default: false },
 ];
 
-function Progress({ step }: { step: Step }) {
-  return <ol className="setup-progress" aria-label="Setup steps">{steps.slice(1, -1).map((name) =>
+function Progress({ step, usage }: { step: Step; usage: boolean }) {
+  // The usage question appears only in builds that can send anonymous counts.
+  return <ol className="setup-progress" aria-label="Setup steps">{steps.slice(1, -1).filter((name) => name !== "privacy" || usage).map((name) =>
     <li key={name} aria-current={name === step ? "step" : undefined} className={steps.indexOf(name) < steps.indexOf(step) ? "done" : ""}>{titles[name]}</li>)}</ol>;
 }
 
@@ -77,7 +79,7 @@ export function SetupWizard({ state, client, close }: { state: State; client: Cl
   return <div className="setup-wizard" role="dialog" aria-label="Saiph setup">
     <header className="setup-header"><MoonStar size={26} /><h1>{titles[step]}</h1>
       {step !== "done" && <button type="button" className="text-button" onClick={() => void finish()}>Set up later</button>}</header>
-    {step !== "welcome" && step !== "done" && <Progress step={step} />}
+    {step !== "welcome" && step !== "done" && <Progress step={step} usage={Boolean(state.usage?.available)} />}
 
     {step === "welcome" && <Card title="How do you want to connect your devices?" subtitle="You can change this later in Settings.">
       <div className="setup-choices">
@@ -159,7 +161,14 @@ export function SetupWizard({ state, client, close }: { state: State; client: Cl
           {h.found ? <span className="setup-ok"><Check size={16} />Installed</span> : <span className="muted">Not installed</span>}</div>)}
         {missing.length > 0 && <label>Install the missing helpers with this command<input readOnly aria-label="Install command" value={"sudo apt install " + [...new Set(missing.map(([, h]) => h.package))].join(" ")} onFocus={(e) => e.target.select()} /></label>}
       </>}
-      <div className="actions"><button type="button" className="text-button" onClick={next("features")}>Back</button><button type="button" onClick={next("done")}>Continue</button></div>
+      <div className="actions"><button type="button" className="text-button" onClick={next("features")}>Back</button><button type="button" onClick={next(state.usage?.available ? "privacy" : "done")}>Continue</button></div>
+    </Card>}
+
+    {step === "privacy" && <Card title="Help improve Saiph?" subtitle="Your choice. Saiph works the same either way.">
+      <UsageExplanation />
+      {state.usage?.consent && <p role="status" className="muted">{state.usage.consent === "granted" ? "You're sharing anonymous usage." : "You're not sharing usage."} Change it any time in Settings.</p>}
+      <UsageChoice client={client} onDone={next("done")} />
+      <div className="actions"><button type="button" className="text-button" onClick={next("tools")}>Back</button></div>
     </Card>}
 
     {step === "done" && <Card title="Saiph is ready" subtitle="Your devices now work together.">

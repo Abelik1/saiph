@@ -340,7 +340,10 @@ sends at runtime.
 service (FCM): Saiph does not fetch or upload an FCM registration token. App
 Distribution update checks remain enabled. Your messages, notifications,
 clipboard, files and contacts go only to **your own** Hub, not to Firebase.
-Saiph includes no Analytics or Crashlytics.
+Saiph includes no Firebase Analytics or Crashlytics. Builds that include the
+Saiph service ask once whether to share anonymous daily usage counts; it stays
+off unless you agree, and Settings shows exactly what is sent (see
+[usage statistics](USAGE_ANALYTICS.md)).
 
 Keep your phone locked, and leave USB or wireless debugging off unless you need
 it (see **Background clipboard** in section 7).

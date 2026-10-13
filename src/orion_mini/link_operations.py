@@ -29,7 +29,7 @@ def hosted_available() -> bool:
     return all(find_spec(name) is not None for name in ('tink', 'authlib'))
 
 
-CORE_METHODS = frozenset({'cloud.info', 'cloud.setup', 'cloud.client.open', 'cloud.client.install', 'components.sign_in', 'state', 'hub.pair', 'hub.test', 'phone.sms.send', 'continuity.handoff', 'continuity.dnd', 'deskflow.restart', 'hotspot.connect', 'enrollment.import', 'continuity.dismiss', 'enrollment.cancel', 'components.install', 'hub.decide', 'enrollment.export', 'enrollment.qr', 'phone.call', 'phone.ring', 'phone.media', 'phone.contacts.search', 'phone.sms.compose', 'phone.ringer', 'phone.dial', 'phone.calls.log', 'phone.sms.attachment', 'phone.sms.attachment.save', 'phone.photo.prefetch', 'phone.sms.open', 'enrollment.approve', 'phone.photo.save', 'phone.file.send', 'phone.notification', 'hub.refresh'}) | HOSTED_METHODS
+CORE_METHODS = frozenset({'cloud.info', 'cloud.setup', 'cloud.client.open', 'cloud.client.install', 'components.sign_in', 'state', 'hub.pair', 'hub.test', 'phone.sms.send', 'continuity.handoff', 'continuity.dnd', 'deskflow.restart', 'hotspot.connect', 'enrollment.import', 'continuity.dismiss', 'enrollment.cancel', 'components.install', 'hub.decide', 'enrollment.export', 'enrollment.qr', 'phone.call', 'phone.ring', 'phone.media', 'phone.contacts.search', 'phone.sms.compose', 'phone.ringer', 'phone.dial', 'phone.calls.log', 'phone.sms.attachment', 'phone.sms.attachment.save', 'phone.photo.prefetch', 'phone.sms.open', 'enrollment.approve', 'phone.photo.save', 'phone.file.send', 'phone.notification', 'hub.refresh', 'usage.consent', 'usage.screen'}) | HOSTED_METHODS
 
 class LinkOperations:
     def hosted_controller(self):
@@ -226,6 +226,15 @@ class LinkOperations:
             if (self.settings.get('link') or {}).get('deskflow', {}).get('enabled', False) is not True:
                 raise ValueError('Turn on keyboard and mouse sharing first.')
             return self.deskflow.restart()
+        if method == 'usage.consent':
+            if not isinstance(args, dict) or set(args) != {'granted'}:
+                raise ValueError('Choose whether to share anonymous usage counts.')
+            return self.usage_counter.set_consent(args['granted'])
+        if method == 'usage.screen':
+            if not isinstance(args, dict) or set(args) != {'screen'}:
+                raise ValueError('Unknown screen.')
+            self.usage_counter.screen(args['screen'])
+            return {'ok': True}
         if method == 'continuity.dismiss':
             self.store.delete('handoff', args['id'])
             return {'ok': True}

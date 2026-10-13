@@ -207,6 +207,10 @@ class MainWindow(QMainWindow):
             window_handle = int(self.winId())
             self.workspace.user_presence = UserPresence(lambda: window_handle)
             threading.Thread(target=self.workspace.user_presence.status, name='orion-user-presence', daemon=True).start()
+            # Sends only after the owner agrees; a no-op otherwise.
+            counter = getattr(self.workspace, 'usage_counter', None)
+            if counter is not None:
+                counter.start()
         self.restart_requested.connect(self.restart_app)
         self.workspace.request_restart = self.restart_requested.emit
         # Send to phone from a file manager arrives on the API thread; confirm on the GUI thread.

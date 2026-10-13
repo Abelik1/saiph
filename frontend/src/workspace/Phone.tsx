@@ -111,7 +111,8 @@ export function Phone({ state, client }: { state: State; client: Client }) {
       <Enrollment state={state} client={client} />
       {pairing && <PairingQr qr={pairing.qr} shownAt={pairing.shownAt} onExpire={expirePairing} onClose={() => setPairing(null)} />}
       {pairingNotice && !pairing && <p className="pairing-notice muted" role="status">{pairingNotice}</p>}
-      <PhoneTabs features={state.phone_features} phone={phone} client={client} />
+      <PhoneTabs features={state.phone_features} phone={phone} client={client}
+        onTab={state.usage?.consent === "granted" ? (tab) => void client.call("usage.screen", { screen: tab.toLowerCase() }).catch(() => undefined) : undefined} />
       <details className="phone-handoff"><summary>Continue on another device</summary><Handoff items={state.handoffs || []} devices={info?.devices || []} currentDeviceId={state.settings?.hub?.device_id} client={client} /></details>
     </section>
   </div>;

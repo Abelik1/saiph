@@ -75,6 +75,9 @@ class DesktopBridge(QObject):
             args = json.loads(arguments)
             if not isinstance(args, dict):
                 raise ValueError("Expected an object.")
+            from .usage import BRIDGE_FEATURES, record
+            if method in BRIDGE_FEATURES:
+                record(self.window.workspace, BRIDGE_FEATURES[method])
             if method == "app.update.check":
                 from .package_updates import check
                 self.background(request_id, lambda: check(self.window.workspace.root, dict(self.window.workspace.settings['hub'])))

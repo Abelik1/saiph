@@ -14,6 +14,10 @@ import sefirah.domain.model.ThreadInfo
 
 @Singleton
 class OrionLink @Inject constructor(private val context: Context) {
+    companion object {
+        /** Set by the app for opt-in usage counts; receives only the event type, never its payload. */
+        @Volatile var published: ((String) -> Unit)? = null
+    }
     val status = MutableStateFlow("Waiting for setup")
     private val protocol = LinkProtocol()
     private val client = OkHttpClient.Builder().connectTimeout(10, TimeUnit.SECONDS)
@@ -46,6 +50,7 @@ class OrionLink @Inject constructor(private val context: Context) {
         identity()
         if (!OrionPermissions.read(context).allowsPublication(type)) return false
         val queued = protocol.publish(type, payload, target?.let(::listOf), conversationChecksum)
+        if (queued) runCatching { published?.invoke(type) }
         flush(); return queued
     }
     private fun flush(retry: Boolean = false) {

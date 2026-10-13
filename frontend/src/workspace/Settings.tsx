@@ -11,6 +11,7 @@ import { DeskflowSettings } from "./DeskflowSettings";
 import { HotspotSettings } from "./HotspotSettings";
 import { RemoteSettings } from "./RemoteSettings";
 import { BluetoothLockSettings } from "./BluetoothLockSettings";
+import { UsageSettings } from "./UsageSharing";
 
 export function WorkspaceModule({ installed = false }: { installed?: boolean }) {
   return <Card title="Workspace" subtitle="Optional personal tools."><p>Projects, transcripts, calendar, reminders and assistant tools live in the separate Workspace edition.</p><p className="muted">{installed ? "The Workspace edition is installed on this computer." : "Saiph Link works on its own. Install the Workspace edition separately when a trusted installer is available."}</p></Card>;
@@ -23,7 +24,8 @@ export function Settings({ state, client, openSetup }: { state: State; client: C
     <div className="tabs page-tabs" role="tablist" aria-label="Settings sections">{["General", "Advanced"].map(value => <button key={value} role="tab" aria-selected={tab === value} className={tab === value ? "selected" : ""} onClick={() => setTab(value)}>{value}</button>)}</div>
     {tab === "General" ? <div className="columns">
       <div><Card title="This computer"><Form submit={() => client.call("settings.save", {machine:{...state.settings.machine,name}})}><label>Computer name<input value={name} maxLength={40} required onChange={event => setName(event.target.value)} /></label><button>Save this computer</button></Form></Card><WorkspaceModule installed={state.modules?.workspace?.installed} /><Updates client={client} status={state.update_status} />
-        {openSetup && <Card title="Setup guide" subtitle="Connect, add a phone, choose features and optional tools."><button type="button" onClick={openSetup}>Run the setup guide</button></Card>}</div>
+        {openSetup && <Card title="Setup guide" subtitle="Connect, add a phone, choose features and optional tools."><button type="button" onClick={openSetup}>Run the setup guide</button></Card>}
+        <UsageSettings usage={state.usage} client={client} /></div>
       <Card title="Startup"><div className="list-row"><div className="grow"><b>Start when I sign in</b><small>{state.settings.start_with_windows ? "On" : "Off"}</small></div><Action run={() => client.call("settings.save", {start_with_windows:!state.settings.start_with_windows})}>{state.settings.start_with_windows ? "Turn off" : "Turn on"}<span className="sr-only"> start when I sign in</span></Action></div><div className="list-row"><div className="grow"><b>Close to the system tray</b><small>Keep Saiph available while its window is closed.</small></div><Action run={() => client.call("settings.save", {close_to_tray:!state.settings.close_to_tray})}>{state.settings.close_to_tray ? "Turn off" : "Turn on"}<span className="sr-only"> close to the system tray</span></Action></div></Card>
     </div> : <div className="columns">
       <ContinuitySettings settings={state.settings} backup={state.backup_status} client={client} workspace={false} />

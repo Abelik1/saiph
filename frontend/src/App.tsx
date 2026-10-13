@@ -7,6 +7,7 @@ import { Phone } from "./workspace/Phone";
 import { Cloud } from "./workspace/Cloud";
 import { Settings } from "./workspace/Settings";
 import { SetupWizard } from "./workspace/SetupWizard";
+import { UsagePrompt } from "./workspace/UsageSharing";
 import { Workspace } from "./workspace/edition";
 import "./workspace/workspace.css";
 import "./workspace/link.css";
@@ -44,12 +45,16 @@ export default function App({ providedClient }: { providedClient?: Client } = {}
   const hasWorkspace = state ? workspaceAvailable(state) : false;
   useEffect(() => { if (!hasWorkspace && workspacePages.includes(page)) setPage("Phone"); }, [hasWorkspace, page]);
   useEffect(() => { if (state?.enrollment?.ready && !state.settings.hub?.paired) setPage("Phone"); }, [state?.enrollment?.id, state?.enrollment?.ready, state?.settings.hub?.paired]);
+  // Screens are counted only after the owner agreed to anonymous usage counts.
+  const sharing = state?.usage?.consent === "granted";
+  useEffect(() => { if (client && sharing) void client.call("usage.screen", { screen: page.toLowerCase() }).catch(() => undefined); }, [client, sharing, page]);
   if (!state || !client) return <div className="connection-screen"><MoonStar size={44} /><h1>Saiph</h1><p role={error ? "alert" : "status"}>{error || "Opening Saiph…"}</p></div>;
   // First run, or re-run from Settings: the setup guide takes the whole window.
   if (guide || state.setup?.show) return <div className="workspace-shell link-shell"><main className="page-content">
     <SetupWizard state={state} client={client} close={() => { setGuide(false); void refresh(); }} /></main></div>;
   const workspacePage = workspacePages.includes(page) || (page === "Settings" && hasWorkspace);
   return <div className="workspace-shell link-shell">
+    {state.usage?.available && state.usage.consent === null && <UsagePrompt client={client} />}
     <header className="link-header">
       <div className="brand"><span className="brand-mark"><MoonStar size={23} /></span><b>saiph</b></div>
       <nav aria-label="Main navigation">

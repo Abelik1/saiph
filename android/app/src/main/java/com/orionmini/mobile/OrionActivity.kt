@@ -126,6 +126,8 @@ class OrionActivity : ComponentActivity() {
     }
     private fun resumeUnlocked() {
         showingLock = false
+        UsageAnalytics.count(this, "app_open")
+        UsageAnalytics.ask(this)
         updates.checkStartup()
         if (!prefs.contains("device_id")) { pairing(); return }
         val requestedSetup = intent.getBooleanExtra("setup", false)
@@ -219,6 +221,7 @@ class OrionActivity : ComponentActivity() {
     private fun remember(invite: Enrollment) {
         if (prefs.contains("device_id") || pairingInProgress) return
         prefs.edit().putString("pending_enrollment", invite.pending(Instant.now()).privateJson()).apply()
+        UsageAnalytics.count(this, "pairing_started")
         pairing()
     }
     private fun pendingEnrollment(): Enrollment? {
@@ -338,6 +341,7 @@ class OrionActivity : ComponentActivity() {
     }
     private fun homeLoop() {
         screen = "home"; poll?.cancel()
+        UsageAnalytics.count(this, "screen_home")
         lastRender = ""; render(null, link.status.value)
         poll = lifecycleScope.launch {
             while (isActive) {
@@ -459,6 +463,7 @@ class OrionActivity : ComponentActivity() {
         if (screen == "setup" && !prefs.getBoolean("setup_done", false))
             prefs.edit().putBoolean("setup_deferred", true).apply()
         screen = "settings"; poll?.cancel(); title("Settings")
+        UsageAnalytics.opened(this, "settings")
         root.addView(section("Updates"))
         root.addView(text("Saiph ${BuildConfig.VERSION_NAME}. Updates also check automatically.", 14f, Palette.MUTED))
         val updateStatus = text("", 14f, Palette.MUTED)
@@ -487,11 +492,13 @@ class OrionActivity : ComponentActivity() {
         })
         root.addView(section("Security"))
         root.addView(lock.toggle())
+        UsageAnalytics.settingsViews(this).forEach(root::addView)
         root.addView(buttonRow(button("Setup permissions") { setup() }, button("Advanced") { advanced() }))
         root.addView(buttonRow(button("Back to Saiph") { homeLoop() }))
     }
     private fun advanced() {
         screen = "advanced"; poll?.cancel(); title("Advanced")
+        UsageAnalytics.opened(this, "advanced")
         root.addView(text("Hub: ${runCatching { Api.base(this) }.getOrDefault("Invalid saved configuration")}\nDevice: ${prefs.getString("device_id", "Unpaired")}\n${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})", 14f, Palette.MUTED))
         root.addView(button("Saiph Hosted preview") { startActivity(Intent(this, HostedActivity::class.java)) })
         root.addView(section("Tailscale"))

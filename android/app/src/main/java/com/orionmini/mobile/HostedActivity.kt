@@ -51,6 +51,8 @@ class HostedActivity : ComponentActivity() {
     }
     private fun resumeUnlocked() {
         if (showingLock || !::status.isInitialized) { showingLock = false; render() }
+        UsageAnalytics.opened(this, "hosted")
+        UsageAnalytics.ask(this) { render() }
         poll?.cancel()
         poll = lifecycleScope.launch { while (isActive) { status.text = runtime.status + if (account.signedIn()) " · Signed in" else " · Sign in again"; delay(1000) } }
     }
@@ -148,6 +150,7 @@ class HostedActivity : ComponentActivity() {
         })
         root.addView(heading("Security"))
         root.addView(lock.toggle())
+        UsageAnalytics.settingsViews(this).forEach(root::addView)
         runtime.securityEvents().forEach { root.addView(text(it, 13f, Palette.MUTED)) }
         root.addView(button("Back") { finish() })
     }

@@ -24,11 +24,12 @@ from uuid import UUID, uuid4
 
 from fastapi import HTTPException
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, Response
 
 from .hosted import DEVICE, HostedConfig, body, create_app, exact, reject
 from .hosted_auth import AccessTokens, Auth0Config, ServiceAuth0Config
 from .hosted_maintenance import WorkspaceCleanup, maintenance_context
+from .hosted_usage import MAX_BATCH_BYTES, UsageStore
 
 
 class AccountRegistry:
@@ -268,7 +269,7 @@ class BoundTokens:
 
 class SharedHosted:
     """One API origin; bounded process cache, durable routing across restarts."""
-    def __init__(self, registry: AccountRegistry, *, tokens=None, web_tokens=None, downloads=None, cache_size=64):
+    def __init__(self, registry: AccountRegistry, *, tokens=None, web_tokens=None, downloads=None, cache_size=64, usage=None):
         if type(cache_size) is not int or not 1 <= cache_size <= 256:
             raise ValueError('Bound the workspace application cache')
         self.registry = registry
@@ -278,7 +279,15 @@ class SharedHosted:
         self.cache_size = cache_size
         self.apps = OrderedDict()
         self.lock = threading.Lock()
-        self.maintenance = WorkspaceCleanup(registry)
+        # Aggregate-only usage and request totals (docs/USAGE_ANALYTICS.md).
+        self.usage = usage if usage is not None else UsageStore(registry.directory)
+        cleanup = WorkspaceCleanup(registry)
+
+        def maintenance():
+            result = cleanup()
+            self.usage.flush()
+            return result
+        self.maintenance = maintenance
 
     def application(self, account):
         with self.lock:
@@ -301,10 +310,27 @@ class SharedHosted:
                         await send({'type': 'lifespan.startup.complete'})
                     elif message['type'] == 'lifespan.shutdown':
                         break
+            try:
+                await asyncio.to_thread(self.usage.flush)  # Keep the last minute of request totals.
+            except Exception:
+                pass
             await send({'type': 'lifespan.shutdown.complete'})
             return
         if scope['type'] != 'http':
             return
+        status = []
+
+        async def counted(message):
+            if message['type'] == 'http.response.start':
+                status.append(message['status'])
+            await send(message)
+        try:
+            await self._http(scope, receive, counted)
+        finally:
+            # Service-wide totals by fixed route name and status class only.
+            self.usage.request(scope.get('method', ''), scope['path'], status[0] if status else 0)
+
+    async def _http(self, scope, receive, send):
         request = Request(scope, receive=receive)
         try:
             path = scope['path']
@@ -349,6 +375,24 @@ class SharedHosted:
                 account = await asyncio.to_thread(self.registry.device, request.headers.get('x-orion-device-id'))
                 app = await asyncio.to_thread(self.application, account)
                 return await app(scope, receive, send)
+            elif path == '/v1/usage' and request.method == 'POST':
+                # Anonymous opt-in counts: no account, cookie, origin or query is accepted.
+                if (request.headers.get('origin') or request.cookies or request.headers.get('authorization')
+                        or request.url.query or len(request.headers.getlist('content-length')) > 1):
+                    reject(403)
+                length = request.headers.get('content-length')
+                if length is not None and (not length.isdecimal() or int(length) > MAX_BATCH_BYTES):
+                    reject(413)
+                if not self.usage.admit():
+                    reject(429)
+                raw, value = await body(request)
+                if len(raw) > MAX_BATCH_BYTES:
+                    reject(413)
+                try:
+                    await asyncio.to_thread(self.usage.ingest, value)
+                except ValueError:
+                    reject(400)
+                response = Response(status_code=204)
             else:
                 reject(404)
         except HTTPException as error:

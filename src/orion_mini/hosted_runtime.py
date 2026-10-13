@@ -47,6 +47,7 @@ from .hosted_session import SealedSession, enrollment
 from .hosted_tokens import HostedAccount, HostedUnavailable, SignInRequired, TokenVault
 from .hosted_transport import HostedTransport, TransportError
 from .user_presence import confirm as confirm_user, status as user_verification
+from .usage import record as record_usage
 
 EXCLUSIVE = ("This computer is paired with a self-hosted Hub. A device uses either a self-hosted Hub "
              "or Saiph Hosted, never both.")
@@ -663,6 +664,7 @@ class HostedController:
                     data = read_clipboard(payload)
                     if clipboard_on and self.clipboard_cache.claim("text/plain", data):
                         self.clipboard_sink("text/plain", data)
+                        record_usage(self.workspace, "clipboard_received")
                     outcome = "succeeded"
                 elif event in (NOTIFICATION_UPSERT, NOTIFICATION_REMOVE):
                     self._notification(envelope["header"]["source"], payload)
@@ -690,6 +692,7 @@ class HostedController:
         self.clipboard_cache.claim(mime, data)
         self._outgoing_clipboard = payload
         self._wake.set()
+        record_usage(self.workspace, "clipboard_sent")
         return True
 
     def _notification(self, source, payload):
@@ -699,6 +702,7 @@ class HostedController:
             self.workspace.store.delete("hosted_notification", identifier)
         else:
             self.workspace.store.save("hosted_notification", {**value, "id": identifier, "device_id": source})
+            record_usage(self.workspace, "phone_notification")
 
     def dismiss_notification(self, notification_id) -> dict:
         with self.lock:

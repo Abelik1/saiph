@@ -110,6 +110,7 @@ class HostedRuntime private constructor(private val context: Context) {
         requestCode = HostedApprovalCodes.request(current)
         fingerprint = HostedApprovalCodes.deviceFingerprint(current.enrollment().getValue("device").jsonObject)
         transport!!.submitEnrollment(token)
+        UsageAnalytics.count(context, "hosted_enrolled")
         status = "Waiting for root approval"
     }
     suspend fun freshRequest() = mutex.withLock {
@@ -130,7 +131,9 @@ class HostedRuntime private constructor(private val context: Context) {
             "notification.upsert", "notification.remove" -> if (access.notifications) value else return false
             else -> return false
         }
-        return outgoing.offer(payload)
+        val queued = outgoing.offer(payload)
+        if (queued) UsageAnalytics.count(context, if (type == "clipboard.text") "clipboard_sent" else "notification_shared")
+        return queued
     }
     suspend fun step() = mutex.withLock {
         if (!enabled()) { invalidate(); return@withLock }
@@ -164,7 +167,9 @@ class HostedRuntime private constructor(private val context: Context) {
                     val text = payload.getValue("text").jsonPrimitive.content
                     val raw = text.toByteArray(Charsets.UTF_8)
                     check(raw.size in 1..16384 && ClipboardCache.hash(raw) == payload.getValue("sha256").jsonPrimitive.content)
-                    if (OrionPermissions.read(context).clipboard && receipts.claim("hosted:$id") && cache.claim("text/plain", ClipboardCache.hash(raw))) clipboard?.invoke(text)
+                    if (OrionPermissions.read(context).clipboard && receipts.claim("hosted:$id") && cache.claim("text/plain", ClipboardCache.hash(raw))) {
+                        clipboard?.invoke(text); UsageAnalytics.count(context, "clipboard_received")
+                    }
                 }
                 "notification.dismiss" -> {
                     check(envelope.getValue("header").jsonObject["source"] == JsonPrimitive(current.root.deviceId))
@@ -186,6 +191,7 @@ class HostedRuntime private constructor(private val context: Context) {
             context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { if (it.moveToFirst()) name = it.getString(0) }
             HostedAttachments.send(current, transport!!, input, name, "application/octet-stream")
         }
+        UsageAnalytics.count(context, "hosted_file_send")
     }
     suspend fun saveFile(id: String, uri: Uri) = mutex.withLock {
         check(enabled() && HostedAccount.get(context).signedIn()); val current = open()
@@ -197,6 +203,7 @@ class HostedRuntime private constructor(private val context: Context) {
             context.contentResolver.openOutputStream(uri, "w")!!.use { output -> verified.inputStream().use { it.copyTo(output) } }
             current.completeIncoming(id)
             offers = offers.filterNot { it.first == id }
+            UsageAnalytics.count(context, "hosted_file_save")
         } finally { verified.delete() }
     }
     fun retire() {

@@ -21,6 +21,7 @@ from .agent_grants import ensure as ensure_grants
 from .phone_features import MAX_FILE
 from .codes import verification_code
 from .callpause import CallPause
+from .usage import record as record_usage
 
 MESH_ORIGIN = "http://100.64.0.1:8765"
 LOW_BATTERY = 20  # Alert once at or below this level; re-arm after charging or above RECOVERED.
@@ -268,6 +269,7 @@ class PhoneRuntime:
             if self.loop: self.loop.call_soon_threadsafe(self.discard_superseded_clipboard, mime, digest)
             self.state.error = 'Clipboard content is too large to hold for automatic retry.'
             self.changed(); return
+        record_usage(self.workspace, 'clipboard_sent')
         if self.loop:
             asyncio.run_coroutine_threadsafe(self.flush_clipboard(), self.loop)
 
@@ -475,12 +477,15 @@ class PhoneRuntime:
                                 self.pending_clipboard.clear()
                                 self.discard_clipboard_publication()
                                 self.clipboard_received(mime,data)
+                                record_usage(self.workspace, 'clipboard_received')
                             return
                         notice = self.battery_notice(frame['source'], frame['payload']) if frame['type'] == 'battery' else None
                         if notice and native and not self.continuity.focus.quiet:
                             try: await native.announce('Phone battery low', notice)
                             except Exception: pass
                         row = self.state.event(frame)
+                        if row and frame['type'] == 'notification.upsert':
+                            record_usage(self.workspace, 'phone_notification')
                         if row and (self.workspace.settings.get('link') or {}).get('auto_copy_codes') is True:
                             code = verification_code(row.get('title'), row.get('text'))
                             # Updates to the same notification must not overwrite the clipboard again.
