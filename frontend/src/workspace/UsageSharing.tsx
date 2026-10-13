@@ -38,6 +38,15 @@ function Batch({ batch }: { batch: UsageBatch }) {
   return <pre className="usage-batch" aria-label={"Usage batch for " + batch.day}>{JSON.stringify(batch, null, 2)}</pre>;
 }
 
+/** Settings for the local-only weekly summary shown on the Phone page. */
+export function YourWeekSettings({ enabled, client }: { enabled?: boolean; client: Client }) {
+  if (enabled === undefined) return null;
+  return <Card title="Your week" subtitle={enabled ? "On: a weekly summary on the Phone page." : "Off: nothing is kept for it."}>
+    <p>A summary of what you did with Saiph and who you texted most, worked out on this computer and never sent anywhere. Turning it off deletes its counts.</p>
+    <Action run={() => client.call("insights.enable", { enabled: !enabled })}>{enabled ? "Turn off Your week" : "Turn on Your week"}</Action>
+  </Card>;
+}
+
 /** Settings card: the current choice, a switch, and exactly what is sent. */
 export function UsageSettings({ usage, client }: { usage?: UsageState; client: Client }) {
   if (!usage?.available) return null;

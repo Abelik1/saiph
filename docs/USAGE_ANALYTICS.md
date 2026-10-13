@@ -110,3 +110,14 @@ reporting is not included.
 Anyone can send a well-formed batch, so totals can be inflated by abuse; they
 can never reveal data about a person. Counts and stages are approximate: a
 batch reports the device's current setup stage, not the stage on that day.
+
+## Your week (never sent)
+
+The desktop Phone page has a **Your week** panel: what you did with Saiph in the
+last seven days, which page you opened most, your busiest day, and the people you
+texted most. It is worked out on the computer when the panel is opened, from
+local counts kept for 14 days and from text messages already synced for the
+Phone page. No list of people is stored, and none of it is part of the anonymous
+batches above, which use separate, coarser counts. It is on by default because
+nothing leaves the computer; Settings → General turns it off, which deletes its
+counts, and the panel can clear the current week.

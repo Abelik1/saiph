@@ -2277,3 +2277,10 @@ kbd {
 .usage-terms { margin: 0 0 12px; padding-left: 20px; display: grid; gap: 6px; }
 .usage-choice { gap: 8px; }
 .usage-batch { max-height: 220px; overflow: auto; font-size: 12px; padding: 10px; border-radius: 8px; background: rgba(127, 127, 127, 0.12); white-space: pre-wrap; }
+
+/* Your week: a local-only summary on the Phone page. */
+.your-week { margin: 12px 0; }
+.your-week > summary { cursor: pointer; font-weight: 600; }
+.your-week-list { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 6px; }
+.your-week-list li { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; align-items: baseline; }
+.your-week-list small { grid-column: 1 / -1; color: var(--muted, #8c939c); }

@@ -164,6 +164,10 @@ class UsageCounter:
 
     # ----------------------------------------------------------- counting
     def count(self, feature: str, amount: int = 1) -> None:
+        # The local-only "Your week" summary keeps its own counts, whatever the sharing choice.
+        insights = getattr(self.workspace, "insights", None)
+        if insights is not None:
+            insights.count(feature, amount)
         if feature not in FEATURES or type(amount) is not int or amount < 1 or self.consent() != "granted":
             return
         with self._lock:

@@ -45,8 +45,8 @@ export default function App({ providedClient }: { providedClient?: Client } = {}
   const hasWorkspace = state ? workspaceAvailable(state) : false;
   useEffect(() => { if (!hasWorkspace && workspacePages.includes(page)) setPage("Phone"); }, [hasWorkspace, page]);
   useEffect(() => { if (state?.enrollment?.ready && !state.settings.hub?.paired) setPage("Phone"); }, [state?.enrollment?.id, state?.enrollment?.ready, state?.settings.hub?.paired]);
-  // Screens are counted only after the owner agreed to anonymous usage counts.
-  const sharing = state?.usage?.consent === "granted";
+  // Screens are counted for the local "Your week" summary, and shared only after the owner agreed.
+  const sharing = state?.usage?.consent === "granted" || state?.insights?.enabled === true;
   useEffect(() => { if (client && sharing) void client.call("usage.screen", { screen: page.toLowerCase() }).catch(() => undefined); }, [client, sharing, page]);
   if (!state || !client) return <div className="connection-screen"><MoonStar size={44} /><h1>Saiph</h1><p role={error ? "alert" : "status"}>{error || "Opening Saiph…"}</p></div>;
   // First run, or re-run from Settings: the setup guide takes the whole window.

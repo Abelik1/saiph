@@ -276,9 +276,13 @@ export type DndStatus = {enabled:boolean;active:boolean;source:string;changed_at
 /** One anonymous day of counts, exactly as sent (docs/USAGE_ANALYTICS.md). */
 export type UsageBatch = {schema: number; day: string; app: string; platform: string; version: string; mode: string; install_age: string; stage: string; features: Record<string, string>};
 export type UsageState = {available: boolean; consent: "granted" | "declined" | null; pending: UsageBatch[]; last_sent: UsageBatch | null};
+/** "Your week": calculated on this computer when opened; never sent. */
+export type WeekSummary = {enabled: boolean; from?: string; to?: string; actions: number; busiest_day: string | null; screen: string | null;
+  top: {feature: string; label: string; count: number}[]; people: {name: string; sent: number; received: number; total: number}[]};
 export type State = {
   hosted?: HostedState;
   usage?: UsageState;
+  insights?: {enabled: boolean};
   user_verification?: UserVerification;
   update_status?: {state: string; code: string};
   cloud_status?: {installed: boolean; profile_present: boolean; inspection_complete: boolean; prepared: boolean; selected_libraries: number; state: string; installation_supported?: boolean; management_available?: boolean; service_state?: 'not_managed' | 'reachable' | 'unavailable' | 'needs_attention'};

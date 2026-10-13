@@ -29,7 +29,7 @@ def hosted_available() -> bool:
     return all(find_spec(name) is not None for name in ('tink', 'authlib'))
 
 
-CORE_METHODS = frozenset({'cloud.info', 'cloud.setup', 'cloud.client.open', 'cloud.client.install', 'components.sign_in', 'state', 'hub.pair', 'hub.test', 'phone.sms.send', 'continuity.handoff', 'continuity.dnd', 'deskflow.restart', 'hotspot.connect', 'enrollment.import', 'continuity.dismiss', 'enrollment.cancel', 'components.install', 'hub.decide', 'enrollment.export', 'enrollment.qr', 'phone.call', 'phone.ring', 'phone.media', 'phone.contacts.search', 'phone.sms.compose', 'phone.ringer', 'phone.dial', 'phone.calls.log', 'phone.sms.attachment', 'phone.sms.attachment.save', 'phone.photo.prefetch', 'phone.sms.open', 'enrollment.approve', 'phone.photo.save', 'phone.file.send', 'phone.notification', 'hub.refresh', 'usage.consent', 'usage.screen'}) | HOSTED_METHODS
+CORE_METHODS = frozenset({'cloud.info', 'cloud.setup', 'cloud.client.open', 'cloud.client.install', 'components.sign_in', 'state', 'hub.pair', 'hub.test', 'phone.sms.send', 'continuity.handoff', 'continuity.dnd', 'deskflow.restart', 'hotspot.connect', 'enrollment.import', 'continuity.dismiss', 'enrollment.cancel', 'components.install', 'hub.decide', 'enrollment.export', 'enrollment.qr', 'phone.call', 'phone.ring', 'phone.media', 'phone.contacts.search', 'phone.sms.compose', 'phone.ringer', 'phone.dial', 'phone.calls.log', 'phone.sms.attachment', 'phone.sms.attachment.save', 'phone.photo.prefetch', 'phone.sms.open', 'enrollment.approve', 'phone.photo.save', 'phone.file.send', 'phone.notification', 'hub.refresh', 'usage.consent', 'usage.screen', 'insights.week', 'insights.enable', 'insights.clear'}) | HOSTED_METHODS
 
 class LinkOperations:
     def hosted_controller(self):
@@ -235,6 +235,14 @@ class LinkOperations:
                 raise ValueError('Unknown screen.')
             self.usage_counter.screen(args['screen'])
             return {'ok': True}
+        if method == 'insights.week':
+            return self.insights.week()
+        if method == 'insights.enable':
+            if not isinstance(args, dict) or set(args) != {'enabled'}:
+                raise ValueError('Your week is on or off.')
+            return self.insights.set_enabled(args['enabled'])
+        if method == 'insights.clear':
+            return self.insights.clear()
         if method == 'continuity.dismiss':
             self.store.delete('handoff', args['id'])
             return {'ok': True}

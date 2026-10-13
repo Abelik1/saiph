@@ -64,6 +64,8 @@ class LinkWorkspace(LinkOperations):
         from .usage import UsageCounter, packaged_endpoint
         # Opt-in usage counts; inert until the owner agrees, and in builds without a service.
         self.usage_counter = UsageCounter(self, endpoint=packaged_endpoint())
+        from .insights import Insights
+        self.insights = Insights(self)  # "Your week": computed and kept on this computer only.
         self._pairing_lock = threading.Lock()
         self._cloud_action_lock = threading.Lock()
         self.show_enrollment = False
@@ -97,7 +99,7 @@ class LinkWorkspace(LinkOperations):
                 'components': self.components.snapshot(), 'phone': self.phone.snapshot(),
                 'phone_features': self.phone_features.snapshot(), 'handoffs': self.store.all('handoff')[:100],
                 'deskflow': {**self.deskflow.status(), 'setup': self.deskflow.setup()}, 'dnd': self.dnd_status(), 'hotspot': self.hotspot.status(), 'remote': self.remote.status(), 'bt_lock': self.bt_lock.status(), 'setup': self.setup_state(), 'camera': self.camera.status(), 'microphone': self.microphone.status(),
-                'api': self.api_info, 'hub_inbox': self.hub_inbox(), 'hosted': self.hosted_state(), 'user_verification': user_verification(self), 'usage': self.usage_counter.snapshot(),
+                'api': self.api_info, 'hub_inbox': self.hub_inbox(), 'hosted': self.hosted_state(), 'user_verification': user_verification(self), 'usage': self.usage_counter.snapshot(), 'insights': {'enabled': self.insights.enabled()},
                 'projects': [], 'transcripts': [], 'reminders': [], 'tasks': [], 'jobs': [],
                 'messages': [], 'emails': [], 'providers': [], 'skills': [], 'plugins': [], 'ticker': [],
                 'google': {'signed_in': False}, 'calendar': {'events': [], 'synced_at': None, 'error': ''},
