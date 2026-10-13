@@ -59,3 +59,21 @@ def test_handoff_shell_urls_and_focus_malformed_payload_are_rejected():
         continuity.validate(SimpleNamespace(type="handoff", payload=dict(kind="link", value="file:///private"), targets=["desktop"]))
     with pytest.raises(ValueError):
         continuity.validate(SimpleNamespace(type="focus.plan", payload={}, targets=None))
+
+
+def test_do_not_disturb_latest_change_is_shared_and_validated(tmp_path):
+    db = Database(tmp_path / "hub.sqlite")
+    with db.connect() as c:
+        c.executescript(continuity.SCHEMA)
+        for device in ("phone", "desktop"):
+            c.execute("INSERT INTO devices(id,name,public_key_der_b64,created_at) VALUES(?,?,'test','now')", (device, device))
+        continuity.apply(c, "phone", SimpleNamespace(type="focus.state", payload={"active": True, "changed_at": 1_800_000_000}, targets=None), 100)
+        continuity.apply(c, "desktop", SimpleNamespace(type="focus.state", payload={"active": False, "changed_at": 1_800_000_060}, targets=None), 90)
+    assert continuity.snapshot(db)["dnd"] == {"source": "desktop", "active": False, "changed_at": 1_800_000_060}
+    for payload, targets in (({"active": "yes", "changed_at": 1}, None), ({"active": True}, None),
+                             ({"active": True, "changed_at": 1.5}, None), ({"active": True, "changed_at": 1, "app": "x"}, None),
+                             ({"active": True, "changed_at": 1}, ["phone"])):
+        with pytest.raises(ValueError):
+            continuity.validate(SimpleNamespace(type="focus.state", payload=payload, targets=targets))
+    db.execute("DELETE FROM devices WHERE id='desktop'")
+    assert continuity.snapshot(db)["dnd"]["source"] == "phone"

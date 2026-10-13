@@ -14,6 +14,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS link_focus(source TEXT PRIMARY KEY REFERENCES devices(id) ON DELETE CASCADE, plan_json TEXT NOT NULL, updated_at REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS link_dnd(source TEXT PRIMARY KEY REFERENCES devices(id) ON DELETE CASCADE, active INTEGER NOT NULL, changed_at INTEGER NOT NULL, updated_at REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS link_wake(event_id TEXT PRIMARY KEY REFERENCES link_events(id) ON DELETE CASCADE, target TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending');
 """
 
@@ -39,6 +40,12 @@ def validate(event):
                 raise ValueError("Invalid Focus envelope")
         if event.targets is not None:
             raise ValueError("Focus schedules are shared with all paired devices")
+    elif event.type == "focus.state":
+        # Live Do Not Disturb: one boolean and the time the owner changed it.
+        if set(body) != {"active", "changed_at"} or type(body["active"]) is not bool or type(body["changed_at"]) is not int or not 0 < body["changed_at"] < 2**41:
+            raise ValueError("Invalid Do Not Disturb envelope")
+        if event.targets is not None:
+            raise ValueError("Do Not Disturb is shared with all paired devices")
     elif event.type == "wake":
         if set(body) != {"target"} or not isinstance(body["target"], str) or not re.fullmatch(r"[a-z][a-z0-9_-]{0,31}", body["target"]) or event.targets is not None:
             raise ValueError("Invalid wake envelope")
@@ -50,6 +57,9 @@ def apply(connection, source, event, now):
     validate(event)
     if event.type == "focus.plan":
         connection.execute("INSERT INTO link_focus VALUES(?,?,?) ON CONFLICT(source) DO UPDATE SET plan_json=excluded.plan_json,updated_at=excluded.updated_at", (source, json.dumps(event.payload), now))
+    elif event.type == "focus.state":
+        connection.execute("INSERT INTO link_dnd VALUES(?,?,?,?) ON CONFLICT(source) DO UPDATE SET active=excluded.active,changed_at=excluded.changed_at,updated_at=excluded.updated_at",
+                           (source, int(event.payload["active"]), event.payload["changed_at"], now))
 
 
 def after_insert(connection, event):
@@ -59,7 +69,10 @@ def after_insert(connection, event):
 
 def snapshot(db):
     row = db.row("SELECT source,plan_json,updated_at FROM link_focus ORDER BY updated_at DESC,source LIMIT 1")
+    # Devices that reconnect after the five-minute event TTL still converge.
+    dnd = db.row("SELECT source,active,changed_at FROM link_dnd ORDER BY changed_at DESC,updated_at DESC,source LIMIT 1")
     return {"focus": {"source": row["source"], "payload": json.loads(row["plan_json"]), "updated_at": row["updated_at"]} if row else None,
+            "dnd": {"source": dnd["source"], "active": bool(dnd["active"]), "changed_at": dnd["changed_at"]} if dnd else None,
             "wake_targets": sorted(wake_targets())}
 
 

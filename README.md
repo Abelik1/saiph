@@ -78,17 +78,15 @@ their inclusion is not a delivery-date commitment.
 
 ### Feature backlog
 
-- [ ] **Hosted QR enrollment — Android scanner needed:** the desktop already
-  shows the signed root QR. Add a "Scan root QR" option to the Android Hosted
-  screen using the existing pairing camera scanner, then show the same
-  full-fingerprint confirmation dialog as the paste path.
-- [ ] **Live Do Not Disturb sync — design ready:** the scheduled sleep Focus
-  plan already syncs. Add a `focus.state` event (`active`, `changed_at`) so
-  turning DND on or off on any device mirrors to the others. Android listens for
-  interruption-filter changes and applies Saiph's own automatic rule. The desktop
-  reads Windows DND where possible, quiets GNOME banners and Saiph notifications,
-  and shows a toggle. Track the last shared state to avoid echo loops, and add
-  the latest state to the Hub continuity snapshot for devices that reconnect late.
+- [ ] **Hosted QR enrollment — acceptance:** Android scans the desktop's signed
+  root QR with the pairing camera scanner (or takes the pasted code) and requires
+  the same full-fingerprint confirmation. Needs physical-device acceptance.
+- [ ] **Live Do Not Disturb sync — acceptance:** `focus.state` shares the newest
+  on/off change between all paired devices, and the Hub snapshot covers late
+  reconnects. Android follows interruption-filter changes and applies Saiph's own
+  rule; the desktop reads Windows DND (read-only) and GNOME banners and has a
+  Phone page toggle. Needs acceptance on real Android, Windows and GNOME devices,
+  including the Android 15+ limit on ending DND started on the phone.
 - [ ] **Phone remote for desktop apps — design needed:** choose an app on the
   phone from a list and get buttons and a text box for it, not a screen-share
   view. The desktop publishes a fixed catalog of adapters (`remote.catalog`)
@@ -98,20 +96,19 @@ their inclusion is not a delivery-date commitment.
   computer and an opt-in "type into the focused app" text box. Off by default,
   enabled per adapter and per phone, fixed actions only, no shell, rate-limited,
   and documented in the security model. Wayland input injection is unavailable.
-- [ ] **Phone photo or scan into a desktop task — design ready:** take a
-  photo (and later scan a document) on the phone, send it with the existing
-  `file.offer`, then a separate `capture.insert` event so older Hubs still
-  accept it. The desktop puts the image on the clipboard and shows a "ready to
-  paste" notification.
-- [ ] **Phone hotspot connect/reconnect — design ready:** choose a saved Wi-Fi
-  profile on the desktop (`netsh wlan` / `nmcli`), connect with one click, and
-  reconnect automatically when the Hub link and other networks are down. Android
-  cannot turn on the hotspot for an app, so add a phone shortcut that opens
-  tethering settings.
-- [ ] **Deskflow setup polish — design ready:** detect the certificate in the
-  standard Deskflow `tls` folders, this computer's mesh address and whether the
-  trust files exist. Show a setup checklist with running/stopped status and a
-  restart button, and back off after repeated crashes.
+- [ ] **Phone photo into a desktop task — acceptance:** "Photo to computer" on
+  Android sends the photo with `file.offer` plus a `capture.insert` digest, so
+  older Hubs still relay it; the desktop verifies it and puts it on the
+  clipboard with a "ready to paste" notice. Needs device acceptance. Document
+  scanning with edge correction still needs a dependency decision.
+- [ ] **Phone hotspot connect/reconnect — acceptance:** choose a saved Wi-Fi
+  profile, connect in one click (`netsh wlan` / `nmcli`, never a shell), and
+  reconnect automatically after a 30-second outage with no other network route.
+  The phone app opens Android hotspot settings. Needs real hotspot checks on
+  Windows and Linux.
+- [ ] **Deskflow setup polish — acceptance:** setup checks for the executable,
+  certificate, approved trust file, mesh address and running state; detected
+  values; Restart sharing; and crash backoff. Needs a two-computer check.
 - [ ] **Hosted root transfer and lost-root recovery — design needed:** move
   trust to another approved device and define recovery without giving the server
   access to content keys.

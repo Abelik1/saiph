@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ipaddress
 import os
+import socket
 import subprocess
 import time
 from pathlib import Path
@@ -51,6 +52,58 @@ def configuration(root, *, role="desktop", desktop="100.64.0.2", local=None, cer
     return path
 
 
+MESH = ipaddress.ip_network("100.64.0.0/10")
+STABLE_SECONDS = 600  # A core that ran this long is no longer crash-looping.
+
+
+def tls_directories(root):
+    """GUI trust folders Deskflow uses by default, then Saiph's core trust folder."""
+    if os.name == "nt":
+        gui = [Path(os.environ.get("ProgramData", "C:/ProgramData")) / "Deskflow" / "tls"]
+    else:
+        config = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
+        gui = [config / "Deskflow" / "tls", Path("/etc/Deskflow/tls")]
+    return gui, (gui[0] if os.name == "nt" else Path(root) / "deskflow" / "tls")
+
+
+def mesh_addresses(lookup=None):
+    """This computer's own mesh (100.64.0.0/10) addresses, without contacting anything."""
+    found = set()
+    try:
+        entries = (lookup or socket.getaddrinfo)(socket.gethostname(), None, socket.AF_INET)
+    except OSError:
+        entries = []
+    for entry in entries:
+        try:
+            address = ipaddress.ip_address(entry[4][0])
+        except (ValueError, IndexError, TypeError):
+            continue
+        if address in MESH:
+            found.add(str(address))
+    return sorted(found)
+
+
+def detect(root, options=None, *, addresses=mesh_addresses):
+    """Read-only setup checks. File names only: certificate contents are never opened."""
+    options = options or {}
+    role = options.get("role", "desktop" if os.name == "nt" else "laptop")
+    executable = tool_path("deskflow-core", options.get("executable"))
+    gui, core = tls_directories(root)
+    certificates = []
+    for directory in gui:
+        try:
+            certificates += sorted(str(path) for path in directory.glob("*.pem") if path.is_file())
+        except OSError:
+            continue
+    trust = "trusted-clients" if role == "desktop" else "trusted-servers"
+    try:
+        trusted = (core / trust).is_file()
+    except OSError:
+        trusted = False
+    return {"executable": executable or "", "certificates": certificates[:8], "trust_file": str(core / trust),
+            "trusted": trusted, "mesh_addresses": addresses()}
+
+
 class Deskflow:
     def __init__(self, root, settings, *, popen=subprocess.Popen, clock=time.monotonic, default_enabled=True):
         self.root, self.settings, self.popen, self.clock = Path(root), settings, popen, clock
@@ -59,6 +112,9 @@ class Deskflow:
         self.error = ""
         self.identity = None
         self.default_enabled = default_enabled
+        self.started_at = None
+        self.crashes = 0
+        self.exit_code = None
 
     def poll(self):
         options = (self.settings.get("link") or {}).get("deskflow") or {}
@@ -73,12 +129,29 @@ class Deskflow:
         if not executable:
             self.error = "Deskflow is not installed on this computer."
             return
+        found = None
         certificate = options.get("certificate")
+        if not certificate:
+            # One certificate in Deskflow's own trust folder is unambiguous.
+            found = detect(self.root, options)
+            certificate = found["certificates"][0] if len(found["certificates"]) == 1 else None
         if not certificate or not Path(certificate).is_file():
             self.error = "Complete Deskflow's one-time certificate trust setup on both computers."
             return
-        identity = (executable, role, options.get("desktop", "100.64.0.2"), options.get("local", "100.64.0.2"), certificate)
-        if self.process and (self.identity != identity or self.process.poll() is not None):
+        local = options.get("local")
+        if not local and role == "desktop":
+            addresses = (found or detect(self.root, options))["mesh_addresses"]
+            local = addresses[0] if len(addresses) == 1 else "100.64.0.2"
+        identity = (executable, role, options.get("desktop", "100.64.0.2"), local or "100.64.0.2", certificate)
+        if self.process and self.process.poll() is not None:
+            self.exit_code = self.process.returncode
+            uptime = self.clock() - (self.started_at if self.started_at is not None else self.clock())
+            self.crashes = 0 if uptime >= STABLE_SECONDS else self.crashes + 1
+            self.process = None
+            # Back off a crash loop: 15 s, 30 s, 1 min … up to 5 minutes.
+            self.next_attempt = self.clock() + min(300, 15 * 2 ** min(self.crashes, 5))
+            self.error = "Deskflow stopped unexpectedly; restarting automatically." if self.crashes < 3 else "Deskflow keeps stopping. Check its trust setup, then restart sharing."
+        if self.process and self.identity != identity:
             self.stop()
         if self.process or self.clock() < self.next_attempt:
             return
@@ -89,9 +162,31 @@ class Deskflow:
                                       stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                       **({"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}))
             self.identity = identity
-            self.error = ""
+            self.started_at = self.clock()
+            if self.crashes < 3:
+                self.error = ""
         except (ValueError, OSError):
             self.error = "Deskflow could not start; retrying automatically."
+
+    def status(self):
+        running = bool(self.process and self.process.poll() is None)
+        return {"error": self.error, "running": running, "crashes": self.crashes, "exit_code": self.exit_code,
+                "uptime": int(self.clock() - self.started_at) if running and self.started_at is not None else 0}
+
+    def setup(self):
+        """Cached setup checks for the settings page; refreshed at most every 30 seconds."""
+        options = (self.settings.get("link") or {}).get("deskflow") or {}
+        key = (options.get("role"), options.get("executable"))
+        cached = getattr(self, "_setup", None)
+        if cached is None or cached[0] != key or self.clock() - cached[1] >= 30:
+            self._setup = cached = (key, self.clock(), detect(self.root, options))
+        return cached[2]
+
+    def restart(self):
+        """Owner-requested restart: clears crash backoff and starts on the next poll."""
+        self.stop()
+        self.crashes, self.exit_code, self.next_attempt, self.error = 0, None, 0, ""
+        return {"restarting": True}
 
     def stop(self):
         if self.process:

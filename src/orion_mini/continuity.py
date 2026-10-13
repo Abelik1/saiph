@@ -1,16 +1,17 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Signed Handoff and timezone-aware Focus schedules. Never executes remote commands."""
+"""Signed Handoff, timezone-aware Focus schedules and shared Do Not Disturb. Never executes remote commands."""
 from __future__ import annotations
 
 import hashlib
 import json
+import time
 from pathlib import Path
 from datetime import datetime, timezone
 from urllib.parse import urlsplit
 from uuid import uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from .platform import FocusAdapter
+from .platform import FocusAdapter, system_dnd
 
 
 def validate_handoff(payload):
@@ -66,6 +67,13 @@ def validate_plan(plan):
     return dict(plan)
 
 
+def validate_dnd(payload):
+    if (not isinstance(payload, dict) or set(payload) != {"active", "changed_at"} or type(payload["active"]) is not bool
+            or type(payload["changed_at"]) is not int or not 0 < payload["changed_at"] < 2**41):
+        raise ValueError("Invalid Do Not Disturb state.")
+    return dict(payload)
+
+
 def focus_active(plan, now=None):
     plan = validate_plan(plan)
     if not plan["enabled"]:
@@ -80,10 +88,15 @@ def focus_active(plan, now=None):
 
 
 class Continuity:
-    def __init__(self, workspace, publish, focus=None):
+    def __init__(self, workspace, publish, focus=None, system=system_dnd, clock=time.time):
         self.workspace, self.publish = workspace, publish
         self.focus = focus or FocusAdapter(workspace.root / "focus-system.json")
         self.last_plan = None
+        self.system, self.clock = system, clock
+        self.last_system = None  # The first reading is a baseline, never a change.
+        self.dnd_unsent = False
+        self.dnd_released = False
+        self.plan_quiet = False
 
     def event(self, frame):
         if frame["type"] == "handoff":
@@ -92,6 +105,11 @@ class Continuity:
             rows = self.workspace.store.all("handoff")
             for old in rows[100:]:
                 self.workspace.store.delete("handoff", old["id"])
+            return True
+        if frame["type"] == "focus.state":
+            if self.remember_dnd(validate_dnd(frame["payload"]), frame["source"]):
+                self.dnd_unsent = False  # A newer change from another device supersedes ours.
+                self.apply()
             return True
         if frame["type"] == "focus.plan":
             self.workspace.store.save("focus_plan", {"id": "shared", "plan": validate_plan(frame["payload"]), "source": frame["source"]})
@@ -119,8 +137,84 @@ class Continuity:
             try:
                 plan = self.workspace.store.get("focus_plan", "shared")["plan"]
             except ValueError:
-                return
-        self.focus.set(enabled and focus_active(plan))
+                plan = None
+        self.plan_quiet = bool(enabled and plan and focus_active(plan))
+        self.apply()
+
+    # Live Do Not Disturb. The newest change from any device wins; a device only
+    # publishes changes its owner made, so applying a shared state never echoes.
+    def dnd_enabled(self):
+        return (self.workspace.settings.get("link") or {}).get("dnd_sync", True) is not False
+
+    def dnd_state(self):
+        try:
+            return self.workspace.store.get("focus_state", "shared")
+        except ValueError:
+            return None
+
+    def remember_dnd(self, payload, source):
+        current = self.dnd_state()
+        if current and current["changed_at"] > payload["changed_at"]:
+            return False
+        self.workspace.store.save("focus_state", {"id": "shared", "active": payload["active"], "changed_at": payload["changed_at"], "source": source})
+        if current and current["active"] and not payload["active"]:
+            self.dnd_released = True
+        return True
+
+    def apply(self):
+        state = self.dnd_state()
+        quiet = self.plan_quiet or bool(self.dnd_enabled() and state and state["active"])
+        if not quiet and self.dnd_released and getattr(self.focus, "quiet", False) and getattr(self.focus, "previous", None) is not None:
+            # Ending shared Do Not Disturb means notifications return, even when
+            # GNOME banners were already off because the owner started it there.
+            self.focus.previous = True
+        self.dnd_released = False
+        self.focus.set(quiet)
+
+    def set_dnd(self, active, *, publish=True):
+        if type(active) is not bool:
+            raise ValueError("Do Not Disturb is on or off.")
+        if not self.dnd_enabled():
+            raise ValueError("Turn on Do Not Disturb sync in Settings first.")
+        current = self.dnd_state()
+        changed_at = max(int(self.clock()), current["changed_at"] + 1 if current else 0)
+        self.remember_dnd({"active": active, "changed_at": changed_at}, (self.workspace.settings.get("hub") or {}).get("device_id", ""))
+        self.dnd_unsent = True
+        self.apply()
+        if publish:
+            self.flush_dnd()
+        return {"active": active, "shared": not self.dnd_unsent}
+
+    def flush_dnd(self):
+        state = self.dnd_state()
+        if not self.dnd_unsent or not state:
+            return
+        try:
+            self.publish({"id": str(uuid4()), "type": "focus.state", "ttl_seconds": 300,
+                          "payload": {"active": state["active"], "changed_at": state["changed_at"]}})
+            self.dnd_unsent = False
+        except ValueError:
+            pass  # Offline: the next connected poll sends the newest state.
+
+    def poll_dnd(self, *, publish=True):
+        """Share the owner's own Do Not Disturb changes on this computer. True when state changed."""
+        reading = self.system(self.focus)
+        previous, changed = self.last_system, False
+        if reading is not None:
+            self.last_system = reading
+        if self.dnd_enabled() and reading is not None and previous is not None and reading != previous:
+            state = self.dnd_state()
+            if not state or state["active"] != reading:
+                self.set_dnd(reading, publish=False)
+                changed = True
+        if publish:
+            self.flush_dnd()
+        return changed
+
+    def dnd_status(self):
+        state = self.dnd_state() or {}
+        return {"enabled": self.dnd_enabled(), "active": bool(state.get("active")), "source": state.get("source", ""),
+                "changed_at": state.get("changed_at"), "quiet": bool(getattr(self.focus, "quiet", False))}
 
     def handoff(self, target, kind, value):
         payload = validate_handoff({"kind": kind, "value": value})

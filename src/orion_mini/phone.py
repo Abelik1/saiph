@@ -130,6 +130,9 @@ class NativeNotifications:
             if len(self.suppressed) > 2000:
                 self.suppressed = {old[1]}
 
+    async def announce(self, title, message):
+        await self.notifier.send(title=title, message=message)
+
     async def reconcile(self, current):
         for key in set(self.ids) - current:
             await self.clear(key)
@@ -151,7 +154,20 @@ class PhoneRuntime:
         self.worker_factory = worker_factory
         self.features = workspace.phone_features
         self.features.changed = changed
+        self.features.capture_ready = self.capture_ready
+        self.native = None
         self.continuity = Continuity(workspace,self.publish)
+
+    def capture_ready(self, row, mime, data):
+        """A photo taken on the phone for this computer: ready to paste, with a notice."""
+        # Mark it as already synced, so it is not sent straight back to the phone.
+        self.clipboard_cache.claim(mime, data)
+        self.clipboard_received(mime, data)
+        with self.state.lock:
+            name = next((d['name'] for d in self.state.devices if d['id'] == row['device_id']), 'your phone')
+        if self.native and self.loop:
+            asyncio.run_coroutine_threadsafe(self.native.announce('Photo ready to paste', f'From {name}. Paste it into any app with Ctrl+V.'), self.loop)
+        self.changed()
 
     def publish(self, event):
         if not self.client or not self.loop or not self.state.connected:raise ValueError('Connection is unavailable. This action has not been sent.')
@@ -273,6 +289,11 @@ class PhoneRuntime:
             shared = await asyncio.to_thread(signed, self.workspace.root, mesh, '/v1/link/continuity')
             if shared.get('focus'):
                 self.workspace.store.save('focus_plan', {'id':'shared','plan':shared['focus']['payload'],'source':shared['focus']['source']})
+            if shared.get('dnd'):
+                from .continuity import validate_dnd
+                dnd = shared['dnd']
+                if self.continuity.remember_dnd(validate_dnd({'active': dnd['active'], 'changed_at': dnd['changed_at']}), dnd['source']):
+                    self.continuity.apply()
             self.continuity.last_plan = None
             if getattr(self.workspace, 'workspace_enabled', False) is True:
                 await asyncio.to_thread(ensure_grants, self.workspace.root, mesh)
@@ -286,7 +307,7 @@ class PhoneRuntime:
         self.loop = asyncio.get_running_loop()
         native = None
         try:
-            native = self.notifier_factory(self.command)
+            native = self.native = self.notifier_factory(self.command)
         except Exception:
             self.state.error = "Native notifications are unavailable; phone items remain in Saiph."
         running = None
@@ -295,7 +316,7 @@ class PhoneRuntime:
         next_config_attempt = 0
         next_enrollment = 0
         component_poll = None
-        worker = self.worker_factory(); next_worker = next_peer = next_focus = next_local = next_auxiliary = next_deskflow = 0
+        worker = self.worker_factory(); next_worker = next_peer = next_focus = next_local = next_auxiliary = next_deskflow = next_dnd = next_hotspot = 0
         while not self.stop_requested.is_set():
             components = getattr(self.workspace, 'components', None)
             if components and not os.environ.get('ORION_MINI_TEST'):
@@ -393,6 +414,12 @@ class PhoneRuntime:
                 try:await asyncio.to_thread(self.continuity.tick,publish=self.state.connected)
                 except (OSError,ValueError,RuntimeError):self.state.error='Quiet hours are temporarily unavailable.'
                 next_focus=time.monotonic()+15
+            if time.monotonic() >= next_dnd:
+                # Short interval: a Do Not Disturb change should reach the phone promptly.
+                try:
+                    if await asyncio.to_thread(self.continuity.poll_dnd, publish=self.state.connected): self.changed()
+                except (OSError, ValueError, RuntimeError): pass
+                next_dnd = time.monotonic() + 3
             if identity and self.state.connected:
                 await self.flush_clipboard()
                 if auxiliary and auxiliary.done():
@@ -407,6 +434,9 @@ class PhoneRuntime:
                     # Device discovery/launch is isolated from the mesh receive loop.
                     asyncio.create_task(asyncio.to_thread(worker.poll,{d['id'] for d in self.state.devices}))
                     next_worker = time.monotonic() + 15
+            if identity and getattr(self.workspace, 'hotspot', None) and time.monotonic() >= next_hotspot and not os.environ.get('ORION_MINI_TEST'):
+                if await asyncio.to_thread(self.workspace.hotspot.poll, self.state.connected): self.changed()
+                next_hotspot = time.monotonic() + 15
             if getattr(self.workspace, 'deskflow', None) and time.monotonic() >= next_deskflow:
                 await asyncio.to_thread(self.workspace.deskflow.poll)
                 next_deskflow = time.monotonic() + 15

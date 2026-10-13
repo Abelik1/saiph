@@ -60,12 +60,15 @@ class PhotoKeys(Payload):
     ids: list[str] = Field(max_length=100)
 class PhotoRequest(Payload):
     id: str = Field(pattern='^[0-9]{1,20}$')
+class CaptureInsert(Payload):
+    sha256: str = Field(pattern='^[a-f0-9]{64}$')
 class PhotoOriginal(File):
     photo_id: str = Field(pattern='^[0-9]{1,20}$')
 
 MODELS={'sms.thread':Conversation,'sms.messages':Messages,'sms.remove':Thread,'sms.index':MessageIndex,
         'sms.open':Thread,'sms.send':SmsSend,'call.state':Call,'call.command':CallCommand,
-        'photos.index':Photos,'photos.sync':PhotoKeys,'photo.request':PhotoRequest,'photo.original':PhotoOriginal,'file.offer':File}
+        'photos.index':Photos,'photos.sync':PhotoKeys,'photo.request':PhotoRequest,'photo.original':PhotoOriginal,'file.offer':File,
+        'capture.insert':CaptureInsert}
 def ensure(connection):
     connection.execute(SCHEMA)
 def _put(c,device,kind,key,data,now,limit):
@@ -97,6 +100,10 @@ def apply(c,source,event,now):
         for target in event.targets:
             row=c.execute('SELECT capabilities_json FROM link_devices WHERE device_id=?',(target,)).fetchone()
             if not row or 'cloud.files' not in json.loads(row[0]):raise ValueError('Cloud destination unavailable')
+    if event.type=='capture.insert':
+        # Names one computer that receives the matching photo offer; never stored.
+        if event.targets is None or len(event.targets)!=1:raise ValueError('Capture requires one destination computer')
+        return
     if event.type in {'sms.open','sms.send','call.command','photo.request'}:
         if event.targets is None or len(event.targets)!=1:raise ValueError('Phone command requires one owning phone')
         owner=event.targets[0]

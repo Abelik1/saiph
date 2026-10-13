@@ -62,6 +62,23 @@ and `~/.local/share/OrionMini` on Linux (`$XDG_DATA_HOME/OrionMini` when set).
 core trust folder from this file's directory. Keep the existing certificate path
 pointing to the GUI-generated certificate.
 
+## Setup checks and recovery
+
+Advanced settings show read-only setup checks: whether `deskflow-core` was
+found, which `*.pem` certificates exist in Deskflow's default trust folder (file
+names only; Saiph never opens them), whether the approved trust file for this
+role exists, this computer's mesh address, and whether the core is running.
+**Use detected settings** fills a single detected certificate and mesh address
+into the form; nothing is saved until you choose Save. When the certificate path
+is left blank and exactly one certificate is found, the supervisor uses it, and a
+desktop with exactly one mesh address binds to it. With several candidates you
+must choose.
+
+If the core exits, Saiph restarts it after 15 seconds and doubles the wait after
+each further crash, up to five minutes. A run of ten minutes resets the count.
+After three quick crashes the status asks you to check trust setup. **Restart
+sharing** clears the backoff and starts again on the next poll.
+
 The Advanced status reports fixed supervisor errors. An empty error only means
 that no supervisor error is currently recorded: connection and TLS/input acceptance
 still need the real laptop. Restart and laptop sleep/resume checks remain pending.

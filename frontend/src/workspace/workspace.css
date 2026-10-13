@@ -2253,3 +2253,9 @@ kbd {
 .hub-item .button-row {
   margin-top: 10px;
 }
+.dnd-toggle { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 8px 0; }
+.dnd-toggle > span { display: flex; align-items: center; gap: 6px; }
+.setup-checklist { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 4px; }
+.setup-checklist li { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
+.setup-checklist li small { overflow-wrap: anywhere; }
+.setup-checklist li.pending b { opacity: 0.75; }

@@ -63,3 +63,10 @@ def test_cloud_destination_is_bounded_to_explicit_capable_computers(hub):
     with pytest.raises(ValueError):apply(hub,phone,'file.offer',offer(destination='cloud'))
     with pytest.raises(ValueError):apply(hub,phone,'file.offer',offer(destination='../../other'),[computer])
     with pytest.raises(ValueError):apply(hub,phone,'photos.index',{'photos':[{'id':'17','name':'Photo.jpg','timestamp':1,'thumbnail':offer(destination='cloud')}]},[computer])
+def test_capture_insert_names_one_computer_and_a_digest_only(hub):
+    c=client(hub);_,phone=pair(hub,c);_,computer=pair(hub,c)
+    apply(hub,phone,'capture.insert',{'sha256':'a'*64},[computer])
+    for payload,targets in (({'sha256':'a'*64},None),({'sha256':'A'*64},[computer]),({'sha256':'a'*63},[computer]),
+                            ({'sha256':'a'*64,'path':'C:/private'},[computer])):
+        with pytest.raises(ValueError):apply(hub,phone,'capture.insert',payload,targets)
+    assert features.snapshot(hub.DB)=={'threads':[],'messages':[],'calls':[],'photos':[]}

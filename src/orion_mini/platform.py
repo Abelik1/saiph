@@ -159,6 +159,48 @@ def idle_seconds():
     return None  # Unavailable must not be interpreted as permanent user activity.
 
 
+# Windows publishes its Do Not Disturb (Focus Assist) profile through this WNF
+# state: a DWORD where 0 is off and 1/2 are priority-only/alarms-only.
+_WNF_QUIET_HOURS_PROFILE = 0x0D83063EA3BF1C75
+
+
+def _windows_dnd():
+    if not hasattr(ctypes, "WinDLL"):
+        return None
+    try:
+        from ctypes import wintypes
+        name, stamp = ctypes.c_uint64(_WNF_QUIET_HOURS_PROFILE), wintypes.ULONG(0)
+        buffer, size = ctypes.create_string_buffer(16), wintypes.ULONG(16)
+        status = ctypes.WinDLL("ntdll").NtQueryWnfStateData(ctypes.byref(name), None, None, ctypes.byref(stamp), buffer, ctypes.byref(size))
+        if status != 0 or size.value < 4:
+            return None
+        return int.from_bytes(buffer.raw[:4], "little") != 0
+    except (OSError, AttributeError, ValueError):
+        return None
+
+
+def system_dnd(focus):
+    """The desktop's own Do Not Disturb switch, or None when it cannot be read.
+
+    Read-only: Saiph never changes Windows Do Not Disturb. On GNOME, Do Not
+    Disturb is banners off; a quiet period Saiph applied itself reads as unknown,
+    and banners coming back during it mean the user ended it."""
+    if sys.platform == "win32":
+        return _windows_dnd()
+    if sys.platform.startswith("linux") and "GNOME" in os.environ.get("XDG_CURRENT_DESKTOP", "").upper() and shutil.which("gsettings"):
+        try:
+            result = subprocess.run(["gsettings", "get", "org.gnome.desktop.notifications", "show-banners"], capture_output=True, timeout=3)
+        except (OSError, subprocess.TimeoutExpired):
+            return None
+        if result.returncode or result.stdout.strip() not in {b"true", b"false"}:
+            return None
+        banners = result.stdout.strip() == b"true"
+        if focus.quiet:
+            return False if banners else None
+        return not banners
+    return None
+
+
 class FocusAdapter:
     def __init__(self, state_file=None):
         from .storage import read_json

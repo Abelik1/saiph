@@ -280,3 +280,35 @@ def test_offline_photo_save_reports_an_error_without_recording_saving(tmp_path,m
     monkeypatch.setattr(features,'command',offline)
     with pytest.raises(ValueError,match='offline'):features.dispatch('phone.photo.save',{'device_id':'phone','photo_id':'17'})
     assert not features.snapshot()['photo_saves']
+def capture_case(tmp_path,monkeypatch,data):
+    store=Store(tmp_path);workspace=SimpleNamespace(root=tmp_path,store=store,settings={})
+    features=f.PhoneFeatures(workspace);features.transfer_config={'device_id':'computer'};ready=[]
+    features.capture_ready=lambda row,mime,body:ready.append((row['device_id'],mime,body))
+    digest=hashlib.sha256(data).hexdigest()
+    offer={'id':str(uuid4()),'type':'file.offer','source':'phone','payload':{'name':'Photo.jpg','mime':'image/jpeg','size':len(data),'sha256':digest}}
+    def fake_download(root,config,source,payload,directory,*_):
+        path=tmp_path/'Photo.jpg';path.write_bytes(data);return path
+    monkeypatch.setattr(f,'download',fake_download)
+    return store,features,ready,digest,offer
+@pytest.mark.parametrize('insert_first',[True,False])
+def test_captured_photo_is_placed_on_the_clipboard_once_in_either_order(tmp_path,monkeypatch,insert_first):
+    store,features,ready,digest,offer=capture_case(tmp_path,monkeypatch,b'jpeg-bytes')
+    insert={'id':str(uuid4()),'type':'capture.insert','source':'phone','payload':{'sha256':digest}}
+    if insert_first:features.event(insert,None)
+    store.save('phone_transfer',{'id':offer['id'],'event':offer,'received':time.time()});features._transfer_once()
+    if not insert_first:features.event(insert,None)
+    assert ready==[('phone','image/jpeg',b'jpeg-bytes')]
+    assert store.all('phone_capture')==[]  # One-shot: the request is used up.
+def test_capture_requires_its_own_device_matching_digest_and_an_image(tmp_path,monkeypatch):
+    store,features,ready,digest,offer=capture_case(tmp_path,monkeypatch,b'jpeg-bytes')
+    features.event({'id':str(uuid4()),'type':'capture.insert','source':'other-phone','payload':{'sha256':digest}},None)
+    store.save('phone_transfer',{'id':offer['id'],'event':offer,'received':time.time()});features._transfer_once()
+    assert ready==[]
+    for payload in ({'sha256':'Z'*64},{'sha256':digest,'path':'x'},{}):
+        with pytest.raises(ValueError):features.event({'id':str(uuid4()),'type':'capture.insert','source':'phone','payload':payload},None)
+def test_capture_never_places_non_image_files_on_the_clipboard(tmp_path,monkeypatch):
+    store,features,ready,digest,offer=capture_case(tmp_path,monkeypatch,b'plain text')
+    monkeypatch.setattr(f,'download',lambda *_a:(tmp_path/'notes.txt').write_bytes(b'plain text') and tmp_path/'notes.txt')
+    features.event({'id':str(uuid4()),'type':'capture.insert','source':'phone','payload':{'sha256':digest}},None)
+    store.save('phone_transfer',{'id':offer['id'],'event':offer,'received':time.time()});features._transfer_once()
+    assert ready==[] and store.get('phone_file',offer['id'])['path'].endswith('notes.txt')

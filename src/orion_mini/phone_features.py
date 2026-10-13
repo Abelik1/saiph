@@ -18,6 +18,9 @@ from .cloud import ensure_layout
 from .models import utc_now
 
 MAX_FILE=2*1024**3
+MAX_CAPTURE=32*1024**2  # A phone photo placed on the clipboard, not an arbitrary file.
+CAPTURE_SECONDS=900
+CAPTURE_TYPES={'.jpg':'image/jpeg','.jpeg':'image/jpeg','.png':'image/png','.webp':'image/webp'}
 SAVE_ANSWER_SECONDS=60  # A save the phone never answered becomes retryable.
 def safe_name(value):
     # Filenames are labels, never paths; Windows device names are rejected too.
@@ -96,6 +99,7 @@ class PhoneFeatures:
     def __init__(self,workspace):
         self.workspace=workspace;self.store=workspace.store;self.lock=threading.RLock();self.pending={};self.file_server=None
         self.changed=lambda:None;self.stop_requested=threading.Event();self.worker=None;self.thumbnail_worker=None
+        self.capture_ready=lambda row,mime,data:None  # Set by the runtime: clipboard and notice.
     def restore(self,snapshot):
         # One atomic transaction, rather than one fsync and retention scan per
         # row. GUI readers use WAL and never wait on the feature writer lock.
@@ -178,6 +182,17 @@ class PhoneFeatures:
                 for old in self.store.all('phone_photo'):
                     if old['device_id']==row['device_id'] and old['photo_id'] not in row['ids']:
                         self.store.delete('phone_photo',old['id']);self.store.delete('phone_thumbnail',old['id'])
+            elif kind=='capture.insert':
+                # The phone asked for its own just-taken photo to be ready to paste here.
+                digest=event['payload'].get('sha256') if isinstance(event['payload'],dict) else None
+                if set(event['payload'])!={'sha256'} or not isinstance(digest,str) or len(digest)!=64 or any(c not in '0123456789abcdef' for c in digest):
+                    raise ValueError('Invalid capture request.')
+                now=time.time()
+                for old in self.store.all('phone_capture'):
+                    if now-old['received']>CAPTURE_SECONDS:self.store.delete('phone_capture',old['id'])
+                intent=self.store.save('phone_capture',{'id':self._photo_key(row['device_id'],digest),'device_id':row['device_id'],'sha256':digest,'received':now})
+                done=next((f for f in self.store.all('phone_file') if f['device_id']==row['device_id'] and f.get('sha256')==digest and f.get('path')),None)
+                if done:self._insert_capture(done,intent)
             elif kind in {'file.offer','photo.original'}:
                 # Completed event IDs suppress retries after the final atomic rename.
                 try:return self.store.get('phone_file',event['id'])
@@ -269,7 +284,7 @@ class PhoneFeatures:
         """Record receipt and local file Handoff together; replays cannot resurrect it."""
         row=event['payload'];now=utc_now()
         saved={'id':event['id'],'device_id':event['source'],'name':Path(path).name,'path':str(path),'size':row['size'],
-               'photo_id':row.get('photo_id'),'destination':row.get('destination','downloads'),'updated_at':now}
+               'photo_id':row.get('photo_id'),'destination':row.get('destination','downloads'),'sha256':row.get('sha256'),'updated_at':now}
         with self.store.connect() as connection:
             connection.execute('BEGIN IMMEDIATE')
             created=connection.execute('INSERT OR IGNORE INTO records VALUES(?,?,?)',('phone_file',event['id'],json.dumps(saved))).rowcount
@@ -278,6 +293,19 @@ class PhoneFeatures:
                 connection.execute('INSERT OR IGNORE INTO records VALUES(?,?,?)',('handoff',event['id'],json.dumps(item)))
                 connection.execute("DELETE FROM records WHERE kind='handoff' AND id NOT IN (SELECT id FROM records WHERE kind='handoff' ORDER BY rowid DESC LIMIT 100)")
             connection.execute("DELETE FROM records WHERE kind='phone_transfer' AND id=?",(event['id'],))
+        if event['type']=='file.offer' and row.get('sha256'):
+            try:intent=self.store.get('phone_capture',self._photo_key(event['source'],row['sha256']))
+            except ValueError:intent=None
+            if intent and time.time()-intent['received']<=CAPTURE_SECONDS:self._insert_capture(saved,intent)
+    def _insert_capture(self,row,intent):
+        """One-shot: the verified received photo goes to this computer's clipboard."""
+        self.store.delete('phone_capture',intent['id'])
+        path=Path(row['path']);mime=CAPTURE_TYPES.get(path.suffix.lower())
+        try:
+            if not mime or not same_file(path,row['size'],intent['sha256']) or row['size']>MAX_CAPTURE:return
+            data=path.read_bytes()
+        except OSError:return
+        self.capture_ready(row,mime,data)
     def _destination(self,row,intent=None):
         destination=row.get('destination','downloads')
         if destination=='cloud':

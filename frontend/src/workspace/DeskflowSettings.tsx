@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from "react";
-import type { Client, DeskflowConfig, Settings } from "./types";
-import { Card, Form } from "./ui";
+import type { Client, DeskflowConfig, DeskflowStatus, Settings } from "./types";
+import { Action, Card, Form } from "./ui";
 
-export function DeskflowSettings({ settings, error, client, defaultEnabled = true }: { settings: Settings; error?: string; client: Client; defaultEnabled?: boolean }) {
+export function DeskflowSettings({ settings, error, status, client, defaultEnabled = true }: { settings: Settings; error?: string; status?: DeskflowStatus; client: Client; defaultEnabled?: boolean }) {
   const [config, setConfig] = useState<DeskflowConfig>(() => ({
     enabled: defaultEnabled,
     role: navigator.platform.startsWith("Win") ? "desktop" : "laptop",
@@ -13,10 +13,29 @@ export function DeskflowSettings({ settings, error, client, defaultEnabled = tru
   const text = (key: "desktop" | "local" | "certificate" | "executable", value: string) =>
     setConfig(current => ({ ...current, [key]: value }));
 
+  const setup = status?.setup;
+  const saved = settings.link?.deskflow;
+  const certificate = config.certificate || (setup?.certificates.length === 1 ? setup.certificates[0] : "");
+  const local = config.local || (setup?.mesh_addresses.length === 1 ? setup.mesh_addresses[0] : "");
+  const checks: [string, boolean, string][] = setup ? [
+    ["Deskflow installed", !!setup.executable, setup.executable || "Install upstream Deskflow, or enter its core executable below."],
+    ["Certificate", !!certificate, certificate || (setup.certificates.length > 1 ? "Several certificates found; enter the one Deskflow uses." : "Open the Deskflow GUI once to create it.")],
+    ["Peer fingerprint approved", setup.trusted, setup.trusted ? "Trust file found" : "Approve the other computer's fingerprint in the Deskflow GUI (" + setup.trust_file + ")."],
+    ["Mesh address", !!local || config.role === "laptop", local || (config.role === "laptop" ? "Not needed for the laptop" : "Join the mesh, or enter this computer's mesh address.")],
+    ["Running", !!status?.running, status?.running ? "Sharing is running" : saved?.enabled ? "Waiting to start" : "Off"],
+  ] : [];
   return <Card title="Keyboard and mouse sharing" subtitle="Deskflow setup for this computer. Saiph resumes sharing automatically after setup.">
     <p role="status" className={error && config.enabled !== false ? "inline-error" : "muted"}>
       {config.enabled === false ? "Sharing is switched off in these preferences." : error || "Connection has not been verified here. Test moving the pointer between both computers after setup."}
     </p>
+    {checks.length > 0 && <ul className="setup-checklist" aria-label="Deskflow setup checks">
+      {checks.map(([label, done, detail]) => <li key={label} className={done ? "done" : "pending"}><b>{done ? "✓" : "○"} {label}</b> <small>{detail}</small></li>)}
+    </ul>}
+    {setup && (setup.certificates.length === 1 && !config.certificate || setup.mesh_addresses.length === 1 && !config.local && config.role === "desktop") &&
+      <button type="button" className="text-button" onClick={() => setConfig(current => ({ ...current,
+        ...(setup.certificates.length === 1 && !current.certificate ? { certificate: setup.certificates[0] } : {}),
+        ...(setup.mesh_addresses.length === 1 && !current.local && current.role === "desktop" ? { local: setup.mesh_addresses[0] } : {}) }))}>Use detected settings</button>}
+    {saved?.enabled && <Action className="text-button" run={() => client.call("deskflow.restart")}>Restart sharing</Action>}
     <Form submit={() => {
       const saved = { ...config };
       if (!saved.local) delete saved.local;

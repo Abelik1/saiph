@@ -28,7 +28,7 @@ def hosted_available() -> bool:
     return all(find_spec(name) is not None for name in ('tink', 'authlib'))
 
 
-CORE_METHODS = frozenset({'cloud.info', 'cloud.setup', 'cloud.client.open', 'cloud.client.install', 'components.sign_in', 'state', 'hub.pair', 'hub.test', 'phone.sms.send', 'continuity.handoff', 'enrollment.import', 'continuity.dismiss', 'enrollment.cancel', 'components.install', 'hub.decide', 'enrollment.export', 'enrollment.qr', 'phone.call', 'phone.photo.prefetch', 'phone.sms.open', 'enrollment.approve', 'phone.photo.save', 'phone.file.send', 'phone.notification', 'hub.refresh'}) | HOSTED_METHODS
+CORE_METHODS = frozenset({'cloud.info', 'cloud.setup', 'cloud.client.open', 'cloud.client.install', 'components.sign_in', 'state', 'hub.pair', 'hub.test', 'phone.sms.send', 'continuity.handoff', 'continuity.dnd', 'deskflow.restart', 'hotspot.connect', 'enrollment.import', 'continuity.dismiss', 'enrollment.cancel', 'components.install', 'hub.decide', 'enrollment.export', 'enrollment.qr', 'phone.call', 'phone.photo.prefetch', 'phone.sms.open', 'enrollment.approve', 'phone.photo.save', 'phone.file.send', 'phone.notification', 'hub.refresh'}) | HOSTED_METHODS
 
 class LinkOperations:
     def hosted_controller(self):
@@ -207,6 +207,22 @@ class LinkOperations:
             if not self.phone_runtime:
                 raise ValueError('Connection is unavailable.')
             return self.phone_runtime.continuity.handoff(args['target'], args['kind'], args['value'])
+        if method == 'continuity.dnd':
+            if not isinstance(args, dict) or set(args) != {'active'} or type(args['active']) is not bool:
+                raise ValueError('Do Not Disturb is on or off.')
+            if not self.phone_runtime:
+                raise ValueError('Connection is unavailable.')
+            return self.phone_runtime.continuity.set_dnd(args['active'])
+        if method == 'hotspot.connect':
+            if args:
+                raise ValueError('Unknown hotspot action.')
+            return self.hotspot.connect()
+        if method == 'deskflow.restart':
+            if args:
+                raise ValueError('Unknown Deskflow action.')
+            if (self.settings.get('link') or {}).get('deskflow', {}).get('enabled', False) is not True:
+                raise ValueError('Turn on keyboard and mouse sharing first.')
+            return self.deskflow.restart()
         if method == 'continuity.dismiss':
             self.store.delete('handoff', args['id'])
             return {'ok': True}

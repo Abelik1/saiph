@@ -12,6 +12,7 @@ from .microphone import Microphone, validate_options as validate_microphone_opti
 from .continuity import validate_plan
 from .deskflow import Deskflow
 from .enrollment import Invitations
+from .hotspot import Hotspot, validate_options as validate_hotspot_options
 from .link_operations import CORE_METHODS, LinkOperations
 from .modules import module_state
 from .package_updates import status as update_status
@@ -65,6 +66,7 @@ class LinkWorkspace(LinkOperations):
         self.plugins = UninstalledWorkspace()
         self.api_info = {'running': False, 'url': '', 'error': '', 'discovery': str(root / 'api.json')}
         self.deskflow = Deskflow(root, self.settings, default_enabled=False)
+        self.hotspot = Hotspot(self.settings)
         self.settings['link']={**self.settings.get('link',{}),'camera':{'enabled':False,**(self.settings.get('link',{}).get('camera') or {})}}
         self.camera = Camera(self)
         self.microphone = Microphone(self)
@@ -86,12 +88,18 @@ class LinkWorkspace(LinkOperations):
                 'enrollment': {**invitation, 'approved': invitation['id'] is not None and self.enrollment_approved == invitation['id']},
                 'components': self.components.snapshot(), 'phone': self.phone.snapshot(),
                 'phone_features': self.phone_features.snapshot(), 'handoffs': self.store.all('handoff')[:100],
-                'deskflow': {'error': self.deskflow.error}, 'camera': self.camera.status(), 'microphone': self.microphone.status(),
+                'deskflow': {**self.deskflow.status(), 'setup': self.deskflow.setup()}, 'dnd': self.dnd_status(), 'hotspot': self.hotspot.status(), 'camera': self.camera.status(), 'microphone': self.microphone.status(),
                 'api': self.api_info, 'hub_inbox': self.hub_inbox(), 'hosted': self.hosted_state(),
                 'projects': [], 'transcripts': [], 'reminders': [], 'tasks': [], 'jobs': [],
                 'messages': [], 'emails': [], 'providers': [], 'skills': [], 'plugins': [], 'ticker': [],
                 'google': {'signed_in': False}, 'calendar': {'events': [], 'synced_at': None, 'error': ''},
                 'agenda': {'items': []}, 'backup_status': {'configured': False}}
+
+    def dnd_status(self):
+        runtime = self.phone_runtime
+        if runtime is not None:
+            return runtime.continuity.dnd_status()
+        return {'enabled': (self.settings.get('link') or {}).get('dnd_sync', True) is not False, 'active': False, 'source': '', 'changed_at': None, 'quiet': False}
 
     def dispatch(self, method, args):
         if method in CORE_METHODS:
@@ -122,9 +130,9 @@ class LinkWorkspace(LinkOperations):
             args = {**args, 'cloud': {**self.settings.get('cloud', {}), **cloud}}
         if 'link' in args:
             link = args['link']
-            if not isinstance(link, dict) or set(link) - {'focus', 'clipboard', 'timezone', 'wake_hour', 'wake_minute', 'camera', 'microphone', 'deskflow'}:
+            if not isinstance(link, dict) or set(link) - {'focus', 'dnd_sync', 'clipboard', 'timezone', 'wake_hour', 'wake_minute', 'camera', 'microphone', 'deskflow', 'hotspot'}:
                 raise ValueError('Unknown continuity preference.')
-            for flag in ('focus', 'clipboard'):
+            for flag in ('focus', 'dnd_sync', 'clipboard'):
                 if flag in link and type(link[flag]) is not bool:
                     raise ValueError('Continuity preferences are on or off.')
             if 'deskflow' in link:
@@ -142,6 +150,8 @@ class LinkWorkspace(LinkOperations):
                 if any(key in options and (not isinstance(options[key], str) or len(options[key]) > 4096 or any(c in options[key] for c in '\r\n\0')) for key in ('executable', 'certificate')):
                     raise ValueError('Choose local Deskflow configuration files.')
                 link = {**link, 'deskflow': {**(self.settings.get('link', {}).get('deskflow') or {}), **options}}
+            if 'hotspot' in link:
+                link = {**link, 'hotspot': {**(self.settings.get('link', {}).get('hotspot') or {}), **validate_hotspot_options(link['hotspot'])}}
             if 'camera' in link:
                 options=validate_camera_options(link['camera'])
                 link={**link,'camera':{**(self.settings.get('link',{}).get('camera') or {}),**options}}

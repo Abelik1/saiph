@@ -47,4 +47,18 @@ describe("Deskflow Advanced settings", () => {
     expect(screen.getByText("Deskflow is not installed on this computer.")).toBeVisible();
     expect(call).not.toHaveBeenCalled();
   });
+  it("shows setup checks, fills detected values and restarts on request", async () => {
+    const call = vi.fn().mockResolvedValue({});
+    const status = { error: "", running: false, setup: { executable: "C:/Program Files/Deskflow/deskflow-core.exe", certificates: ["C:/ProgramData/Deskflow/tls/deskflow.pem"],
+      trust_file: "C:/ProgramData/Deskflow/tls/trusted-clients", trusted: false, mesh_addresses: ["100.70.1.2"] } };
+    render(<DeskflowSettings settings={{ link: { deskflow: { enabled: true, role: "desktop", desktop: "100.70.1.2" } } } as Settings} status={status} client={{ call } as unknown as Client} />);
+    const checks = screen.getByRole("list", { name: "Deskflow setup checks" });
+    expect(checks).toHaveTextContent("✓ Deskflow installed");
+    expect(checks).toHaveTextContent("○ Peer fingerprint approved");
+    fireEvent.click(screen.getByRole("button", { name: "Use detected settings" }));
+    expect(screen.getByLabelText("Existing Deskflow certificate path")).toHaveValue("C:/ProgramData/Deskflow/tls/deskflow.pem");
+    expect(screen.getByLabelText("This computer's mesh address")).toHaveValue("100.70.1.2");
+    fireEvent.click(screen.getByRole("button", { name: "Restart sharing" }));
+    await waitFor(() => expect(call).toHaveBeenCalledWith("deskflow.restart"));
+  });
 });

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Battery, Bell, MessageSquare, Smartphone, X } from "lucide-react";
+import { Battery, Bell, BellOff, MessageSquare, Smartphone, X } from "lucide-react";
 import type { Client, PhoneNotification, State } from "./types";
 import { Action, Empty, Form } from "./ui";
 import { HubInbox } from "./HubInbox";
@@ -30,6 +30,17 @@ function Notification({ row, client, online }: { row: PhoneNotification; client:
       {sent && <small role="status">Reply queued for your phone.</small>}
     </Form>}
   </article>;
+}
+
+/** Shared Do Not Disturb: the newest change from any paired device wins. */
+export function DoNotDisturb({ state, client }: { state: State; client: Client }) {
+  const dnd = state.dnd;
+  if (!dnd?.enabled || !state.settings?.hub?.paired) return null;
+  const from = dnd.source && dnd.source !== state.settings.hub.device_id ? state.phone?.devices.find((d) => d.id === dnd.source)?.name : "";
+  return <div className="dnd-toggle" role="group" aria-label="Do Not Disturb">
+    <span>{dnd.active ? <BellOff size={16} /> : <Bell size={16} />}<b>Do Not Disturb</b> <small>{dnd.active ? "On" + (from ? " · from " + from : "") : "Off"}</small></span>
+    <Action className="text-button" ariaLabel={(dnd.active ? "Turn off" : "Turn on") + " Do Not Disturb on all devices"} run={() => client.call("continuity.dnd", { active: !dnd.active })}>{dnd.active ? "Turn off" : "Turn on"}</Action>
+  </div>;
 }
 
 export function Phone({ state, client }: { state: State; client: Client }) {
@@ -76,6 +87,7 @@ export function Phone({ state, client }: { state: State; client: Client }) {
         <div><h2>{phone?.name || "Your phone"}</h2>
           {phones.length > 1 && <label>Phone<select value={phone?.id} onChange={(e) => setSelected(e.target.value)}>{phones.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</select></label>}
           <p className={phone?.online ? "phone-online" : "muted"}>{phone?.online ? "Online" : phone ? "Offline" : "Pair once to get started"}</p>
+          <DoNotDisturb state={state} client={client} />
           {phone?.battery && <small className="phone-battery"><Battery size={16} />{phone.battery.battery_level}%{phone.battery.is_charging ? " · charging" : ""}{!phone.online ? " · last reported" : ""}</small>}
           {state.settings?.hub?.paired && <div className="add-device" role="group" aria-label="Add a device">
             <small>Add a device</small>

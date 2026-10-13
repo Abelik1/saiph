@@ -8,6 +8,7 @@ import { CameraSettings } from "./CameraSettings";
 import { MicrophoneSettings } from "./PhoneMicrophone";
 import { HostedSettings } from "./HostedSettings";
 import { DeskflowSettings } from "./DeskflowSettings";
+import { HotspotSettings } from "./HotspotSettings";
 
 export function WorkspaceModule({ installed = false }: { installed?: boolean }) {
   return <Card title="Workspace" subtitle="Optional personal tools."><p>Projects, transcripts, calendar, reminders and assistant tools live in the separate Workspace edition.</p><p className="muted">{installed ? "The Workspace edition is installed on this computer." : "Saiph Link works on its own. Install the Workspace edition separately when a trusted installer is available."}</p></Card>;
@@ -25,7 +26,8 @@ export function Settings({ state, client }: { state: State; client: Client }) {
       <ContinuitySettings settings={state.settings} backup={state.backup_status} client={client} workspace={false} />
       <CameraSettings settings={state.settings} camera={state.camera} client={client} />
       <MicrophoneSettings settings={state.settings} microphone={state.microphone} client={client} />
-      <DeskflowSettings settings={state.settings} error={state.deskflow?.error} client={client} defaultEnabled={false} />
+      <DeskflowSettings settings={state.settings} error={state.deskflow?.error} status={state.deskflow} client={client} defaultEnabled={false} />
+      <HotspotSettings hotspot={state.hotspot} client={client} />
       <HostedSettings hosted={state.hosted} client={client} />
       <Card title="Saiph Hub"><Form submit={async () => {await client.call("hub.pair", {base_url:hub,code,name:state.settings.machine?.name || "Saiph desktop"});setCode("");}}><label>Hub address<input aria-label="Saiph Hub address" value={hub} onChange={event => setHub(event.target.value)} /></label><label>One-time pairing code<input aria-label="Saiph Hub pairing code" value={code} inputMode="numeric" maxLength={8} onChange={event => setCode(event.target.value)} /></label><button>Pair desktop</button></Form><p className="muted">{state.settings.hub?.paired ? "This computer is paired." : "Pair once using your server invitation."}</p>{state.phone?.error && <p className="inline-error">{state.phone.error}</p>}</Card>
     </div>}

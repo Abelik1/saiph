@@ -11,6 +11,21 @@ function state(online = true): State {
   } } as unknown as State;
 }
 describe("Phone page", () => {
+  it("names the device that turned on shared Do Not Disturb and toggles it everywhere", async () => {
+    const call = vi.fn().mockResolvedValue({ active: false, shared: true });
+    const fixture = { ...state(), settings: { hub: { paired: true, device_id: "desktop", base_url: "" }, link: { camera: { enabled: false } } },
+      dnd: { enabled: true, active: true, source: "phone", changed_at: 1, quiet: true } } as unknown as State;
+    render(<Phone state={fixture} client={{ call, subscribe: () => () => {} } as Client} />);
+    expect(screen.getByText("On · from Galaxy A55")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Turn off Do Not Disturb on all devices" }));
+    await waitFor(() => expect(call).toHaveBeenCalledWith("continuity.dnd", { active: false }));
+  });
+  it("hides Do Not Disturb when sync is switched off", () => {
+    const fixture = { ...state(), settings: { hub: { paired: true, device_id: "desktop", base_url: "" }, link: { camera: { enabled: false } } },
+      dnd: { enabled: false, active: false, source: "", changed_at: null, quiet: false } } as unknown as State;
+    render(<Phone state={fixture} client={{ call: vi.fn(), subscribe: () => () => {} } as Client} />);
+    expect(screen.queryByRole("group", { name: "Do Not Disturb" })).toBeNull();
+  });
   it('keeps the active microphone visible and names its actual phone while changing the selection',()=>{
     const fixture={...state(),settings:{link:{camera:{enabled:false},microphone:{enabled:false}}},microphone:{available:true,running:true,muted:false,verified:false,mode:'linux-pulse',device_id:'phone',message:'Capturing'}} as State;
     fixture.phone!.devices.push({...fixture.phone!.devices[0],id:'second-phone',name:'Second phone'});

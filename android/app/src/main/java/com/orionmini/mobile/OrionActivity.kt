@@ -282,7 +282,7 @@ class OrionActivity : ComponentActivity() {
                 openSettings(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,Uri.parse("package:$packageName")))
             else appPermissionSettings()
         }) { requestPermissions(photos, 46) }
-        step("Sleep plan quiet hours", getSystemService(android.app.NotificationManager::class.java).isNotificationPolicyAccessGranted, optional = true, manage = {
+        step("Sleep plan and Do Not Disturb sync", getSystemService(android.app.NotificationManager::class.java).isNotificationPolicyAccessGranted, optional = true, manage = {
             openSettings(Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS))
         }) {
             openSettings(Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS))
@@ -304,6 +304,11 @@ class OrionActivity : ComponentActivity() {
         catch (_: Exception) {
             Toast.makeText(this, "This settings page isn't available. Open Android Settings to configure it.", Toast.LENGTH_LONG).show()
         }
+    }
+    /** Android lets only system apps switch the hotspot on; open its settings page instead. */
+    private fun hotspotSettings() {
+        val tethering = Intent(Intent.ACTION_MAIN).setClassName("com.android.settings", "com.android.settings.TetherSettings")
+        try { startActivity(tethering) } catch (_: Exception) { openSettings(Intent(Settings.ACTION_WIRELESS_SETTINGS)) }
     }
     private fun appPermissionSettings() = openSettings(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
 
@@ -330,6 +335,8 @@ class OrionActivity : ComponentActivity() {
         new.forEach { root.addView(itemCard(it)) }
         root.addView(section("Recent decisions"))
         all.filter { it.getString("status") != "new" }.take(10).forEach { root.addView(itemCard(it)) }
+        root.addView(section("Continuity"))
+        root.addView(buttonRow(button("Photo to computer") { startActivity(Intent(this, OrionCaptureActivity::class.java)) }, button("Hotspot settings") { hotspotSettings() }))
         val wake = runCatching { JSONArray(getSharedPreferences("orion_continuity",0).getString("wake_targets","[]")) }.getOrNull()
         if(wake != null && wake.length()>0) {
             root.addView(section("Computers"))
@@ -423,6 +430,10 @@ class OrionActivity : ComponentActivity() {
         root.addView(Switch(this).apply {
             text = "Follow the shared sleep plan"; isChecked = prefs.getBoolean("focus_enabled", true)
             setOnCheckedChangeListener { _, checked -> prefs.edit().putBoolean("focus_enabled", checked).apply(); lifecycleScope.launch(Dispatchers.IO) { runCatching { OrionContinuity(this@OrionActivity).tick() } } }
+        })
+        root.addView(Switch(this).apply {
+            text = "Sync Do Not Disturb with my devices"; isChecked = prefs.getBoolean("dnd_sync", true)
+            setOnCheckedChangeListener { _, checked -> prefs.edit().putBoolean("dnd_sync", checked).apply(); lifecycleScope.launch(Dispatchers.IO) { runCatching { OrionContinuity(this@OrionActivity).tick() } } }
         })
         root.addView(buttonRow(button("Setup permissions") { setup() }, button("Advanced") { advanced() }))
         root.addView(buttonRow(button("Back to Saiph") { homeLoop() }))

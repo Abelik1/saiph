@@ -135,6 +135,14 @@ class OrionDirectFiles @Inject constructor(private val context: Context,private 
         try { link.publish("file.offer",JsonObject(offer(file,"Shared text.txt","text/plain")+mapOf("destination" to JsonPrimitive(destination))),target) }
         catch(_: Exception) { file.delete();false }
     }
+    /** A photo just taken for one computer: offered as a file, then marked ready to paste there. */
+    suspend fun capture(file: File,target: String): Boolean=withContext(Dispatchers.IO) {
+        try {
+            val name="Photo "+java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH.mm.ss"))+".jpg"
+            val offer=offer(file,name,"image/jpeg")
+            link.publish("file.offer",offer,target) && link.publish("capture.insert",buildJsonObject { put("sha256",offer.getValue("sha256")) },target)
+        } catch(_: Exception) { file.delete();false }
+    }
     fun refreshPhotoAccess(): Boolean {
         if(OrionPermissions.read(context).photos)return true
         items.entries.removeIf { (_,item) -> if(item.photo!=null) { item.file.delete();true } else false }

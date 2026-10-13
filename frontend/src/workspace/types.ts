@@ -11,9 +11,10 @@ export type CameraStatus = {available:boolean;running:boolean;verified:boolean;m
 export type MicrophoneConfig = {enabled?:boolean;scrcpy_executable?:string};
 export type MicrophoneStatus = {available:boolean;running:boolean;muted:boolean;verified:boolean;mode:"linux-pulse"|"windows-cable"|"unavailable";device_id:string|null;message:string};
 export type DeskflowConfig = {enabled?:boolean;role?:"desktop"|"laptop";desktop?:string;local?:string;certificate?:string;executable?:string};
+export type DeskflowStatus = {error:string;running?:boolean;crashes?:number;exit_code?:number|null;uptime?:number;setup?:{executable:string;certificates:string[];trust_file:string;trusted:boolean;mesh_addresses:string[]}};
 export type Settings = {
   cloud?: {path?:string;enabled?:boolean;recordings?:boolean};
-  link?: {focus?:boolean;clipboard?:boolean;timezone?:string;wake_hour?:number;wake_minute?:number;camera?:CameraConfig;microphone?:MicrophoneConfig;deskflow?:DeskflowConfig};
+  link?: {focus?:boolean;dnd_sync?:boolean;clipboard?:boolean;timezone?:string;wake_hour?:number;wake_minute?:number;camera?:CameraConfig;microphone?:MicrophoneConfig;deskflow?:DeskflowConfig;hotspot?:{profile?:string;auto?:boolean}};
   projects: string[];
   selected_project: string;
   start_with_windows: boolean;
@@ -264,6 +265,8 @@ export type Transcript = {
 };
 export type HostedConfig = {service_url: string; issuer: string; audience: string; client_id: string; refresh_tokens: boolean};
 export type HostedState = {available: boolean; enabled: boolean; status: string; identity: boolean; configured?: boolean; config?: HostedConfig; self_hosted_paired?: boolean; error?: string; account?: {status: string; error: string; refresh_tokens: boolean}; fingerprint?: string | null; roster?: {expires_at: number; version: number; clock_warning: boolean; members: {id: string; label: string; root: boolean; fingerprint: string}[]} | null; offers?: {id: string; name: string; size: number}[]; notifications?: {id: string; app: string; title: string; text: string}[]};
+export type HotspotStatus = {profiles:string[];profile:string;auto:boolean;active:string|null;error:string;supported:boolean};
+export type DndStatus = {enabled:boolean;active:boolean;source:string;changed_at:number|null;quiet:boolean};
 export type State = {
   hosted?: HostedState;
   update_status?: {state: string; code: string};
@@ -271,7 +274,9 @@ export type State = {
   modules?: { workspace: { installed: boolean; enabled: boolean } };
   enrollment?: {ready:boolean;id:string|null;expires_at:string|null;custom_mesh:boolean;approved?:boolean};
   components?: {mesh_installed:boolean;mesh_running:boolean;busy:boolean;message:string};
-  deskflow?: {error:string};
+  deskflow?: DeskflowStatus;
+  dnd?: DndStatus;
+  hotspot?: HotspotStatus;
   camera?: CameraStatus;
   microphone?: MicrophoneStatus;
   handoffs?: import("./Handoff").HandoffItem[];

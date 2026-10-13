@@ -34,6 +34,29 @@ synthetic notification and clipboard text. Review the target device before sendi
 a file, phone action or message. Only enable camera/microphone functions when you
 intend to use them, and stop capture when finished.
 
+Do Not Disturb is shared across paired devices: turning it on or off on the
+phone, in Windows or GNOME, or with the Phone page toggle quiets the others, and
+the newest change wins. Saiph reads Windows Do Not Disturb but never changes it;
+on Windows it quiets Saiph's own notifications. On Android it uses Saiph's own
+Do Not Disturb rule, which needs Do Not Disturb access. Android 15 and later may
+not let Saiph end Do Not Disturb you started on the phone; end it there. Turn sync off in Settings →
+Advanced on the computer or Settings on the phone. Physical-device acceptance
+is pending.
+
+**Photo to computer** on the phone's home screen takes a photo with your camera
+app and sends it to a paired computer, where it is saved in Downloads → Orion
+and placed on the clipboard with a "ready to paste" notification. Only image
+files up to 32 MB from that phone's own request are placed on the clipboard.
+Document scanning with edge correction is not included yet.
+
+To get a computer online through your phone, join the phone's hotspot once in
+the computer's Wi-Fi settings, then choose it under Settings → Advanced → Phone
+hotspot. **Connect** joins it in one click; with automatic reconnection on,
+Saiph joins it when the Hub has been unreachable for 30 seconds and the computer
+has no other network. Wi-Fi passwords stay with Windows or NetworkManager.
+Android doesn't let apps switch the hotspot on, so **Hotspot settings** in the
+phone app opens the right Android page.
+
 Cloud connects to separately configured services; it does not automatically
 provision storage. Optional tools and services should not block basic phone
 pairing. Deskflow is optional and requires a separate installation; see the

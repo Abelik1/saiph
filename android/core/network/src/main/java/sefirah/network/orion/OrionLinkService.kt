@@ -1,7 +1,10 @@
 package sefirah.network.orion
 
 import android.app.*
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.os.IBinder
 import android.os.PowerManager
 import androidx.core.app.NotificationCompat
@@ -32,6 +35,12 @@ class OrionLinkService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val continuity by lazy { OrionContinuity(this) }
     private var clipboardEnabled = false
+    // The owner's own Do Not Disturb changes are shared; applying a shared state is not.
+    private val interruptionFilter = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            scope.launch { runCatching { continuity.systemChanged { type, payload -> link.publish(type, payload) } } }
+        }
+    }
     override fun onCreate() {
         super.onCreate()
         Api.migrateMesh(this)
@@ -39,6 +48,7 @@ class OrionLinkService : Service() {
         manager.createNotificationChannel(NotificationChannel("orion_link", "Saiph status", NotificationManager.IMPORTANCE_LOW))
         startForeground(42, notification("Starting automatically"))
         controls.start()
+        androidx.core.content.ContextCompat.registerReceiver(this, interruptionFilter, IntentFilter(NotificationManager.ACTION_INTERRUPTION_FILTER_CHANGED), androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED)
         scope.launch { notifications.enable("") }
         scope.launch { link.status.collect { manager.notify(42, notification(it)) } }
         val receipts = CommandReceipts(this)
@@ -114,6 +124,7 @@ class OrionLinkService : Service() {
     }
     override fun onBind(intent: Intent?): IBinder? = null
     override fun onDestroy() {
+        runCatching { unregisterReceiver(interruptionFilter) }
         controls.stop()
         scope.cancel()
         // Finish bounded teardown before a replacement service can start.
