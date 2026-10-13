@@ -9,8 +9,8 @@ import threading
 import time
 from pathlib import Path
 
-from PySide6.QtCore import QObject, Signal, Slot, QMimeData, QUrl, QTimer, Qt
-from PySide6.QtGui import QDrag
+from PySide6.QtCore import QObject, Signal, Slot, QMimeData, QMimeDatabase, QUrl, QTimer, Qt
+from PySide6.QtGui import QDrag, QImageIOHandler, QImageReader
 from PySide6.QtWidgets import QFileDialog, QApplication
 
 from .platform import set_startup, open_target
@@ -24,11 +24,13 @@ class DesktopBridge(QObject):
     dragging = Signal(bool)
     completed = Signal(str)
     update_ready = Signal()
+    photo_prepared = Signal(str, object)
 
     def __init__(self, window):
         super().__init__(window)
         self.window = window
         self.completed.connect(self.finish)
+        self.photo_prepared.connect(self.finish_photo)
         self.update_ready.connect(lambda: QTimer.singleShot(700, self.window.quit_app))
 
     @Slot(str)
@@ -43,6 +45,64 @@ class DesktopBridge(QObject):
             except Exception as error: packet={"id":request_id,"ok":False,"error":str(error)}
             self.completed.emit(json.dumps(packet))
         threading.Thread(target=run,name="orion-phone-action",daemon=True).start()
+
+    def photo_original(self, request_id, method, args):
+        if set(args) != {"device_id", "photo_id"} or not all(isinstance(value, str) and value for value in args.values()):
+            raise ValueError("Choose a photo from a paired phone.")
+        def prepare():
+            try:
+                features = self.window.workspace.phone_features
+                with features.lock:
+                    features.photo_request(args["device_id"], args["photo_id"], "prefetch")
+                deadline = time.monotonic() + 60
+                while time.monotonic() < deadline:
+                    row = features.photo_cached(args["device_id"], args["photo_id"])
+                    if row:
+                        result, clipboard = self.prepare_photo(row, method == "phone.photo.copy")
+                        self.photo_prepared.emit(json.dumps({"id": request_id, "result": result}), clipboard)
+                        return
+                    time.sleep(0.1)
+                raise ValueError("Your phone has not sent the original yet. Try again when it is connected.")
+            except Exception as error:
+                self.completed.emit(json.dumps({"id": request_id, "ok": False, "error": str(error)}))
+        threading.Thread(target=prepare, name="orion-photo-original", daemon=True).start()
+
+    @staticmethod
+    def prepare_photo(row, copying):
+        # Decode and read bytes away from the GUI thread. Only clipboard ownership
+        # crosses back to Qt's GUI thread, including for large phone originals.
+        path = Path(row["path"])
+        reader = QImageReader(str(path))
+        reader.setAutoTransform(True)
+        if not reader.canRead():
+            raise ValueError("This image format cannot be opened here. Save the original to open it in another app.")
+        size = reader.size()
+        if reader.transformation() & QImageIOHandler.Transformation.TransformationRotate90:
+            size.transpose()
+        result = {"url": QUrl.fromLocalFile(str(path)).toString(), "width": size.width(), "height": size.height(), "size": path.stat().st_size}
+        if not copying:
+            return result, None
+        image = reader.read()
+        if image.isNull():
+            raise ValueError("The original image could not be copied. Try saving it instead.")
+        mime = QMimeDatabase().mimeTypeForFile(str(path)).name()
+        encoded = path.read_bytes() if mime.startswith("image/") else None
+        return {"copied": True, "width": image.width(), "height": image.height()}, (image, mime, encoded)
+
+    @Slot(str, object)
+    def finish_photo(self, raw, clipboard):
+        packet = json.loads(raw)
+        try:
+            if clipboard is not None:
+                image, mime, encoded = clipboard
+                data = QMimeData()
+                data.setImageData(image)
+                if encoded is not None:
+                    data.setData(mime, encoded)
+                QApplication.clipboard().setMimeData(data)
+            self.finish(json.dumps({"id": packet["id"], "ok": True, "result": packet["result"]}))
+        except Exception as error:
+            self.finish(json.dumps({"id": packet["id"], "ok": False, "error": str(error)}))
 
     def photo_drag(self, request_id, args):
         workspace = self.window.workspace
@@ -173,6 +233,8 @@ class DesktopBridge(QObject):
                 if path:
                     self.background(request_id,lambda:self.window.workspace.dispatch("phone.file.send",{**args,"path":path}));return
                 result={"cancelled":True}
+            elif method in {"phone.photo.view", "phone.photo.copy"}:
+                self.photo_original(request_id, method, args);return
             elif method in {"phone.file.send","phone.photo.save","phone.photo.prefetch"}:
                 self.background(request_id,lambda:self.window.workspace.dispatch(method,args));return
             elif method == "phone.code.copy":
