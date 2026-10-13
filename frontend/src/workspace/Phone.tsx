@@ -110,6 +110,10 @@ export function Phone({
           {phone && !phone.online && <p className="muted" role="status">
             {phone.last_seen_at ? `Last seen ${new Date(phone.last_seen_at).toLocaleString()}. ` : ""}
             Open Saiph on your phone and check that both devices can reach your server. Saved content remains available.</p>}
+          {/* The phone shares its clipboard only while Saiph's helper runs; this computer starts it with adb. */}
+          {phone?.online && state.settings?.link?.clipboard !== false && !phone.capabilities.includes("clipboard") && <p className="muted">
+            Clipboard isn't shared with {phone.name} yet. Check that Clipboard is on in Saiph on your phone, then connect it once
+            over USB or wireless debugging so this computer can start Saiph's clipboard helper. The setup guide's Optional tools shows whether adb is installed.</p>}
           <DoNotDisturb state={state} client={client} />
           <PhonePanel features={state.phone_features} phone={phone} client={client} />
           {phone?.online && phone.capabilities.includes("ring") && <Action className="text-button" run={() => client.call("phone.ring", { device_id: phone.id })}>Ring {phone.name}</Action>}

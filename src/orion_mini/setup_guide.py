@@ -13,6 +13,7 @@ LINKS = {
     "scrcpy": "https://github.com/Genymobile/scrcpy/releases/tag/v3.3.4",
     "deskflow": "https://github.com/deskflow/deskflow/releases/tag/v1.27.0",
     "android": "https://appdistribution.firebase.google.com/testerapps",
+    "adb": "https://developer.android.com/tools/releases/platform-tools",
 }
 # Linux helper commands and the Debian/Ubuntu packages that provide them.
 LINUX_HELPERS = {
@@ -28,6 +29,9 @@ def tools():
     from .companion_tools import tool_path
     found = {"scrcpy": bool(tool_path("scrcpy")), "deskflow": bool(tool_path("deskflow-core") or tool_path("deskflow"))}
     result = {
+        # The phone shares its clipboard only while Saiph's helper runs, and the
+        # computer starts that helper over USB or wireless debugging with adb.
+        "adb": {"found": bool(tool_path("adb")), "purpose": "Clipboard with your phone (starts Saiph's clipboard helper)", "link": "adb"},
         "scrcpy": {"found": found["scrcpy"], "purpose": "Phone screen, phone apps in windows, webcam and microphone", "link": "scrcpy"},
         "deskflow": {"found": found["deskflow"], "purpose": "Keyboard and mouse sharing between computers", "link": "deskflow"},
     }

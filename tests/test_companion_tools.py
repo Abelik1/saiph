@@ -25,6 +25,34 @@ def test_portable_discovery_requires_upstream_marker_and_prefers_latest(tmp_path
         tool_path('arbitrary-command')
 
 
+def _fake_adb(root):
+    adb = root / 'platform-tools' / ('adb.exe' if os.name == 'nt' else 'adb')
+    adb.parent.mkdir(parents=True)
+    adb.write_bytes(b'fixture executable')
+    return adb
+
+
+def test_installed_app_finds_adb_in_the_default_android_sdk(tmp_path, monkeypatch):
+    # An installed Saiph has no SDK of its own; adb is often only in Android Studio's SDK.
+    monkeypatch.setattr('orion_mini.companion_tools.shutil.which', lambda _: None)
+    monkeypatch.delenv('ANDROID_HOME', raising=False)
+    monkeypatch.delenv('ANDROID_SDK_ROOT', raising=False)
+    monkeypatch.setenv('LOCALAPPDATA', str(tmp_path / 'no-portable-tools'))
+    monkeypatch.setattr('orion_mini.companion_tools.default_sdk_roots', lambda: [str(tmp_path / 'missing'), str(tmp_path / 'Sdk')])
+    assert tool_path('adb') is None
+    adb = _fake_adb(tmp_path / 'Sdk')
+    assert Path(tool_path('adb')) == adb
+
+
+def test_explicit_android_sdk_root_is_used(tmp_path, monkeypatch):
+    monkeypatch.setattr('orion_mini.companion_tools.shutil.which', lambda _: None)
+    monkeypatch.delenv('ANDROID_HOME', raising=False)
+    monkeypatch.setattr('orion_mini.companion_tools.default_sdk_roots', lambda: [])
+    adb = _fake_adb(tmp_path / 'configured')
+    monkeypatch.setenv('ANDROID_SDK_ROOT', str(tmp_path / 'configured'))
+    assert Path(tool_path('adb')) == adb
+
+
 def test_deskflow_keeps_mesh_tls_and_clipboard_constraints(tmp_path):
     path = configuration(tmp_path, role='desktop', local='100.64.0.2', certificate=tmp_path / 'Deskflow.pem')
     text = path.read_text()

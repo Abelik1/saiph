@@ -11,6 +11,7 @@ import { SaiphMark, WaveLoader, WaveProgress } from "./waves";
 
 type Mode = "hosted" | "hub";
 type Step = "welcome" | "connect" | "phone" | "features" | "tools" | "privacy" | "done";
+const toolNames: Record<string, string> = { adb: "Android platform tools (adb)", scrcpy: "scrcpy", deskflow: "Deskflow" };
 const steps: Step[] = ["welcome", "connect", "phone", "features", "tools", "privacy", "done"];
 const titles: Record<Step, string> = { welcome: "Welcome", connect: "Connect this computer", phone: "Add your phone", features: "Choose features", tools: "Optional tools", privacy: "Usage statistics", done: "All set" };
 
@@ -156,7 +157,7 @@ export function SetupWizard({ state, client, close }: { state: State; client: Cl
 
     {step === "tools" && <Card title="Optional tools" subtitle="Only needed for some features. Saiph links to each project's official download.">
       {tools && Object.entries(tools).filter(([name]) => name !== "deskflow" || choices.deskflow).map(([name, tool]) => <div className="list-row" key={name}>
-        <div className="grow"><b>{name === "scrcpy" ? "scrcpy" : "Deskflow"}</b><small>{tool.purpose}</small></div>
+        <div className="grow"><b>{toolNames[name] || name}</b><small>{tool.purpose}</small></div>
         {tool.found ? <span className="setup-ok"><Check size={16} />Installed</span> : <Action className="text-button" run={() => client.call("setup.open", { link: tool.link })}>Download</Action>}
       </div>)}
       {helpers.length > 0 && <>

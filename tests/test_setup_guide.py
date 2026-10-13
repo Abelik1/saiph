@@ -26,7 +26,8 @@ def test_linux_helpers_report_the_package_to_install(monkeypatch):
     result = setup_guide.tools()
     assert result["linux"]["xdotool"]["found"] is True
     assert result["linux"]["bluetoothctl"] == {"found": False, "package": "bluez", "purpose": "Lock when your phone leaves"}
-    assert set(result["tools"]) == {"scrcpy", "deskflow"}
+    assert set(result["tools"]) == {"adb", "scrcpy", "deskflow"}
+    assert result["tools"]["adb"]["link"] == "adb"
 
 
 def test_links_are_official_release_pages_only():

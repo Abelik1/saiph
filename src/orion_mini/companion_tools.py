@@ -6,6 +6,24 @@ from pathlib import Path
 import shutil
 
 
+def _sdk_adb(roots):
+    executable = "adb.exe" if os.name == "nt" else "adb"
+    for root in filter(None, roots):
+        candidate = Path(root) / "platform-tools" / executable
+        if candidate.is_file():
+            return str(candidate)
+    return None
+
+
+def default_sdk_roots():
+    """Android Studio's default SDK folders. An installed Saiph has no SDK of its
+    own, so without these a computer whose adb is not on PATH could never start
+    the phone's clipboard helper."""
+    if os.name == "nt":
+        return [str(Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData/Local")) / "Android" / "Sdk")]
+    return [str(Path.home() / "Android" / "Sdk"), str(Path.home() / "Library" / "Android" / "sdk")]
+
+
 def tool_path(name, configured=None):
     if name not in {"adb", "restic", "scrcpy", "deskflow-core", "deskflow"}:
         raise ValueError("Unknown Saiph companion tool.")
@@ -15,12 +33,12 @@ def tool_path(name, configured=None):
     standard = shutil.which(name)
     if standard:
         return standard
-    if name == "adb" and os.environ.get("ANDROID_HOME"):
-        candidate = Path(os.environ["ANDROID_HOME"]) / "platform-tools" / ("adb.exe" if os.name == "nt" else "adb")
-        if candidate.is_file():
-            return str(candidate)
+    if name == "adb":
+        configured_sdk = _sdk_adb([os.environ.get("ANDROID_HOME"), os.environ.get("ANDROID_SDK_ROOT")])
+        if configured_sdk:
+            return configured_sdk
     if os.name != "nt":
-        return None
+        return _sdk_adb(default_sdk_roots()) if name == "adb" else None
     package = {"adb": "scrcpy", "deskflow-core": "deskflow"}.get(name, name)
     root = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData/Local")) / "OrionMini" / "tools" / package
     versions = sorted(root.iterdir(), key=lambda p: tuple(int(x) for x in p.name.split('.') if x.isdigit()), reverse=True) if root.is_dir() else []
@@ -30,5 +48,8 @@ def tool_path(name, configured=None):
         candidates = list(version.rglob(name + ".exe"))
         if candidates:
             return str(candidates[0])
+    if name == "adb":
+        # Saiph's checksum-verified portable copy wins; the default SDK folder is the last guess.
+        return _sdk_adb(default_sdk_roots())
     installed = Path(os.environ.get("ProgramFiles", "C:/Program Files")) / "Deskflow" / (name + ".exe")
     return str(installed) if package == "deskflow" and installed.is_file() else None

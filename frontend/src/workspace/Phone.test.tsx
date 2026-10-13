@@ -38,6 +38,21 @@ function state(online = true): State {
   } as unknown as State;
 }
 describe("Phone page", () => {
+  it("explains when a connected phone is not sharing its clipboard", () => {
+    const client = { call: vi.fn(), subscribe: () => () => {} } as unknown as Client;
+    const notice = /Clipboard isn't shared with Galaxy A55 yet/;
+    const { rerender } = render(<Phone state={state()} client={client} />);
+    expect(screen.getByText(notice)).toBeVisible();
+    const sharing = state();
+    sharing.phone!.devices[0].capabilities.push("clipboard");
+    rerender(<Phone state={sharing} client={client} />);
+    expect(screen.queryByText(notice)).toBeNull();
+    // Switched off on this computer, or the phone is offline: nothing to fix.
+    rerender(<Phone state={{ ...state(), settings: { link: { clipboard: false } } } as unknown as State} client={client} />);
+    expect(screen.queryByText(notice)).toBeNull();
+    rerender(<Phone state={state(false)} client={client} />);
+    expect(screen.queryByText(notice)).toBeNull();
+  });
   it("rings a phone that supports it", async () => {
     const call = vi.fn().mockResolvedValue({ queued: true });
     const fixture = state();
