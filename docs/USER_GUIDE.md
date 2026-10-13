@@ -62,7 +62,7 @@ the newest change wins. Saiph reads Windows Do Not Disturb but never changes it;
 on Windows it quiets Saiph's own notifications. On Android it uses Saiph's own
 Do Not Disturb rule, which needs Do Not Disturb access. Android 15 and later may
 not let Saiph end Do Not Disturb you started on the phone; end it there. Turn sync off in Settings →
-Advanced on the computer or Settings on the phone. Physical-device acceptance
+Connections on the computer or Settings on the phone. Physical-device acceptance
 is pending.
 
 **Photo to computer** on the phone's home screen takes a photo with your camera
@@ -72,7 +72,7 @@ files up to 32 MB from that phone's own request are placed on the clipboard.
 Document scanning with edge correction is not included yet.
 
 To get a computer online through your phone, join the phone's hotspot once in
-the computer's Wi-Fi settings, then choose it under Settings → Advanced → Phone
+the computer's Wi-Fi settings, then choose it under Settings → Connections → Phone
 hotspot. **Connect** joins it in one click; with automatic reconnection on,
 Saiph joins it when the Hub has been unreachable for 30 seconds and the computer
 has no other network. Wi-Fi passwords stay with Windows or NetworkManager.
@@ -80,7 +80,7 @@ Android doesn't let apps switch the hotspot on, so **Hotspot settings** in the
 phone app opens the right Android page.
 
 **Phone remote** turns your phone into a remote for apps on a computer. Turn it
-on in Settings → Advanced → Phone remote on the computer, choose which phones may
+on in Settings → Devices → Phone remote on the computer, choose which phones may
 use it, and choose the apps offered: media, presentations, web video, locking the
 computer, and typing into the app in front. Lock and typing are off unless you
 turn them on. On the phone, open **Remote for computer apps**, pick the computer
@@ -113,7 +113,7 @@ files, each up to 2 GB. The tray's Phone menu also has Send a file to phone.
 **New screenshots and photos:** when you take a screenshot or photo on the phone,
 the computer shows a notice with Copy (it lands on the clipboard) and Save (to
 Downloads → Orion). Nothing transfers until you choose one. Turn it off with
-Offer new screenshots and photos in Settings → Advanced.
+Offer new screenshots and photos in Settings → Connections.
 
 **Pictures in messages (MMS):** conversations show Show picture for MMS parts.
 The picture is fetched from the phone only then, kept in Saiph's own folder,
@@ -145,11 +145,11 @@ the computer's clipboard ready to paste.
 into a touchpad with click, right-click, double-click and scrolling, alongside the
 typing text box. Windows and X11 only.
 
-**Lock when my phone leaves (Linux):** in Settings → Advanced, choose your
+**Lock when my phone leaves (Linux):** in Settings → Devices, choose your
 Bluetooth-paired phone; the session locks once it has been gone for the chosen
 time. It never unlocks. On Windows, use Dynamic Lock in sign-in options instead.
 
-Smaller conveniences, each with a switch in Settings → Advanced:
+Smaller conveniences, each with a switch in Settings → Connections:
 
 - **Verification codes:** a phone notification containing a one-time code shows
   **Copy code** on the computer. Automatic copying is off unless you turn it on.
@@ -185,3 +185,36 @@ device signatures do not make every feature end-to-end encrypted. See the
 Report ordinary bugs with the version, OS/phone model, reproducible synthetic
 steps and sanitized metadata. Follow [SECURITY.md](../SECURITY.md) for private
 vulnerability reports. Never attach messages, tokens, keys or personal databases.
+
+## Desktop photos and preferences
+
+Click a recent photo to open the window-filling viewer. It keeps the preview
+visible while the original downloads, fits the image without changing its aspect
+ratio, and offers actual-size zoom, arrow-key browsing, details, copy and save.
+Escape closes the viewer. Right-click a tile or use its three-dot button for the
+same original-image actions. Copy uses the original image with its orientation
+applied; Save keeps the original file in Downloads → Orion. Hovering the grid
+does not download originals.
+
+The desktop header and bottom bar stay fixed while content scrolls inside the
+window. Settings uses sidebar sections: **General** (this computer, startup and
+the setup guide), **Connections** (Cloud, clipboard and continuity, Saiph account,
+your Hub and phone hotspot), **Devices** (phone camera and microphone, phone
+remote and lock when your phone leaves), **Updates** and **Advanced**
+(keyboard and mouse sharing).
+
+While Saiph is open, returning to a page restores its scroll position and Phone
+remembers the selected feature. SMS drafts stay with their conversation when you
+switch conversations or tabs. Settings forms keep unfinished edits across
+sections and show **Unsaved changes** until you choose Save; startup switches
+apply immediately. These drafts are held in memory for the current session.
+
+Cloud settings and phone camera/microphone setup buttons open the relevant
+settings section directly. Cloud preferences include **Browse Cloud folder**,
+timezone suggestions and a time picker for the end of quiet hours. Device setup
+shows instructions for the current operating system.
+
+A disconnected phone shows saved content and explains which actions need a
+connection. Originals already cached on the computer can still be viewed, copied
+and saved offline. Failed conversation or original-photo loads offer a Retry
+action without discarding your draft or closing the viewer.

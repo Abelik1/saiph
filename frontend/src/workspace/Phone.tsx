@@ -12,7 +12,15 @@ import { PhoneCamera } from "./PhoneCamera";
 import { PhoneMicrophone } from "./PhoneMicrophone";
 import { PairingQr, validQr, type PairingQrCode } from "./PairingQr";
 
-function Notification({ row, client, online }: { row: PhoneNotification; client: Client; online: boolean }) {
+function Notification({
+  row,
+  client,
+  online,
+}: {
+  row: PhoneNotification;
+  client: Client;
+  online: boolean;
+}) {
   const [reply, setReply] = useState("");
   const [sent, setSent] = useState(false);
   const command = (operation: string, extra = {}) => client.call("phone.notification", { id: row.id, operation, ...extra });
@@ -45,9 +53,18 @@ export function DoNotDisturb({ state, client }: { state: State; client: Client }
   </div>;
 }
 
-export function Phone({ state, client }: { state: State; client: Client }) {
+export function Phone({
+  state,
+  client,
+  active = true,
+}: {
+  state: State;
+  client: Client;
+  active?: boolean;
+}) {
   const info = state.phone;
-  const phones = info?.devices.filter((d) => d.capabilities.includes("battery")) || [];
+  const phones =
+    info?.devices.filter((d) => d.capabilities.includes("battery")) || [];
   const [selected, setSelected] = useState("");
   const phone = phones.find((d) => d.id === selected) || phones[0];
   const notices = (info?.notifications || []).filter((n) => !phone || n.device_id === phone.id);
@@ -89,6 +106,9 @@ export function Phone({ state, client }: { state: State; client: Client }) {
         <div><h2>{phone?.name || "Your phone"}</h2>
           {phones.length > 1 && <label>Phone<select value={phone?.id} onChange={(e) => setSelected(e.target.value)}>{phones.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</select></label>}
           <p className={phone?.online ? "phone-online" : "muted"}>{phone?.online ? "Online" : phone ? "Offline" : "Pair once to get started"}</p>
+          {phone && !phone.online && <p className="muted" role="status">
+            {phone.last_seen_at ? `Last seen ${new Date(phone.last_seen_at).toLocaleString()}. ` : ""}
+            Open Saiph on your phone and check that both devices can reach your server. Saved content remains available.</p>}
           <DoNotDisturb state={state} client={client} />
           <PhonePanel features={state.phone_features} phone={phone} client={client} />
           {phone?.online && phone.capabilities.includes("ring") && <Action className="text-button" run={() => client.call("phone.ring", { device_id: phone.id })}>Ring {phone.name}</Action>}
@@ -104,14 +124,20 @@ export function Phone({ state, client }: { state: State; client: Client }) {
       {state.settings?.link?.camera?.enabled !== false && <PhoneCamera camera={state.camera} config={state.settings?.link?.camera} deviceId={phone?.online ? phone.id : undefined} client={client} />}
       {(state.settings?.link?.microphone?.enabled === true || state.microphone?.running) && <PhoneMicrophone microphone={state.microphone} deviceId={phone?.online ? phone.id : undefined} deviceName={state.microphone?.running ? phones.find(row=>row.id===state.microphone?.device_id)?.name : phone?.name} client={client} />}
       <div className="section-head"><h2>Notifications</h2><Bell size={17} /></div>
-      {notices.length ? notices.map((row) => <Notification key={row.id} row={row} client={client} online={canAct} />) : <Empty title="All clear">Your phone notifications appear here automatically.</Empty>}
+      {notices.length ? notices.map((row) => <Notification key={row.id} row={row} client={client} online={canAct} />)
+        : <Empty title={!phone ? "Connect your phone" : !phone.online ? "Phone disconnected" : !canAct ? "Allow notifications" : "All clear"}>
+            {!phone ? "Pair your phone to see its notifications here." : !phone.online ? "Notifications will update when your phone reconnects."
+              : !canAct ? "Allow notification access in Saiph on your phone." : "Your phone notifications appear here automatically."}</Empty>}
+      {notices.length > 0 && !canAct && <p className="muted">{phone?.online
+        ? "Allow notification access in Saiph on your phone to use these actions."
+        : "Showing saved notifications. Reconnect your phone to reply or dismiss."}</p>}
       <HubInbox state={state} client={client} />
     </aside>
     <section className="phone-detail" aria-label="Phone features and sharing">
       <Enrollment state={state} client={client} />
       {pairing && <PairingQr qr={pairing.qr} shownAt={pairing.shownAt} onExpire={expirePairing} onClose={() => setPairing(null)} />}
       {pairingNotice && !pairing && <p className="pairing-notice muted" role="status">{pairingNotice}</p>}
-      <PhoneTabs features={state.phone_features} phone={phone} client={client} />
+      <PhoneTabs active={active} features={state.phone_features} phone={phone} client={client} />
       <details className="phone-handoff"><summary>Continue on another device</summary><Handoff items={state.handoffs || []} devices={info?.devices || []} currentDeviceId={state.settings?.hub?.device_id} client={client} /></details>
     </section>
   </div>;

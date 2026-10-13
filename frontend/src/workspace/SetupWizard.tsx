@@ -93,7 +93,7 @@ export function SetupWizard({ state, client, close }: { state: State; client: Cl
     {step === "connect" && <Card title={mode === "hosted" ? "Sign in with your Saiph account" : "Pair with your Hub"}>
       {mode === "hosted" && hosted && <>
         {hosted.self_hosted_paired ? <p>This computer is already paired with your own Hub. A device uses one or the other.</p>
-          : !hosted.configured && !hosted.enabled ? <p>This build has no Saiph account settings. Enter them under Settings → Advanced → Saiph Hosted, or choose My own Hub.</p>
+          : !hosted.configured && !hosted.enabled ? <p>This build has no Saiph account settings. Enter them under Settings → Connections → Saiph Hosted, or choose My own Hub.</p>
           : <>
             {!hosted.enabled && <Action run={() => client.call("hosted.enable", { enabled: true })}>Turn on Saiph account</Action>}
             {hosted.enabled && !signedIn && <><p>{hosted.account?.status === "signing_in" ? "Finish signing in in your browser." : "Activate your beta code on the Saiph website first, then sign in here."}</p>
@@ -140,7 +140,7 @@ export function SetupWizard({ state, client, close }: { state: State; client: Cl
         <button type="button" onClick={next("features")}>{phoneReady ? "Continue" : "Skip for now"}</button></div>
     </Card>}
 
-    {step === "features" && <Card title="What should Saiph do?" subtitle="Change any of these later in Settings → Advanced.">
+    {step === "features" && <Card title="What should Saiph do?" subtitle="Change any of these later in Settings → Connections.">
       {mode === "hosted" && <p className="muted">With a Saiph account, Saiph currently shares the clipboard, notifications and files you choose. More features need your own Hub for now.</p>}
       <div className="setup-features">{shown.map((f) => <label className="check" key={f.key}>
         <input type="checkbox" checked={choices[f.key]} onChange={(e) => setChoices((c) => ({ ...c, [f.key]: e.target.checked }))} />

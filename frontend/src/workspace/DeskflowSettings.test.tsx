@@ -33,7 +33,8 @@ describe("Deskflow Advanced settings", () => {
     fireEvent.click(screen.getByLabelText("Share keyboard and mouse"));
     fireEvent.click(screen.getByRole("button", { name: "Save sharing preferences" }));
     await waitFor(() => expect(call).toHaveBeenCalledWith("settings.save", { link: { deskflow: { enabled: false, role: "laptop", desktop: "100.64.0.2" } } }));
-    expect(screen.getByRole("status")).toHaveTextContent("switched off in these preferences");
+    expect(screen.getByText("Sharing is switched off in these preferences.")).toBeVisible();
+    expect(await screen.findByText("Sharing preferences saved.")).toBeVisible();
   });
 
   it("keeps mesh and certificate controls inside the Advanced tab", () => {

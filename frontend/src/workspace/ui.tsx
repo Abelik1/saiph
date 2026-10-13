@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useRef, useState } from "react";
-import type { FormEvent, ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
+import type { AriaRole, FormEvent, ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import { LoaderCircle, X } from "lucide-react";
 import type { Features, Job, Reminder } from "./types";
@@ -67,6 +73,8 @@ export function Action({
   disabled = false,
   title,
   ariaLabel,
+  role,
+  ariaChecked,
 }: {
   run: () => Promise<unknown>;
   children: ReactNode;
@@ -74,6 +82,8 @@ export function Action({
   disabled?: boolean;
   title?: string;
   ariaLabel?: string;
+  role?: AriaRole;
+  ariaChecked?: boolean;
 }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
@@ -84,6 +94,8 @@ export function Action({
         className={className}
         title={title}
         aria-label={ariaLabel}
+        role={role}
+        aria-checked={ariaChecked}
         disabled={disabled || pending}
         onClick={async () => {
           setPending(true);
@@ -112,19 +124,49 @@ export function Form({
   submit,
   children,
   className = "",
+  successMessage,
 }: {
   submit: () => Promise<unknown>;
   children: ReactNode;
   className?: string;
+  successMessage?: string;
 }) {
   const [pending, setPending] = useState(false),
     [error, setError] = useState("");
+  const [saved, setSaved] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const form = useRef<HTMLFormElement>(null);
+  const baseline = useRef<string>(undefined);
+  const values = useCallback(() => {
+    return JSON.stringify(
+      Array.from(
+        form.current?.querySelectorAll<
+          HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+        >("input,select,textarea") || [],
+      ).map((input) => [
+        input.value,
+        "checked" in input ? input.checked : null,
+      ]),
+    );
+  }, []);
+  useLayoutEffect(() => {
+    if (!successMessage) return;
+    const current = values();
+    if (baseline.current === undefined) baseline.current = current;
+    const changed = baseline.current !== current;
+    if (dirty !== changed) setDirty(changed);
+  }, [children, successMessage, dirty, values]);
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     setPending(true);
+    setSaved(false);
     setError("");
+    const submitted = values();
     try {
       await submit();
+      baseline.current = submitted;
+      setDirty(values() !== submitted);
+      setSaved(true);
     } catch (error) {
       setError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -132,9 +174,27 @@ export function Form({
     }
   }
   return (
-    <form className={className} onSubmit={onSubmit}>
+    <form
+      ref={form}
+      className={className}
+      onSubmit={onSubmit}
+      onChangeCapture={() => {
+        setSaved(false);
+        if (successMessage) setDirty(values() !== baseline.current);
+      }}
+    >
       <fieldset disabled={pending}>{children}</fieldset>
       {pending && <small role="status">Saving…</small>}
+      {dirty && successMessage && (
+        <small className="settings-unsaved" role="status">
+          Unsaved changes · choose Save to apply.
+        </small>
+      )}
+      {saved && !dirty && successMessage && (
+        <small className="settings-saved" role="status">
+          {successMessage}
+        </small>
+      )}
       {error && (
         <p role="alert" className="inline-error">
           {error}
@@ -304,7 +364,8 @@ function earlyWarning(item: Reminder) {
 /** One live sentence about where a reminder currently stands. */
 export function reminderStatus(item: Reminder, now: number) {
   if (item.kind === "break") {
-    if (item.payload.idle_available === false) return "Activity detection is unavailable on this desktop. Break timer paused.";
+    if (item.payload.idle_available === false)
+      return "Activity detection is unavailable on this desktop. Break timer paused.";
     const idle = Number(item.payload.idle_seconds) || 0;
     const rest = Number(item.payload.break_seconds) || 0;
     if (idle >= 10)

@@ -89,7 +89,7 @@ class LinkWorkspace(LinkOperations):
 
     def state(self):
         invitation = self.invitations.status()
-        return {'modules': module_state(False), 'settings': self.settings, 'update_status': update_status(self.root), 'cloud_status': self.cloud_status(),
+        return {'platform': platform.system().lower(), 'modules': module_state(False), 'settings': self.settings, 'update_status': update_status(self.root), 'cloud_status': self.cloud_status(),
                 'enrollment': {**invitation, 'approved': invitation['id'] is not None and self.enrollment_approved == invitation['id']},
                 'components': self.components.snapshot(), 'phone': self.phone.snapshot(),
                 'phone_features': self.phone_features.snapshot(), 'handoffs': self.store.all('handoff')[:100],

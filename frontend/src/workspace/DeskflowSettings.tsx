@@ -36,7 +36,7 @@ export function DeskflowSettings({ settings, error, status, client, defaultEnabl
         ...(setup.certificates.length === 1 && !current.certificate ? { certificate: setup.certificates[0] } : {}),
         ...(setup.mesh_addresses.length === 1 && !current.local && current.role === "desktop" ? { local: setup.mesh_addresses[0] } : {}) }))}>Use detected settings</button>}
     {saved?.enabled && <Action className="text-button" run={() => client.call("deskflow.restart")}>Restart sharing</Action>}
-    <Form submit={() => {
+    <Form successMessage="Sharing preferences saved." submit={() => {
       const saved = { ...config };
       if (!saved.local) delete saved.local;
       if (!saved.executable) delete saved.executable;

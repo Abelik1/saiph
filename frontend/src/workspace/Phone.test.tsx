@@ -5,10 +5,37 @@ import { Phone } from "./Phone";
 import type { Client, State } from "./types";
 
 function state(online = true): State {
-  return { hub_inbox: { items: [], synced_at: null, error: "" }, phone: {
-    status: "Online", error: "", devices: [{ id: "phone", name: "Galaxy A55", online, last_seen_at: null, capabilities: ["battery", "notifications"], battery: { battery_level: 76, is_charging: false, updated_at: 1 } }],
-    notifications: [{ id: "n", device_id: "phone", key: "private-key", app: "Messages", package: "test", title: "Synthetic message", text: "Synthetic body", timestamp: 1, actions: [{ index: 2, label: "Archive" }], reply_key: "reply" }],
-  } } as unknown as State;
+  return {
+    hub_inbox: { items: [], synced_at: null, error: "" },
+    phone: {
+      status: "Online",
+      error: "",
+      devices: [
+        {
+          id: "phone",
+          name: "Galaxy A55",
+          online,
+          last_seen_at: null,
+          capabilities: ["battery", "notifications"],
+          battery: { battery_level: 76, is_charging: false, updated_at: 1 },
+        },
+      ],
+      notifications: [
+        {
+          id: "n",
+          device_id: "phone",
+          key: "private-key",
+          app: "Messages",
+          package: "test",
+          title: "Synthetic message",
+          text: "Synthetic body",
+          timestamp: 1,
+          actions: [{ index: 2, label: "Archive" }],
+          reply_key: "reply",
+        },
+      ],
+    },
+  } as unknown as State;
 }
 describe("Phone page", () => {
   it("rings a phone that supports it", async () => {
@@ -50,29 +77,111 @@ describe("Phone page", () => {
     expect(screen.getByText('Galaxy A55 microphone · Capturing audio')).toBeVisible();
     expect(screen.getByRole('button',{name:'Stop phone microphone'})).toBeEnabled();
   });
-  it('offers an enabled camera in Link without installing personal Workspace',()=>{
-    const fixture={...state(),settings:{link:{camera:{enabled:true}}},modules:{workspace:{installed:false,enabled:false}},camera:{available:true,running:false,verified:false,mode:'linux-v4l2',device_id:null,message:'Ready'}} as State;
-    render(<Phone state={fixture} client={{call:vi.fn(),subscribe:()=>()=>{}} as Client}/>);
-    expect(screen.getByRole('button',{name:'Use phone as webcam'})).toBeEnabled();
+  it("offers an enabled camera in Link without installing personal Workspace", () => {
+    const fixture = {
+      ...state(),
+      settings: { link: { camera: { enabled: true } } },
+      modules: { workspace: { installed: false, enabled: false } },
+      camera: {
+        available: true,
+        running: false,
+        verified: false,
+        mode: "linux-v4l2",
+        device_id: null,
+        message: "Ready",
+      },
+    } as State;
+    render(
+      <Phone
+        state={fixture}
+        client={{ call: vi.fn(), subscribe: () => () => {} } as Client}
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: "Use phone as webcam" }),
+    ).toBeEnabled();
   });
   it("shows real state and sends explicit replies/actions to the owning notification", async () => {
     const call = vi.fn().mockResolvedValue({ queued: true });
-    render(<Phone state={state()} client={{ call, subscribe: () => () => {} } as Client} />);
+    render(
+      <Phone
+        state={state()}
+        client={{ call, subscribe: () => () => {} } as Client}
+      />,
+    );
     expect(screen.getByText("76%")).toBeVisible();
-    expect(screen.queryByRole("button", { name: /Connect|Refresh|Sync/ })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /Connect|Refresh|Sync/ }),
+    ).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Archive" }));
-    await waitFor(() => expect(call).toHaveBeenCalledWith("phone.notification", { id: "n", operation: "action", index: 2 }));
-    fireEvent.change(screen.getByLabelText("Reply to Synthetic message"), { target: { value: "Synthetic reply" } });
+    await waitFor(() =>
+      expect(call).toHaveBeenCalledWith("phone.notification", {
+        id: "n",
+        operation: "action",
+        index: 2,
+      }),
+    );
+    fireEvent.change(screen.getByLabelText("Reply to Synthetic message"), {
+      target: { value: "Synthetic reply" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Send reply" }));
-    await waitFor(() => expect(call).toHaveBeenCalledWith("phone.notification", { id: "n", operation: "reply", text: "Synthetic reply", reply_key: "reply" }));
+    await waitFor(() =>
+      expect(call).toHaveBeenCalledWith("phone.notification", {
+        id: "n",
+        operation: "reply",
+        text: "Synthetic reply",
+        reply_key: "reply",
+      }),
+    );
     expect(screen.getByText("Synthetic message")).toBeVisible(); // Phone remains the authority; no optimistic deletion.
   });
   it("retains offline content while preventing remote actions", () => {
-    render(<Phone state={state(false)} client={{ call: vi.fn(), subscribe: () => () => {} } as Client} />);
+    render(
+      <Phone
+        state={state(false)}
+        client={{ call: vi.fn(), subscribe: () => () => {} } as Client}
+      />,
+    );
     expect(screen.getByText("Offline")).toBeVisible();
     expect(screen.getByRole("button", { name: "Archive" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Send reply" })).toBeDisabled();
     expect(screen.getByText("Synthetic body")).toBeVisible();
+  });
+  it("distinguishes a disconnected feed from missing notification permission", () => {
+    const fixture = state(false);
+    fixture.phone!.notifications = [];
+    fixture.phone!.devices[0].last_seen_at = "2026-10-12T10:00:00Z";
+    const client = {
+      call: vi.fn().mockResolvedValue({}),
+      subscribe: () => () => {},
+    } as Client;
+    const view = render(<Phone state={fixture} client={client} />);
+    expect(
+      screen.getByRole("heading", { name: "Phone disconnected" }),
+    ).toBeVisible();
+    expect(screen.getByText(/Last seen/)).toBeVisible();
+    expect(screen.queryByRole("heading", { name: "All clear" })).toBeNull();
+    view.rerender(
+      <Phone
+        state={{
+          ...fixture,
+          phone: {
+            ...fixture.phone!,
+            devices: [
+              {
+                ...fixture.phone!.devices[0],
+                online: true,
+                capabilities: ["battery"],
+              },
+            ],
+          },
+        }}
+        client={client}
+      />,
+    );
+    expect(
+      screen.getByRole("heading", { name: "Allow notifications" }),
+    ).toBeVisible();
   });
 });
 
