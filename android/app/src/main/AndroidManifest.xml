@@ -37,6 +37,7 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <uses-permission android:name="android.permission.READ_CALL_LOG" />
+    <uses-permission android:name="android.permission.CALL_PHONE" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />
     <uses-permission android:name="android.permission.SEND_SMS" />
     <uses-permission android:name="android.permission.READ_SMS" />
@@ -117,6 +118,17 @@
         <service android:name="sefirah.network.orion.OrionLinkService"
             android:exported="false" android:foregroundServiceType="connectedDevice" />
 
+        <service
+            android:name="com.orionmini.mobile.OrionLockTileService"
+            android:exported="true"
+            android:label="Lock computer"
+            android:icon="@drawable/ic_sync_desktop"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
+            tools:targetApi="24">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
         <service
             android:name="com.orionmini.mobile.OrionTileService"
             android:exported="true"

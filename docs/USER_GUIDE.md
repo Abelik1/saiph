@@ -67,6 +67,22 @@ work only when that app is in front on the computer. Wayland does not allow apps
 to send keys, so only media controls work there. See the
 [security model](SECURITY_MODEL.md#phone-remote-control) before enabling typing.
 
+From the Phone page and the tray's Phone menu you can also:
+
+- control music or video playing on the phone (needs notification access);
+- start a new text message, with suggestions from the phone's contacts. Contact
+  results are kept only in the computer's memory for a few minutes and are never
+  stored on the Hub;
+- switch the phone between ring, vibrate and silent (silent needs Do Not
+  Disturb access on the phone);
+- call a number from the Calls tab; the call is placed on the phone and its
+  audio stays there. Codes containing * or # are refused, because they can change
+  phone settings such as call forwarding. Recent calls appear on request and are
+  not stored on the Hub;
+- lock a computer from the phone's home screen or the Lock computer quick
+  setting, after allowing the phone in that computer's Phone remote settings and
+  turning on This computer.
+
 Smaller conveniences, each with a switch in Settings → Advanced:
 
 - **Verification codes:** a phone notification containing a one-time code shows

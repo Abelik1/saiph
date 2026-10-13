@@ -41,6 +41,7 @@ class OrionActivity : ComponentActivity() {
     private var screen = "home"
     private var lastRender = ""
     private var pairingInProgress = false
+    private var computers: List<Pair<String, String>> = emptyList()
     private val prefs by lazy { getSharedPreferences("orion", MODE_PRIVATE) }
     private val lock = AppLock(this)
     private var showingLock = false
@@ -288,7 +289,8 @@ class OrionActivity : ComponentActivity() {
             openSettings(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
         }
         val phone = arrayOf(Manifest.permission.READ_SMS, Manifest.permission.SEND_SMS, Manifest.permission.RECEIVE_SMS,
-            Manifest.permission.READ_PHONE_STATE, Manifest.permission.READ_CALL_LOG, Manifest.permission.READ_CONTACTS, Manifest.permission.ANSWER_PHONE_CALLS)
+            Manifest.permission.READ_PHONE_STATE, Manifest.permission.READ_CALL_LOG, Manifest.permission.READ_CONTACTS, Manifest.permission.ANSWER_PHONE_CALLS,
+            Manifest.permission.CALL_PHONE)
         step("Messages and calls", phone.all(::granted), optional = true,
             manage = ::appPermissionSettings, partiallyGranted = phone.any(::granted)) { requestPermissions(phone, 45) }
         val photos = when {
@@ -340,7 +342,8 @@ class OrionActivity : ComponentActivity() {
         poll = lifecycleScope.launch {
             while (isActive) {
                 val items = withContext(Dispatchers.IO) { runCatching { Api.inbox(this@OrionActivity) }.getOrNull() }
-                val state = link.status.value; val fingerprint = state + items?.toString()
+                computers = withContext(Dispatchers.IO) { runCatching { OrionComputers.remote(this@OrionActivity) }.getOrDefault(emptyList()) }
+                val state = link.status.value; val fingerprint = state + items?.toString() + computers
                 if (fingerprint != lastRender) { render(items, state); lastRender = fingerprint }
                 delay(5000)
             }
@@ -357,6 +360,10 @@ class OrionActivity : ComponentActivity() {
         root.addView(section("Continuity"))
         root.addView(buttonRow(button("Photo to computer") { startActivity(Intent(this, OrionCaptureActivity::class.java)) }, button("Hotspot settings") { hotspotSettings() }))
         root.addView(buttonRow(button("Remote for computer apps") { startActivity(Intent(this, OrionRemoteActivity::class.java)) }))
+        // Opt-in on each computer: Phone remote with "This computer" turned on.
+        computers.forEach { (id, name) -> root.addView(buttonRow(button("Lock $name") {
+            Toast.makeText(this, if (OrionComputers.lock(link, id)) "Locking $name…" else "Saiph is reconnecting. Nothing was sent.", Toast.LENGTH_SHORT).show()
+        })) }
         val wake = runCatching { JSONArray(getSharedPreferences("orion_continuity",0).getString("wake_targets","[]")) }.getOrNull()
         if(wake != null && wake.length()>0) {
             root.addView(section("Computers"))

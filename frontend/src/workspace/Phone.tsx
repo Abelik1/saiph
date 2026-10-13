@@ -5,6 +5,7 @@ import type { Client, PhoneNotification, State } from "./types";
 import { Action, Empty, Form } from "./ui";
 import { HubInbox } from "./HubInbox";
 import { PhoneTabs } from "./PhoneTabs";
+import { PhonePanel } from "./PhonePanel";
 import { Handoff } from "./Handoff";
 import { Enrollment } from "./Enrollment";
 import { PhoneCamera } from "./PhoneCamera";
@@ -89,6 +90,7 @@ export function Phone({ state, client }: { state: State; client: Client }) {
           {phones.length > 1 && <label>Phone<select value={phone?.id} onChange={(e) => setSelected(e.target.value)}>{phones.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</select></label>}
           <p className={phone?.online ? "phone-online" : "muted"}>{phone?.online ? "Online" : phone ? "Offline" : "Pair once to get started"}</p>
           <DoNotDisturb state={state} client={client} />
+          <PhonePanel features={state.phone_features} phone={phone} client={client} />
           {phone?.online && phone.capabilities.includes("ring") && <Action className="text-button" run={() => client.call("phone.ring", { device_id: phone.id })}>Ring {phone.name}</Action>}
           {phone?.battery && <small className="phone-battery"><Battery size={16} />{phone.battery.battery_level}%{phone.battery.is_charging ? " · charging" : ""}{!phone.online ? " · last reported" : ""}</small>}
           {state.settings?.hub?.paired && <div className="add-device" role="group" aria-label="Add a device">

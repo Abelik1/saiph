@@ -48,6 +48,7 @@ class OrionNetworkManager @Inject constructor(private val context: Context, priv
         // Later phases wire the retained modules individually, with capability and action checks.
         val target = deviceId.takeIf { it.isNotBlank() }
         OrionPhoneFeatures.send(link,target,message)?.let { return it }
+        if (message is PlaybackInfo) return OrionPhoneFeatures.media.update(message)?.let { link.publish("media.state", it) } ?: true
         return when (message) {
             is ClipboardInfo -> if(clipboardEnabled() && message.clipboardType=="text/plain") peer.sendText(message.content) else false
             is BatteryState -> link.publish("battery", buildJsonObject {

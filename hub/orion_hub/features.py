@@ -85,6 +85,49 @@ class RemoteResult(Payload):
     control: str = Field(max_length=32)
     ok: bool
     message: str = Field(max_length=200)
+class MediaSession(Payload):
+    source: str = Field(min_length=1,max_length=240)
+    app: str = Field(max_length=120)
+    title: str = Field(max_length=240)
+    artist: str = Field(max_length=240)
+    playing: bool
+    can_play: bool
+    can_pause: bool
+    can_next: bool
+    can_previous: bool
+    can_seek: bool
+    position_ms: int = Field(ge=0,le=2**40)
+    length_ms: int = Field(ge=0,le=2**40)
+    volume: int = Field(ge=0,le=100)
+class MediaState(Payload):
+    sessions: list[MediaSession] = Field(max_length=5)
+class MediaCommand(Payload):
+    source: str = Field(min_length=1,max_length=240)
+    action: Literal['play','pause','next','previous','seek','volume']
+    value: int | None = Field(default=None,ge=0,le=2**40)
+class ContactsSearch(Payload):
+    query: str = Field(min_length=1,max_length=64)
+class Contact(Payload):
+    name: str = Field(max_length=120)
+    numbers: list[str] = Field(max_length=5)
+class ContactsResults(Payload):
+    query: str = Field(max_length=64)
+    contacts: list[Contact] = Field(max_length=20)
+class SmsCompose(Payload):
+    addresses: list[str] = Field(min_length=1,max_length=1)
+    text: str = Field(min_length=1,max_length=4096)
+class Ringer(Payload):
+    mode: Literal['ring','vibrate','silent']
+class Dial(Payload):
+    number: str = Field(pattern=r'^[0-9+() .-]{1,40}$')  # No * or #: MMI codes can change call forwarding.
+class CallLogEntry(Payload):
+    number: str = Field(max_length=120)
+    name: str = Field(max_length=240)
+    timestamp: int = Field(ge=0)
+    duration: int = Field(ge=0)
+    type: Literal['incoming','outgoing','missed','rejected','other']
+class CallLog(Payload):
+    calls: list[CallLogEntry] = Field(max_length=50)
 class PhotoOriginal(File):
     photo_id: str = Field(pattern='^[0-9]{1,20}$')
 
@@ -92,7 +135,9 @@ MODELS={'sms.thread':Conversation,'sms.messages':Messages,'sms.remove':Thread,'s
         'sms.open':Thread,'sms.send':SmsSend,'call.state':Call,'call.command':CallCommand,
         'photos.index':Photos,'photos.sync':PhotoKeys,'photo.request':PhotoRequest,'photo.original':PhotoOriginal,'file.offer':File,
         'capture.insert':CaptureInsert,'remote.catalog.request':RemoteRequest,'phone.ring':RemoteRequest,'remote.command':RemoteCommand,
-        'remote.catalog':RemoteCatalog,'remote.result':RemoteResult}
+        'remote.catalog':RemoteCatalog,'remote.result':RemoteResult,'media.state':MediaState,'media.command':MediaCommand,
+        'contacts.search':ContactsSearch,'contacts.results':ContactsResults,'sms.compose':SmsCompose,'ringer.state':Ringer,
+        'phone.ringer':Ringer,'call.dial':Dial,'calls.log.request':RemoteRequest,'calls.log':CallLog}
 def ensure(connection):
     connection.execute(SCHEMA)
 def _put(c,device,kind,key,data,now,limit):
@@ -118,6 +163,8 @@ def apply(c,source,event,now):
             address=ipaddress.ip_address(file.blob.address)
             if address not in ipaddress.ip_network('100.64.0.0/10' if address.version==4 else 'fd7a:115c:a1e0::/48'):raise ValueError()
         if isinstance(value,Photos) and any(p.thumbnail.size>512*1024 for p in value.photos):raise ValueError()
+        if isinstance(value,ContactsResults) and any(not n or len(n)>40 for c in value.contacts for n in c.numbers):raise ValueError()
+        if isinstance(value,SmsCompose) and any(not a or len(a)>120 or any(ord(ch)<32 for ch in a) for a in value.addresses):raise ValueError()
     except (ValueError,TypeError):raise ValueError('Invalid phone feature envelope') from None
     if any(file.destination=='cloud' for file in files):
         if event.type!='file.offer' or not event.targets:raise ValueError('Cloud files require a destination computer')
@@ -131,16 +178,21 @@ def apply(c,source,event,now):
             row=c.execute('SELECT capabilities_json FROM link_devices WHERE device_id=?',(event.targets[0],)).fetchone()
             if not row or 'remote' not in json.loads(row[0]):raise ValueError('Remote control unavailable')
         return
+    if event.type in {'contacts.results','calls.log'}:
+        # Private answers to one computer's request: relayed, never stored.
+        if event.targets is None or len(event.targets)!=1:raise ValueError('Phone answer names one device')
+        return
     if event.type=='capture.insert':
         # Names one computer that receives the matching photo offer; never stored.
         if event.targets is None or len(event.targets)!=1:raise ValueError('Capture requires one destination computer')
         return
-    if event.type in {'sms.open','sms.send','call.command','photo.request','phone.ring'}:
+    if event.type in {'sms.open','sms.send','call.command','photo.request','phone.ring','media.command','contacts.search','sms.compose','phone.ringer','call.dial','calls.log.request'}:
         if event.targets is None or len(event.targets)!=1:raise ValueError('Phone command requires one owning phone')
         owner=event.targets[0]
         row=c.execute('SELECT capabilities_json FROM link_devices WHERE device_id=?',(owner,)).fetchone()
         caps=json.loads(row[0]) if row else []
-        required={'sms.open':'sms','sms.send':'sms','call.command':'call-control','photo.request':'photos','phone.ring':'ring'}[event.type]
+        required={'sms.open':'sms','sms.send':'sms','call.command':'call-control','photo.request':'photos','phone.ring':'ring','media.command':'media',
+                  'contacts.search':'contacts','sms.compose':'sms','phone.ringer':'ringer','call.dial':'call-dial','calls.log.request':'call-log'}[event.type]
         if required not in caps:raise ValueError('Phone capability unavailable')
         if isinstance(value,Thread) and _get(c,owner,'thread',value.thread) is None:raise ValueError('Conversation unavailable')
         if isinstance(value,SmsSend) and len((_get(c,owner,'thread',value.thread) or {}).get('recipients',[]))!=1:raise ValueError('Group messaging remains on the phone')
@@ -164,6 +216,8 @@ def apply(c,source,event,now):
     elif isinstance(value,Thread):
         c.execute('DELETE FROM phone_features WHERE device_id=? AND (kind="thread" AND item_key=? OR kind="message" AND item_key LIKE ?)',(source,str(value.thread),f'{value.thread}:%'))
     elif isinstance(value,Call):_put(c,source,'call','current',data,now,1)
+    elif isinstance(value,MediaState):_put(c,source,'media','current',data,now,1)
+    elif isinstance(value,Ringer):_put(c,source,'ringer','current',data,now,1)
     elif isinstance(value,Photos):
         for photo in value.photos:_put(c,source,'photo',photo.id,photo.model_dump(),now,100)
     elif isinstance(value,PhotoKeys):
@@ -175,7 +229,7 @@ def snapshot(db):
     with db.connect() as c:
         ensure(c)
         rows=c.execute('SELECT * FROM phone_features ORDER BY updated_at DESC').fetchall()
-    result={'threads':[],'messages':[],'calls':[],'photos':[]}
-    names={'thread':'threads','message':'messages','call':'calls','photo':'photos'}
+    result={'threads':[],'messages':[],'calls':[],'photos':[],'media':[],'ringers':[]}
+    names={'thread':'threads','message':'messages','call':'calls','photo':'photos','media':'media','ringer':'ringers'}
     for row in rows:result[names[row['kind']]].append({**json.loads(row['data_json']),'device_id':row['device_id']})
     return result

@@ -20,6 +20,9 @@ object OrionPermissions {
             granted(Manifest.permission.ANSWER_PHONE_CALLS),
             photos || (Build.VERSION.SDK_INT >= 30 && Environment.isExternalStorageManager()),
             NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName),
-            context.getSharedPreferences("orion",0).getBoolean("clipboard_enabled",true))
+            context.getSharedPreferences("orion",0).getBoolean("clipboard_enabled",true),
+            granted(Manifest.permission.READ_CONTACTS), granted(Manifest.permission.READ_CALL_LOG), granted(Manifest.permission.CALL_PHONE),
+            // Silent mode needs Do Not Disturb access on current Android versions.
+            context.getSystemService(android.app.NotificationManager::class.java).isNotificationPolicyAccessGranted)
     }
 }

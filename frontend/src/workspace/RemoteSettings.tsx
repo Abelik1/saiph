@@ -29,6 +29,7 @@ export function RemoteSettings({ remote, state, client }: { remote?: RemoteStatu
       </fieldset>
       <button>Save remote preferences</button>
     </Form>
+    <p className="muted">To lock this computer from your phone (home screen or the Lock computer quick setting), allow the phone and turn on This computer.</p>
     {remote.wayland && <p className="muted">Wayland does not let apps send keys, so presentation, web video and typing controls are unavailable. Media controls still work.</p>}
     {remote.last && <p className="muted" role="status">Last control: {remote.adapters[remote.last.app]?.name || remote.last.app} · {remote.last.control} at {new Date(remote.last.at * 1000).toLocaleTimeString()}</p>}
   </Card>;

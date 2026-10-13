@@ -5,6 +5,7 @@ import base64
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import threading
@@ -21,6 +22,10 @@ MAX_FILE=2*1024**3
 MAX_CAPTURE=32*1024**2  # A phone photo placed on the clipboard, not an arbitrary file.
 CAPTURE_SECONDS=900
 CAPTURE_TYPES={'.jpg':'image/jpeg','.jpeg':'image/jpeg','.png':'image/png','.webp':'image/webp'}
+MEDIA_ACTIONS={'play','pause','next','previous','seek','volume'}
+RINGER_MODES={'ring','vibrate','silent'}
+DIAL=re.compile(r'[0-9+() .-]{1,40}')  # No * or #: MMI codes can change call forwarding.
+ANSWER_SECONDS=300  # Contact results and call history are kept in memory this long.
 SAVE_ANSWER_SECONDS=60  # A save the phone never answered becomes retryable.
 def safe_name(value):
     # Filenames are labels, never paths; Windows device names are rejected too.
@@ -100,12 +105,14 @@ class PhoneFeatures:
         self.workspace=workspace;self.store=workspace.store;self.lock=threading.RLock();self.pending={};self.file_server=None
         self.changed=lambda:None;self.stop_requested=threading.Event();self.worker=None;self.thumbnail_worker=None
         self.capture_ready=lambda row,mime,data:None  # Set by the runtime: clipboard and notice.
+        self.answers={}  # (device, kind) -> private answer kept in memory only (contacts, call history).
+        self.answers_lock=threading.Lock()  # Separate: GUI snapshots never wait on the restore writer.
     def restore(self,snapshot):
         # One atomic transaction, rather than one fsync and retention scan per
         # row. GUI readers use WAL and never wait on the feature writer lock.
         with self.lock,self.store.connect() as connection:
             connection.execute('BEGIN IMMEDIATE')
-            for kind,key in [('thread','threads'),('message','messages'),('call','calls'),('photo','photos')]:
+            for kind,key in [('thread','threads'),('message','messages'),('call','calls'),('photo','photos'),('media','media'),('ringer','ringers')]:
                 present=set();devices=set()
                 for row in snapshot.get(key,[]):
                     item=self._save(kind,row,connection=connection,prune=False);present.add(item['id']);devices.add(row['device_id'])
@@ -137,13 +144,13 @@ class PhoneFeatures:
         return saved
     @staticmethod
     def _prune(connection,kind,device):
-        limit={'thread':500,'message':2000,'photo':100,'call':1}[kind]
+        limit={'thread':500,'message':2000,'photo':100,'call':1,'media':1,'ringer':1}[kind]
         connection.execute("DELETE FROM records WHERE kind=? AND json_extract(data,'$.device_id')=? AND id NOT IN (SELECT id FROM records WHERE kind=? AND json_extract(data,'$.device_id')=? ORDER BY json_extract(data,'$.updated_at') DESC,rowid DESC LIMIT ?)",('phone_'+kind,device,'phone_'+kind,device,limit))
     def snapshot(self):
         with self.store.connect() as connection:
             connection.execute('BEGIN')
             result={name:[json.loads(row[0]) for row in connection.execute('SELECT data FROM records WHERE kind=? ORDER BY rowid DESC',('phone_'+kind,))]
-                    for kind,name in [('thread','threads'),('message','messages'),('call','calls'),('photo','photos'),('file','files'),('photo_save','photo_saves')]}
+                    for kind,name in [('thread','threads'),('message','messages'),('call','calls'),('photo','photos'),('file','files'),('photo_save','photo_saves'),('media','media'),('ringer','ringers')]}
         now=time.time();transfers=None;saves=[]
         for row in result['photo_saves']:
             if row['status']=='saved' and not Path(row['path']).is_file():continue
@@ -152,6 +159,10 @@ class PhoneFeatures:
                 row=self._unanswered(row,transfers)
             saves.append(row)
         result['photo_saves']=saves
+        with self.answers_lock:
+            self.answers={key:value for key,value in self.answers.items() if now-value['at']<ANSWER_SECONDS}
+            result['contacts']=[{**v['payload'],'device_id':k[0]} for k,v in self.answers.items() if k[1]=='contacts.results']
+            result['call_logs']=[{**v['payload'],'device_id':k[0]} for k,v in self.answers.items() if k[1]=='calls.log']
         return result
     def event(self,event,config):
         kind=event['type'];row={**event['payload'],'device_id':event['source']}
@@ -174,6 +185,11 @@ class PhoneFeatures:
                 for old in self.store.all('phone_message'):
                     if old['device_id']==row['device_id'] and old['thread']==row['thread'] and old['message_id'] not in row['ids']:self.store.delete('phone_message',old['id'])
             elif kind=='call.state':self._save('call',row)
+            elif kind=='media.state':self._save('media',row)
+            elif kind=='ringer.state':self._save('ringer',row)
+            elif kind in {'contacts.results','calls.log'}:
+                # Private answers to this computer's request: memory only, never stored.
+                with self.answers_lock:self.answers[(row['device_id'],kind)]={'payload':event['payload'],'at':time.time()}
             elif kind=='photos.index':
                 for photo in row['photos']:
                     self._save('photo',{**photo,'device_id':row['device_id']})
@@ -389,7 +405,8 @@ class PhoneFeatures:
     def command(self,device,kind,payload):
         runtime=self.workspace.phone_runtime
         if not runtime or not runtime.client or not runtime.loop or not self.workspace.phone.connected:raise ValueError('Saiph is offline. This action has not been sent.')
-        capability={'sms.open':'sms','sms.send':'sms','photo.request':'photos','call.command':'call-control','file.offer':'files','phone.ring':'ring'}[kind]
+        capability={'sms.open':'sms','sms.send':'sms','photo.request':'photos','call.command':'call-control','file.offer':'files','phone.ring':'ring',
+                    'media.command':'media','contacts.search':'contacts','sms.compose':'sms','phone.ringer':'ringer','call.dial':'call-dial','calls.log.request':'call-log'}[kind]
         phone=next((d for d in self.workspace.phone.snapshot()['devices'] if d['id']==device and d.get('online') and capability in d.get('capabilities',[])),None)
         if phone is None:raise ValueError('This feature is unavailable on that device.')
         event={'id':str(uuid4()),'type':kind,'ttl_seconds':30 if kind!='file.offer' else 300,'targets':[device],'payload':payload}
@@ -419,6 +436,31 @@ class PhoneFeatures:
             return self.command(args['device_id'],'sms.send',{'thread':int(args['thread']),'text':text})
         if method=='phone.call':return self.command(args['device_id'],'call.command',{'operation':args['operation']})
         if method=='phone.ring':return self.command(args['device_id'],'phone.ring',{})
+        if method=='phone.media':
+            payload={'source':str(args['source'])[:240],'action':args.get('action')}
+            if payload['action'] not in MEDIA_ACTIONS:raise ValueError('Unknown media control.')
+            if payload['action'] in {'seek','volume'}:
+                value=args.get('value')
+                if type(value) is not int or value<0 or (payload['action']=='volume' and value>100):raise ValueError('Choose a valid position or volume.')
+                payload['value']=value
+            return self.command(args['device_id'],'media.command',payload)
+        if method=='phone.contacts.search':
+            query=str(args.get('query','')).strip()
+            if not 0<len(query)<=64:raise ValueError('Type part of a name or number.')
+            return self.command(args['device_id'],'contacts.search',{'query':query})
+        if method=='phone.sms.compose':
+            address,text=str(args.get('address','')).strip(),str(args.get('text',''))
+            if not address or len(address)>120 or any(ord(c)<32 for c in address):raise ValueError('Enter a phone number or choose a contact.')
+            if not text.strip() or len(text)>4096:raise ValueError('Enter a message up to 4096 characters.')
+            return self.command(args['device_id'],'sms.compose',{'addresses':[address],'text':text})
+        if method=='phone.ringer':
+            if args.get('mode') not in RINGER_MODES:raise ValueError('Choose ring, vibrate or silent.')
+            return self.command(args['device_id'],'phone.ringer',{'mode':args['mode']})
+        if method=='phone.dial':
+            number=str(args.get('number','')).strip()
+            if not DIAL.fullmatch(number) or not any(c.isdigit() for c in number):raise ValueError('Enter a phone number. Codes with * or # stay on your phone.')
+            return self.command(args['device_id'],'call.dial',{'number':number})
+        if method=='phone.calls.log':return self.command(args['device_id'],'calls.log.request',{})
         if method=='phone.photo.save':return self.photo_request(args['device_id'],args['photo_id'])
         if method=='phone.photo.prefetch':return self.photo_request(args['device_id'],args['photo_id'],'prefetch')
         raise ValueError('Unknown phone action.')

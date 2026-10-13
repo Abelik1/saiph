@@ -124,11 +124,11 @@ same on Linux, for any phone brand and without a Microsoft account. The full
 checklist, design and order are in the
 [Phone Link replacement plan](docs/PHONE_LINK_PARITY.md).
 
-- [ ] Phone media controls on the computer (D).
-- [ ] New messages with contact search (A1); MMS pictures (A2); group replies (A3).
-- [ ] Phone panel with ringer mode and quick toggles (C).
-- [ ] Lock this PC from the phone (E).
-- [ ] Dial from the computer and call history (B1).
+- [ ] **Acceptance:** phone media controls on the computer (D).
+- [ ] **Acceptance:** new messages with contact search (A1). MMS pictures (A2); group replies (A3).
+- [ ] **Acceptance:** phone panel, tray Phone menu and ringer mode (C).
+- [ ] **Acceptance:** lock this PC from the phone, opt-in (E).
+- [ ] **Acceptance:** dial from the computer and call history (B1).
 - [ ] New screenshots and photos offered on the computer (G).
 - [ ] Send to phone from File Explorer and Linux file managers (H).
 - [ ] Phone apps in their own windows (J).

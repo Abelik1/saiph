@@ -180,6 +180,9 @@ class MainWindow(QMainWindow):
         menu = QMenu(self)
         show = menu.addAction('Open Saiph')
         show.triggered.connect(self.showNormal)
+        # Phone quick controls, rebuilt from current state each time the menu opens.
+        self.phone_menu = menu.addMenu('Phone')
+        self.phone_menu.aboutToShow.connect(self.fill_phone_menu)
         from .package_updates import current as packaged_release
         update_action = menu.addAction('Check for updates' if packaged_release() else 'Update and rebuild')
         update_action.triggered.connect(self.update_from_tray)
@@ -301,6 +304,34 @@ class MainWindow(QMainWindow):
         start_update()
         QTimer.singleShot(400, self.quit_app)
         return {'ok': True}
+
+    def fill_phone_menu(self):
+        from .tray_menu import phone_entries
+        self.phone_menu.clear()
+        try:
+            rows = phone_entries(self.workspace.state())
+        except Exception:
+            rows = [('Phone status unavailable', None, None)]
+        for label, method, args in rows:
+            action = self.phone_menu.addAction(label)
+            if method is None:
+                action.setEnabled(False)
+            else:
+                action.triggered.connect(lambda _checked=False, m=method, a=args: self.tray_phone_action(m, a))
+
+    def tray_phone_action(self, method, args):
+        if method == 'phone.file.choose':
+            from PySide6.QtWidgets import QFileDialog
+            path, _ = QFileDialog.getOpenFileName(self, 'Send a file to your phone')
+            if not path:
+                return
+            method, args = 'phone.file.send', {**args, 'path': path}
+        def run():
+            try:
+                self.workspace.dispatch(method, args)
+            except Exception as error:
+                self.update_checked.emit(str(error))  # Shown as a tray message.
+        threading.Thread(target=run, name='orion-tray-phone', daemon=True).start()
 
     def update_from_tray(self):
         from .package_updates import current, check

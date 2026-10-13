@@ -16,6 +16,17 @@ The desktop keeps identity, settings and pairing state in its private applicatio
 data directory, separate from installed releases. Enrollment invitations contain
 private setup material. Never commit or publicly upload these files.
 
+### Phone commands from a computer
+
+A paired computer can ask the phone to play or pause media, change the ringer
+mode, send a text to a new number and place a call. Each needs the matching
+Android permission and is refused by the Hub unless the phone advertises it.
+Dialing accepts ordinary numbers only: codes with * or # are refused on the
+computer, the Hub and the phone, because MMI codes can change settings such as
+call forwarding. Contact search results and call history answer one computer's
+request; the Hub relays them without storing them, and the computer keeps them
+in memory for a few minutes.
+
 ### Phone remote control
 
 Phone remote lets an approved paired phone press fixed controls on a computer:

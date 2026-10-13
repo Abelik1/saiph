@@ -69,7 +69,7 @@ def test_capture_insert_names_one_computer_and_a_digest_only(hub):
     for payload,targets in (({'sha256':'a'*64},None),({'sha256':'A'*64},[computer]),({'sha256':'a'*63},[computer]),
                             ({'sha256':'a'*64,'path':'C:/private'},[computer])):
         with pytest.raises(ValueError):apply(hub,phone,'capture.insert',payload,targets)
-    assert features.snapshot(hub.DB)=={'threads':[],'messages':[],'calls':[],'photos':[]}
+    assert features.snapshot(hub.DB)=={'threads':[],'messages':[],'calls':[],'photos':[],'media':[],'ringers':[]}
 def test_remote_control_targets_one_computer_that_offers_it(hub):
     c=client(hub);_,phone=pair(hub,c);_,computer=pair(hub,c)
     with pytest.raises(ValueError):apply(hub,phone,'remote.command',{'app':'media','control':'next'},[computer])
@@ -91,3 +91,41 @@ def test_ring_targets_one_phone_that_can_ring(hub):
     apply(hub,computer,'phone.ring',{},[phone])
     with pytest.raises(ValueError):apply(hub,computer,'phone.ring',{'volume':100},[phone])
     with pytest.raises(ValueError):apply(hub,computer,'phone.ring',{})
+def session(**extra):
+    return {'source':'com.spotify.music','app':'Spotify','title':'Song','artist':'Artist','playing':True,'can_play':True,'can_pause':True,
+            'can_next':True,'can_previous':True,'can_seek':False,'position_ms':1000,'length_ms':200000,'volume':50,**extra}
+def test_media_state_is_kept_per_phone_and_commands_need_the_capability(hub):
+    c=client(hub);_,phone=pair(hub,c);_,computer=pair(hub,c)
+    apply(hub,phone,'media.state',{'sessions':[session()]})
+    apply(hub,phone,'media.state',{'sessions':[session(playing=False)]})
+    assert [m['sessions'][0]['playing'] for m in features.snapshot(hub.DB)['media']]==[False]
+    with pytest.raises(ValueError):apply(hub,phone,'media.state',{'sessions':[session(volume=101)]})
+    with pytest.raises(ValueError):apply(hub,computer,'media.command',{'source':'com.spotify.music','action':'next'},[phone])
+    caps(hub,phone,['media'])
+    apply(hub,computer,'media.command',{'source':'com.spotify.music','action':'next'},[phone])
+    for payload in ({'source':'x','action':'shell'},{'source':'x','action':'seek','value':-1}):
+        with pytest.raises(ValueError):apply(hub,computer,'media.command',payload,[phone])
+def test_contacts_and_call_log_answers_are_relayed_but_never_stored(hub):
+    c=client(hub);_,phone=pair(hub,c);_,computer=pair(hub,c)
+    caps(hub,phone,['contacts','call-log'])
+    apply(hub,computer,'contacts.search',{'query':'Ali'},[phone])
+    apply(hub,phone,'contacts.results',{'query':'Ali','contacts':[{'name':'PRIVATE_NAME','numbers':['+441234']}]},[computer])
+    apply(hub,computer,'calls.log.request',{},[phone])
+    apply(hub,phone,'calls.log',{'calls':[{'number':'+441234','name':'PRIVATE_NAME','timestamp':1,'duration':5,'type':'missed'}]},[computer])
+    assert 'PRIVATE_NAME' not in json.dumps(features.snapshot(hub.DB))
+    with pytest.raises(ValueError):apply(hub,phone,'contacts.results',{'query':'Ali','contacts':[]})
+    with pytest.raises(ValueError):apply(hub,phone,'contacts.results',{'query':'Ali','contacts':[{'name':'x','numbers':['1'*41]}]},[computer])
+    with pytest.raises(ValueError):apply(hub,computer,'contacts.search',{'query':''},[phone])
+def test_compose_dial_and_ringer_commands_are_bounded(hub):
+    c=client(hub);_,phone=pair(hub,c);_,computer=pair(hub,c)
+    caps(hub,phone,['sms','ringer','call-dial'])
+    apply(hub,computer,'sms.compose',{'addresses':['+447700900123'],'text':'Hello'},[phone])
+    for payload in ({'addresses':[],'text':'x'},{'addresses':['a','b'],'text':'x'},{'addresses':['bad\nnumber'],'text':'x'},{'addresses':['1'],'text':''}):
+        with pytest.raises(ValueError):apply(hub,computer,'sms.compose',payload,[phone])
+    apply(hub,computer,'call.dial',{'number':'+44 (0) 7700-900123'},[phone])
+    for number in ('tel:123','*21*07700900123#','#31#'):
+        with pytest.raises(ValueError):apply(hub,computer,'call.dial',{'number':number},[phone])
+    apply(hub,computer,'phone.ringer',{'mode':'silent'},[phone])
+    with pytest.raises(ValueError):apply(hub,computer,'phone.ringer',{'mode':'loud'},[phone])
+    apply(hub,phone,'ringer.state',{'mode':'vibrate'})
+    assert features.snapshot(hub.DB)['ringers'][0]['mode']=='vibrate'

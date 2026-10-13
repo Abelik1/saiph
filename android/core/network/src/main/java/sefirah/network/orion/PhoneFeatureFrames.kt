@@ -21,6 +21,32 @@ object PhoneFeatureFrames {
             put("state",when(value.callState) { CallState.Ringing->"ringing";CallState.InProgress->"active";CallState.MissedCall->"missed";CallState.Ended->"ended" })
             put("number",value.phoneNumber.take(120));put("name",value.contactInfo?.displayName.orEmpty().take(240))
         })
+        is RingerModeState -> ringer(value.mode)?.let { listOf("ringer.state" to buildJsonObject { put("mode", it) }) }
         else -> null
     }
+    fun ringer(mode: Int) = when (mode) { 0 -> "silent"; 1 -> "vibrate"; 2 -> "ring"; else -> null }
+    fun ringerMode(name: String) = when (name) { "silent" -> 0; "vibrate" -> 1; "ring" -> 2; else -> throw IllegalArgumentException() }
+    /** At most 20 matching contacts with their numbers, for one computer's search. */
+    fun contacts(query: String, all: List<ContactInfo>): JsonObject {
+        val needle = query.trim().lowercase(); val digits = needle.filter(Char::isDigit)
+        val matches = all.filter { it.displayName.lowercase().contains(needle) || (digits.length >= 3 && it.number.filter(Char::isDigit).contains(digits)) }
+            .groupBy { it.displayName }.entries.take(20)
+        return buildJsonObject {
+            put("query", query.take(64))
+            put("contacts", JsonArray(matches.map { (name, rows) -> buildJsonObject {
+                put("name", name.take(120))
+                put("numbers", JsonArray(rows.map { it.number.take(40) }.filter { it.isNotBlank() }.distinct().take(5).map(::JsonPrimitive)))
+            } }))
+        }
+    }
+    fun callLog(calls: List<CallLogInfo>) = buildJsonObject {
+        put("calls", JsonArray(calls.sortedByDescending { it.timestampMillis }.take(50).map { call -> buildJsonObject {
+            put("number", call.phoneNumber.take(120)); put("name", call.contactInfo?.displayName.orEmpty().take(240))
+            put("timestamp", call.timestampMillis.coerceAtLeast(0)); put("duration", call.durationSeconds.coerceAtLeast(0))
+            put("type", when (call.callType) { CallLogType.Incoming, CallLogType.AnsweredExternally -> "incoming"; CallLogType.Outgoing -> "outgoing"
+                CallLogType.Missed -> "missed"; CallLogType.Rejected, CallLogType.Blocked -> "rejected"; else -> "other" })
+        } }))
+    }
+    /** Ordinary numbers only: * and # make MMI codes that can change call forwarding. */
+    fun dialable(number: String) = Regex("[0-9+() .-]{1,40}").matches(number) && number.any(Char::isDigit)
 }

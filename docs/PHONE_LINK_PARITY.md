@@ -29,15 +29,15 @@ reports as of October 2026. Microsoft changes it often; recheck before release.
 | Clipboard sync (latest item) | Have | — |
 | Do Not Disturb toggle | Have (shared DND) | C (panel) |
 | Send files phone ↔ PC | Have | H (Windows Send to) |
-| Lock the PC from the phone | Partial (phone remote "lock", opt-in) | E |
+| Lock the PC from the phone | Built, acceptance pending (opt-in) | E |
 | SMS: reply in existing one-to-one threads | Have | — |
-| SMS: start a new conversation, contact search | Missing | A1 |
+| SMS: start a new conversation, contact search | Built, acceptance pending | A1 |
 | MMS pictures and group conversations | Missing | A2, A3 |
 | Calls: answer or decline | Have | — |
-| Calls: dial from the PC, call history | Missing | B1 |
+| Calls: dial from the PC, call history | Built, acceptance pending | B1 |
 | Calls: talk through the PC's microphone and speakers | Missing | B2 (research first) |
-| Phone media controls (audio player) | Missing | D |
-| Ringer mode (silent / vibrate) | Missing | C |
+| Phone media controls (audio player) | Built, acceptance pending | D |
+| Ringer mode (silent / vibrate) | Built, acceptance pending | C |
 | Recent photos view: browse, save, drag | Have (kept as it is) | — |
 | Phone storage in File Explorer (alongside the photos view) | Missing | F |
 | New screenshots and photos offered on the PC | Partial (Photo to computer) | G |
