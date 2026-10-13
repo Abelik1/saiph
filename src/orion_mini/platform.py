@@ -14,9 +14,10 @@ from pathlib import Path
 def qt_platform_for_background_clipboard(environ=None):
     """Qt platform that keeps clipboard sharing alive while the window is unfocused.
 
-    GNOME/Wayland tells only the focused client about clipboard changes and lets only
-    it take ownership, and Mutter offers no data-control protocol, so a native Wayland
-    Qt client is deaf and mute whenever Orion is in the background. Qt's xcb platform
+    A Wayland compositor tells only the focused client about clipboard changes and
+    lets only it take ownership. Qt implements no data-control protocol, and Mutter
+    offers none, so a native Wayland Qt client is deaf and mute whenever Orion is in
+    the background on GNOME, KDE Plasma and wlroots desktops alike. Qt's xcb platform
     goes through XWayland, whose selection bridge works unfocused. ``xcb;wayland``
     falls back to Wayland if the xcb plugin cannot load. A QT_QPA_PLATFORM the user set
     wins; ORION_MINI_QT_PLATFORM (for example ``wayland``) opts out of the choice.
@@ -27,8 +28,8 @@ def qt_platform_for_background_clipboard(environ=None):
     override = environ.get("ORION_MINI_QT_PLATFORM", "").strip()
     if override:
         return override
-    if (environ.get("XDG_SESSION_TYPE") == "wayland" and "gnome" in environ.get("XDG_CURRENT_DESKTOP", "").lower()
-            and environ.get("DISPLAY")):
+    wayland = environ.get("XDG_SESSION_TYPE") == "wayland" or bool(environ.get("WAYLAND_DISPLAY"))
+    if wayland and environ.get("DISPLAY"):  # XWayland is running
         return "xcb;wayland"
     return None
 

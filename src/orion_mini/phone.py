@@ -6,12 +6,14 @@ import asyncio
 import hashlib
 import json
 import os
+import sys
 import threading
 import time
 from uuid import uuid4
 
 from .hub_client import signed
 from .link_client import LinkClient
+from .network_watch import NetworkWatch
 from .clipboard import PendingClipboard, RecentClipboard, envelope
 from .peer import PeerServer, fetch
 from .peer import MAX_CLIPBOARD
@@ -34,6 +36,13 @@ def capabilities(settings):
     if ((settings.get('link') or {}).get('remote') or {}).get('enabled') is True: result.append('remote')
     if (settings.get('link') or {}).get('ring_computer', True) is not False: result.append('ring')
     return result
+
+def network_watch():
+    """Linux only: CLOCK_BOOTTIME and /proc routes are Linux interfaces."""
+    if not sys.platform.startswith("linux") or os.environ.get("ORION_MINI_TEST"):
+        return None
+    return NetworkWatch()
+
 
 def notification_id(device: str, key: str) -> str:
     return hashlib.sha256((device + "\0" + key).encode()).hexdigest()
@@ -382,6 +391,7 @@ class PhoneRuntime:
 
     async def run(self):
         self.loop = asyncio.get_running_loop()
+        watch = network_watch()
         native = None
         try:
             native = self.native = self.notifier_factory(self.command)
@@ -397,6 +407,10 @@ class PhoneRuntime:
         component_poll = None
         worker = self.worker_factory(); next_worker = next_peer = next_focus = next_local = next_auxiliary = next_deskflow = next_dnd = next_hotspot = next_battery = next_bt_lock = 0
         while not self.stop_requested.is_set():
+            # A resume or new network leaves a dead socket that the keepalive would
+            # take about 30 s to notice; reconnect straight away instead.
+            if watch and watch.changed() and self.client:
+                self.client.reconnect_now()
             components = getattr(self.workspace, 'components', None)
             if components and not os.environ.get('ORION_MINI_TEST'):
                 if component_poll is None or component_poll.done():

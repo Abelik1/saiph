@@ -129,3 +129,102 @@ def test_discarded_copy_is_not_sent_after_a_preceding_send_yields(tmp_path, monk
             task.cancel()
             await asyncio.gather(task, return_exceptions=True)
     asyncio.run(scenario())
+
+
+def test_reconnect_now_replaces_a_silent_socket_at_once(tmp_path, monkeypatch):
+    # Physical acceptance: after a laptop resume the old socket stayed "open" until
+    # the keepalive gave up, so the Hub saw the laptop again only 29.6 s later.
+    async def scenario():
+        connected = []
+        second = asyncio.Event()
+
+        async def server(socket):
+            connected.append(time.monotonic())
+            await socket.send(json.dumps({"op": "welcome", "device_id": "device-test"}))
+            if len(connected) == 2:
+                second.set()
+            await socket.wait_closed()  # never answers or closes by itself: a half-open peer
+
+        async with serve(server, "127.0.0.1", 0, ping_interval=None) as listener:
+            port = listener.sockets[0].getsockname()[1]
+            monkeypatch.setattr(link_client, "mesh_url", lambda _: f"ws://127.0.0.1:{port}")
+            async def received(event):
+                pass
+            client = link_client.LinkClient(tmp_path, "device-test", "http://100.64.0.1:8765", received)
+            task = asyncio.create_task(client.run())
+            try:
+                while not connected or client.socket is None:
+                    await asyncio.sleep(0.05)
+                kicked = time.monotonic()
+                client.reconnect_now()
+                await asyncio.wait_for(second.wait(), timeout=2)
+                assert connected[1] - kicked < 1
+            finally:
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+    asyncio.run(scenario())
+
+
+def test_reconnect_now_skips_the_remaining_backoff(tmp_path, monkeypatch):
+    async def scenario():
+        attempts = []
+        accepted = asyncio.Event()
+
+        async def server(socket):
+            attempts.append(time.monotonic())
+            if len(attempts) <= 4:
+                await socket.close(1012, "Service restart")  # backoff grows to about 4 s
+                return
+            accepted.set()
+            await socket.wait_closed()
+
+        async with serve(server, "127.0.0.1", 0, ping_interval=None) as listener:
+            port = listener.sockets[0].getsockname()[1]
+            monkeypatch.setattr(link_client, "mesh_url", lambda _: f"ws://127.0.0.1:{port}")
+            client = link_client.LinkClient(tmp_path, "device-test", "http://100.64.0.1:8765", None)
+            task = asyncio.create_task(client.run())
+            try:
+                while len(attempts) < 4:
+                    await asyncio.sleep(0.05)
+                await asyncio.sleep(0.3)
+                kicked = time.monotonic()
+                client.reconnect_now()  # e.g. the network came back
+                await asyncio.wait_for(accepted.wait(), timeout=2)
+                assert attempts[4] - kicked < 1
+            finally:
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+    asyncio.run(scenario())
+
+
+def test_quitting_closes_the_link_normally(tmp_path, monkeypatch):
+    # Physical acceptance: quitting the app made the Hub log peer_code=1011
+    # (internal error) because the cancelled link closed as if it had failed.
+    async def scenario():
+        codes = []
+        connected = asyncio.Event()
+
+        async def server(socket):
+            await socket.send(json.dumps({"op": "welcome", "device_id": "device-test"}))
+            connected.set()
+            await socket.wait_closed()
+            codes.append(socket.close_code)
+
+        async with serve(server, "127.0.0.1", 0, ping_interval=None) as listener:
+            port = listener.sockets[0].getsockname()[1]
+            monkeypatch.setattr(link_client, "mesh_url", lambda _: f"ws://127.0.0.1:{port}")
+            async def received(event):
+                pass
+            client = link_client.LinkClient(tmp_path, "device-test", "http://100.64.0.1:8765", received)
+            task = asyncio.create_task(client.run())
+            await asyncio.wait_for(connected.wait(), timeout=5)
+            while client.socket is None:  # quit after the link is up, as the app does
+                await asyncio.sleep(0.05)
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+            for _ in range(40):
+                if codes:
+                    break
+                await asyncio.sleep(0.05)
+            assert codes == [1000]
+    asyncio.run(scenario())

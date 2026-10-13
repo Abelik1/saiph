@@ -120,3 +120,29 @@ def test_existing_orion_startup_can_be_controlled_after_brand_upgrade(session, e
         assert "Exec=" + platform._desktop_quote(launcher) + "\n" in entry.read_text()
     else:
         assert not entry.exists()
+
+
+@pytest.mark.parametrize("desktop", ["ubuntu:GNOME", "KDE", "sway", ""])
+def test_wayland_sessions_with_xwayland_use_xcb_for_background_clipboard(monkeypatch, desktop):
+    # Physical acceptance on GNOME: a native Wayland Qt client could neither set nor
+    # read the clipboard while unfocused. KDE and wlroots behave the same for Qt.
+    monkeypatch.setattr(platform.sys, "platform", "linux")
+    environ = {"XDG_SESSION_TYPE": "wayland", "XDG_CURRENT_DESKTOP": desktop, "DISPLAY": ":0", "WAYLAND_DISPLAY": "wayland-0"}
+    assert platform.qt_platform_for_background_clipboard(environ) == "xcb;wayland"
+
+
+@pytest.mark.parametrize("environ, expected", [
+    ({"XDG_SESSION_TYPE": "wayland", "WAYLAND_DISPLAY": "wayland-0"}, None),  # no XWayland: leave Qt alone
+    ({"XDG_SESSION_TYPE": "x11", "DISPLAY": ":0"}, None),
+    ({"WAYLAND_DISPLAY": "wayland-0", "DISPLAY": ":0"}, "xcb;wayland"),
+    ({"XDG_SESSION_TYPE": "wayland", "DISPLAY": ":0", "QT_QPA_PLATFORM": "wayland"}, None),  # user choice wins
+    ({"XDG_SESSION_TYPE": "wayland", "DISPLAY": ":0", "ORION_MINI_QT_PLATFORM": "wayland"}, "wayland"),
+])
+def test_qt_platform_choice_respects_session_and_overrides(monkeypatch, environ, expected):
+    monkeypatch.setattr(platform.sys, "platform", "linux")
+    assert platform.qt_platform_for_background_clipboard(environ) == expected
+
+
+def test_qt_platform_choice_is_linux_only(monkeypatch):
+    monkeypatch.setattr(platform.sys, "platform", "win32")
+    assert platform.qt_platform_for_background_clipboard({"XDG_SESSION_TYPE": "wayland", "DISPLAY": ":0"}) is None

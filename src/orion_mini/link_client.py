@@ -40,6 +40,8 @@ class LinkClient:
         self.pending: dict[str, tuple[dict, float]] = {}
         self.seen: OrderedDict[str, float] = OrderedDict()
         self.outgoing = asyncio.Event()
+        self.socket = None
+        self.wake = asyncio.Event()
 
     def publish(self, event: dict):
         # Called on the client's event loop. Keep the original envelope on retry.
@@ -47,6 +49,16 @@ class LinkClient:
             raise ValueError("Probe queue is full")
         self.pending.setdefault(event["id"], (event, time.time() + event.get("ttl_seconds", 60)))
         self.outgoing.set()
+
+    def reconnect_now(self):
+        """Drop a socket that may have died unseen and reconnect without backoff.
+
+        After a resume or a network change the old TCP connection is usually gone
+        while the keepalive still believes it; waiting for its timeout cost about
+        30 s on a physical laptop. Called on the client's event loop."""
+        self.wake.set()
+        if self.socket is not None:
+            self.socket.transport.abort()
 
     def discard(self, event_id: str):
         """Cancel an unaccepted local event; already-transmitted frames cannot be recalled."""
@@ -105,13 +117,21 @@ class LinkClient:
                 async with connect(self.url, additional_headers=signed_headers(self.root, self.device_id, "/v1/link"),
                                    max_size=65536, open_timeout=10, close_timeout=2, proxy=None) as ws:
                     started = time.monotonic()
+                    self.socket = ws
+                    self.wake.clear()
                     await ws.send(json.dumps({"op": "hello", "capabilities": self.capabilities}))
                     tasks = [asyncio.create_task(self.transmit(ws)), asyncio.create_task(self.receive(ws))]
                     try:
                         done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
                         for task in done:
                             task.result()
+                    except asyncio.CancelledError:
+                        # Quitting is a normal close; websockets would report a cancelled
+                        # block to the Hub as an internal error (1011).
+                        await ws.close()
+                        raise
                     finally:
+                        self.socket = None
                         for task in tasks:
                             task.cancel()
                         await asyncio.gather(*tasks, return_exceptions=True)
@@ -121,5 +141,12 @@ class LinkClient:
                 # Errors can contain server replies. Report only a fixed status.
                 pass
             self.on_status({"op": "reconnecting"})
-            await asyncio.sleep(delay + random.uniform(0, delay / 4))
-            delay = min(delay * 2, 10)
+            try:
+                await asyncio.wait_for(self.wake.wait(), delay + random.uniform(0, delay / 4))
+            except asyncio.TimeoutError:
+                pass
+            if self.wake.is_set():
+                self.wake.clear()
+                delay = 0.25
+            else:
+                delay = min(delay * 2, 10)

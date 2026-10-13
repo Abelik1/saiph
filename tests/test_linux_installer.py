@@ -243,7 +243,8 @@ def test_linux_file_actions_follow_choice_and_never_return_unasked(tmp_path, she
     # (terminal --text, and the in-app updater) re-added declined Send to phone actions.
     home, paths, environment = profile
     data = Path(environment['XDG_DATA_HOME'])
-    actions = [data / 'nautilus/scripts/Send to phone (Saiph)', data / 'kio/servicemenus/saiph-send-to-phone.desktop']
+    actions = [data / 'nautilus/scripts/Send to phone (Saiph)', data / 'kio/servicemenus/saiph-send-to-phone.desktop',
+               data / 'kservices5/ServiceMenus/saiph-send-to-phone.desktop']
     foreign = data / 'nautilus/scripts/Synthetic own script'
     package = tmp_path / 'package'; package.mkdir()
     shutil.copyfile(SCRIPT, package / 'install.sh')
@@ -261,14 +262,21 @@ def test_linux_file_actions_follow_choice_and_never_return_unasked(tmp_path, she
         assert subprocess.run([shell, str(package / 'install.sh')], env=env, capture_output=True, timeout=15).returncode == 0
         return [path.exists() for path in actions]
 
-    assert install('1.0.0') == [True, True]  # first install: on by default
+    assert install('1.0.0') == [True, True, True]  # first install: on by default
+    # Kubuntu 24.04's KF5 Dolphin needs the old location and service type; KF6 ignores both.
+    assert b'ServiceTypes=KonqPopupMenu/Plugin\n' in actions[2].read_bytes()
+    assert actions[2].read_bytes().replace(b'ServiceTypes=KonqPopupMenu/Plugin\n', b'') == actions[1].read_bytes()
     owned = [path.read_bytes() for path in actions]
     foreign.write_text('#!/bin/sh\necho synthetic\n')
-    assert install('1.0.1', 'off') == [False, False]  # declined: only Saiph's own actions go
+    assert install('1.0.1', 'off') == [False, False, False]  # declined: only Saiph's own actions go
     assert foreign.read_text() == '#!/bin/sh\necho synthetic\n'
-    assert install('1.0.2') == [False, False]  # upgrade without a choice keeps them off
-    assert install('1.0.3', 'on') == [True, True]
+    assert install('1.0.2') == [False, False, False]  # upgrade without a choice keeps them off
+    assert install('1.0.3', 'on') == [True, True, True]
     assert [path.read_bytes() for path in actions] == owned
     actions[0].unlink()  # removed by hand in the file manager
-    assert install('1.0.4') == [False, True]  # unset refreshes what is present, adds nothing
+    actions[2].unlink()  # as installed by a release that wrote only the KF6 menu
+    assert install('1.0.4') == [False, True, True]  # unset keeps a removed action off, completes Dolphin's pair
     assert foreign.exists()
+    retained = home / '.local/lib/orion/current/install.sh'
+    assert subprocess.run([shell, str(retained), '--uninstall'], env=environment, capture_output=True, timeout=15).returncode == 0
+    assert [path.exists() for path in actions] == [False, False, False] and foreign.exists()

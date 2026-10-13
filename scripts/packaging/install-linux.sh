@@ -30,6 +30,8 @@ mime="$data_root/mime/packages/orion-enrollment.xml"
 # File-manager "Send to phone" actions: GNOME Files (Nautilus) scripts and KDE Dolphin service menus.
 nautilus="$data_root/nautilus/scripts/Send to phone (Saiph)"
 servicemenu="$data_root/kio/servicemenus/saiph-send-to-phone.desktop"
+# KDE Frameworks 5 Dolphin (for example Kubuntu 24.04) reads only this older location.
+servicemenu5="$data_root/kservices5/ServiceMenus/saiph-send-to-phone.desktop"
 integration_work=
 stage=
 committed=0
@@ -43,7 +45,7 @@ cleanup() {
   # modification or symlink is retained; prior active release stays selected.
   if [ "$committed" != 1 ] && [ -n "$integration_work" ]; then
     for name in $changed; do
-      case "$name" in launcher) target=$launcher ;; desktop) target=$desktop ;; autostart) target=$autostart ;; mime) target=$mime ;; nautilus) target=$nautilus ;; servicemenu) target=$servicemenu ;; esac
+      case "$name" in launcher) target=$launcher ;; desktop) target=$desktop ;; autostart) target=$autostart ;; mime) target=$mime ;; nautilus) target=$nautilus ;; servicemenu) target=$servicemenu ;; servicemenu5) target=$servicemenu5 ;; esac
       if safe_path "$target" && [ -f "$target" ] && cmp -s "$target" "$integration_work/$name"; then
         if [ -f "$integration_work/old-$name" ]; then
           temporary=$(mktemp "${target}.orion.XXXXXXXX")
@@ -76,7 +78,8 @@ prepare_integration() {
   printf '#!/bin/sh\n# ORION_OWNED=1\nexec "%s" --send-files "$@"\n' "$launcher" > "$integration_work/nautilus"
   printf '[Desktop Entry]\n# ORION_OWNED=1\nType=Service\nMimeType=all/allfiles;\nActions=sendToPhone;\nX-KDE-Priority=TopLevel\n\n[Desktop Action sendToPhone]\nName=Send to phone (Saiph)\nIcon=%s/current/app/_internal/assets/orion-mini-icon.png\nExec="%s" --send-files %%F\n' "$install_root" "$launcher" > "$integration_work/servicemenu"
   # Both file managers only run executable entries.
-  chmod u+x "$integration_work/nautilus" "$integration_work/servicemenu"
+  printf '[Desktop Entry]\n# ORION_OWNED=1\nType=Service\nServiceTypes=KonqPopupMenu/Plugin\nMimeType=all/allfiles;\nActions=sendToPhone;\nX-KDE-Priority=TopLevel\n\n[Desktop Action sendToPhone]\nName=Send to phone (Saiph)\nIcon=%s/current/app/_internal/assets/orion-mini-icon.png\nExec="%s" --send-files %%F\n' "$install_root" "$launcher" > "$integration_work/servicemenu5"
+  chmod u+x "$integration_work/nautilus" "$integration_work/servicemenu" "$integration_work/servicemenu5"
   # Accept only exact older label variants; arbitrary marker-bearing files stay unowned.
   for name in desktop autostart autostart-disabled mime mime-legacy; do
     sed -e 's/Name=Saiph/Name=Orion/' -e 's/Saiph device enrollment/Orion device enrollment/' "$integration_work/$name" > "$integration_work/orion-$name"
@@ -129,6 +132,7 @@ if [ "$isolated" != 1 ]; then
     preflight_integration mime "$mime"
     preflight_integration nautilus "$nautilus"
     preflight_integration servicemenu "$servicemenu"
+    preflight_integration servicemenu5 "$servicemenu5"
   fi
 fi
 case "$install_root" in /*) ;; *) echo "Install root must be absolute." >&2; exit 1 ;; esac
@@ -170,8 +174,8 @@ if [ "${1:-}" = --uninstall ]; then
   # Retain installed releases and user data. Remove only owned launch integration,
   # allowing recovery and library replacement without recursive user-file deletion.
   if [ "$isolated" != 1 ]; then
-    for name in launcher desktop autostart mime nautilus servicemenu; do
-      case "$name" in launcher) target=$launcher ;; desktop) target=$desktop ;; autostart) target=$autostart ;; mime) target=$mime ;; nautilus) target=$nautilus ;; servicemenu) target=$servicemenu ;; esac
+    for name in launcher desktop autostart mime nautilus servicemenu servicemenu5; do
+      case "$name" in launcher) target=$launcher ;; desktop) target=$desktop ;; autostart) target=$autostart ;; mime) target=$mime ;; nautilus) target=$nautilus ;; servicemenu) target=$servicemenu ;; servicemenu5) target=$servicemenu5 ;; esac
       if owned_integration "$name" "$target"; then rm -- "$target"; fi
     done
   fi
@@ -227,13 +231,20 @@ if [ "$isolated" != 1 ]; then
     # Declined in the setup dialog: remove only Saiph's own previously written actions.
     if owned_integration nautilus "$nautilus"; then rm -- "$nautilus"; fi
     if owned_integration servicemenu "$servicemenu"; then rm -- "$servicemenu"; fi
+    if owned_integration servicemenu5 "$servicemenu5"; then rm -- "$servicemenu5"; fi
   elif [ "${SAIPH_FILE_ACTIONS:-}" = on ] || [ ! -f "$install_root/integration-created" ]; then
-    mkdir -p "$data_root/nautilus/scripts" "$data_root/kio/servicemenus"
+    mkdir -p "$data_root/nautilus/scripts" "$data_root/kio/servicemenus" "$data_root/kservices5/ServiceMenus"
     write_integration nautilus "$nautilus"
     write_integration servicemenu "$servicemenu"
+    write_integration servicemenu5 "$servicemenu5"
   else
     [ ! -e "$nautilus" ] || write_integration nautilus "$nautilus"
-    [ ! -e "$servicemenu" ] || write_integration servicemenu "$servicemenu"
+    # Dolphin's two menu files are one action: an upgrade adds the KF5 copy to a kept KF6 one.
+    if [ -e "$servicemenu" ] || [ -e "$servicemenu5" ]; then
+      mkdir -p "$data_root/kio/servicemenus" "$data_root/kservices5/ServiceMenus"
+      write_integration servicemenu "$servicemenu"
+      write_integration servicemenu5 "$servicemenu5"
+    fi
   fi
 fi
 # Refuse unrelated active pointers and stale temporary links before activation.
