@@ -58,3 +58,23 @@ describe("New messages and calls", () => {
     await waitFor(() => expect(call).toHaveBeenCalledWith("phone.dial", { device_id: "phone", number: "01234 567890" }));
   });
 });
+
+describe("MMS pictures", () => {
+  const base = { ...empty, threads: [{ id: "t", device_id: "phone", thread: 7, recipients: ["Alice"], message: { body: "", timestamp: 1 } }],
+    messages: [{ id: "m", message_id: 31, device_id: "phone", thread: 7, body: "", timestamp: 1, direction: "incoming" as const }],
+    attachments: [{ device_id: "phone", thread: 7, message: 31, parts: [{ part: 5, mime: "image/jpeg", name: "IMG.jpg" }] }] };
+  it("fetches a picture only when asked", async () => {
+    const call = vi.fn().mockResolvedValue({ queued: true });
+    render(<PhoneTabs features={base} phone={phone(["sms"])} client={{ call } as unknown as Client} />);
+    fireEvent.click(screen.getByRole("button", { name: "Show IMG.jpg" }));
+    await waitFor(() => expect(call).toHaveBeenCalledWith("phone.sms.attachment", { device_id: "phone", thread: 7, message: 31, part: 5 }));
+  });
+  it("shows a received picture inline and saves it", async () => {
+    const call = vi.fn().mockResolvedValue({ saved: true });
+    const features = { ...base, attachment_files: [{ id: "a", device_id: "phone", thread: 7, message: 31, part: 5, name: "IMG.jpg", mime: "image/jpeg", size: 4, preview: "data:image/jpeg;base64,AA==", ready: true }] };
+    render(<PhoneTabs features={features} phone={phone(["sms"])} client={{ call } as unknown as Client} />);
+    expect(screen.getByAltText("IMG.jpg")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: /Save/ }));
+    await waitFor(() => expect(call).toHaveBeenCalledWith("phone.sms.attachment.save", { id: "a" }));
+  });
+});

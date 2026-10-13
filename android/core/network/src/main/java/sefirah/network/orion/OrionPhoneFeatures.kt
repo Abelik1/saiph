@@ -110,6 +110,8 @@ class OrionPhoneFeatures @Inject constructor(private val context: Context,
                 val action=MediaAction(type,body.getValue("source").jsonPrimitive.content,body["value"]?.jsonPrimitive?.longOrNull?.toDouble())
                 scope.launch { playback.handlePlaybackAction("",action) }
             }
+            "sms.attachment.request" -> if(smsPermissionGranted(context))
+                direct.sendMmsPart(body.getValue("thread").jsonPrimitive.long,body.getValue("message").jsonPrimitive.long,body.getValue("part").jsonPrimitive.long,event.getValue("source").jsonPrimitive.content)
             "photo.request" -> direct.sendOriginal(body.getValue("id").jsonPrimitive.content,event.getValue("source").jsonPrimitive.content)
             "file.offer" -> direct.enqueue(event)
         }

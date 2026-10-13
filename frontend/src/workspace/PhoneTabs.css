@@ -24,3 +24,5 @@
 .phone-ringer { display: flex; gap: 4px; margin: 6px 0; }
 .phone-ringer .selected { font-weight: 600; text-decoration: underline; }
 .phone-now-playing { display: grid; gap: 2px; margin: 8px 0; }
+.phone-attachment { margin: 4px 0; display: grid; gap: 4px; }
+.phone-attachment img { max-width: 240px; max-height: 240px; border-radius: 8px; object-fit: contain; }

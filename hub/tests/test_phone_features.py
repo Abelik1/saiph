@@ -69,7 +69,7 @@ def test_capture_insert_names_one_computer_and_a_digest_only(hub):
     for payload,targets in (({'sha256':'a'*64},None),({'sha256':'A'*64},[computer]),({'sha256':'a'*63},[computer]),
                             ({'sha256':'a'*64,'path':'C:/private'},[computer])):
         with pytest.raises(ValueError):apply(hub,phone,'capture.insert',payload,targets)
-    assert features.snapshot(hub.DB)=={'threads':[],'messages':[],'calls':[],'photos':[],'media':[],'ringers':[]}
+    assert features.snapshot(hub.DB)=={'threads':[],'messages':[],'calls':[],'photos':[],'media':[],'ringers':[],'attachments':[]}
 def test_remote_control_targets_one_computer_that_offers_it(hub):
     c=client(hub);_,phone=pair(hub,c);_,computer=pair(hub,c)
     with pytest.raises(ValueError):apply(hub,phone,'remote.command',{'app':'media','control':'next'},[computer])
@@ -129,3 +129,19 @@ def test_compose_dial_and_ringer_commands_are_bounded(hub):
     with pytest.raises(ValueError):apply(hub,computer,'phone.ringer',{'mode':'loud'},[phone])
     apply(hub,phone,'ringer.state',{'mode':'vibrate'})
     assert features.snapshot(hub.DB)['ringers'][0]['mode']=='vibrate'
+def test_mms_attachments_are_indexed_requested_and_offered_directly(hub):
+    c=client(hub);_,phone=pair(hub,c);_,computer=pair(hub,c)
+    caps(hub,phone,['sms'])
+    apply(hub,phone,'sms.thread',thread())
+    apply(hub,phone,'sms.attachments',{'thread':7,'message':31,'parts':[{'part':5,'mime':'image/jpeg','name':'IMG.jpg'}]})
+    assert features.snapshot(hub.DB)['attachments'][0]['parts'][0]['part']==5
+    apply(hub,computer,'sms.attachment.request',{'thread':7,'message':31,'part':5},[phone])
+    for payload in ({'thread':7,'message':31,'part':6},{'thread':7,'message':32,'part':5}):
+        with pytest.raises(ValueError):apply(hub,computer,'sms.attachment.request',payload,[phone])
+    blob={'id':str(uuid4()),'address':'100.64.0.9','port':8767}
+    offer={'name':'IMG.jpg','mime':'image/jpeg','size':10,'sha256':'a'*64,'blob':blob,'thread':7,'message':31,'part':5}
+    apply(hub,phone,'sms.attachment.file',offer,[computer])
+    with pytest.raises(ValueError):apply(hub,phone,'sms.attachment.file',{**offer,'blob':{**blob,'address':'8.8.8.8'}},[computer])
+    with pytest.raises(ValueError):apply(hub,phone,'sms.attachment.file',offer)
+    apply(hub,phone,'sms.remove',{'thread':7})
+    assert features.snapshot(hub.DB)['attachments']==[]

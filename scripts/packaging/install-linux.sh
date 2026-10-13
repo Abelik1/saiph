@@ -27,6 +27,9 @@ launcher="$HOME/.local/bin/orion"
 desktop="$data_root/applications/orion.desktop"
 autostart="$config_root/autostart/orion.desktop"
 mime="$data_root/mime/packages/orion-enrollment.xml"
+# File-manager "Send to phone" actions: GNOME Files (Nautilus) scripts and KDE Dolphin service menus.
+nautilus="$data_root/nautilus/scripts/Send to phone (Saiph)"
+servicemenu="$data_root/kio/servicemenus/saiph-send-to-phone.desktop"
 integration_work=
 stage=
 committed=0
@@ -40,7 +43,7 @@ cleanup() {
   # modification or symlink is retained; prior active release stays selected.
   if [ "$committed" != 1 ] && [ -n "$integration_work" ]; then
     for name in $changed; do
-      case "$name" in launcher) target=$launcher ;; desktop) target=$desktop ;; autostart) target=$autostart ;; mime) target=$mime ;; esac
+      case "$name" in launcher) target=$launcher ;; desktop) target=$desktop ;; autostart) target=$autostart ;; mime) target=$mime ;; nautilus) target=$nautilus ;; servicemenu) target=$servicemenu ;; esac
       if safe_path "$target" && [ -f "$target" ] && cmp -s "$target" "$integration_work/$name"; then
         if [ -f "$integration_work/old-$name" ]; then
           temporary=$(mktemp "${target}.orion.XXXXXXXX")
@@ -70,6 +73,10 @@ prepare_integration() {
   sed 's/X-GNOME-Autostart-enabled=true/X-GNOME-Autostart-enabled=false/' "$integration_work/autostart" > "$integration_work/autostart-disabled"
   printf '<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info"><mime-type type="application/x-orion-enrollment"><comment>Saiph device enrollment</comment><glob pattern="*.orion-enrollment"/></mime-type></mime-info>\n' > "$integration_work/mime-legacy"
   { printf '<!-- ORION_OWNED=1 -->\n'; cat "$integration_work/mime-legacy"; } > "$integration_work/mime"
+  printf '#!/bin/sh\n# ORION_OWNED=1\nexec "%s" --send-files "$@"\n' "$launcher" > "$integration_work/nautilus"
+  printf '[Desktop Entry]\n# ORION_OWNED=1\nType=Service\nMimeType=all/allfiles;\nActions=sendToPhone;\nX-KDE-Priority=TopLevel\n\n[Desktop Action sendToPhone]\nName=Send to phone (Saiph)\nIcon=%s/current/app/_internal/assets/orion-mini-icon.png\nExec="%s" --send-files %%F\n' "$install_root" "$launcher" > "$integration_work/servicemenu"
+  # Both file managers only run executable entries.
+  chmod u+x "$integration_work/nautilus" "$integration_work/servicemenu"
   # Accept only exact older label variants; arbitrary marker-bearing files stay unowned.
   for name in desktop autostart autostart-disabled mime mime-legacy; do
     sed -e 's/Name=Saiph/Name=Orion/' -e 's/Saiph device enrollment/Orion device enrollment/' "$integration_work/$name" > "$integration_work/orion-$name"
@@ -120,6 +127,8 @@ if [ "$isolated" != 1 ]; then
     preflight_integration desktop "$desktop"
     preflight_integration autostart "$autostart"
     preflight_integration mime "$mime"
+    preflight_integration nautilus "$nautilus"
+    preflight_integration servicemenu "$servicemenu"
   fi
 fi
 case "$install_root" in /*) ;; *) echo "Install root must be absolute." >&2; exit 1 ;; esac
@@ -161,8 +170,8 @@ if [ "${1:-}" = --uninstall ]; then
   # Retain installed releases and user data. Remove only owned launch integration,
   # allowing recovery and library replacement without recursive user-file deletion.
   if [ "$isolated" != 1 ]; then
-    for name in launcher desktop autostart mime; do
-      case "$name" in launcher) target=$launcher ;; desktop) target=$desktop ;; autostart) target=$autostart ;; mime) target=$mime ;; esac
+    for name in launcher desktop autostart mime nautilus servicemenu; do
+      case "$name" in launcher) target=$launcher ;; desktop) target=$desktop ;; autostart) target=$autostart ;; mime) target=$mime ;; nautilus) target=$nautilus ;; servicemenu) target=$servicemenu ;; esac
       if owned_integration "$name" "$target"; then rm -- "$target"; fi
     done
   fi
@@ -205,6 +214,9 @@ if [ "$isolated" != 1 ]; then
     write_integration autostart "$autostart"
   fi
   write_integration mime "$mime"
+  mkdir -p "$data_root/nautilus/scripts" "$data_root/kio/servicemenus"
+  write_integration nautilus "$nautilus"
+  write_integration servicemenu "$servicemenu"
 fi
 # Refuse unrelated active pointers and stale temporary links before activation.
 if [ -e "$install_root/current.new" ] || [ -L "$install_root/current.new" ]; then echo "Existing activation staging retained." >&2; exit 1; fi

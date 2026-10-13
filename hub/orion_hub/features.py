@@ -128,6 +128,22 @@ class CallLogEntry(Payload):
     type: Literal['incoming','outgoing','missed','rejected','other']
 class CallLog(Payload):
     calls: list[CallLogEntry] = Field(max_length=50)
+class AttachmentPart(Payload):
+    part: int = Field(ge=0)
+    mime: str = Field(min_length=1,max_length=120)
+    name: str = Field(max_length=180)
+class SmsAttachments(Payload):
+    thread: int = Field(ge=0)
+    message: int = Field(ge=0)
+    parts: list[AttachmentPart] = Field(min_length=1,max_length=10)
+class SmsAttachmentRequest(Payload):
+    thread: int = Field(ge=0)
+    message: int = Field(ge=0)
+    part: int = Field(ge=0)
+class SmsAttachmentFile(File):
+    thread: int = Field(ge=0)
+    message: int = Field(ge=0)
+    part: int = Field(ge=0)
 class PhotoOriginal(File):
     photo_id: str = Field(pattern='^[0-9]{1,20}$')
 
@@ -137,7 +153,8 @@ MODELS={'sms.thread':Conversation,'sms.messages':Messages,'sms.remove':Thread,'s
         'capture.insert':CaptureInsert,'remote.catalog.request':RemoteRequest,'phone.ring':RemoteRequest,'remote.command':RemoteCommand,
         'remote.catalog':RemoteCatalog,'remote.result':RemoteResult,'media.state':MediaState,'media.command':MediaCommand,
         'contacts.search':ContactsSearch,'contacts.results':ContactsResults,'sms.compose':SmsCompose,'ringer.state':Ringer,
-        'phone.ringer':Ringer,'call.dial':Dial,'calls.log.request':RemoteRequest,'calls.log':CallLog}
+        'phone.ringer':Ringer,'call.dial':Dial,'calls.log.request':RemoteRequest,'calls.log':CallLog,
+        'sms.attachments':SmsAttachments,'sms.attachment.request':SmsAttachmentRequest,'sms.attachment.file':SmsAttachmentFile}
 def ensure(connection):
     connection.execute(SCHEMA)
 def _put(c,device,kind,key,data,now,limit):
@@ -178,7 +195,7 @@ def apply(c,source,event,now):
             row=c.execute('SELECT capabilities_json FROM link_devices WHERE device_id=?',(event.targets[0],)).fetchone()
             if not row or 'remote' not in json.loads(row[0]):raise ValueError('Remote control unavailable')
         return
-    if event.type in {'contacts.results','calls.log'}:
+    if event.type in {'contacts.results','calls.log','sms.attachment.file'}:
         # Private answers to one computer's request: relayed, never stored.
         if event.targets is None or len(event.targets)!=1:raise ValueError('Phone answer names one device')
         return
@@ -186,18 +203,20 @@ def apply(c,source,event,now):
         # Names one computer that receives the matching photo offer; never stored.
         if event.targets is None or len(event.targets)!=1:raise ValueError('Capture requires one destination computer')
         return
-    if event.type in {'sms.open','sms.send','call.command','photo.request','phone.ring','media.command','contacts.search','sms.compose','phone.ringer','call.dial','calls.log.request'}:
+    if event.type in {'sms.open','sms.send','call.command','photo.request','phone.ring','media.command','contacts.search','sms.compose','phone.ringer','call.dial','calls.log.request','sms.attachment.request'}:
         if event.targets is None or len(event.targets)!=1:raise ValueError('Phone command requires one owning phone')
         owner=event.targets[0]
         row=c.execute('SELECT capabilities_json FROM link_devices WHERE device_id=?',(owner,)).fetchone()
         caps=json.loads(row[0]) if row else []
         required={'sms.open':'sms','sms.send':'sms','call.command':'call-control','photo.request':'photos','phone.ring':'ring','media.command':'media',
-                  'contacts.search':'contacts','sms.compose':'sms','phone.ringer':'ringer','call.dial':'call-dial','calls.log.request':'call-log'}[event.type]
+                  'contacts.search':'contacts','sms.compose':'sms','phone.ringer':'ringer','call.dial':'call-dial','calls.log.request':'call-log','sms.attachment.request':'sms'}[event.type]
         if required not in caps:raise ValueError('Phone capability unavailable')
         if isinstance(value,Thread) and _get(c,owner,'thread',value.thread) is None:raise ValueError('Conversation unavailable')
         if isinstance(value,SmsSend) and len((_get(c,owner,'thread',value.thread) or {}).get('recipients',[]))!=1:raise ValueError('Group messaging remains on the phone')
         if isinstance(value,CallCommand) and (_get(c,owner,'call','current') or {}).get('state')!='ringing':raise ValueError('Call no longer ringing')
         if isinstance(value,PhotoRequest) and _get(c,owner,'photo',value.id) is None:raise ValueError('Photo unavailable')
+        if isinstance(value,SmsAttachmentRequest) and value.part not in [p['part'] for p in (_get(c,owner,'attachment',f'{value.thread}:{value.message}') or {}).get('parts',[])]:
+            raise ValueError('Attachment unavailable')
         return
     if isinstance(value,Conversation):
         _put(c,source,'thread',value.thread,data,now,500)
@@ -214,10 +233,11 @@ def apply(c,source,event,now):
         for row in rows:
             if json.loads(row['data_json'])['id'] not in current:c.execute('DELETE FROM phone_features WHERE device_id=? AND kind="message" AND item_key=?',(source,row['item_key']))
     elif isinstance(value,Thread):
-        c.execute('DELETE FROM phone_features WHERE device_id=? AND (kind="thread" AND item_key=? OR kind="message" AND item_key LIKE ?)',(source,str(value.thread),f'{value.thread}:%'))
+        c.execute('DELETE FROM phone_features WHERE device_id=? AND (kind="thread" AND item_key=? OR kind IN ("message","attachment") AND item_key LIKE ?)',(source,str(value.thread),f'{value.thread}:%'))
     elif isinstance(value,Call):_put(c,source,'call','current',data,now,1)
     elif isinstance(value,MediaState):_put(c,source,'media','current',data,now,1)
     elif isinstance(value,Ringer):_put(c,source,'ringer','current',data,now,1)
+    elif isinstance(value,SmsAttachments):_put(c,source,'attachment',f'{value.thread}:{value.message}',data,now,2000)
     elif isinstance(value,Photos):
         for photo in value.photos:_put(c,source,'photo',photo.id,photo.model_dump(),now,100)
     elif isinstance(value,PhotoKeys):
@@ -229,7 +249,7 @@ def snapshot(db):
     with db.connect() as c:
         ensure(c)
         rows=c.execute('SELECT * FROM phone_features ORDER BY updated_at DESC').fetchall()
-    result={'threads':[],'messages':[],'calls':[],'photos':[],'media':[],'ringers':[]}
-    names={'thread':'threads','message':'messages','call':'calls','photo':'photos','media':'media','ringer':'ringers'}
+    result={'threads':[],'messages':[],'calls':[],'photos':[],'media':[],'ringers':[],'attachments':[]}
+    names={'thread':'threads','message':'messages','call':'calls','photo':'photos','media':'media','ringer':'ringers','attachment':'attachments'}
     for row in rows:result[names[row['kind']]].append({**json.loads(row['data_json']),'device_id':row['device_id']})
     return result

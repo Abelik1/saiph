@@ -14,19 +14,24 @@ from uuid import uuid4
 
 def forward_invitation(root: Path, path: str) -> bool:
     """Forward a file association to the existing authenticated local API."""
+    return forward_local(root, '/v1/enrollment/import', {'path': str(Path(path).resolve())})
+
+
+def forward_local(root: Path, endpoint: str, body: dict) -> bool:
+    """POST to the running instance's authenticated loopback API from its api.json."""
     import urllib.request
     try:
         info = json.loads((root / 'api.json').read_text(encoding='utf-8-sig'))
         origin = urlsplit(info['url'])
         if origin.scheme != 'http' or origin.hostname != '127.0.0.1' or not origin.port or origin.path not in {'', '/'} or origin.query or origin.fragment or origin.username is not None:
             return False
-        request = urllib.request.Request(info['url'].rstrip('/') + '/v1/enrollment/import',
-                                         data=json.dumps({'path': str(Path(path).resolve())}).encode(),
+        request = urllib.request.Request(info['url'].rstrip('/') + endpoint,
+                                         data=json.dumps(body).encode(),
                                          headers={'Authorization': 'Bearer ' + info['token'], 'Content-Type': 'application/json'})
         from .hub_client import _NoRedirect
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect())
         with opener.open(request, timeout=5) as response:
-            return response.status == 200
+            return response.status in {200, 202}
     except (OSError, ValueError, KeyError, TypeError):
         return False
 

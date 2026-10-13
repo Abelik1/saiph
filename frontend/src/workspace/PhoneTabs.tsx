@@ -13,11 +13,26 @@ export type MediaSession = { source: string; app: string; title: string; artist:
 export type CallLogEntry = { number: string; name: string; timestamp: number; duration: number; type: "incoming" | "outgoing" | "missed" | "rejected" | "other" };
 export type PhoneFeatureState = { threads: SmsThread[]; messages: SmsMessage[]; calls: { device_id: string; state: "ringing" | "active" | "missed" | "ended"; number: string; name: string }[]; photos: PhonePhoto[]; files: { id: string; device_id: string; name: string; path: string; size: number }[]; photo_saves?: PhotoSave[];
   media?: { device_id: string; sessions: MediaSession[] }[]; ringers?: { device_id: string; mode: "ring" | "vibrate" | "silent" }[];
-  contacts?: { device_id: string; query: string; contacts: { name: string; numbers: string[] }[] }[]; call_logs?: { device_id: string; calls: CallLogEntry[] }[] };
+  contacts?: { device_id: string; query: string; contacts: { name: string; numbers: string[] }[] }[]; call_logs?: { device_id: string; calls: CallLogEntry[] }[];
+  attachments?: { device_id: string; thread: number; message: number; parts: { part: number; mime: string; name: string }[] }[];
+  attachment_files?: { id: string; device_id: string; thread: number; message: number; part: number; name: string; mime: string; size: number; preview?: string; ready: boolean }[] };
 type PhoneDevice = { id: string; name: string; online: boolean; capabilities: string[] };
 const noFeatures: PhoneFeatureState = { threads: [], messages: [], calls: [], photos: [], files: [] };
 
 /** A new conversation: contact suggestions come from the phone on request and are not stored. */
+/** MMS parts: fetched from the phone only when the owner asks, then shown or saved. */
+function Attachments({ info, phone, message, client }: { info: PhoneFeatureState; phone: PhoneDevice; message: SmsMessage; client: Client }) {
+  const parts = info.attachments?.find((row) => row.device_id === phone.id && row.thread === message.thread && row.message === message.message_id)?.parts || [];
+  return <>{parts.map((part) => {
+    const file = info.attachment_files?.find((row) => row.device_id === phone.id && row.thread === message.thread && row.message === message.message_id && row.part === part.part && row.ready);
+    if (file?.preview) return <figure key={part.part} className="phone-attachment"><img src={file.preview} alt={part.name || "Picture"} />
+      <Action className="text-button" run={() => client.call("phone.sms.attachment.save", { id: file.id })}>Save<span className="sr-only"> {part.name}</span></Action></figure>;
+    if (file) return <div key={part.part} className="actions"><span>{part.name}</span><Action className="text-button" run={() => client.call("phone.sms.attachment.open", { id: file.id })}>Open</Action>
+      <Action className="text-button" run={() => client.call("phone.sms.attachment.save", { id: file.id })}>Save</Action></div>;
+    return <Action key={part.part} className="text-button" disabled={!phone.online} ariaLabel={"Show " + (part.name || part.mime)}
+      run={() => client.call("phone.sms.attachment", { device_id: phone.id, thread: message.thread, message: message.message_id, part: part.part })}>{part.mime.startsWith("image/") ? "Show picture" : "Get " + (part.name || "attachment")}</Action>;
+  })}</>;
+}
 function NewMessage({ info, phone, client, close }: { info: PhoneFeatureState; phone: PhoneDevice; client: Client; close: () => void }) {
   const [address, setAddress] = useState("");
   const [text, setText] = useState("");
@@ -58,7 +73,7 @@ function Messages({ info, phone, client }: { info: PhoneFeatureState; phone?: Ph
   const messages = info.messages.filter((r) => r.device_id === phone.id && r.thread === thread.thread).sort((a, b) => a.timestamp - b.timestamp);
   return <>{compose}<div className="phone-messages">
     <aside aria-label="Conversations">{threads.map((r) => <button key={r.id} className={r.thread === thread.thread ? "selected" : ""} onClick={() => { setSelected(r.thread); setReply(""); setQueued(false); }}><strong>{r.recipients.join(", ") || "Conversation"}</strong><span>{r.message.body}</span></button>)}</aside>
-    <section className="phone-conversation"><h2>{thread.recipients.join(", ") || "Conversation"}</h2><div className="phone-message-list">{messages.map((r) => <article key={r.id} className={"phone-message " + r.direction}><p>{r.body}</p><small>{new Date(r.timestamp).toLocaleString()}</small></article>)}</div>
+    <section className="phone-conversation"><h2>{thread.recipients.join(", ") || "Conversation"}</h2><div className="phone-message-list">{messages.map((r) => <article key={r.id} className={"phone-message " + r.direction}>{r.body && <p>{r.body}</p>}<Attachments info={info} phone={phone} message={r} client={client} /><small>{new Date(r.timestamp).toLocaleString()}</small></article>)}</div>
       <Form submit={async () => { await client.call("phone.sms.send", { device_id: phone.id, thread: thread.thread, text: reply }); setReply(""); setQueued(true); }}><label>Message<input aria-label="SMS reply" value={reply} maxLength={4096} disabled={!available || thread.recipients.length!==1} onChange={(e) => { setReply(e.target.value); setQueued(false); }} /></label><button disabled={!available || thread.recipients.length!==1 || !reply.trim()}><Send size={15} />Send</button>{queued && <small role="status">Reply queued for your phone.</small>}{thread.recipients.length!==1 && <small>Group replies stay in your phone's messaging app.</small>}</Form>
     </section>
   </div></>;

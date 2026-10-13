@@ -261,13 +261,18 @@ public static class Setup {
     }
     static string MenuShortcut { get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "Saiph", "Saiph.lnk"); } }
     static string LegacyMenuShortcut { get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "Orion", "Orion.lnk"); } }
-    static bool OwnShortcut(string path, List<string> targets) {
-        try { CheckParents(path, destination); return File.Exists(path) && Shortcut.Owned(path, targets); }
+    // Explorer's Send to menu: Windows appends the selected files after this fixed argument.
+    static string SendToShortcut { get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.SendTo), "Saiph (phone).lnk"); } }
+    const string SendFilesArgument = "--send-files";
+    static bool OwnShortcut(string path, List<string> targets, string arguments = "") {
+        try { CheckParents(path, destination); return File.Exists(path) && Shortcut.Owned(path, targets, arguments); }
         catch { return false; }
     }
     static void PreflightIntegration(List<string> targets) {
         CheckParents(MenuShortcut, destination);
         if (Directory.Exists(MenuShortcut) || (File.Exists(MenuShortcut) && !OwnShortcut(MenuShortcut, targets))) throw new InvalidDataException();
+        CheckParents(SendToShortcut, destination);
+        if (Directory.Exists(SendToShortcut) || (File.Exists(SendToShortcut) && !OwnShortcut(SendToShortcut, targets, SendFilesArgument))) throw new InvalidDataException();
         using (var key = Registry.CurrentUser.OpenSubKey(RunKey)) {
             object value = key == null ? null : key.GetValue("OrionMini", null, RegistryValueOptions.DoNotExpandEnvironmentNames);
             if (value != null && !IntegrationPolicy.OwnRun(value, targets)) throw new InvalidDataException();
@@ -286,6 +291,8 @@ public static class Setup {
         string exe = Path.Combine(release, "app", "OrionMini.exe"); string icon = Path.Combine(release, "app", "_internal", "assets", "orion-mini-icon.ico");
         string menu = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "Saiph"); Directory.CreateDirectory(menu);
         Shortcut.Create(MenuShortcut, exe, icon, "OrionMini.Desktop");
+        Directory.CreateDirectory(Path.GetDirectoryName(SendToShortcut));
+        Shortcut.Create(SendToShortcut, exe, icon, "OrionMini.Desktop", SendFilesArgument);
         // Only remove the old label when its target proves installer ownership.
         if (OwnShortcut(LegacyMenuShortcut, targets)) File.Delete(LegacyMenuShortcut);
         using (var key = Registry.CurrentUser.CreateSubKey(RunKey)) {
@@ -330,6 +337,7 @@ public static class Setup {
         if (!isolated) {
             if (OwnShortcut(MenuShortcut, targets)) File.Delete(MenuShortcut);
             if (OwnShortcut(LegacyMenuShortcut, targets)) File.Delete(LegacyMenuShortcut);
+            if (OwnShortcut(SendToShortcut, targets, SendFilesArgument)) File.Delete(SendToShortcut);
             using (var key = Registry.CurrentUser.OpenSubKey(RunKey, true)) { object value = key == null ? null : key.GetValue("OrionMini", null, RegistryValueOptions.DoNotExpandEnvironmentNames); if (IntegrationPolicy.OwnRun(value, targets)) key.DeleteValue("OrionMini"); }
             if (IntegrationPolicy.OwnUninstall(TryReadTree(UninstallKey), destination)) Registry.CurrentUser.DeleteSubKeyTree(UninstallKey, false);
             var command = TryReadTree(EnrollmentClass);
@@ -407,20 +415,21 @@ static class Shortcut {
     [StructLayout(LayoutKind.Explicit, Size=24)] struct Value { [FieldOffset(0)] public ushort type; [FieldOffset(8)] public IntPtr text; }
     [ComImport, InterfaceType(ComInterfaceType.InterfaceIsIUnknown), Guid("886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99")]
     interface Store { void GetCount(out uint a); void GetAt(uint a, out Key b); void GetValue(ref Key a, out Value b); void SetValue(ref Key a, ref Value b); void Commit(); }
-    public static bool Owned(string path, IEnumerable<string> targets) {
+    public static bool Owned(string path, IEnumerable<string> targets, string expectedArguments = "") {
         object item = new ShellLink();
         try {
             ((System.Runtime.InteropServices.ComTypes.IPersistFile)item).Load(path, 0);
             var target = new StringBuilder(32768); var arguments = new StringBuilder(32768);
             ((Link)item).GetPath(target, target.Capacity, IntPtr.Zero, 4); // SLGP_RAWPATH; never resolve or launch.
             ((Link)item).GetArguments(arguments, arguments.Capacity);
-            return arguments.Length == 0 && targets.Any(exe => String.Equals(target.ToString(), exe, StringComparison.OrdinalIgnoreCase));
+            return arguments.ToString() == expectedArguments && targets.Any(exe => String.Equals(target.ToString(), exe, StringComparison.OrdinalIgnoreCase));
         } finally { Marshal.FinalReleaseComObject(item); }
     }
-    public static void Create(string path, string executable, string icon, string identity) {
+    public static void Create(string path, string executable, string icon, string identity, string arguments = "") {
         object item = new ShellLink();
         try {
             var link = (Link)item; link.SetPath(executable); link.SetWorkingDirectory(Path.GetDirectoryName(executable)); link.SetIconLocation(icon, 0);
+            if (arguments.Length > 0) link.SetArguments(arguments);
             var store = (Store)item; var key = new Key { format = new Guid("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3"), id = 5 };
             var value = new Value { type = 31, text = Marshal.StringToCoTaskMemUni(identity) };
             try { store.SetValue(ref key, ref value); store.Commit(); } finally { Marshal.FreeCoTaskMem(value.text); }

@@ -139,8 +139,10 @@ class NativeNotifications:
             if len(self.suppressed) > 2000:
                 self.suppressed = {old[1]}
 
-    async def announce(self, title, message):
-        await self.notifier.send(title=title, message=message)
+    async def announce(self, title, message, buttons=(), clicked=None):
+        from desktop_notifier import Button
+        await self.notifier.send(title=title, message=message, on_clicked=clicked,
+                                 buttons=[Button(title=label, on_pressed=action) for label, action in buttons])
 
     async def reconcile(self, current):
         for key in set(self.ids) - current:
@@ -164,6 +166,7 @@ class PhoneRuntime:
         self.features = workspace.phone_features
         self.features.changed = changed
         self.features.capture_ready = self.capture_ready
+        self.features.photo_new = self.photo_new
         self.native = None
         self.low_battery = set()
         self.copied_codes = set()  # (notification, code) already copied automatically.
@@ -193,6 +196,23 @@ class PhoneRuntime:
             return
         self.clipboard_cache.claim('text/plain', code.encode())
         self.clipboard_received('text/plain', code.encode())
+
+    def photo_new(self, row):
+        """A screenshot or photo just taken on the phone: offer Copy and Save. Nothing transfers until clicked."""
+        if (self.workspace.settings.get('link') or {}).get('new_photo_notices') is False:
+            return
+        if not self.native or not self.loop or self.continuity.focus.quiet:
+            return
+        with self.state.lock:
+            name = next((d['name'] for d in self.state.devices if d['id'] == row['device_id']), 'your phone')
+        kind = 'screenshot' if 'screenshot' in str(row.get('name', '')).lower() else 'photo'
+        def act(mode):
+            try:
+                self.features.photo_request(row['device_id'], row['photo_id'], mode)
+            except ValueError:
+                pass  # Offline: the notice simply does nothing now.
+        buttons = [('Copy', lambda: act('copy')), ('Save', lambda: act('save'))]
+        asyncio.run_coroutine_threadsafe(self.native.announce(f'New {kind} from {name}', 'Copy it to paste here, or save it to Downloads.', buttons), self.loop)
 
     def capture_ready(self, row, mime, data):
         """A photo taken on the phone for this computer: ready to paste, with a notice."""

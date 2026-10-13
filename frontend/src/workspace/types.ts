@@ -14,7 +14,7 @@ export type DeskflowConfig = {enabled?:boolean;role?:"desktop"|"laptop";desktop?
 export type DeskflowStatus = {error:string;running?:boolean;crashes?:number;exit_code?:number|null;uptime?:number;setup?:{executable:string;certificates:string[];trust_file:string;trusted:boolean;mesh_addresses:string[]}};
 export type Settings = {
   cloud?: {path?:string;enabled?:boolean;recordings?:boolean};
-  link?: {focus?:boolean;dnd_sync?:boolean;auto_copy_codes?:boolean;battery_alerts?:boolean;pause_media_on_calls?:boolean;clipboard?:boolean;timezone?:string;wake_hour?:number;wake_minute?:number;camera?:CameraConfig;microphone?:MicrophoneConfig;deskflow?:DeskflowConfig;hotspot?:{profile?:string;auto?:boolean};remote?:{enabled?:boolean;devices?:string[];adapters?:Record<string,boolean>}};
+  link?: {focus?:boolean;dnd_sync?:boolean;auto_copy_codes?:boolean;battery_alerts?:boolean;pause_media_on_calls?:boolean;new_photo_notices?:boolean;clipboard?:boolean;timezone?:string;wake_hour?:number;wake_minute?:number;camera?:CameraConfig;microphone?:MicrophoneConfig;deskflow?:DeskflowConfig;hotspot?:{profile?:string;auto?:boolean};remote?:{enabled?:boolean;devices?:string[];adapters?:Record<string,boolean>}};
   projects: string[];
   selected_project: string;
   start_with_windows: boolean;

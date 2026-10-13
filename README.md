@@ -125,12 +125,12 @@ checklist, design and order are in the
 [Phone Link replacement plan](docs/PHONE_LINK_PARITY.md).
 
 - [ ] **Acceptance:** phone media controls on the computer (D).
-- [ ] **Acceptance:** new messages with contact search (A1). MMS pictures (A2); group replies (A3).
+- [ ] **Acceptance:** new messages with contact search (A1) and MMS pictures (A2). Group replies (A3).
 - [ ] **Acceptance:** phone panel, tray Phone menu and ringer mode (C).
 - [ ] **Acceptance:** lock this PC from the phone, opt-in (E).
 - [ ] **Acceptance:** dial from the computer and call history (B1).
-- [ ] New screenshots and photos offered on the computer (G).
-- [ ] Send to phone from File Explorer and Linux file managers (H).
+- [ ] **Acceptance:** new screenshots and photos offered on the computer (G).
+- [ ] **Acceptance:** Send to phone from File Explorer, GNOME Files and Dolphin (H).
 - [ ] Phone apps in their own windows (J).
 - [ ] Calls through the computer's audio: research spike first (B2).
 - [ ] Phone storage in File Explorer and Linux file managers (F).

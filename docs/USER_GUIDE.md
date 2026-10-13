@@ -83,6 +83,20 @@ From the Phone page and the tray's Phone menu you can also:
   setting, after allowing the phone in that computer's Phone remote settings and
   turning on This computer.
 
+**Send to phone:** in File Explorer choose Send to → Saiph (phone); in GNOME
+Files use Scripts → Send to phone (Saiph); in Dolphin use the Send to phone
+(Saiph) action. Saiph asks which phone and confirms before sending; at most 20
+files, each up to 2 GB. The tray's Phone menu also has Send a file to phone.
+
+**New screenshots and photos:** when you take a screenshot or photo on the phone,
+the computer shows a notice with Copy (it lands on the clipboard) and Save (to
+Downloads → Orion). Nothing transfers until you choose one. Turn it off with
+Offer new screenshots and photos in Settings → Advanced.
+
+**Pictures in messages (MMS):** conversations show Show picture for MMS parts.
+The picture is fetched from the phone only then, kept in Saiph's own folder,
+shown in the conversation, and saved to Downloads → Orion on request.
+
 Smaller conveniences, each with a switch in Settings → Advanced:
 
 - **Verification codes:** a phone notification containing a one-time code shows

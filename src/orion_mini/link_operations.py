@@ -29,7 +29,7 @@ def hosted_available() -> bool:
     return all(find_spec(name) is not None for name in ('tink', 'authlib'))
 
 
-CORE_METHODS = frozenset({'cloud.info', 'cloud.setup', 'cloud.client.open', 'cloud.client.install', 'components.sign_in', 'state', 'hub.pair', 'hub.test', 'phone.sms.send', 'continuity.handoff', 'continuity.dnd', 'deskflow.restart', 'hotspot.connect', 'enrollment.import', 'continuity.dismiss', 'enrollment.cancel', 'components.install', 'hub.decide', 'enrollment.export', 'enrollment.qr', 'phone.call', 'phone.ring', 'phone.media', 'phone.contacts.search', 'phone.sms.compose', 'phone.ringer', 'phone.dial', 'phone.calls.log', 'phone.photo.prefetch', 'phone.sms.open', 'enrollment.approve', 'phone.photo.save', 'phone.file.send', 'phone.notification', 'hub.refresh'}) | HOSTED_METHODS
+CORE_METHODS = frozenset({'cloud.info', 'cloud.setup', 'cloud.client.open', 'cloud.client.install', 'components.sign_in', 'state', 'hub.pair', 'hub.test', 'phone.sms.send', 'continuity.handoff', 'continuity.dnd', 'deskflow.restart', 'hotspot.connect', 'enrollment.import', 'continuity.dismiss', 'enrollment.cancel', 'components.install', 'hub.decide', 'enrollment.export', 'enrollment.qr', 'phone.call', 'phone.ring', 'phone.media', 'phone.contacts.search', 'phone.sms.compose', 'phone.ringer', 'phone.dial', 'phone.calls.log', 'phone.sms.attachment', 'phone.sms.attachment.save', 'phone.photo.prefetch', 'phone.sms.open', 'enrollment.approve', 'phone.photo.save', 'phone.file.send', 'phone.notification', 'hub.refresh'}) | HOSTED_METHODS
 
 class LinkOperations:
     def hosted_controller(self):
@@ -203,7 +203,8 @@ class LinkOperations:
             self._cloud_status_cache = None
             return result
         if method in {'phone.sms.open', 'phone.sms.send', 'phone.call', 'phone.ring', 'phone.media', 'phone.contacts.search', 'phone.sms.compose',
-                      'phone.ringer', 'phone.dial', 'phone.calls.log', 'phone.photo.save', 'phone.photo.prefetch', 'phone.file.send'}:
+                      'phone.ringer', 'phone.dial', 'phone.calls.log', 'phone.sms.attachment', 'phone.sms.attachment.save',
+                      'phone.photo.save', 'phone.photo.prefetch', 'phone.file.send'}:
             return self.phone_features.dispatch(method, args)
         if method == 'continuity.handoff':
             if not self.phone_runtime:

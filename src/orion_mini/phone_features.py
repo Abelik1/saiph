@@ -26,6 +26,9 @@ MEDIA_ACTIONS={'play','pause','next','previous','seek','volume'}
 RINGER_MODES={'ring','vibrate','silent'}
 DIAL=re.compile(r'[0-9+() .-]{1,40}')  # No * or #: MMI codes can change call forwarding.
 ANSWER_SECONDS=300  # Contact results and call history are kept in memory this long.
+NEW_PHOTO_SECONDS=120  # A photo this recent, first seen now, is offered on the computer.
+MAX_ATTACHMENT=20*1024**2
+PREVIEW_BYTES=400*1024  # MMS pictures up to this size are shown inline in the conversation.
 SAVE_ANSWER_SECONDS=60  # A save the phone never answered becomes retryable.
 def safe_name(value):
     # Filenames are labels, never paths; Windows device names are rejected too.
@@ -107,12 +110,13 @@ class PhoneFeatures:
         self.capture_ready=lambda row,mime,data:None  # Set by the runtime: clipboard and notice.
         self.answers={}  # (device, kind) -> private answer kept in memory only (contacts, call history).
         self.answers_lock=threading.Lock()  # Separate: GUI snapshots never wait on the restore writer.
+        self.photo_new=lambda row:None  # Set by the runtime: offer a new screenshot or photo.
     def restore(self,snapshot):
         # One atomic transaction, rather than one fsync and retention scan per
         # row. GUI readers use WAL and never wait on the feature writer lock.
         with self.lock,self.store.connect() as connection:
             connection.execute('BEGIN IMMEDIATE')
-            for kind,key in [('thread','threads'),('message','messages'),('call','calls'),('photo','photos'),('media','media'),('ringer','ringers')]:
+            for kind,key in [('thread','threads'),('message','messages'),('call','calls'),('photo','photos'),('media','media'),('ringer','ringers'),('attachment','attachments')]:
                 present=set();devices=set()
                 for row in snapshot.get(key,[]):
                     item=self._save(kind,row,connection=connection,prune=False);present.add(item['id']);devices.add(row['device_id'])
@@ -123,7 +127,8 @@ class PhoneFeatures:
     def _save(self,kind,row,*,connection=None,prune=True):
         if connection is None:
             with self.store.connect() as connection:return self._save(kind,row,connection=connection,prune=prune)
-        key=str(row['thread'])+':'+str(row['id']) if kind=='message' else str(row.get('thread',row.get('id','current')))
+        key=(str(row['thread'])+':'+str(row['id']) if kind=='message' else str(row['thread'])+':'+str(row['message']) if kind=='attachment'
+             else str(row.get('thread',row.get('id','current'))))
         ident=hashlib.sha256((row['device_id']+'\0'+kind+'\0'+key).encode()).hexdigest()
         previous={}
         if kind=='photo':
@@ -144,13 +149,13 @@ class PhoneFeatures:
         return saved
     @staticmethod
     def _prune(connection,kind,device):
-        limit={'thread':500,'message':2000,'photo':100,'call':1,'media':1,'ringer':1}[kind]
+        limit={'thread':500,'message':2000,'photo':100,'call':1,'media':1,'ringer':1,'attachment':2000}[kind]
         connection.execute("DELETE FROM records WHERE kind=? AND json_extract(data,'$.device_id')=? AND id NOT IN (SELECT id FROM records WHERE kind=? AND json_extract(data,'$.device_id')=? ORDER BY json_extract(data,'$.updated_at') DESC,rowid DESC LIMIT ?)",('phone_'+kind,device,'phone_'+kind,device,limit))
     def snapshot(self):
         with self.store.connect() as connection:
             connection.execute('BEGIN')
             result={name:[json.loads(row[0]) for row in connection.execute('SELECT data FROM records WHERE kind=? ORDER BY rowid DESC',('phone_'+kind,))]
-                    for kind,name in [('thread','threads'),('message','messages'),('call','calls'),('photo','photos'),('file','files'),('photo_save','photo_saves'),('media','media'),('ringer','ringers')]}
+                    for kind,name in [('thread','threads'),('message','messages'),('call','calls'),('photo','photos'),('file','files'),('photo_save','photo_saves'),('media','media'),('ringer','ringers'),('attachment','attachments'),('attachment_file','attachment_files')]}
         now=time.time();transfers=None;saves=[]
         for row in result['photo_saves']:
             if row['status']=='saved' and not Path(row['path']).is_file():continue
@@ -159,6 +164,7 @@ class PhoneFeatures:
                 row=self._unanswered(row,transfers)
             saves.append(row)
         result['photo_saves']=saves
+        result['attachment_files']=[self._attachment_view(row) for row in result['attachment_files']]
         with self.answers_lock:
             self.answers={key:value for key,value in self.answers.items() if now-value['at']<ANSWER_SECONDS}
             result['contacts']=[{**v['payload'],'device_id':k[0]} for k,v in self.answers.items() if k[1]=='contacts.results']
@@ -178,7 +184,7 @@ class PhoneFeatures:
                     for message in row['messages']:self._save('message',{'thread':row['thread'],**message,'device_id':row['device_id']},connection=connection,prune=False)
                     self._prune(connection,'message',row['device_id'])
             elif kind=='sms.remove':
-                for name in ['thread','message']:
+                for name in ['thread','message','attachment']:
                     for old in self.store.all('phone_'+name):
                         if old['device_id']==row['device_id'] and old['thread']==row['thread']:self.store.delete('phone_'+name,old['id'])
             elif kind=='sms.index':
@@ -187,12 +193,18 @@ class PhoneFeatures:
             elif kind=='call.state':self._save('call',row)
             elif kind=='media.state':self._save('media',row)
             elif kind=='ringer.state':self._save('ringer',row)
+            elif kind=='sms.attachments':self._save('attachment',row)
             elif kind in {'contacts.results','calls.log'}:
                 # Private answers to this computer's request: memory only, never stored.
                 with self.answers_lock:self.answers[(row['device_id'],kind)]={'payload':event['payload'],'at':time.time()}
             elif kind=='photos.index':
                 for photo in row['photos']:
-                    self._save('photo',{**photo,'device_id':row['device_id']})
+                    ident=hashlib.sha256((row['device_id']+'\0photo\0'+str(photo.get('id'))).encode()).hexdigest()
+                    try:self.store.get('phone_photo',ident);seen=True
+                    except ValueError:seen=False
+                    saved=self._save('photo',{**photo,'device_id':row['device_id']})
+                    # Only a photo taken just now, never seen before, is offered; history is not.
+                    if not seen and time.time()*1000-saved.get('timestamp',0)<NEW_PHOTO_SECONDS*1000:self.photo_new(saved)
                 self.start(config)
             elif kind=='photos.sync':
                 for old in self.store.all('phone_photo'):
@@ -209,7 +221,7 @@ class PhoneFeatures:
                 intent=self.store.save('phone_capture',{'id':self._photo_key(row['device_id'],digest),'device_id':row['device_id'],'sha256':digest,'received':now})
                 done=next((f for f in self.store.all('phone_file') if f['device_id']==row['device_id'] and f.get('sha256')==digest and f.get('path')),None)
                 if done:self._insert_capture(done,intent)
-            elif kind in {'file.offer','photo.original'}:
+            elif kind in {'file.offer','photo.original','sms.attachment.file'}:
                 # Completed event IDs suppress retries after the final atomic rename.
                 try:return self.store.get('phone_file',event['id'])
                 except ValueError:pass
@@ -272,6 +284,13 @@ class PhoneFeatures:
                         self.store.delete('phone_transfer',event['id'])
                         if not intent or intent['mode']=='save':self.photo_request(event['source'],row['photo_id'],'save')
                         self.changed();continue
+                if 'part' in row:
+                    # An MMS picture the owner opened: kept in Saiph's own folder, shown in the conversation.
+                    path=download(self.workspace.root,self.transfer_config,event['source'],row,self.workspace.root/'sms-attachments',MAX_ATTACHMENT)
+                    self.store.save('phone_attachment_file',{'id':self._attachment_key(event['source'],row['thread'],row['message'],row['part']),
+                        'device_id':event['source'],'thread':row['thread'],'message':row['message'],'part':row['part'],
+                        'name':safe_name(row['name']),'mime':row['mime'],'path':str(path),'size':row['size'],'sha256':row['sha256']})
+                    self.store.delete('phone_transfer',event['id']);self.changed();continue
                 directory=self._destination(row,intent)
                 existing=directory/safe_name(row['name'])
                 if photo_key and row.get('sha256') and same_file(existing,row['size'],row['sha256']):path=existing
@@ -283,7 +302,10 @@ class PhoneFeatures:
                     except ValueError:latest=intent
                     if intent and intent['mode']=='prefetch' and latest and latest['mode']=='save':
                         self.photo_request(event['source'],row['photo_id'],'save')
-                if not intent or intent['mode']!='prefetch':
+                    if latest and latest['mode']=='copy':
+                        self.store.delete('phone_photo_intent',photo_key)
+                        self._copy_original(event['source'],row['photo_id'])
+                if not intent or intent['mode'] not in {'prefetch','copy'}:
                     self._complete_file(event,path)
                     if photo_key:self._record_save(event['source'],row['photo_id'],'saved',name=path.name,path=str(path),size=row['size'],sha256=row.get('sha256'),file_id=event['id'])
                 else:self.store.delete('phone_transfer',event['id'])
@@ -328,7 +350,7 @@ class PhoneFeatures:
             if (self.workspace.settings.get('cloud') or {}).get('enabled',True) is False:raise ValueError('Cloud is disabled.')
             return ensure_layout(self.workspace.settings)/'Shared'
         if destination!='downloads':raise ValueError('Unknown file destination.')
-        return self.workspace.root/'phone-originals' if intent and intent['mode']=='prefetch' else Path.home()/'Downloads'/'Orion'
+        return self.workspace.root/'phone-originals' if intent and intent['mode'] in {'prefetch','copy'} else Path.home()/'Downloads'/'Orion'
     @staticmethod
     def _photo_key(device,photo):return hashlib.sha256((device+'\0'+str(photo)).encode()).hexdigest()
     def photo_cached(self,device,photo):
@@ -375,12 +397,44 @@ class PhoneFeatures:
             file_id=str(uuid4())
             self.store.save('phone_file',{'id':file_id,'device_id':device,'name':destination.name,'path':str(destination),'size':cached['size'],'photo_id':str(photo)})
         return self._record_save(device,photo,'saved',name=destination.name,path=str(destination),size=cached['size'],sha256=sha256,file_id=file_id)
+    @staticmethod
+    def _attachment_key(device,thread,message,part):return hashlib.sha256(f'{device}\0{thread}\0{message}\0{part}'.encode()).hexdigest()
+    @staticmethod
+    def _attachment_view(row):
+        """Small pictures inline; anything else is opened or saved on request."""
+        view={key:row.get(key) for key in ('id','device_id','thread','message','part','name','mime','size')}
+        try:
+            path=Path(row['path'])
+            if row['mime'].startswith('image/') and row['size']<=PREVIEW_BYTES and same_file(path,row['size'],row.get('sha256')):
+                view['preview']='data:'+row['mime']+';base64,'+base64.b64encode(path.read_bytes()).decode()
+            view['ready']=path.is_file()
+        except (OSError,KeyError):view['ready']=False
+        return view
+    def _attachment(self,args):
+        row=self.store.get('phone_attachment_file',str(args['id']))
+        if not same_file(row['path'],row['size'],row.get('sha256')):raise ValueError('This picture is no longer on this computer. Open it again from the conversation.')
+        return row
+    def attachment_save(self,args):
+        """Copies a received MMS picture into Downloads → Orion; never overwrites."""
+        row=self._attachment(args)
+        directory=Path.home()/'Downloads'/'Orion';directory.mkdir(parents=True,exist_ok=True)
+        destination=directory/safe_name(row['name'])
+        if destination.exists():destination=directory/(destination.stem+' '+str(uuid4())[:8]+destination.suffix)
+        shutil.copy2(row['path'],destination)
+        return {'saved':True,'path':str(destination),'folder':display_folder(destination)}
+    def _copy_original(self,device,photo):
+        """Places a held original on this computer's clipboard (Copy on a new-photo notice)."""
+        cached=self.photo_cached(device,photo)
+        mime=CAPTURE_TYPES.get(Path(cached['path']).suffix.lower()) if cached else None
+        if not cached or not mime or cached['size']>MAX_CAPTURE or not same_file(cached['path'],cached['size'],cached.get('sha256')):return False
+        self.capture_ready({'device_id':device},mime,Path(cached['path']).read_bytes());return True
     def photo_request(self,device,photo,mode='save'):
         if mode=='save':
             with self.lock:result=self._photo_save(device,photo)
             self.changed();return result
+        if mode=='copy' and self._copy_original(device,photo):return {'copied':True}
         cached=self.photo_cached(device,photo)
-        if cached:return {'ready':True,'path':cached['path']}
+        if cached and mode=='prefetch':return {'ready':True,'path':cached['path']}
         state=self.photo_save_state(device,photo)
         if state and state['status']=='saving':return {'queued':True}  # Hovering must not redirect a save to the cache.
         key=self._photo_key(device,photo)
@@ -406,7 +460,8 @@ class PhoneFeatures:
         runtime=self.workspace.phone_runtime
         if not runtime or not runtime.client or not runtime.loop or not self.workspace.phone.connected:raise ValueError('Saiph is offline. This action has not been sent.')
         capability={'sms.open':'sms','sms.send':'sms','photo.request':'photos','call.command':'call-control','file.offer':'files','phone.ring':'ring',
-                    'media.command':'media','contacts.search':'contacts','sms.compose':'sms','phone.ringer':'ringer','call.dial':'call-dial','calls.log.request':'call-log'}[kind]
+                    'media.command':'media','contacts.search':'contacts','sms.compose':'sms','phone.ringer':'ringer','call.dial':'call-dial','calls.log.request':'call-log',
+                    'sms.attachment.request':'sms'}[kind]
         phone=next((d for d in self.workspace.phone.snapshot()['devices'] if d['id']==device and d.get('online') and capability in d.get('capabilities',[])),None)
         if phone is None:raise ValueError('This feature is unavailable on that device.')
         event={'id':str(uuid4()),'type':kind,'ttl_seconds':30 if kind!='file.offer' else 300,'targets':[device],'payload':payload}
@@ -461,6 +516,14 @@ class PhoneFeatures:
             if not DIAL.fullmatch(number) or not any(c.isdigit() for c in number):raise ValueError('Enter a phone number. Codes with * or # stay on your phone.')
             return self.command(args['device_id'],'call.dial',{'number':number})
         if method=='phone.calls.log':return self.command(args['device_id'],'calls.log.request',{})
+        if method=='phone.sms.attachment':
+            thread,message,part=(int(args[key]) for key in ('thread','message','part'))
+            try:
+                held=self.store.get('phone_attachment_file',self._attachment_key(args['device_id'],thread,message,part))
+                if same_file(held['path'],held['size'],held.get('sha256')):return {'ready':True,'id':held['id']}
+            except ValueError:pass
+            return self.command(args['device_id'],'sms.attachment.request',{'thread':thread,'message':message,'part':part})
+        if method=='phone.sms.attachment.save':return self.attachment_save(args)
         if method=='phone.photo.save':return self.photo_request(args['device_id'],args['photo_id'])
         if method=='phone.photo.prefetch':return self.photo_request(args['device_id'],args['photo_id'],'prefetch')
         raise ValueError('Unknown phone action.')

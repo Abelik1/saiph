@@ -126,6 +126,7 @@ class MainWindow(QMainWindow):
     restart_requested = Signal()
     automation_requested = Signal(object)
     security_alert = Signal(str)
+    send_files_requested = Signal(object)
 
     def __init__(self, data_dir=None, bootstrap=True):
         super().__init__()
@@ -206,6 +207,9 @@ class MainWindow(QMainWindow):
             threading.Thread(target=self.workspace.user_presence.status, name='orion-user-presence', daemon=True).start()
         self.restart_requested.connect(self.restart_app)
         self.workspace.request_restart = self.restart_requested.emit
+        # Send to phone from a file manager arrives on the API thread; confirm on the GUI thread.
+        self.send_files_requested.connect(self.confirm_send_files)
+        self.workspace.request_send_files = self.send_files_requested.emit
         self.automation_requested.connect(self.run_automation)
         self.workspace.automation_call = Automation(self.workspace, self.run_on_gui, self.bridge.changed.emit)
         self.api = ApiServer(self.workspace, 0 if os.environ.get('ORION_MINI_TEST') else None)
@@ -304,6 +308,42 @@ class MainWindow(QMainWindow):
         start_update()
         QTimer.singleShot(400, self.quit_app)
         return {'ok': True}
+
+    def confirm_send_files(self, paths, attempts=0):
+        """The owner chooses the phone and confirms; nothing is sent before that."""
+        from PySide6.QtWidgets import QInputDialog, QMessageBox
+        from .send_files import targets, validate
+        try:
+            paths = validate(list(paths))
+        except (ValueError, OSError) as error:
+            self.tray.showMessage('Saiph', str(error), QSystemTrayIcon.Warning, 10000)
+            return
+        devices = targets(self.workspace.state())
+        if not devices and attempts < 7:
+            # The phone link may still be connecting just after start-up.
+            QTimer.singleShot(4000, lambda: self.confirm_send_files(paths, attempts + 1))
+            return
+        if not devices:
+            self.tray.showMessage('Saiph', 'Your phone is offline. Nothing was sent.', QSystemTrayIcon.Warning, 10000)
+            return
+        count = f'{len(paths)} file' + ('' if len(paths) == 1 else 's')
+        if len(devices) == 1:
+            device = devices[0]
+            if QMessageBox.question(self, 'Send to phone', f'Send {count} to {device["name"]}?') != QMessageBox.StandardButton.Yes:
+                return
+        else:
+            names = [d['name'] for d in devices]
+            name, chosen = QInputDialog.getItem(self, 'Send to phone', f'Send {count} to:', names, 0, False)
+            if not chosen:
+                return
+            device = devices[names.index(name)]
+        def run():
+            for path in paths:
+                try:
+                    self.workspace.dispatch('phone.file.send', {'device_id': device['id'], 'path': path})
+                except Exception as error:
+                    self.update_checked.emit(f'{Path(path).name}: {error}')
+        threading.Thread(target=run, name='orion-send-files', daemon=True).start()
 
     def fill_phone_menu(self):
         from .tray_menu import phone_entries
@@ -421,6 +461,8 @@ def main():
             return 2
         sys.argv.remove('--worker')
         return addon.worker_main()
+    from .send_files import arguments as send_arguments
+    sys.argv, send_paths = send_arguments(sys.argv)
     invitation = None
     if '--enrollment' in sys.argv:
         index = sys.argv.index('--enrollment')
@@ -445,6 +487,9 @@ def main():
         if invitation:
             from .enrollment import forward_invitation
             return 0 if forward_invitation(app_data_dir(), invitation) else 2
+        if send_paths:
+            from .send_files import forward
+            return 0 if forward(app_data_dir(), send_paths) else 2
         return 0
     app.setQuitOnLastWindowClosed(False)
     # Detection only, before any store opens: preserve evidence, never repair.
@@ -472,4 +517,7 @@ def main():
             from PySide6.QtWidgets import QMessageBox
             QMessageBox.warning(window, 'Server invitation', 'This invitation could not be opened or has expired. Ask your server for a fresh one.')
     window.show()
+    if send_paths:
+        # Started from Send to while Saiph was closed: ask once the phone link has had time to connect.
+        QTimer.singleShot(4000, lambda: window.confirm_send_files(send_paths))
     return app.exec()

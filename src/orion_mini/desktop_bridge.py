@@ -181,6 +181,9 @@ class DesktopBridge(QObject):
                 code = verification_code(row.get("title"), row.get("text"))
                 if not code: raise ValueError("This notification has no verification code.")
                 QApplication.clipboard().setText(code); result = {"copied": True}
+            elif method == "phone.sms.attachment.open":
+                row=self.window.workspace.phone_features._attachment(args)
+                open_target(Path(row["path"]));result={"opened":True}
             elif method == "phone.file.open":
                 row=self.window.workspace.store.get("phone_file",args["id"])
                 if not row.get("path") or not Path(row["path"]).is_file():raise ValueError("This file is unavailable.")

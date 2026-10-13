@@ -56,7 +56,7 @@ class OrionLinkService : Service() {
             continuity.event(event)
             runCatching { OrionRemote.receive(event) }
             if(event["type"]?.jsonPrimitive?.content in setOf("sms.open","sms.send","call.command","photo.request","file.offer","sms.compose","contacts.search",
-                    "calls.log.request","call.dial","phone.ringer","media.command")) phoneFeatures.receive(event)
+                    "calls.log.request","call.dial","phone.ringer","media.command","sms.attachment.request")) phoneFeatures.receive(event)
             if(event["type"]?.jsonPrimitive?.content=="clipboard" && getSharedPreferences("orion",0).getBoolean("clipboard_enabled",true)) peer.receiveClipboard(event,clipboard)
             if (event["type"]?.jsonPrimitive?.content == "phone.ring" && receipts.claim(event.getValue("id").jsonPrimitive.content)) OrionRing.start(this@OrionLinkService)
             if (event["type"]?.jsonPrimitive?.content == "notification.command") {

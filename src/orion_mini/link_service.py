@@ -138,9 +138,9 @@ class LinkWorkspace(LinkOperations):
             args = {**args, 'cloud': {**self.settings.get('cloud', {}), **cloud}}
         if 'link' in args:
             link = args['link']
-            if not isinstance(link, dict) or set(link) - {'focus', 'dnd_sync', 'auto_copy_codes', 'battery_alerts', 'pause_media_on_calls', 'clipboard', 'timezone', 'wake_hour', 'wake_minute', 'camera', 'microphone', 'deskflow', 'hotspot', 'remote'}:
+            if not isinstance(link, dict) or set(link) - {'focus', 'dnd_sync', 'auto_copy_codes', 'battery_alerts', 'pause_media_on_calls', 'new_photo_notices', 'clipboard', 'timezone', 'wake_hour', 'wake_minute', 'camera', 'microphone', 'deskflow', 'hotspot', 'remote'}:
                 raise ValueError('Unknown continuity preference.')
-            for flag in ('focus', 'dnd_sync', 'auto_copy_codes', 'battery_alerts', 'pause_media_on_calls', 'clipboard'):
+            for flag in ('focus', 'dnd_sync', 'auto_copy_codes', 'battery_alerts', 'pause_media_on_calls', 'new_photo_notices', 'clipboard'):
                 if flag in link and type(link[flag]) is not bool:
                     raise ValueError('Continuity preferences are on or off.')
             if 'deskflow' in link:

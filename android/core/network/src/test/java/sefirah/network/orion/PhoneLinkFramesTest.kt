@@ -55,4 +55,16 @@ class PhoneLinkFramesTest {
         assertFalse(FeatureAccess(contacts = false).allowsPublication("contacts.results"))
         assertFalse(FeatureAccess(callLog = false).allowsPublication("calls.log"))
     }
+    @Test fun mmsPartsAreAnnouncedWithoutTheirBytes() {
+        val message = TextMessage(uniqueId = 31, addresses = listOf("+44"), body = "", attachments = listOf(
+            SmsAttachment("IMG.jpg", "image/jpeg", thumbnail = "base64-thumbnail", partId = 5),
+            SmsAttachment("text", "text/plain", partId = 6), SmsAttachment("smil", "application/smil", partId = 7)))
+        val frames = PhoneFeatureFrames.encode(ConversationInfo(threadId = 7, recipients = listOf("+44"), message = message))!!
+        assertEquals(listOf("sms.thread", "sms.attachments"), frames.map { it.first })
+        val parts = frames[1].second.getValue("parts").jsonArray
+        assertEquals(1, parts.size)
+        assertEquals(5L, parts.single().jsonObject.getValue("part").jsonPrimitive.long)
+        assertFalse(frames[1].second.toString().contains("base64-thumbnail"))
+        assertNull(PhoneFeatureFrames.attachments(7, message.copy(attachments = null)))
+    }
 }

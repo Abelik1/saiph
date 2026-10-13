@@ -192,6 +192,21 @@ class ApiServer:
                         return self.reply(503, {"error": "unavailable", "message": "Restart is unavailable in this process."})
                     self.reply(202, {"restarting": True, "pid": os.getpid()})
                     return restart()
+                if path == "/v1/phone/send" and method == "POST":
+                    # Live authenticated callers only (Send to phone from a file manager);
+                    # the owner still confirms the phone before anything is sent.
+                    request = getattr(workspace, "request_send_files", None)
+                    if request is None:
+                        return self.reply(503, {"error": "unavailable", "message": "Sending is unavailable in this process."})
+                    if not isinstance(body, dict) or set(body) != {"paths"}:
+                        return self.reply(400, {"error": "invalid_body", "message": "Send a list of file paths."})
+                    from .send_files import validate
+                    try:
+                        paths = validate(body["paths"])
+                    except (ValueError, OSError) as error:
+                        return self.reply(400, {"error": "invalid_files", "message": str(error)})
+                    request(paths)
+                    return self.reply(202, {"confirming": True, "files": len(paths)})
                 if path == "/v1/app/call" and method == "POST":
                     return self.reply(*app_call(workspace, body))
                 self.reply(*handle(workspace, method, path, body))

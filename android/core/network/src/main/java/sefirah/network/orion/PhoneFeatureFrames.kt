@@ -13,8 +13,9 @@ object PhoneFeatureFrames {
     fun encode(value: SocketMessage): List<Pair<String,JsonObject>>? = when(value) {
         is ConversationInfo -> listOf("sms.thread" to buildJsonObject {
             put("thread",value.threadId);put("recipients",JsonArray(value.recipients.take(10).map { JsonPrimitive(it.take(120)) }));put("message",message(value.message))
-        })
-        is MessageList -> value.messages.take(10).chunked(2).map { chunk->"sms.messages" to buildJsonObject { put("thread",value.threadId);put("messages",JsonArray(chunk.map(::message))) } }
+        }) + listOfNotNull(attachments(value.threadId,value.message))
+        is MessageList -> value.messages.take(10).chunked(2).map { chunk->"sms.messages" to buildJsonObject { put("thread",value.threadId);put("messages",JsonArray(chunk.map(::message))) } } +
+            value.messages.take(10).mapNotNull { attachments(value.threadId,it) }
         is RemoveConversation -> listOf("sms.remove" to buildJsonObject { put("thread",value.threadId) })
         is MessageIndex -> listOf("sms.index" to buildJsonObject { put("thread",value.threadId);put("ids",JsonArray(value.messageIds.take(2000).map(::JsonPrimitive))) })
         is CallInfo -> listOf("call.state" to buildJsonObject {
@@ -23,6 +24,15 @@ object PhoneFeatureFrames {
         })
         is RingerModeState -> ringer(value.mode)?.let { listOf("ringer.state" to buildJsonObject { put("mode", it) }) }
         else -> null
+    }
+    /** MMS parts are announced by name only; their bytes travel directly when the computer asks. */
+    fun attachments(thread: Long, m: TextMessage): Pair<String,JsonObject>? {
+        val parts=m.attachments.orEmpty().filter { it.partId>=0 && !it.mimeType.startsWith("text/") && it.mimeType!="application/smil" }.take(10)
+        if(parts.isEmpty())return null
+        return "sms.attachments" to buildJsonObject {
+            put("thread",thread);put("message",m.uniqueId.coerceAtLeast(0))
+            put("parts",JsonArray(parts.map { buildJsonObject { put("part",it.partId);put("mime",it.mimeType.take(120));put("name",it.fileName.take(180)) } }))
+        }
     }
     fun ringer(mode: Int) = when (mode) { 0 -> "silent"; 1 -> "vibrate"; 2 -> "ring"; else -> null }
     fun ringerMode(name: String) = when (name) { "silent" -> 0; "vibrate" -> 1; "ring" -> 2; else -> throw IllegalArgumentException() }

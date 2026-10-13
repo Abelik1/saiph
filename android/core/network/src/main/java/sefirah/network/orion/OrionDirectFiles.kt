@@ -4,6 +4,9 @@ import android.Manifest
 import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
+import android.database.ContentObserver
+import android.os.Handler
+import android.os.Looper
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Environment
@@ -17,6 +20,8 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import kotlinx.coroutines.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.*
 import org.json.JSONObject
 import java.io.File
@@ -38,6 +43,10 @@ class OrionDirectFiles @Inject constructor(private val context: Context,private 
     private var server: EmbeddedServer<*,*>?=null
     private var host: String?=null
     private var nextPhotos=0L
+    private val photosMutex=Mutex()
+    // A new screenshot or photo is indexed within seconds, so the computer can offer it.
+    private var photoObserver: ContentObserver?=null
+    private var photoChange: Job?=null
     private val photoCache=mutableMapOf<Long,Pair<Long,JsonObject>>()
     private val transfers=context.getSharedPreferences("orion_file_transfers",0)
     private val transferLock=Any()
@@ -109,7 +118,7 @@ class OrionDirectFiles @Inject constructor(private val context: Context,private 
         }.start(wait=false);host=address;return true
     }
     private fun prune() { items.entries.removeIf { if(it.value.expires<System.currentTimeMillis()) { it.value.file.delete();true } else false } }
-    @Synchronized fun stop() { server?.stop(100,1000);server=null;host=null;items.values.forEach { it.file.delete() };items.clear();photoCache.clear();nextPhotos=0 }
+    @Synchronized fun stop() { unwatchPhotos();server?.stop(100,1000);server=null;host=null;items.values.forEach { it.file.delete() };items.clear();photoCache.clear();nextPhotos=0 }
     private fun offer(file: File,name: String,mime: String,photo: Uri? = null): JsonObject {
         require(start());prune();require(items.size<150 && file.length()<=MAX_FILE)
         val digest=MessageDigest.getInstance("SHA-256")
@@ -143,15 +152,30 @@ class OrionDirectFiles @Inject constructor(private val context: Context,private 
             link.publish("file.offer",offer,target) && link.publish("capture.insert",buildJsonObject { put("sha256",offer.getValue("sha256")) },target)
         } catch(_: Exception) { file.delete();false }
     }
+    private fun watchPhotos() {
+        if(photoObserver!=null)return
+        photoObserver=object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) {
+                photoChange?.cancel()
+                photoChange=scope.launch { delay(2000);nextPhotos=0L;runCatching { refreshPhotos() } }
+            }
+        }.also { context.contentResolver.registerContentObserver(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,true,it) }
+    }
+    private fun unwatchPhotos() {
+        photoChange?.cancel();photoChange=null
+        photoObserver?.let { context.contentResolver.unregisterContentObserver(it) };photoObserver=null
+    }
     fun refreshPhotoAccess(): Boolean {
         if(OrionPermissions.read(context).photos)return true
+        unwatchPhotos()
         items.entries.removeIf { (_,item) -> if(item.photo!=null) { item.file.delete();true } else false }
         photoCache.clear();nextPhotos=0L
         return false
     }
-    suspend fun refreshPhotos() {
-        if(!refreshPhotoAccess() || System.currentTimeMillis()<nextPhotos)return
-        if(!start())return
+    suspend fun refreshPhotos() = photosMutex.withLock {
+        if(!refreshPhotoAccess() || System.currentTimeMillis()<nextPhotos)return@withLock
+        if(!start())return@withLock
+        watchPhotos()
         nextPhotos=System.currentTimeMillis()+120_000
         val photos=mutableListOf<JsonObject>()
         context.contentResolver.query(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,arrayOf(MediaStore.Images.Media._ID,MediaStore.Images.Media.DISPLAY_NAME,MediaStore.Images.Media.DATE_ADDED),null,null,"${MediaStore.Images.Media.DATE_ADDED} DESC")?.use { cursor->
@@ -174,6 +198,18 @@ class OrionDirectFiles @Inject constructor(private val context: Context,private 
         photos.chunked(10).forEach { link.publish("photos.index",buildJsonObject { put("photos",JsonArray(it)) }) }
         link.publish("photos.sync",buildJsonObject { put("ids",JsonArray(photos.map { it.getValue("id") })) })
     }
+    /** One MMS part, after checking it belongs to that message and conversation. */
+    fun sendMmsPart(thread: Long,message: Long,part: Long,target: String) { scope.launch { runCatching {
+        val partUri=ContentUris.withAppendedId(Uri.parse("content://mms/part"),part)
+        val (mid,mime,name)=context.contentResolver.query(Uri.parse("content://mms/part"),arrayOf("mid","ct","name","cl"),"_id = ?",arrayOf(part.toString()),null)?.use {
+            require(it.moveToFirst());Triple(it.getLong(0),it.getString(1) ?: "application/octet-stream",it.getString(2) ?: it.getString(3) ?: "attachment_$part")
+        } ?: throw IllegalStateException()
+        require(mid==message)
+        val owner=context.contentResolver.query(ContentUris.withAppendedId(Uri.parse("content://mms"),message),arrayOf("thread_id"),null,null,null)?.use { if(it.moveToFirst())it.getLong(0) else null }
+        require(owner==thread)
+        val value=offer(copyUri(partUri),name,mime)
+        link.publish("sms.attachment.file",JsonObject(value+mapOf("thread" to JsonPrimitive(thread),"message" to JsonPrimitive(message),"part" to JsonPrimitive(part))),target)
+    } } }
     fun sendOriginal(id: String,target: String) { scope.launch {
         if("photos" !in OrionPhoneFeatures.capabilities(context))return@launch
         val uri=ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,id.toLong())
