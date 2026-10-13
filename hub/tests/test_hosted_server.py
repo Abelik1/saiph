@@ -32,9 +32,21 @@ def test_every_setting_required(tmp_path, name):
 @pytest.mark.parametrize("setting,value", [("ORION_HOSTED_EXPERIMENTAL", "true"),
     ("ORION_HOSTED_DATABASE", "orion-hosted.sqlite3"), ("ORION_HOSTED_DATABASE", "/var/lib/orion-hub/orion-hub.sqlite3"),
     ("ORION_AUTH0_ISSUER", "http://tenant.example/"), ("ORION_AUTH0_NATIVE_CLIENT_IDS", ""),
-    ("ORION_HOSTED_DEPLOYMENT_ID", "not-an-id")])
+    ("ORION_HOSTED_DEPLOYMENT_ID", "not-an-id"), ("ORION_AUTH0_MFA_CLAIM", "mfa"),
+    ("ORION_AUTH0_MFA_CLAIM", "http://synthetic.example/mfa")])
 def test_bad_configuration_fails_closed(tmp_path, setting, value):
     env = valid(tmp_path)
     env[setting] = value
     with pytest.raises(ValueError):
         configuration(env)
+
+
+def test_shared_service_refuses_an_invalid_second_factor_claim(tmp_path):
+    from orion_hub.hosted_service_server import configuration as shared
+    env = {"ORION_HOSTED_SHARED": "1", "ORION_AUTH0_ISSUER": "https://synthetic.eu.auth0.com/",
+           "ORION_AUTH0_AUDIENCE": "https://api.example", "ORION_AUTH0_NATIVE_CLIENT_IDS": "desktop,android",
+           "ORION_HOSTED_STATE": str(tmp_path)}
+    assert shared(env)[0] == tmp_path
+    assert shared({**env, "ORION_AUTH0_MFA_CLAIM": "https://synthetic.example/mfa"})[0] == tmp_path
+    with pytest.raises(ValueError):
+        shared({**env, "ORION_AUTH0_MFA_CLAIM": "mfa"})

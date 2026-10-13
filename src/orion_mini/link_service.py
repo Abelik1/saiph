@@ -20,6 +20,7 @@ from .package_updates import status as update_status
 from .phone import PhoneState
 from .phone_features import PhoneFeatures
 from .storage import Store, read_json, write_json
+from .user_presence import status as user_verification
 
 
 class UninstalledWorkspace:
@@ -91,7 +92,7 @@ class LinkWorkspace(LinkOperations):
                 'components': self.components.snapshot(), 'phone': self.phone.snapshot(),
                 'phone_features': self.phone_features.snapshot(), 'handoffs': self.store.all('handoff')[:100],
                 'deskflow': {**self.deskflow.status(), 'setup': self.deskflow.setup()}, 'dnd': self.dnd_status(), 'hotspot': self.hotspot.status(), 'remote': self.remote.status(), 'camera': self.camera.status(), 'microphone': self.microphone.status(),
-                'api': self.api_info, 'hub_inbox': self.hub_inbox(), 'hosted': self.hosted_state(),
+                'api': self.api_info, 'hub_inbox': self.hub_inbox(), 'hosted': self.hosted_state(), 'user_verification': user_verification(self),
                 'projects': [], 'transcripts': [], 'reminders': [], 'tasks': [], 'jobs': [],
                 'messages': [], 'emails': [], 'providers': [], 'skills': [], 'plugins': [], 'ticker': [],
                 'google': {'signed_in': False}, 'calendar': {'events': [], 'synced_at': None, 'error': ''},

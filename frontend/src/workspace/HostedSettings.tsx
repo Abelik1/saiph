@@ -9,6 +9,13 @@ type Request = {device_id: string; fingerprint: string; expires_at: number};
 const emptyConfig: HostedConfig = {service_url: "", issuer: "", audience: "", client_id: "", refresh_tokens: false};
 const statuses: Record<string, string> = {off: "Off", starting: "Starting", setup: "Set up this computer as root", active: "Connected", signed_out: "Signed out", sign_in_required: "Sign in again", offline: "Offline; reconnecting", renewal_pending: "Waiting to renew device approvals", retrying: "Reconnecting", clock: "Check this computer's clock", keys_unavailable: "Hosted keys could not be unlocked"};
 
+/** Tells the person whether approving or removing devices needs their face, fingerprint or PIN. */
+export function VerificationNote({value}: {value?: string}) {
+  if (value === "windows_hello") return <p className="muted">Windows Hello confirms it's you before a device is added or removed.</p>;
+  if (value === "unavailable") return <p className="muted">Anyone using this computer while it is unlocked can add a device. On Windows, set up Windows Hello in Settings → Accounts → Sign-in options so adding a device needs your face, fingerprint or PIN.</p>;
+  return null;
+}
+
 /** Opt-in preview. Deployment values are public configuration; credentials stay native. */
 export function HostedSettings({hosted, client}: {hosted?: HostedState; client: Client}) {
   const [config, setConfig] = useState<HostedConfig>(() => hosted?.config || emptyConfig);
@@ -58,10 +65,12 @@ export function HostedSettings({hosted, client}: {hosted?: HostedState; client: 
             <label>Device name<input value={label} maxLength={40} required onChange={event => setLabel(event.target.value)} /></label>
             <label><input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} /> The full fingerprint matches my phone</label><button disabled={!confirmed}>Approve device</button>
           </Form>}
+          <VerificationNote value={hosted.user_verification} />
           <p>Approvals expire at {new Date(hosted.roster!.expires_at * 1000).toLocaleString()}.</p>
           {members.map(member => <div className="list-row" key={member.id}><div className="grow"><b>{member.label}</b><small>{member.fingerprint}</small></div><Action run={() => client.call("hosted.revoke", {device_id: member.id})}>Revoke {member.label}</Action></div>)}
           {members.length > 0 && <><label>Send file to<select value={target} onChange={event => setTarget(event.target.value)}><option value="">Choose device</option>{members.map(member => <option key={member.id} value={member.id}>{member.label}</option>)}</select></label><Action disabled={!target} run={() => client.call("hosted.file.choose", {target})}>Choose file to send</Action></>}
           {hosted.offers?.map(offer => <div className="list-row" key={offer.id}><span>{offer.name} ({offer.size} bytes)</span><Action run={() => client.call("hosted.file.save", {id: offer.id})}>Save {offer.name}</Action></div>)}
+          {!!hosted.security_events?.length && <details><summary>Recent device changes</summary>{hosted.security_events.map(event => <p key={event.id}>{event.kind === "added" ? "Approved" : "Removed"} {event.label} · {new Date(event.at * 1000).toLocaleString()}</p>)}</details>}
           {hosted.notifications?.map(item => <div key={item.id}><b>{item.app}: {item.title}</b><p>{item.text}</p><Action run={() => client.call("hosted.notification.dismiss", {id: item.id})}>Dismiss notification</Action></div>)}
         </>}
         {hosted.error && <p role="alert">{hosted.error}</p>}

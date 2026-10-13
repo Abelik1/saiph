@@ -3,7 +3,7 @@ import "server-only";
 import { Auth0Client } from "@auth0/nextjs-auth0/server";
 import { NextResponse } from "next/server";
 import { accountCookieName, readAuthConfig } from "./policy.mjs";
-import {canUseAccount, readBetaConfig} from "./beta-policy.mjs";
+import {canUseAccount, completedSecondFactor, readBetaConfig, secondFactorRequired} from "./beta-policy.mjs";
 let instance: Auth0Client | undefined;
 export function getAuth0() {
   const config = readAuthConfig(process.env);
@@ -22,7 +22,10 @@ export function getAuth0() {
       transactionCookie: {sameSite: "lax", secure: true},
       async onCallback(error, _context, session) {
         if (error) return new NextResponse("Sign-in could not be completed. Please start again.", {status: 400});
-        if (!canUseAccount(session?.user.sub, config.ownerSubject, process.env)) {
+        if (secondFactorRequired(process.env) && !completedSecondFactor(session?.user)) {
+          return new NextResponse("Two-step verification is required. Turn it on when Saiph asks during sign-in, then sign in again.", {status: 403});
+        }
+        if (!canUseAccount(session?.user.sub, config.ownerSubject, process.env, completedSecondFactor(session?.user))) {
           return new NextResponse("This development account site is restricted to its owner.", {status: 403});
         }
         // Always use the configured origin and destination, ignoring caller returnTo.
@@ -30,7 +33,8 @@ export function getAuth0() {
       },
       async beforeSessionSaved(session) {
         // No profile, email or access token is exposed through a browser API.
-        return {...session, user: {sub: session.user.sub}};
+        // Only whether this sign-in used a second factor is kept.
+        return {...session, user: {sub: session.user.sub, mfa: completedSecondFactor(session.user)}};
       }
     });
   }

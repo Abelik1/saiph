@@ -38,7 +38,7 @@ export default async function Account({ searchParams }: Props) {
     );
   const session = await auth0.getSession();
   if (!session) redirect("/auth/login");
-  if (!canUseAccount(session.user.sub, process.env.SAIPH_OWNER_SUBJECT, process.env))
+  if (!canUseAccount(session.user.sub, process.env.SAIPH_OWNER_SUBJECT, process.env, session.user.mfa))
     return (
       <>
         <h1>Access denied.</h1>

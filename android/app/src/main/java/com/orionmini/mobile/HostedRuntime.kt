@@ -1,8 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package com.orionmini.mobile
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
+import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.*
@@ -138,6 +143,7 @@ class HostedRuntime private constructor(private val context: Context) {
             outgoing.clear(); offers = emptyList(); status = "Waiting for root approval or renewal"; return@withLock
         }
         gate(); status = "Connected"
+        runCatching { watchMembers(current) }
         while (true) {
             val payload = outgoing.poll() ?: break
             val type = payload["type"]?.jsonPrimitive?.content
@@ -197,6 +203,48 @@ class HostedRuntime private constructor(private val context: Context) {
         check(!enabled()); HostedAccount.get(context).signOut(); invalidate()
         // Keystore keys and encrypted trust history stay available for explicit
         // recovery. A newly enrolled member gets a fresh unique device ID.
-        prefs.edit().remove("device_id").remove("root").remove("recipient").commit()
+        prefs.edit().remove("device_id").remove("root").remove("recipient").remove("seen_members").commit()
+    }
+
+    /**
+     * Alert on every change to the root-signed device list. The first verified
+     * list is the baseline; afterwards an added device raises a high-priority
+     * notification, so an approval made on an unattended computer is noticed.
+     */
+    private fun watchMembers(current: HostedSession) {
+        val members = current.currentMembers().keys.filter { it != current.deviceId }.sorted()
+        val seen = prefs.getString("seen_members", null)
+        val joined = members.joinToString(",")
+        if (seen == joined) return
+        check(prefs.edit().putString("seen_members", joined).commit())
+        if (seen == null) return
+        val before = seen.split(',').filter { it.isNotEmpty() }.toSet()
+        val added = members.count { it !in before }
+        val removed = before.count { it !in members }
+        val now = System.currentTimeMillis()
+        val events = securityEventRecords().toMutableList()
+        if (added > 0) events.add(0, "$now:added:$added")
+        if (removed > 0) events.add(0, "$now:removed:$removed")
+        prefs.edit().putString("security_events", events.take(20).joinToString("\n")).apply()
+        if (added > 0) alert(if (added == 1) "A new device was added to your Saiph account" else "$added new devices were added to your Saiph account",
+            "If you didn't approve this on your computer, remove the device there now and change your password.")
+        else alert("A device was removed from your Saiph account", "It no longer receives your clipboard, notifications or files.")
+    }
+    private fun securityEventRecords() = prefs.getString("security_events", "")!!.split('\n').filter { it.matches(Regex("\\d{1,15}:(added|removed):\\d{1,3}")) }
+    /** Recent device-list changes for the Hosted screen, newest first. */
+    fun securityEvents(): List<String> = securityEventRecords().map { record ->
+        val (time, kind, count) = record.split(':')
+        val label = java.text.DateFormat.getDateTimeInstance().format(java.util.Date(time.toLong()))
+        (if (kind == "added") "Device added" else "Device removed") + (if (count != "1") " ($count)" else "") + " · $label"
+    }
+    private fun alert(title: String, body: String) {
+        val manager = context.getSystemService(NotificationManager::class.java)
+        manager.createNotificationChannel(NotificationChannel("orion_security", "Saiph security alerts", NotificationManager.IMPORTANCE_HIGH))
+        val open = PendingIntent.getActivity(context, 44, Intent(context, HostedActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
+        runCatching {
+            manager.notify(44, NotificationCompat.Builder(context, "orion_security").setSmallIcon(android.R.drawable.ic_dialog_alert)
+                .setContentTitle(title).setContentText(body).setStyle(NotificationCompat.BigTextStyle().bigText(body))
+                .setContentIntent(open).setAutoCancel(true).setPriority(NotificationCompat.PRIORITY_HIGH).build())
+        }
     }
 }

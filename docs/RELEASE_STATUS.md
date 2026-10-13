@@ -1,5 +1,13 @@
 # Current release preparation status
 
+2026-10-13 account security: [account and device controls](ACCOUNT_SECURITY.md)
+are in source with synthetic tests — Windows Hello before device changes,
+device-list alerts on desktop and Android, Android biometric confirmation and
+optional app lock, enforceable second-factor claims for the Hosted service and
+account website, and an administrator workspace reset. They need a release and
+physical acceptance; second-factor enforcement waits for a paid Auth0 plan and
+stays off until configured. None is deployed.
+
 2026-10-12 security update: [four hosted security fixes](SECURITY_FIXES_2026-10-12.md)
 are prepared in source with offline regression tests. Updating installed desktop
 and hosted service releases, production load checks and off-host recovery remain

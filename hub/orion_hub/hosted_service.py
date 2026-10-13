@@ -10,9 +10,10 @@ from __future__ import annotations
 
 import asyncio
 from collections import OrderedDict
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 import json
 import hashlib
+import os
 from pathlib import Path
 import re
 import secrets
@@ -200,6 +201,51 @@ class AccountRegistry:
                 if previous and previous['account'] != account:
                     reject(409)
                 db.execute('INSERT OR IGNORE INTO devices VALUES(?,?)', (device, account))
+
+    def reset_workspace(self, identifier):
+        """Administrator recovery after a lost root or a root set up by someone else.
+
+        Keeps a private consistent copy, then clears rosters, used device IDs,
+        candidates and sealed content in the same write transaction, so a running
+        service never sees a partial reset. Account, entitlement and immutable
+        device ownership are kept; the owner sets up a new root and re-approves
+        devices, whose old trust state fails closed until they are retired.
+        Verify the requester and secure their login (with a second factor) first,
+        or the same attacker can set up a root again.
+        """
+        if not isinstance(identifier, str) or str(UUID(identifier)) != identifier:
+            raise ValueError('Use the account identifier')
+        with self.connect() as db:
+            row = db.execute('SELECT id,issuer,subject FROM accounts WHERE id=?', (identifier,)).fetchone()
+        if row is None:
+            raise ValueError('Unknown account')
+        config = self.config(dict(row))
+        if not config.database.is_file():
+            raise ValueError('This account has no workspace to reset')
+        archive = self.directory / 'retired-workspaces'
+        archive.mkdir(mode=0o700, exist_ok=True)
+        target = archive / f"{identifier}-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}.sqlite3"
+        descriptor = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)  # Never overwrite evidence.
+        os.close(descriptor)
+        expected = (config.deployment_id, config.auth.issuer, config.auth.owner_subject, config.auth.audience)
+        try:
+            with closing(sqlite3.connect(config.database.as_uri() + '?mode=rw', uri=True, timeout=10)) as db, db:
+                db.execute('BEGIN IMMEDIATE')
+                if tuple(db.execute('SELECT deployment_id,issuer,subject,audience FROM deployment WHERE id=1').fetchone() or ()) != expected:
+                    raise ValueError('Workspace ownership mismatch')
+                # This connection holds the write lock, so a separate reader copies
+                # exactly the committed state that is cleared below (WAL mode).
+                with closing(sqlite3.connect(config.database.as_uri() + '?mode=ro', uri=True, timeout=10)) as reader, \
+                        closing(sqlite3.connect(target)) as copy:
+                    reader.backup(copy)
+                tables = [name for (name,) in db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")]
+                for table in tables:
+                    if table != 'deployment':
+                        db.execute(f'DELETE FROM "{table}"')
+        except BaseException:
+            target.unlink(missing_ok=True)
+            raise
+        return {'account': identifier, 'archived': target.name}
 
     def config(self, account):
         identifier = account['id']

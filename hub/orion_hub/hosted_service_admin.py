@@ -22,7 +22,7 @@ def main():
     migrate = commands.add_parser('import-owner')
     migrate.add_argument('--snapshot', type=Path, required=True)
     migrate.add_argument('--until', type=int, required=True)
-    for action in ('suspend', 'reactivate'):
+    for action in ('suspend', 'reactivate', 'reset-workspace'):
         commands.add_parser(action).add_argument('--account', required=True)
     args = parser.parse_args()
     try:
@@ -43,6 +43,9 @@ def main():
         elif args.action == 'revoke-code':
             registry.revoke_code(args.digest)
             identifier = 'revoked'
+        elif args.action == 'reset-workspace':
+            print(json.dumps({**registry.reset_workspace(args.account), 'action': args.action}))
+            return
         elif args.action == 'admit':
             value = json.loads(args.identity_file.read_text(encoding='utf-8'))
             if not isinstance(value, dict) or set(value) != {'issuer', 'subject'} or value['issuer'] != auth.issuer:

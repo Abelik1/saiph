@@ -67,8 +67,11 @@ def test_do_not_disturb_latest_change_is_shared_and_validated(tmp_path):
         c.executescript(continuity.SCHEMA)
         for device in ("phone", "desktop"):
             c.execute("INSERT INTO devices(id,name,public_key_der_b64,created_at) VALUES(?,?,'test','now')", (device, device))
-        continuity.apply(c, "phone", SimpleNamespace(type="focus.state", payload={"active": True, "changed_at": 1_800_000_000}, targets=None), 100)
-        continuity.apply(c, "desktop", SimpleNamespace(type="focus.state", payload={"active": False, "changed_at": 1_800_000_060}, targets=None), 90)
+        continuity.apply(c, "phone", SimpleNamespace(type="focus.state", payload={"active": True, "changed_at": 1_800_000_000}, targets=None), 1_800_000_100)
+        continuity.apply(c, "desktop", SimpleNamespace(type="focus.state", payload={"active": False, "changed_at": 1_800_000_060}, targets=None), 1_800_000_090)
+        # A far-future time (a wrong clock) cannot pin the shared state.
+        with pytest.raises(ValueError, match="future"):
+            continuity.apply(c, "phone", SimpleNamespace(type="focus.state", payload={"active": True, "changed_at": 2**41 - 1}, targets=None), 1_800_000_100)
     assert continuity.snapshot(db)["dnd"] == {"source": "desktop", "active": False, "changed_at": 1_800_000_060}
     for payload, targets in (({"active": "yes", "changed_at": 1}, None), ({"active": True}, None),
                              ({"active": True, "changed_at": 1.5}, None), ({"active": True, "changed_at": 1, "app": "x"}, None),

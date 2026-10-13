@@ -344,3 +344,31 @@ def test_web_redemption_and_native_device_authorization_stay_separate(service):
 def test_invitation_requires_bounded_expiry(service, until):
     with pytest.raises(ValueError):
         service['registry'].issue_code(until)
+
+
+def test_administrator_reset_archives_then_clears_one_workspace_for_a_new_root(service):
+    """Recovery after a lost root, or a root an attacker created with a stolen login."""
+    import sqlite3
+    client, registry = service['client'], service['registry']
+    alice, bob = service['accounts']
+    source, target = alice['devices']
+    assert send(client, source, 'POST', '/v1/sealed/events', source['session'].encrypt(target['id'], {'text': 'synthetic'})).status_code == 200
+    result = registry.reset_workspace(alice['id'])
+    archived = registry.directory / 'retired-workspaces' / result['archived']
+    with sqlite3.connect(archived) as copy:
+        assert copy.execute('SELECT count(*) FROM rosters').fetchone()[0] == len(alice['entries'])
+        assert copy.execute('SELECT count(*) FROM sealed_events').fetchone()[0] == 1
+    # The cached running app sees an empty workspace; the old devices lose access.
+    assert client.get('/v1/devices/rosters', headers=alice['headers']).json()['chain'] == []
+    assert send(client, target, 'GET', '/v1/sealed/events').status_code in (401, 403, 409)
+    # A new root (fresh device ID) can be set up; the other account is untouched.
+    root = dict(id='dev_' + uuid4().hex, sign=ec.generate_private_key(ec.SECP256R1()), enc=generate_recipient())
+    value = enrollment(alice['id'], root['id'], root['sign'], root['enc'])
+    assert client.post('/v1/devices/requests', headers=alice['headers'], json=value).status_code == 200
+    genesis = dict(deployment_id=alice['id'], version=1, previous_hash=None, expires_at=int(time.time()) + 3600, members=[value['device']])
+    assert client.post('/v1/devices/rosters', headers=alice['headers'], json=sign_roster(genesis, root['sign'])).status_code == 200
+    assert client.get('/v1/devices/rosters', headers=bob['headers']).json()['chain'] == bob['entries']
+    # Device ownership stays immutable across accounts.
+    assert registry.device(source['id'])['id'] == alice['id']
+    with pytest.raises(ValueError):
+        registry.reset_workspace(str(uuid4()))

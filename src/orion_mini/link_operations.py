@@ -12,6 +12,7 @@ from pathlib import Path
 from . import hub_client
 from .models import utc_now
 from .storage import write_json
+from .user_presence import confirm as confirm_user
 
 # Opt-in Saiph Hosted preview. Every method refuses work unless the hosted
 # setting is on; with it off, self-hosted behaviour is unchanged.
@@ -238,6 +239,8 @@ class LinkOperations:
                 raise ValueError('Choose Show pairing QR to add a device.')
             if not self.hub_ready():
                 raise ValueError('Pair this computer with your server before adding a device.')
+            # A pairing code adds a device to the Hub; the person must be present.
+            confirm_user(self, 'show a pairing code for a new device')
             try:
                 # Same signed Hub invitation as the file flow; shown on screen, never saved.
                 artifact = hub_client.signed(self.root, self.settings['hub'], '/v1/link/enrollment', 'POST', {})
@@ -249,6 +252,7 @@ class LinkOperations:
             target = Path(args['path'])
             if target.suffix.lower() != '.orion-enrollment':
                 raise ValueError('Choose a new private Saiph invitation file.')
+            confirm_user(self, 'save a pairing invitation for a new device')
             fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
             try:
                 with os.fdopen(fd, 'w', encoding='utf-8') as output:

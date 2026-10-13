@@ -125,6 +125,7 @@ class MainWindow(QMainWindow):
     update_checked = Signal(str)
     restart_requested = Signal()
     automation_requested = Signal(object)
+    security_alert = Signal(str)
 
     def __init__(self, data_dir=None, bootstrap=True):
         super().__init__()
@@ -189,6 +190,17 @@ class MainWindow(QMainWindow):
         self.tray.activated.connect(lambda reason: self.showNormal() if reason == QSystemTrayIcon.Trigger else None)
         if not os.environ.get('ORION_MINI_TEST'):
             self.tray.show()
+        # Device-list changes are announced from the hosted worker thread; the
+        # signal delivers them to the tray on the GUI thread.
+        self.security_alert.connect(lambda message: self.tray.showMessage('Saiph security', message, QSystemTrayIcon.Warning, 15000))
+        self.workspace.security_alert = self.security_alert.emit
+        if not os.environ.get('ORION_MINI_TEST'):
+            # Adding devices requires Windows Hello where it is set up. The handle
+            # is read here, on the GUI thread; prompts run on worker threads.
+            from .user_presence import UserPresence
+            window_handle = int(self.winId())
+            self.workspace.user_presence = UserPresence(lambda: window_handle)
+            threading.Thread(target=self.workspace.user_presence.status, name='orion-user-presence', daemon=True).start()
         self.restart_requested.connect(self.restart_app)
         self.workspace.request_restart = self.restart_requested.emit
         self.automation_requested.connect(self.run_automation)

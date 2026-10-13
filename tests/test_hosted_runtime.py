@@ -13,7 +13,24 @@ CONFIG = {"service_url": "https://synthetic.example", "issuer": "https://identit
 
 
 def workspace(tmp_path, settings=None):
-    return SimpleNamespace(root=tmp_path, settings=settings or {}, save=lambda: None)
+    from orion_mini.storage import Store
+    return SimpleNamespace(root=tmp_path, settings=settings or {}, save=lambda: None, store=Store(tmp_path / "store"))
+
+
+class Presence:
+    """Records verification requests; ``refuse`` simulates a cancelled Windows Hello prompt."""
+    def __init__(self):
+        self.reasons, self.refuse = [], False
+
+    def confirm(self, reason):
+        from orion_mini.user_presence import UserVerificationError
+        self.reasons.append(reason)
+        if self.refuse:
+            raise UserVerificationError("Verification was cancelled. Nothing was changed.")
+        return "verified"
+
+    def cached_status(self):
+        return "windows_hello"
 
 
 @pytest.mark.parametrize("settings", [{}, {"hosted": {}}, {"hosted": {"enabled": False}},
@@ -246,6 +263,9 @@ def test_root_approval_clipboard_restart_and_revocation_use_real_crypto_offline(
             pytest.fail(f"Unexpected synthetic Hosted route: {method} {path}")
 
     profile = workspace(tmp_path / "desktop")
+    profile.user_presence = presence = Presence()
+    alerts = []
+    profile.security_alert = alerts.append
     protection = SyntheticProtection()
     received = []
     controller = HostedController(profile, protection=protection, transport_factory=SyntheticTransport)
@@ -265,8 +285,17 @@ def test_root_approval_clipboard_restart_and_revocation_use_real_crypto_offline(
     assert controller.inspect_request(request)["device_id"] == device
     with pytest.raises(HostedError, match="fingerprint"):
         controller.approve(request, "Synthetic phone", False)
-    assert len(chain) == 1
+    assert len(chain) == 1 and not presence.reasons
+    # A cancelled Windows Hello prompt stops approval before any roster is signed.
+    presence.refuse = True
+    with pytest.raises(ValueError, match="cancelled"):
+        controller.approve(request, "Synthetic phone", True)
+    assert len(chain) == 1 and not alerts
+    presence.refuse = False
     assert controller.approve(request, "Synthetic phone", True) == {"approved": device}
+    assert presence.reasons[-1] == 'approve the device "Synthetic phone" for your Saiph account'
+    assert alerts == ["Synthetic phone was approved for your Saiph account. If this wasn't you, remove it in Settings."]
+    assert [(e["kind"], e["device_id"]) for e in controller.snapshot()["security_events"]] == [("added", device)]
     phone = SealedSession(tmp_path / "phone.sqlite3", deployment, root.signing_key, device, signing, encryption)
     phone.accept_chain(deepcopy(chain))
     assert controller._labels()[device] == "Synthetic phone"
@@ -292,6 +321,8 @@ def test_root_approval_clipboard_restart_and_revocation_use_real_crypto_offline(
     assert restarted.status == "active"
     assert restarted.info.device_id == root.device_id
     assert restarted.revoke(device) == {"revoked": device}
+    assert presence.reasons[-1] == "remove a device from your Saiph account"
+    assert alerts[-1] == "Synthetic phone was removed from your Saiph account."
     assert device not in restarted.session.current()
     assert device not in restarted._labels()
     with pytest.raises(EnvelopeError):

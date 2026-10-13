@@ -21,5 +21,14 @@ describe("Hosted preview settings", () => {
     fireEvent.change(screen.getByLabelText("Phone request code"), {target: {value: "first"}}); fireEvent.click(screen.getByRole("button", {name: "Check request"})); await screen.findByText("Compare this full device fingerprint with the phone:");
     fireEvent.click(screen.getByLabelText("The full fingerprint matches my phone")); fireEvent.change(screen.getByLabelText("Phone request code"), {target: {value: "different"}}); expect(screen.queryByRole("button", {name: "Approve device"})).toBeNull();
   });
+  it("says whether Windows Hello protects device changes and lists recent changes", () => {
+    setup({...active, user_verification: "windows_hello", security_events: [{id: "e1", kind: "added", device_id: "phone", label: "Phone", at: 1900000000}]});
+    expect(screen.getByText(/Windows Hello confirms it's you/)).toBeVisible();
+    expect(screen.getByText(/Approved Phone/)).toBeInTheDocument();
+  });
+  it("asks the owner to set up verification when none is available", () => {
+    setup({...active, user_verification: "unavailable"});
+    expect(screen.getByText(/Anyone using this computer while it is unlocked can add a device/)).toBeVisible();
+  });
   it("requires explicit retirement confirmation and does not show data while signed out", () => { setup({...active, enabled: false}); expect(screen.getByRole("button", {name: "Forget Hosted on this computer"})).toBeDisabled(); expect(screen.queryByRole("button", {name: "Choose file to send"})).toBeNull(); });
 });

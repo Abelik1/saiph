@@ -42,6 +42,8 @@ class OrionActivity : ComponentActivity() {
     private var lastRender = ""
     private var pairingInProgress = false
     private val prefs by lazy { getSharedPreferences("orion", MODE_PRIVATE) }
+    private val lock = AppLock(this)
+    private var showingLock = false
     private val updates by lazy { AppUpdates(this) }
     private lateinit var backupSettings: OrionBackupSettings
     private val enrollmentFile = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -110,6 +112,19 @@ class OrionActivity : ComponentActivity() {
     }
     override fun onResume() {
         super.onResume(); network.startService(); lastRender = ""
+        lock.protectWindow(AppLock.enabled(this))
+        lock.open(::lockedScreen, ::resumeUnlocked)
+    }
+    override fun onStop() { lock.stopped(); super.onStop() }
+    private fun lockedScreen() {
+        if (showingLock) return
+        showingLock = true; poll?.cancel()
+        root.removeAllViews(); navigation.removeAllViews()
+        root.addView(heading("Saiph is locked")); root.addView(text("Confirm it's you to open Saiph.", 14f, Palette.MUTED))
+        root.addView(buttonRow(button("Unlock", true) { lock.declined = false; lock.open({}, ::resumeUnlocked) }))
+    }
+    private fun resumeUnlocked() {
+        showingLock = false
         updates.checkStartup()
         if (!prefs.contains("device_id")) { pairing(); return }
         val requestedSetup = intent.getBooleanExtra("setup", false)
@@ -193,7 +208,11 @@ class OrionActivity : ComponentActivity() {
         if (prefs.contains("device_id") || pairingInProgress) return
         AlertDialog.Builder(this).setTitle("Use this Saiph invitation?")
             .setMessage("Pair this phone with the server that provided this invitation. Continue only if you trust its owner. Your phone keeps its own signing key.")
-            .setPositiveButton("Use invitation") { _, _ -> remember(invite) }
+            .setPositiveButton("Use invitation") { _, _ ->
+                // Pairing shares notifications and messages with that server; confirm the owner.
+                if (!AppLock.deviceSecure(this)) Toast.makeText(this, "Set a screen lock so nobody else can pair or open this phone.", Toast.LENGTH_LONG).show()
+                lock.confirm("Pair this phone with a Saiph server", failure = { Toast.makeText(this, it, Toast.LENGTH_LONG).show() }) { remember(invite) }
+            }
             .setNegativeButton("Cancel", null).show()
     }
     private fun remember(invite: Enrollment) {
@@ -436,6 +455,8 @@ class OrionActivity : ComponentActivity() {
             text = "Sync Do Not Disturb with my devices"; isChecked = prefs.getBoolean("dnd_sync", true)
             setOnCheckedChangeListener { _, checked -> prefs.edit().putBoolean("dnd_sync", checked).apply(); lifecycleScope.launch(Dispatchers.IO) { runCatching { OrionContinuity(this@OrionActivity).tick() } } }
         })
+        root.addView(section("Security"))
+        root.addView(lock.toggle())
         root.addView(buttonRow(button("Setup permissions") { setup() }, button("Advanced") { advanced() }))
         root.addView(buttonRow(button("Back to Saiph") { homeLoop() }))
     }

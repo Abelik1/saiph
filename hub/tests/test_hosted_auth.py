@@ -173,3 +173,31 @@ def test_rejects_incomplete_or_unsafe_configuration(config, change):
     from dataclasses import asdict
     with pytest.raises(ValueError):
         Auth0Config(**{**asdict(config), **change})
+
+
+MFA = "https://saiph.example.test/mfa"
+
+
+@pytest.mark.parametrize("value", [None, False, "true", 1, {"done": True}])
+def test_required_second_factor_claim_must_be_exactly_true(config, claims, key, value):
+    verifier = AccessTokens(config, key_resolver=lambda kid: key.public_key(), mfa_claim=MFA)
+    if value is not None:
+        claims[MFA] = value
+    assert_unauthorized(lambda: verifier.verify(encode(key, claims)))
+    claims[MFA] = True
+    assert verifier.verify(encode(key, claims)) == {"issuer": config.issuer, "subject": config.owner_subject}
+
+
+def test_second_factor_claim_is_optional_until_configured(config, claims, key):
+    assert AccessTokens(config, key_resolver=lambda kid: key.public_key()).verify(encode(key, claims))["subject"] == config.owner_subject
+
+
+@pytest.mark.parametrize("value", ["mfa", "http://saiph.example.test/mfa", "https://saiph.example.test", "https://x/a b",
+                                   "https://saiph.example.test/mfa?x=1", " https://saiph.example.test/mfa"])
+def test_invalid_second_factor_claim_names_refuse_startup(config, value):
+    from orion_hub.hosted_auth import mfa_claim
+    with pytest.raises(ValueError):
+        mfa_claim({"ORION_AUTH0_MFA_CLAIM": value})
+    with pytest.raises(ValueError):
+        AccessTokens(config, mfa_claim=value)
+    assert mfa_claim({}) is None and mfa_claim({"ORION_AUTH0_MFA_CLAIM": MFA}) == MFA

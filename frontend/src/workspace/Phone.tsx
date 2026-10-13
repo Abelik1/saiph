@@ -95,6 +95,7 @@ export function Phone({ state, client }: { state: State; client: Client }) {
             <small>Add a device</small>
             <Action className="text-button" disabled={Boolean(pairing)} run={showPairingQr}>Show pairing QR</Action>
             <Action className="text-button" run={() => client.call("enrollment.export")}>Save invitation file</Action>
+            {state.user_verification === "unavailable" && <small className="muted">Set up Windows Hello so adding a device needs your face, fingerprint or PIN.</small>}
           </div>}
         </div>
       </div>

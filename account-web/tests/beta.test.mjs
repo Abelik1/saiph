@@ -63,3 +63,16 @@ test("backend denial or malformed status produces generic failure with no secret
     const body=await response.text();assert.equal(body.includes(code),false);assert.equal(body.includes("bearer-secret"),false);
   }
 });
+test("required second factor needs a sign-in whose verified amr claim includes mfa",async()=>{
+  const {completedSecondFactor,secondFactorRequired}=await import("../lib/beta-policy.mjs");
+  const strict={...env,SAIPH_REQUIRE_MFA:"true"};
+  assert.equal(secondFactorRequired(strict),true);
+  for(const value of ["1","TRUE","yes",undefined]) assert.equal(secondFactorRequired({...env,SAIPH_REQUIRE_MFA:value}),false);
+  assert.equal(completedSecondFactor({sub:"synthetic|friend",amr:["pwd","mfa"]}),true);
+  for(const claims of [null,{},{amr:"mfa"},{amr:["pwd"]},{amr:[["mfa"]]},{mfa:true}]) assert.equal(completedSecondFactor(claims),false);
+  assert.equal(canUseAccount("synthetic|friend","synthetic|owner",strict,true),true);
+  for(const flag of [undefined,false,"true",1]) assert.equal(canUseAccount("synthetic|friend","synthetic|owner",strict,flag),false);
+  // Owners need the second factor too once it is required.
+  assert.equal(canUseAccount("synthetic|owner","synthetic|owner",{SAIPH_REQUIRE_MFA:"true"},false),false);
+  assert.equal(canUseAccount("synthetic|friend","synthetic|owner",env,false),true);
+});

@@ -53,11 +53,18 @@ def validate(event):
             raise ValueError("Wake target is not configured")
 
 
+DND_FUTURE_SKEW_SECONDS = 86_400
+
+
 def apply(connection, source, event, now):
     validate(event)
     if event.type == "focus.plan":
         connection.execute("INSERT INTO link_focus VALUES(?,?,?) ON CONFLICT(source) DO UPDATE SET plan_json=excluded.plan_json,updated_at=excluded.updated_at", (source, json.dumps(event.payload), now))
     elif event.type == "focus.state":
+        # The newest change wins, so a far-future time from one bad clock would
+        # pin the shared state for every device. Allow ordinary clock skew only.
+        if event.payload["changed_at"] > now + DND_FUTURE_SKEW_SECONDS:
+            raise ValueError("Do Not Disturb change time is in the future; check this device's clock")
         connection.execute("INSERT INTO link_dnd VALUES(?,?,?,?) ON CONFLICT(source) DO UPDATE SET active=excluded.active,changed_at=excluded.changed_at,updated_at=excluded.updated_at",
                            (source, int(event.payload["active"]), event.payload["changed_at"], now))
 

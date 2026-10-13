@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 
 from .hosted import HostedConfig, create_app
-from .hosted_auth import Auth0Config
+from .hosted_auth import AccessTokens, Auth0Config, mfa_claim
 
 
 def configuration(environ=None):
@@ -16,6 +16,7 @@ def configuration(environ=None):
     try:
         auth = Auth0Config(env["ORION_AUTH0_ISSUER"], env["ORION_AUTH0_AUDIENCE"],
                            tuple(env["ORION_AUTH0_NATIVE_CLIENT_IDS"].split(",")), env["ORION_AUTH0_OWNER_SUBJECT"])
+        mfa_claim(env)
         database = Path(env["ORION_HOSTED_DATABASE"])
         if not database.is_absolute() or database.name != "orion-hosted.sqlite3":
             raise ValueError()
@@ -26,7 +27,9 @@ def configuration(environ=None):
 
 def main():
     import uvicorn
-    uvicorn.run(create_app(configuration()), host="127.0.0.1", port=8766,
+    config = configuration()
+    tokens = AccessTokens(config.auth, mfa_claim=mfa_claim(os.environ))
+    uvicorn.run(create_app(config, tokens=tokens), host="127.0.0.1", port=8766,
                 access_log=False, proxy_headers=False, server_header=False)
 
 

@@ -68,7 +68,7 @@ export async function proxy(request: NextRequest) {
     if (path === "/account" || path.startsWith("/account/") || path.startsWith("/api/")) {
       const session = await auth0.getSession(request);
       if (!session) return secure(NextResponse.redirect(new URL("/auth/login", process.env.APP_BASE_URL)));
-      if (!canUseAccount(session.user.sub, process.env.SAIPH_OWNER_SUBJECT, process.env)) {
+      if (!canUseAccount(session.user.sub, process.env.SAIPH_OWNER_SUBJECT, process.env, session.user.mfa)) {
         return new NextResponse("Access denied", {status: 403, headers: responseHeaders});
       }
     }

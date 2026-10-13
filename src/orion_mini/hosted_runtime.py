@@ -46,6 +46,7 @@ from .hosted_renewal import ROSTER_LIFETIME_SECONDS, assess
 from .hosted_session import SealedSession, enrollment
 from .hosted_tokens import HostedAccount, HostedUnavailable, SignInRequired, TokenVault
 from .hosted_transport import HostedTransport, TransportError
+from .user_presence import confirm as confirm_user, status as user_verification
 
 EXCLUSIVE = ("This computer is paired with a self-hosted Hub. A device uses either a self-hosted Hub "
              "or Saiph Hosted, never both.")
@@ -149,6 +150,9 @@ class HostedController:
         self._thread = None
         self._stop = threading.Event()
         self._wake = threading.Event()
+        # Called with a short message when the approved device list changes; the
+        # desktop window installs a thread-safe tray notification.
+        self.alert = lambda message: getattr(self.workspace, "security_alert", lambda _: None)(message)
 
     # ------------------------------------------------------------ settings
     @property
@@ -222,6 +226,9 @@ class HostedController:
         """
         if confirm is not True:
             raise HostedError("Confirm that this computer should stop using Saiph Hosted.")
+        if self.enabled():
+            raise HostedError("Turn off Saiph Hosted first.")
+        confirm_user(self.workspace, "retire this computer's Saiph Hosted identity")
         with self.lock:
             if self.enabled():
                 raise HostedError("Turn off Saiph Hosted first.")
@@ -360,6 +367,7 @@ class HostedController:
                 self.identity.create(deployment, role="root")
             self._open()
             self._genesis(token)
+            self._watch_members()  # Baseline: only this computer, so the first approval alerts.
             self.status = "active"
             self.error = ""
         self.changed()
@@ -457,6 +465,16 @@ class HostedController:
             raise HostedError("Name the device you are approving.")
         with self.lock:
             self._require_enabled()
+            self._open()
+            try:
+                verify_request_code(code, self.root)
+            except ApprovalError:
+                raise HostedError("This request code is invalid, expired or for another deployment.") from None
+        # An approved device receives future content; the person at the computer
+        # must prove presence. Prompt outside the lock so syncing continues.
+        confirm_user(self.workspace, f"approve the device \"{label.strip()}\" for your Saiph account")
+        with self.lock:
+            self._require_enabled()
             token = self._token_or_error()
             self._open()
             try:
@@ -475,10 +493,14 @@ class HostedController:
             if candidate["device"]["id"] not in members:
                 raise HostedError("Saiph Hosted has not accepted the approval yet. It will retry automatically.")
             self._set_label(candidate["device"]["id"], label.strip())
+            self._watch_members()
         self.changed()
         return {"approved": candidate["device"]["id"]}
 
     def revoke(self, device_id) -> dict:
+        if type(device_id) is not str:
+            raise HostedError("Choose an approved device.")
+        confirm_user(self.workspace, "remove a device from your Saiph account")
         with self.lock:
             self._require_enabled()
             token = self._token_or_error()
@@ -493,6 +515,7 @@ class HostedController:
                 raise HostedError("Revocation could not be confirmed. Saiph will refresh the device list when it reconnects.") from None
             if device_id in members:
                 raise HostedError("Saiph Hosted has not accepted the revocation yet. It will retry automatically.")
+            self._watch_members()
             labels = self._labels()
             labels.pop(device_id, None)
             self._write_labels(labels)
@@ -516,6 +539,47 @@ class HostedController:
         labels = self._labels()
         labels[device_id] = label
         self._write_labels(labels)
+
+    # --------------------------------------------------------------- alerts
+    def _watch_members(self):
+        """Record and announce every change to the verified device list.
+
+        The first list seen on this computer is the baseline. Later additions and
+        removals are kept as security events and raised as a system notification,
+        so an approval made while the owner was away is noticed.
+        """
+        try:
+            current = sorted(self.session.current())
+        except EnvelopeError:
+            return
+        path = self.folder / "members-seen.json"
+        try:
+            seen = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(seen, list) or not all(type(item) is str for item in seen):
+                seen = None
+        except (OSError, ValueError):
+            seen = None
+        if seen == current:
+            return
+        temporary = path.with_suffix(".tmp")
+        temporary.write_text(json.dumps(current), encoding="utf-8")
+        temporary.replace(path)
+        if seen is None:
+            return
+        labels, now = self._labels(), int(self.clock())
+        changes = [("added", device) for device in sorted(set(current) - set(seen))]
+        changes += [("removed", device) for device in sorted(set(seen) - set(current))]
+        for change, device in changes:
+            label = labels.get(device, "A device")
+            self.workspace.store.save("hosted_security_event", {
+                "id": hashlib.sha256(f"{change}|{device}|{now}".encode()).hexdigest(),
+                "kind": change, "device_id": device, "label": label, "at": now})
+            if change == "added":
+                self.alert(f"{label} was approved for your Saiph account. If this wasn't you, remove it in Settings.")
+            else:
+                self.alert(f"{label} was removed from your Saiph account.")
+        for old in self.workspace.store.all("hosted_security_event")[50:]:
+            self.workspace.store.delete("hosted_security_event", old["id"])
 
     # ------------------------------------------------------------- schedule
     def step(self) -> None:
@@ -554,6 +618,7 @@ class HostedController:
                     expires = self.session.roster["expires_at"] if self._active() else None
                     self.decision = assess(expires, self.clock(), server_offset=getattr(self.transport, "server_offset", None))
                 if self._active() and not self.decision.blocked:
+                    self._watch_members()
                     self.status = "active" if not self.decision.skew_warning else "clock"
                     if self.status == "active":
                         self.error = ""
@@ -727,7 +792,7 @@ class HostedController:
                   "status": self.status if self.enabled() else "off", "error": self.error if self.enabled() else "",
                   "account": {"status": "signed_out", "refresh_tokens": bool(config and config["refresh_tokens"]), "error": ""},
                   "role": None, "device_id": None, "fingerprint": None, "roster": None, "offers": [],
-                  "notifications": []}
+                  "notifications": [], "user_verification": user_verification(self.workspace), "security_events": []}
         if not self.enabled() and not self.identity.exists():
             return result
         with self.lock:
@@ -755,6 +820,7 @@ class HostedController:
                 except (EnvelopeError, KeyError, TypeError):
                     self._offers.pop(event_id, None)
         result["notifications"] = self.workspace.store.all("hosted_notification")[:200]
+        result["security_events"] = self.workspace.store.all("hosted_security_event")[:20]
         return result
 
     # --------------------------------------------------------------- thread

@@ -264,12 +264,15 @@ export type Transcript = {
   track_labels: Record<string, string>;
 };
 export type HostedConfig = {service_url: string; issuer: string; audience: string; client_id: string; refresh_tokens: boolean};
-export type HostedState = {available: boolean; enabled: boolean; status: string; identity: boolean; configured?: boolean; config?: HostedConfig; self_hosted_paired?: boolean; error?: string; account?: {status: string; error: string; refresh_tokens: boolean}; fingerprint?: string | null; roster?: {expires_at: number; version: number; clock_warning: boolean; members: {id: string; label: string; root: boolean; fingerprint: string}[]} | null; offers?: {id: string; name: string; size: number}[]; notifications?: {id: string; app: string; title: string; text: string}[]};
+export type HostedState = {available: boolean; enabled: boolean; status: string; identity: boolean; configured?: boolean; config?: HostedConfig; self_hosted_paired?: boolean; error?: string; account?: {status: string; error: string; refresh_tokens: boolean}; fingerprint?: string | null; roster?: {expires_at: number; version: number; clock_warning: boolean; members: {id: string; label: string; root: boolean; fingerprint: string}[]} | null; offers?: {id: string; name: string; size: number}[]; notifications?: {id: string; app: string; title: string; text: string}[]; user_verification?: UserVerification; security_events?: {id: string; kind: "added" | "removed"; device_id: string; label: string; at: number}[]};
+/** Whether the operating system confirms the person before a device is added. */
+export type UserVerification = "windows_hello" | "unavailable" | "checking";
 export type RemoteStatus = {enabled:boolean;devices:string[];adapters:Record<string,{name:string;enabled:boolean;available:boolean}>;wayland:boolean;last:{device_id:string;app:string;control:string;at:number}|null};
 export type HotspotStatus = {profiles:string[];profile:string;auto:boolean;active:string|null;error:string;supported:boolean};
 export type DndStatus = {enabled:boolean;active:boolean;source:string;changed_at:number|null;quiet:boolean};
 export type State = {
   hosted?: HostedState;
+  user_verification?: UserVerification;
   update_status?: {state: string; code: string};
   cloud_status?: {installed: boolean; profile_present: boolean; inspection_complete: boolean; prepared: boolean; selected_libraries: number; state: string; installation_supported?: boolean; management_available?: boolean; service_state?: 'not_managed' | 'reachable' | 'unavailable' | 'needs_attention'};
   modules?: { workspace: { installed: boolean; enabled: boolean } };

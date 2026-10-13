@@ -17,6 +17,8 @@ import sefirah.network.orion.HostedApprovalCodes
 
 /** A separate preview screen; opening it leaves the setting off. */
 class HostedActivity : ComponentActivity() {
+    private val lock = AppLock(this)
+    private var showingLock = false
     private val runtime by lazy { HostedRuntime.get(this) }
     private val account by lazy { HostedAccount.get(this) }
     private val prefs by lazy { getSharedPreferences("orion_hosted", 0) }
@@ -36,14 +38,35 @@ class HostedActivity : ComponentActivity() {
     private val saveFile = registerForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
         if (uri != null && saving.isNotEmpty()) { val id = saving; saving = ""; action { runtime.saveFile(id, uri) } }
     }
-    override fun onCreate(state: Bundle?) { super.onCreate(state); saving = state?.getString("saving") ?: ""; deploymentSettings = state?.getBoolean("deploymentSettings") ?: false; render() }
+    override fun onCreate(state: Bundle?) {
+        super.onCreate(state); lock.protectWindow()
+        saving = state?.getString("saving") ?: ""; deploymentSettings = state?.getBoolean("deploymentSettings") ?: false
+        if (!AppLock.locked(this)) render()
+    }
     override fun onSaveInstanceState(state: Bundle) { state.putString("saving", saving); state.putBoolean("deploymentSettings", deploymentSettings); super.onSaveInstanceState(state) }
     override fun onResume() {
         super.onResume()
         if (runtime.enabled()) ContextCompat.startForegroundService(this, Intent(this, HostedSyncService::class.java))
+        lock.open(::lockedScreen, ::resumeUnlocked)
+    }
+    private fun resumeUnlocked() {
+        if (showingLock || !::status.isInitialized) { showingLock = false; render() }
+        poll?.cancel()
         poll = lifecycleScope.launch { while (isActive) { status.text = runtime.status + if (account.signedIn()) " · Signed in" else " · Sign in again"; delay(1000) } }
     }
+    private fun lockedScreen() {
+        if (showingLock) return
+        showingLock = true; poll?.cancel()
+        root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(22), dp(24), dp(22), dp(32)); setBackgroundColor(Palette.BG) }
+        setContentView(ScrollView(this).apply { addView(root) })
+        root.addView(heading("Saiph is locked")); root.addView(text("Confirm it's you to see Saiph Hosted."))
+        root.addView(button("Unlock", true) { lock.declined = false; lock.open({}, ::resumeUnlocked) })
+    }
     override fun onPause() { poll?.cancel(); super.onPause() }
+    override fun onStop() { lock.stopped(); super.onStop() }
+    /** Actions that let another device in need the owner, not just an unlocked phone. */
+    private fun verified(reason: String, requireScreenLock: Boolean = true, run: () -> Unit) =
+        lock.confirm(reason, requireScreenLock, failure = ::message, success = run)
     private fun message(value: String) = Toast.makeText(this, value, Toast.LENGTH_LONG).show()
     private fun action(run: suspend () -> Unit) {
         lifecycleScope.launch { try { withContext(Dispatchers.IO) { run() }; render() } catch (_: Exception) { message("Hosted could not complete this step. Check sign-in, the root device and your connection, then retry.") } }
@@ -54,7 +77,9 @@ class HostedActivity : ComponentActivity() {
             val inspected = HostedApprovalCodes.inspect(value)
             val fingerprint = HostedApprovalCodes.displayFingerprint(inspected.fingerprint())
             android.app.AlertDialog.Builder(this).setTitle("Compare the full root fingerprint").setMessage("Compare every group with the trusted screen on your computer:\n\n$fingerprint")
-                .setNegativeButton("Cancel", null).setPositiveButton("The full fingerprint matches") { _, _ -> action { runtime.enroll(value, fingerprint) } }.show()
+                .setNegativeButton("Cancel", null).setPositiveButton("The full fingerprint matches") { _, _ ->
+                    verified("Trust your computer as this phone's root device") { action { runtime.enroll(value, fingerprint) } }
+                }.show()
         }.onFailure { message("Invalid or expired root code. Ask your computer for a new code.") }
     }
     private fun field(label: String, value: String = ""): EditText { root.addView(text(label)); return EditText(this).apply { setText(value); setTextColor(Palette.TEXT); contentDescription = label; root.addView(this) } }
@@ -76,7 +101,9 @@ class HostedActivity : ComponentActivity() {
                 val audience = field("API audience", prefs.getString("audience", "")!!)
                 val client = field("Android native client ID", prefs.getString("client_id", "")!!)
                 val refresh = CheckBox(this).apply { text = "Keep me signed in with a protected rotating refresh token"; isChecked = prefs.getBoolean("refresh_tokens", false); setTextColor(Palette.TEXT) }; root.addView(refresh)
-                root.addView(button("Save deployment") { action { runtime.configure(origin.text.toString(), issuer.text.toString(), audience.text.toString(), client.text.toString(), refresh.isChecked) } })
+                root.addView(button("Save deployment") { verified("Change the Saiph Hosted connection", requireScreenLock = false) {
+                    action { runtime.configure(origin.text.toString(), issuer.text.toString(), audience.text.toString(), client.text.toString(), refresh.isChecked) }
+                } })
                 root.addView(text("Register the native redirect: ${HostedAccount.REDIRECT}"))
             }
         }
@@ -106,7 +133,7 @@ class HostedActivity : ComponentActivity() {
                 root.addView(button("Check root code") { checkRoot(code.text.toString()) })
             } else {
                 root.addView(text("Your phone's full device fingerprint:\n${runtime.fingerprint}"))
-                root.addView(button("Show a fresh device request") { action { runtime.freshRequest() } })
+                root.addView(button("Show a fresh device request") { verified("Show a request to add this phone") { action { runtime.freshRequest() } } })
                 if (runtime.requestCode.isNotEmpty()) {
                     root.addView(text("Paste this request into the computer, compare this phone's full fingerprint, then approve."))
                     root.addView(EditText(this).apply { setText(runtime.requestCode); setTextColor(Palette.TEXT); isFocusable = false; contentDescription = "Phone device approval request code" })
@@ -117,8 +144,11 @@ class HostedActivity : ComponentActivity() {
             }
         } else if (prefs.contains("device_id")) root.addView(button("Retire this phone's Hosted identity") {
             android.app.AlertDialog.Builder(this).setTitle("Retire Hosted identity?").setMessage("Revoke this phone on the root computer too. Its encrypted keys and trust history stay on this phone for recovery.")
-                .setNegativeButton("Cancel", null).setPositiveButton("Retire") { _, _ -> action { runtime.retire() } }.show()
+                .setNegativeButton("Cancel", null).setPositiveButton("Retire") { _, _ -> verified("Retire this phone's Hosted identity", requireScreenLock = false) { action { runtime.retire() } } }.show()
         })
+        root.addView(heading("Security"))
+        root.addView(lock.toggle())
+        runtime.securityEvents().forEach { root.addView(text(it, 13f, Palette.MUTED)) }
         root.addView(button("Back") { finish() })
     }
 }

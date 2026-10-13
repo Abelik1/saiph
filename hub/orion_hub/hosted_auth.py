@@ -50,6 +50,25 @@ class Auth0Config:
             raise ValueError("Auth0 API audience, native client IDs and deployment owner are required")
 
 
+_MFA_CLAIM = re.compile(r"https://[A-Za-z0-9.-]{1,253}(?:/[A-Za-z0-9._~-]{1,64}){1,4}")
+
+
+def mfa_claim(environ) -> str | None:
+    """The namespaced access-token claim proving multi-factor sign-in, if required.
+
+    Set ``ORION_AUTH0_MFA_CLAIM`` to the claim the tenant's post-login Action adds
+    (for example ``https://usesaiph.com/mfa``). Every account and website token
+    must then carry it with the JSON value ``true``. An invalid value refuses
+    startup instead of silently disabling the requirement.
+    """
+    value = environ.get("ORION_AUTH0_MFA_CLAIM", "")
+    if value == "":
+        return None
+    if not isinstance(value, str) or len(value) > 300 or _MFA_CLAIM.fullmatch(value) is None:
+        raise ValueError("ORION_AUTH0_MFA_CLAIM must be a namespaced HTTPS claim name")
+    return value
+
+
 def _unauthorized() -> HTTPException:
     return HTTPException(401, "Unauthorized", headers={"WWW-Authenticate": "Bearer"})
 
@@ -71,8 +90,12 @@ class AccessTokens:
         config: Auth0Config | ServiceAuth0Config | None,
         *,
         key_resolver: Callable[[str], Any] | None = None,
+        mfa_claim: str | None = None,
     ) -> None:
+        if mfa_claim is not None and (not isinstance(mfa_claim, str) or _MFA_CLAIM.fullmatch(mfa_claim) is None):
+            raise ValueError("Use a namespaced HTTPS claim name for multi-factor sign-in")
         self.config = config
+        self.mfa_claim = mfa_claim
         self._jwks = None
         self._key_resolver = key_resolver
         if config is not None and key_resolver is None:
@@ -130,6 +153,8 @@ class AccessTokens:
                 or not isinstance(claims["sub"], str)
                 or not 1 <= len(claims["sub"]) <= 256
                 or any(ord(c) < 33 or ord(c) > 126 for c in claims["sub"])
+                # Only the boolean true proves a completed second factor.
+                or (self.mfa_claim is not None and claims.get(self.mfa_claim) is not True)
             ):
                 raise ValueError()
             return {"issuer": config.issuer, "subject": claims["sub"]}
