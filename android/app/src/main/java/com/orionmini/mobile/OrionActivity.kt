@@ -350,7 +350,13 @@ class OrionActivity : ComponentActivity() {
         }
     }
     private fun render(items: JSONArray?, state: String) {
-        title("Saiph"); root.addView(text(state, 14f, Palette.MUTED))
+        title("Saiph")
+        if (OrionPause.paused(this)) {
+            root.addView(card(strong = true).apply {
+                addView(text("Saiph is paused. Nothing syncs until you resume it.", 15f))
+                addView(buttonRow(button("Resume", true) { OrionPause.set(this@OrionActivity, false); network.startService(); homeLoop() }))
+            })
+        } else root.addView(text(state, 14f, Palette.MUTED))
         val all = items?.let { a -> (0 until a.length()).map(a::getJSONObject) }.orEmpty()
         root.addView(section("Needs you")); val new = all.filter { it.getString("status") == "new" }
         if (new.isEmpty()) root.addView(card().apply { addView(text(if (items == null) "Your inbox will return automatically." else "All clear", 16f)) })
@@ -460,6 +466,12 @@ class OrionActivity : ComponentActivity() {
         check.setOnClickListener { updates.checkManual(check, updateStatus) }
         root.addView(buttonRow(check))
         root.addView(updateStatus)
+        root.addView(section("Saiph"))
+        root.addView(Switch(this).apply {
+            text = "Saiph is on"; isChecked = !OrionPause.paused(this@OrionActivity)
+            setOnCheckedChangeListener { _, on -> OrionPause.set(this@OrionActivity, !on); if (on) network.startService() else network.stopService() }
+        })
+        root.addView(text("Pause stops all syncing until you turn Saiph back on; pairing and settings are kept. The Saiph widget does the same from your home screen.", 13f, Palette.MUTED))
         root.addView(section("Focus"))
         root.addView(Switch(this).apply {
             text = "Share clipboard across my devices"; isChecked = prefs.getBoolean("clipboard_enabled", true)

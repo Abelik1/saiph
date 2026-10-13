@@ -15,6 +15,8 @@ import javax.inject.Singleton
 @Singleton
 class OrionNetworkManager @Inject constructor(private val context: Context, private val link: OrionLink, private val peer: OrionPeer) : NetworkManager {
     override fun startService() {
+        // Paused from the widget or Settings: nothing starts, including after a reboot.
+        if (OrionPause.paused(context)) { stopService(); return }
         if (hostedEnabled()) {
             context.stopService(Intent(context, OrionLinkService::class.java))
             ContextCompat.startForegroundService(context, Intent().setClassName(context, "com.orionmini.mobile.HostedSyncService"))

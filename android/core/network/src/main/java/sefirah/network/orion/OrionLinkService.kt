@@ -50,7 +50,7 @@ class OrionLinkService : Service() {
         controls.start()
         androidx.core.content.ContextCompat.registerReceiver(this, interruptionFilter, IntentFilter(NotificationManager.ACTION_INTERRUPTION_FILTER_CHANGED), androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED)
         scope.launch { notifications.enable("") }
-        scope.launch { link.status.collect { manager.notify(42, notification(it)) } }
+        scope.launch { link.status.collect { manager.notify(42, notification(it)); OrionPause.changed(this@OrionLinkService) } }
         val receipts = CommandReceipts(this)
         scope.launch { link.run(onConnected = { controls.sendDeviceStatus(""); notifications.sendActiveNotifications(""); scope.launch { phoneFeatures.connected() };scope.launch { runCatching { continuity.restore() } } }, onEvent = { event ->
             continuity.event(event)
@@ -128,6 +128,7 @@ class OrionLinkService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
     override fun onDestroy() {
         runCatching { unregisterReceiver(interruptionFilter) }
+        OrionPause.changed(this)
         controls.stop()
         scope.cancel()
         // Finish bounded teardown before a replacement service can start.

@@ -46,7 +46,7 @@ class HostedActivity : ComponentActivity() {
     override fun onSaveInstanceState(state: Bundle) { state.putString("saving", saving); state.putBoolean("deploymentSettings", deploymentSettings); super.onSaveInstanceState(state) }
     override fun onResume() {
         super.onResume()
-        if (runtime.enabled()) ContextCompat.startForegroundService(this, Intent(this, HostedSyncService::class.java))
+        if (runtime.enabled() && !sefirah.network.orion.OrionPause.paused(this)) ContextCompat.startForegroundService(this, Intent(this, HostedSyncService::class.java))
         lock.open(::lockedScreen, ::resumeUnlocked)
     }
     private fun resumeUnlocked() {

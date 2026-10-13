@@ -153,6 +153,8 @@ Apple-style continuity, from the same plan:
 - [ ] **Acceptance:** pause playing desktop media during phone calls and resume
   only what was paused (playerctl on Linux; Windows needs the optional
   `winrt-Windows.Media.Control` binding, which is not yet a dependency).
+- [ ] **Acceptance:** home-screen widget showing whether Saiph is on, with Pause /
+  Resume; pausing stops all syncing until resumed, including after a reboot.
 - [ ] Remote adapters for terminal/assistant sessions and per-app layouts
   (for example a meeting app's mute/camera/leave buttons).
 - [ ] Nearby discovery and file sharing without the private mesh, for Linux

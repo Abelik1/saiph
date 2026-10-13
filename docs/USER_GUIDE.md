@@ -105,6 +105,11 @@ one in its own window through scrcpy; Pin adds it to the Start menu or the
 applications menu. It needs authorised wireless or USB debugging (as the phone
 preview does) and Android 10 or later.
 
+**Pause Saiph on the phone:** add the Saiph widget to your home screen to see
+whether Saiph is on and connected, and to pause or resume it with one tap.
+Settings in the phone app has the same switch. While paused, nothing syncs and
+Saiph does not restart, even after a reboot; pairing and settings are kept.
+
 **Your devices on the phone:** the phone's home screen lists your other devices
 with their battery. Computers with a battery share it every minute or when it
 changes. From there you can **Ring** a computer to find it (it plays an alert for
