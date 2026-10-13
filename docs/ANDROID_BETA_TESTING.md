@@ -166,8 +166,10 @@ Firebase console.
 
 `-Upload` rebuilds and reverifies before uploading. It checks that the signed-in
 account can see the Firebase app, then runs `firebase appdistribution:distribute`
-with generated release notes (or `-ReleaseNotesFile`). Without `-TesterGroups`, it
-uploads without granting anyone access. Firebase CLI output is suppressed
+with generated release notes (or `-ReleaseNotesFile`). Without `-TesterGroups` or
+`-Testers`, it uploads without granting anyone access. A group gives access only
+to its current members, so a group with no testers reaches nobody; add your own
+tester address with `-Testers` to receive the release yourself. Firebase CLI output is suppressed
 because it can contain account data and download tokens. Pass `-FirebaseCli` with
 the path to `firebase.cmd` or `firebase-tools/lib/bin/firebase.js` if it is not
 on `PATH`.

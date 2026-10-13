@@ -37,6 +37,8 @@
   ./scripts/android/build-tester-apk.ps1 ... -Upload -TesterGroups beta-testers
 
   Additionally uploads the verified APK and gives the named group access.
+  Add -Testers you@example.com to also give named testers access directly: a
+  group with no members gives nobody access.
 #>
 [CmdletBinding()]
 param(
@@ -64,6 +66,8 @@ param(
     # firebase executable/.cmd, or firebase-tools lib/bin/firebase.js (run with node).
     [string]$FirebaseCli = $env:SAIPH_FIREBASE_CLI,
     [string[]]$TesterGroups = @(),
+    # Tester email addresses given access directly, e.g. the publisher's own account.
+    [string[]]$Testers = @(),
     [string]$ReleaseNotesFile = '',
     # Public service/OAuth identifiers, temporarily embedded in the beta APK.
     [string]$HostedConfiguration = ''
@@ -137,6 +141,8 @@ $forbidden = @(Get-Content -LiteralPath $ForbiddenStringsFile | ForEach-Object {
 if ($forbidden.Count -eq 0) { throw 'The forbidden strings file has no entries.' }
 foreach ($group in $TesterGroups) { if ($group -notmatch '^[a-z0-9][a-z0-9-]*$') { throw 'Tester group aliases use lowercase letters, digits and hyphens.' } }
 if ($TesterGroups.Count -and -not $Upload) { throw '-TesterGroups only applies with -Upload.' }
+foreach ($tester in $Testers) { if ($tester -notmatch '^[^@\s,]+@[^@\s,]+\.[^@\s,]+$') { throw 'Testers are email addresses.' } }
+if ($Testers.Count -and -not $Upload) { throw '-Testers only applies with -Upload.' }
 
 $declared = [regex]::Match((Get-Content -LiteralPath (Join-Path $android 'app/build.gradle.kts') -Raw), 'versionName\s*=\s*"([^"]+)"')
 if (-not $declared.Success -or $declared.Groups[1].Value -ne $VersionName) {
@@ -369,10 +375,13 @@ try {
     }
     $distribute = @('appdistribution:distribute', $apk, '--app', $appId, '--project', $project, '--release-notes-file', $notes)
     if ($TesterGroups.Count) { $distribute += @('--groups', ($TesterGroups -join ',')) }
+    if ($Testers.Count) { $distribute += @('--testers', ($Testers -join ',')) }
     [void](Invoke-Firebase $distribute)
     $receipt.uploaded = $true; $receipt.uploadedAtUtc = [DateTime]::UtcNow.ToString('o'); $receipt.testerGroups = $TesterGroups
+    # Only the count is kept: the release record is not a place for email addresses.
+    $receipt.directTesters = $Testers.Count
     $receipt | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $receiptPath -Encoding utf8
-    if ($TesterGroups.Count) { Write-Output "Uploaded to Firebase App Distribution for group(s): $($TesterGroups -join ', ')." }
+    if ($TesterGroups.Count -or $Testers.Count) { Write-Output "Uploaded to Firebase App Distribution for group(s): $($TesterGroups -join ', ') and $($Testers.Count) direct tester(s). A group gives access only to its current members." }
     else { Write-Output 'Uploaded to Firebase App Distribution without granting any tester access.' }
 } finally {
     if ($placedHosted) { Remove-Item -LiteralPath $hostedAsset -Force }
