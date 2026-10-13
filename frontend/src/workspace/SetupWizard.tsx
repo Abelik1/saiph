@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useCallback, useState } from "react";
-import { Check, Cloud, MoonStar, Server } from "lucide-react";
+import { Check, Cloud, Server } from "lucide-react";
 import type { Client, State } from "./types";
 import { Action, Card, Form } from "./ui";
 import { Enrollment } from "./Enrollment";
 import { HostedApproveDevice, HostedRootCode } from "./HostedSettings";
 import { PairingQr, validQr, type PairingQrCode } from "./PairingQr";
 import { UsageChoice, UsageExplanation } from "./UsageSharing";
+import { SaiphMark, WaveLoader, WaveProgress } from "./waves";
 
 type Mode = "hosted" | "hub";
 type Step = "welcome" | "connect" | "phone" | "features" | "tools" | "privacy" | "done";
@@ -27,10 +28,11 @@ const features: Feature[] = [
   { key: "deskflow", label: "Share keyboard and mouse with another computer", detail: "Needs Deskflow on both computers.", default: false },
 ];
 
+const tracked = steps.slice(1, -1);
 function Progress({ step, usage }: { step: Step; usage: boolean }) {
   // The usage question appears only in builds that can send anonymous counts.
-  return <ol className="setup-progress" aria-label="Setup steps">{steps.slice(1, -1).filter((name) => name !== "privacy" || usage).map((name) =>
-    <li key={name} aria-current={name === step ? "step" : undefined} className={steps.indexOf(name) < steps.indexOf(step) ? "done" : ""}>{titles[name]}</li>)}</ol>;
+  const shown = tracked.filter((name) => name !== "privacy" || usage);
+  return <WaveProgress steps={shown.map((name) => titles[name])} current={shown.indexOf(step)} />;
 }
 
 function phoneOf(state: State) {
@@ -77,10 +79,12 @@ export function SetupWizard({ state, client, close }: { state: State; client: Cl
   const helpers = Object.entries(state.setup?.linux || {});
   const missing = helpers.filter(([, h]) => !h.found);
   return <div className="setup-wizard" role="dialog" aria-label="Saiph setup">
-    <header className="setup-header"><MoonStar size={26} /><h1>{titles[step]}</h1>
+    <header className="setup-header">{step !== "welcome" && <SaiphMark size={40} />}<h1 key={step}>{titles[step]}</h1>
       {step !== "done" && <button type="button" className="text-button" onClick={() => void finish()}>Set up later</button>}</header>
     {step !== "welcome" && step !== "done" && <Progress step={step} usage={Boolean(state.usage?.available)} />}
+    <div className="setup-step" key={step}>
 
+    {step === "welcome" && <div className="setup-hero"><SaiphMark size={96} /><p>Your phone and your computers, in tune.</p></div>}
     {step === "welcome" && <Card title="How do you want to connect your devices?" subtitle="You can change this later in Settings.">
       <div className="setup-choices">
         <button type="button" className={"setup-choice" + (mode === "hosted" ? " selected" : "")} disabled={hosted?.available === false} onClick={() => setMode("hosted")}>
@@ -127,7 +131,7 @@ export function SetupWizard({ state, client, close }: { state: State; client: Cl
           <p>In the Saiph app on your phone, tap Scan pairing QR.</p>
           {qr ? <PairingQr qr={qr.qr} shownAt={qr.shownAt} onExpire={expire} onClose={() => setQr(null)} />
             : <Action run={async () => { const shownAt = Date.now(); const value = await client.call<unknown>("enrollment.qr"); if (!validQr(value)) throw new Error("The pairing QR could not be shown."); setQr({ qr: value, shownAt }); }}>Show pairing QR</Action>}
-          <p className="muted" role="status">Waiting for your phone…</p>
+          <WaveLoader label="Waiting for your phone…" />
         </>}
       </>}
       {mode === "hosted" && hosted && <>
@@ -179,5 +183,6 @@ export function SetupWizard({ state, client, close }: { state: State; client: Cl
       </ul>
       <div className="actions"><Action run={finish}>Open Saiph</Action></div>
     </Card>}
+    </div>
   </div>;
 }

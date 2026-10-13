@@ -11,7 +11,6 @@ import {
   ChevronDown,
   Cloud as CloudIcon,
   FolderOpen,
-  MoonStar,
   Settings as SettingsIcon,
   Smartphone,
 } from "lucide-react";
@@ -24,10 +23,12 @@ import { SetupWizard } from "./workspace/SetupWizard";
 import { UsagePrompt } from "./workspace/UsageSharing";
 import { Workspace } from "./workspace/edition";
 import { RetainedView } from "./workspace/Navigation";
+import { SaiphMark, WaveField, WaveLoader, gather } from "./workspace/waves";
 import { SettingsNavigation } from "./workspace/settingsNavigation";
 import type { SettingsTarget } from "./workspace/settingsNavigation";
 import "./workspace/workspace.css";
 import "./workspace/link.css";
+import "./workspace/waves.css";
 
 const workspacePages: Page[] = ["Today", "Assistant", "Library", "Calendar", "Tasks", "Reminders", "Inbox", "Plugins"];
 
@@ -42,6 +43,16 @@ export function workspaceAvailable(state: State) {
 export default function App({
   providedClient,
 }: { providedClient?: Client } = {}) {
+  // One string field for the whole window, so it carries on across screens.
+  return (
+    <>
+      <WaveField />
+      <Screens providedClient={providedClient} />
+    </>
+  );
+}
+
+function Screens({ providedClient }: { providedClient?: Client }) {
   const [client, setClient] = useState<Client | null>(providedClient || null);
   const [state, setState] = useState<State | null>(null);
   const [page, setPage] = useState<Page>("Phone");
@@ -129,16 +140,26 @@ export default function App({
     },
     [hasWorkspace, navigate],
   );
+  const opening = !state || !client;
+  // While connecting, the background strings curl around the mark.
+  useEffect(() => {
+    if (opening && !error)
+      return gather(window.innerWidth / 2, window.innerHeight / 2, 150);
+  }, [opening, error]);
   if (!state || !client)
     return (
       <div className="connection-screen">
-        <MoonStar size={44} />
-        <h1>Saiph</h1>
-        <p role={error ? "alert" : "status"}>{error || "Opening Saiph…"}</p>
+        <SaiphMark size={72} />
+        <h1>saiph</h1>
+        {error ? (
+          <p role="alert">{error}</p>
+        ) : (
+          <WaveLoader label="Opening Saiph…" />
+        )}
       </div>
     );
   // First run, or re-run from Settings: the setup guide takes the whole window.
-  if (guide || state.setup?.show) return <div className="workspace-shell link-shell"><main className="page-content">
+  if (guide || state.setup?.show) return <div className="workspace-shell link-shell setup-shell"><main className="page-content">
     <SetupWizard state={state} client={client} close={() => { setGuide(false); void refresh(); }} /></main></div>;
   const workspacePage =
     workspacePages.includes(page) || (page === "Settings" && hasWorkspace);
@@ -151,7 +172,7 @@ export default function App({
         <header className="link-header">
           <div className="brand">
             <span className="brand-mark">
-              <MoonStar size={23} />
+              <SaiphMark size={30} />
             </span>
             <b>saiph</b>
           </div>
@@ -221,7 +242,7 @@ export default function App({
         >
           <div className="page-content">
             {!workspacePage && page !== "Settings" && (
-              <header className="page-header">
+              <header className="page-header" key={page}>
                 <h1>{page}</h1>
                 <p>
                   {page === "Phone"

@@ -1,0 +1,133 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Saiph wave theme: deep blue, rippling strings, cyan to violet light.
+   Loaded after the shell styles so it sets the palette for every page. */
+:root {
+  --deep: #040917;
+  --blue: #081530;
+  --muted: #8fa3bf;
+  --line: #1b2b49;
+  --accent: #22d3ee;
+  --accent-2: #67e8f9;
+  --violet: #a78bfa;
+  --panel: rgba(12, 22, 44, 0.78);
+  --glass: rgba(10, 19, 40, 0.72);
+  --glass-edge: rgba(103, 232, 249, 0.13);
+  --glow: 0 0 0 1px rgba(103, 232, 249, 0.18), 0 10px 40px rgba(34, 211, 238, 0.12);
+  --wave-squiggle: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='6' viewBox='0 0 24 6'%3E%3Cpath d='M0 3 Q3 0 6 3 T12 3 T18 3 T24 3' fill='none' stroke='%2367e8f9' stroke-width='1.6'/%3E%3C/svg%3E");
+  color: #e7edf4;
+  background: var(--deep);
+}
+body {
+  background:
+    radial-gradient(1200px 700px at 15% -10%, rgba(34, 211, 238, 0.13), transparent 60%),
+    radial-gradient(900px 700px at 105% 110%, rgba(167, 139, 250, 0.12), transparent 60%),
+    linear-gradient(180deg, var(--blue), var(--deep) 75%);
+  background-attachment: fixed;
+}
+
+/* The string field sits behind everything and never takes input. */
+.wave-field { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+.wave-field canvas { width: 100%; height: 100%; display: block; }
+.workspace-shell, .link-shell, .connection-screen { position: relative; z-index: 1; background: transparent; }
+
+/* Brand mark */
+.saiph-mark { display: block; overflow: visible; filter: drop-shadow(0 0 6px rgba(103, 232, 249, 0.35)); }
+.link-header .brand-mark { width: 42px; height: 42px; border-radius: 13px; background: radial-gradient(circle at 50% 45%, rgba(34, 211, 238, 0.16), rgba(8, 21, 48, 0.9) 70%); border: 1px solid var(--glass-edge); box-shadow: inset 0 0 12px rgba(34, 211, 238, 0.12); }
+.link-header .brand b { background: linear-gradient(90deg, #e7f6ff, #9fe9f7 60%, #c4b5fd); -webkit-background-clip: text; background-clip: text; color: transparent; font-weight: 600; }
+
+/* Shell surfaces: translucent, so the strings move faintly behind them. */
+.link-header { background: rgba(5, 11, 26, 0.72); border-bottom-color: rgba(103, 232, 249, 0.1); backdrop-filter: blur(14px); }
+.link-header nav > button[aria-current]::after, .workspace-navigation > summary.active::after {
+  width: 30px; height: 6px; border-radius: 0; background: var(--wave-squiggle) repeat-x 0 0 / 12px 6px; animation: wave-slide 1.2s linear infinite;
+}
+.link-header nav > button:hover, .link-header nav > button[aria-current] { color: #e9fbff; }
+.phone-tabs > button[aria-current]::after { width: 30px; height: 6px; border-radius: 0; background: var(--wave-squiggle) repeat-x 0 0 / 12px 6px; animation: wave-slide 1.2s linear infinite; }
+.app-footer { background: rgba(5, 11, 26, 0.78); border-top-color: rgba(103, 232, 249, 0.1); box-shadow: none; color: var(--muted); backdrop-filter: blur(14px); }
+.settings-sidebar button[aria-selected="true"] { background: rgba(34, 211, 238, 0.1); border-color: rgba(103, 232, 249, 0.3); color: #e9fbff; box-shadow: inset 2px 0 0 var(--accent); }
+.settings-sidebar button:hover { background: rgba(34, 211, 238, 0.05); }
+.workspace-nav-menu { background: rgba(9, 18, 38, 0.96); border-color: var(--line); }
+.workspace-nav-menu button:hover, .workspace-nav-menu button[aria-current] { background: rgba(34, 211, 238, 0.1); color: #e9fbff; }
+.card, .phone-notification { background: var(--glass); border-color: var(--glass-edge); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03); }
+.phone-detail { background: rgba(7, 15, 33, 0.7); border-color: var(--glass-edge); }
+.phone-rail .card { background: none; }
+.phone-silhouette { background: linear-gradient(155deg, #133a5a, #0b1a36 65%, #1c1846); border-color: rgba(103, 232, 249, 0.35); color: var(--accent-2); box-shadow: 0 0 24px rgba(34, 211, 238, 0.15), inset 0 0 0 4px rgba(4, 9, 23, 0.7); }
+.page-header h1 { letter-spacing: -0.8px; }
+.page-header p, .section-head p { color: var(--muted); }
+.page-header { animation: rise 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+
+/* Controls */
+button { background: rgba(18, 33, 62, 0.85); border-color: #22375c; color: #e3eefb; transition: background 0.2s, border-color 0.2s, box-shadow 0.2s, transform 0.15s; }
+button:hover { background: rgba(28, 50, 90, 0.9); border-color: rgba(103, 232, 249, 0.45); box-shadow: 0 0 18px rgba(34, 211, 238, 0.15); }
+button.primary, .actions > button:last-child:not(.text-button) { background: linear-gradient(120deg, #22d3ee, #60a5fa 55%, #a78bfa); border-color: transparent; color: #04101f; }
+button.primary:hover, .actions > button:last-child:not(.text-button):hover { filter: brightness(1.08); box-shadow: 0 0 24px rgba(34, 211, 238, 0.35); }
+.text-button, summary { color: var(--accent-2); }
+.text-button, .text-button:hover { background: transparent; border-color: transparent; box-shadow: none; }
+input, select, textarea { background: rgba(5, 12, 28, 0.8); border-color: #22375c; color: #e7edf4; }
+input:focus, textarea:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.14); }
+.tabs button.selected, .phone-tabs button[aria-current] { border-color: var(--accent); }
+
+/* Opening screen */
+.connection-screen { gap: 6px; }
+.connection-screen h1 { margin: 18px 0 14px; font-size: 34px; font-weight: 600; letter-spacing: 2px; background: linear-gradient(90deg, #e7f6ff, #67e8f9, #c4b5fd); -webkit-background-clip: text; background-clip: text; color: transparent; animation: rise 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.connection-screen .saiph-mark { animation: breathe 3.2s ease-in-out infinite; }
+
+/* Loader: one string ringing through its harmonics */
+.wave-loader { display: inline-flex; flex-direction: column; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; }
+.wave-loader svg { overflow: visible; filter: drop-shadow(0 0 6px rgba(34, 211, 238, 0.45)); }
+
+/* Setup guide */
+.setup-shell .page-content { min-height: 100vh; display: grid; align-items: start; padding-top: 6vh; }
+.setup-wizard { max-width: 780px; width: 100%; gap: 20px; }
+.setup-header { gap: 14px; }
+.setup-header h1 { font-size: 26px; font-weight: 600; letter-spacing: -0.6px; animation: rise 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.setup-step { display: grid; gap: 16px; animation: step-in 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.setup-wizard .card { padding: 28px 30px; border-radius: 18px; background: rgba(8, 17, 37, 0.8); box-shadow: var(--glow); position: relative; overflow: hidden; }
+/* A thin bright string runs along the top edge of each step card. */
+.setup-wizard .card::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1px; background: linear-gradient(90deg, transparent, rgba(103, 232, 249, 0.8), rgba(167, 139, 250, 0.7), transparent); background-size: 200% 100%; animation: sweep 4s linear infinite; }
+.setup-wizard .section-head h2 { font-size: 17px; }
+.setup-hero { display: grid; justify-items: center; gap: 14px; padding: 26px 0 6px; text-align: center; }
+.setup-hero .saiph-mark { animation: breathe 3.2s ease-in-out infinite; }
+.setup-hero p { margin: 0; font-size: 15px; letter-spacing: 0.4px; color: #b9cbe2; }
+.setup-choice { position: relative; overflow: hidden; padding: 20px; border-radius: 14px; border: 1px solid #22375c; background: rgba(12, 25, 52, 0.7); transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), border-color 0.25s, box-shadow 0.25s; }
+.setup-choice svg { color: var(--accent-2); }
+.setup-choice:hover:not(:disabled) { transform: translateY(-3px); border-color: rgba(103, 232, 249, 0.5); box-shadow: 0 12px 36px rgba(34, 211, 238, 0.14); }
+.setup-choice.selected { outline: none; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 14px 40px rgba(34, 211, 238, 0.22); }
+/* The chosen card's lower edge becomes a moving wave. */
+.setup-choice::after { content: ""; position: absolute; left: 0; right: 0; bottom: 6px; height: 6px; background: var(--wave-squiggle) repeat-x 0 0 / 16px 6px; opacity: 0; transition: opacity 0.3s; }
+.setup-choice.selected::after { opacity: 0.8; animation: wave-slide 1s linear infinite; }
+.setup-features { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
+.setup-features .check { display: flex; flex-direction: row; align-items: flex-start; gap: 12px; margin: 0; padding: 14px; border-radius: 12px; border: 1px solid #1d3152; background: rgba(12, 25, 52, 0.5); cursor: pointer; transition: background 0.2s, border-color 0.2s, box-shadow 0.2s; }
+.setup-features .check:hover { background: rgba(34, 211, 238, 0.06); border-color: rgba(103, 232, 249, 0.3); }
+.setup-features .check:has(input:checked) { border-color: rgba(103, 232, 249, 0.45); box-shadow: inset 0 0 18px rgba(34, 211, 238, 0.06); }
+.setup-features .check input { margin: 2px 0 0; width: 16px; height: 16px; flex: none; }
+.setup-features .check span { gap: 4px; }
+.setup-ok { color: #7ee7c4; }
+.setup-ok svg { filter: drop-shadow(0 0 5px rgba(52, 211, 153, 0.6)); }
+.setup-step .wave-loader { margin: 8px 0 4px; align-items: flex-start; }
+
+/* Step progress: stars on a string; the finished stretch carries a wave. */
+.wave-progress { position: relative; }
+.wave-progress-line { position: absolute; top: 2px; height: 24px; overflow: visible; }
+.wave-progress-rest { stroke: rgba(103, 232, 249, 0.16); stroke-width: 1; stroke-dasharray: 2 5; vector-effect: non-scaling-stroke; }
+.wave-progress-run { fill: none; stroke-width: 2; vector-effect: non-scaling-stroke; animation: wave-run 1.1s linear infinite; filter: drop-shadow(0 0 4px rgba(34, 211, 238, 0.6)); }
+.wave-progress-reach { transition: width 0.8s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.wave-progress ol { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; list-style: none; margin: 0; padding: 0; }
+.wave-progress li { display: grid; justify-items: center; gap: 10px; font-size: 12px; color: var(--muted); text-align: center; }
+.wave-node { width: 12px; height: 12px; margin-top: 8px; border-radius: 50%; background: var(--deep); border: 1.5px solid rgba(103, 232, 249, 0.35); transition: background 0.4s, border-color 0.4s, box-shadow 0.4s, transform 0.4s; }
+.wave-progress li.done .wave-node { background: var(--accent-2); border-color: var(--accent-2); box-shadow: 0 0 10px rgba(103, 232, 249, 0.7); }
+.wave-progress li[aria-current="step"] { color: #e9fbff; font-weight: 600; }
+.wave-progress li[aria-current="step"] .wave-node { background: #f2f8ff; border-color: #f2f8ff; transform: scale(1.25); animation: ring 1.8s ease-out infinite; }
+
+@keyframes wave-slide { to { background-position: 12px 0; } }
+@keyframes wave-run { to { transform: translateX(-40px); } }
+@keyframes sweep { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } }
+@keyframes step-in { from { opacity: 0; transform: translateY(14px) scale(0.985); filter: blur(3px); } }
+@keyframes breathe { 50% { transform: scale(1.06); filter: drop-shadow(0 0 14px rgba(103, 232, 249, 0.55)); } }
+@keyframes ring { 0% { box-shadow: 0 0 0 0 rgba(103, 232, 249, 0.55), 0 0 12px rgba(242, 248, 255, 0.8); } 100% { box-shadow: 0 0 0 12px rgba(103, 232, 249, 0), 0 0 12px rgba(242, 248, 255, 0.8); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .page-header, .setup-header h1, .setup-step, .connection-screen h1, .connection-screen .saiph-mark, .setup-hero .saiph-mark,
+  .wave-progress-run, .wave-progress li[aria-current="step"] .wave-node, .setup-wizard .card::before, .setup-choice.selected::after,
+  .link-header nav > button[aria-current]::after, .workspace-navigation > summary.active::after, .phone-tabs > button[aria-current]::after { animation: none; }
+}
