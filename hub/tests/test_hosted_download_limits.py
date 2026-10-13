@@ -95,11 +95,15 @@ def test_global_concurrency_limit_includes_other_accounts(service,release):
     downloads.release(first.lease)
 
 
-@pytest.mark.parametrize('ending',['success','error','cancel','timeout'])
-def test_stream_lease_released_on_every_exit(service,release,ending):
+@pytest.mark.parametrize('spec',['2.3','2.4'])
+@pytest.mark.parametrize('ending',['success','error','cancel','timeout','disconnect'])
+def test_stream_lease_released_on_every_exit(service,release,ending,spec):
     _, downloads, _=release
     response=downloads.response(ticket(service,downloads))
-    scope={'type':'http','method':'GET','headers':[], 'extensions':{'http.response.pathsend':{}}}
+    # Starlette >=1.8 watches receive() for a disconnect below ASGI 2.4 (as
+    # uvicorn advertises); 2.4 servers report it by raising OSError from send.
+    scope={'type':'http','method':'GET','headers':[],'asgi':{'version':'3.0','spec_version':spec},
+           'extensions':{'http.response.pathsend':{}}}
     async def run():
         reached=asyncio.Event()
         async def send(message):
@@ -108,13 +112,16 @@ def test_stream_lease_released_on_every_exit(service,release,ending):
                 reached.set()
                 if ending=='error': raise OSError('Synthetic disconnect')
                 if ending in ('cancel','timeout'): await asyncio.Event().wait()
-        async def receive(): return {'type':'http.disconnect'}
+        async def receive():
+            # Only the disconnect case loses the client; the others stay connected.
+            if ending!='disconnect': await asyncio.Event().wait()
+            return {'type':'http.disconnect'}
         if ending=='timeout': response.seconds=0.02
         task=asyncio.create_task(response(scope,receive,send))
         if ending=='cancel':
             await asyncio.wait_for(reached.wait(),2)
             task.cancel()
-        if ending=='success': await task
+        if ending in ('success','disconnect'): await task
         else:
             with pytest.raises({'error':OSError,'cancel':asyncio.CancelledError,'timeout':TimeoutError}[ending]): await task
     asyncio.run(run())
