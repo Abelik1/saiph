@@ -1,7 +1,10 @@
 [Unit]
 Description=Orion Hub personal coordinator
-After=network-online.target tailscaled.service
-Wants=network-online.target
+# Devices sign each connection with the time. A Raspberry Pi has no clock battery and
+# boots with its last saved time, so wait for the first network time sync or every
+# device is refused until it happens (minutes after a reboot).
+After=network-online.target tailscaled.service time-sync.target
+Wants=network-online.target time-sync.target
 
 [Service]
 Type=simple

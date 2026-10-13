@@ -40,6 +40,8 @@ exec runuser -u orion -- env ORION_HUB_DATA="$ORION_HUB_DATA" /opt/orion-mini/hu
 SH
 chmod 755 /usr/local/sbin/orion-hub
 systemctl daemon-reload
+# time-sync.target is only reached after a real sync when this waiter is enabled.
+systemctl enable systemd-time-wait-sync.service 2>/dev/null || echo 'Clock sync wait unavailable; the Hub may refuse devices until the clock is set.' >&2
 systemctl enable orion-hub
 systemctl enable --now orion-hub-backup.timer
 systemctl restart orion-hub
