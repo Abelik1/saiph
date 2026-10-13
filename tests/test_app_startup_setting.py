@@ -16,7 +16,7 @@ def workspace(enabled=True):
     # Physical acceptance: a fresh Linux profile without ~/.local/bin/orion
     # exited at every launch with this unhandled error.
     'Install Saiph before enabling session startup.',
-    'An unrelated startup entry was preserved. Review startup in Advanced.',
+    'An unrelated startup entry was preserved. Review startup in Settings → General.',
 ])
 def test_refused_startup_is_recorded_not_fatal(monkeypatch, message):
     monkeypatch.setattr(app, 'set_startup', Mock(side_effect=ValueError(message)))

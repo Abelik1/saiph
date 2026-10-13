@@ -75,7 +75,7 @@ def set_startup(enabled, *, config_home=None):
     _startup_plain_path(entry)
     if entry.exists():
         if entry.stat().st_size > 16384 or entry.read_text(encoding="utf-8") not in allowed:
-            raise ValueError("An unrelated startup entry was preserved. Review startup in Advanced.")
+            raise ValueError("An unrelated startup entry was preserved. Review startup in Settings → General.")
     if not enabled:
         entry.unlink(missing_ok=True)
         return
@@ -126,7 +126,7 @@ def _startup_plain_path(path):
             continue
         if (stat.S_ISLNK(info.st_mode) or getattr(info, 'st_file_attributes', 0) & 0x400
                 or not (stat.S_ISREG(info.st_mode) if candidate == path else stat.S_ISDIR(info.st_mode))):
-            raise ValueError("A redirected or unrelated startup path was preserved. Review startup in Advanced.")
+            raise ValueError("A redirected or unrelated startup path was preserved. Review startup in Settings → General.")
 
 
 class _POWER_STATUS(ctypes.Structure):

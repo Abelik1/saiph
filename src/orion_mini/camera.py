@@ -16,7 +16,7 @@ from .companion_tools import tool_path
 
 WINDOW_TITLE = 'Orion Phone Camera'
 OBS_NAME = 'Orion Phone'
-SETUP_MESSAGE = 'Complete the one-time phone camera setup in Settings → Advanced.'
+SETUP_MESSAGE = 'Complete the one-time phone camera setup in Settings → Devices.'
 
 
 def validate_options(options):
@@ -130,7 +130,7 @@ class Camera:
         config = self._config()
         if config.get('enabled',True) is False:return None, 'Phone camera is switched off in Settings.'
         executable = tool_path('scrcpy', config.get('scrcpy_executable'))
-        if not executable:return None, 'Install scrcpy in Settings → Advanced to use the phone camera.'
+        if not executable:return None, 'Install scrcpy (Settings → Devices explains how) to use the phone camera.'
         if self.system.startswith('linux'):
             sink = config.get('v4l2_sink')
             if not self.verify_sink(sink):return None, SETUP_MESSAGE
@@ -174,7 +174,7 @@ class Camera:
             worker = self.worker_factory()
             serial = worker.paired_serial(device_id)
             if not isinstance(serial,str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.:\[\]-]{0,199}',serial) or not worker.adb:
-                raise ValueError('Authorized debugging is unavailable for this phone. See Settings → Advanced.')
+                raise ValueError('Authorized debugging is unavailable for this phone. Connect it over USB or wireless debugging and allow this computer. Optional tools in the setup guide shows whether adb is installed.')
             flags = subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0
             if prepared['mode']=='windows-obs':
                 try:
@@ -201,7 +201,7 @@ class Camera:
                 threading.Thread(target=self._monitor,args=(self.monitor_stop,),name='orion-camera',daemon=True).start()
                 return self.status()
             except OSError:
-                self.stop();raise ValueError('Phone camera could not start. Check Settings → Advanced.') from None
+                self.stop();raise ValueError('Phone camera could not start. Check Settings → Devices.') from None
 
     def stop(self):
         with self.lock:

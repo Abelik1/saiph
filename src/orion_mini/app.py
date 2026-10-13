@@ -129,7 +129,7 @@ def apply_startup_setting(workspace):
     except ValueError as error:
         workspace.store.save('job', {'kind': 'startup', 'status': 'failed', 'error': str(error)})
     except OSError:
-        workspace.store.save('job', {'kind': 'startup', 'status': 'failed', 'error': 'This computer denied the startup setting. Check Settings → Advanced.'})
+        workspace.store.save('job', {'kind': 'startup', 'status': 'failed', 'error': 'This computer denied the startup setting. Check Settings → General.'})
 
 class MainWindow(QMainWindow):
     phone_changed = Signal()

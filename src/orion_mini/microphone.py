@@ -210,12 +210,12 @@ class Microphone:
             return self._prepared_cache
         self._config_cache = dict(config)
         self._probe_at = time.monotonic() + 15
-        prepared, message = None, 'Set up the phone microphone in Settings → Advanced.'
+        prepared, message = None, 'Set up the phone microphone in Settings → Devices.'
         scrcpy = tool_path('scrcpy', config.get('scrcpy_executable')) if config.get('enabled', False) else None
         if not config.get('enabled', False):
             message = 'Phone microphone is switched off in Settings.'
         elif not scrcpy:
-            message = 'Install scrcpy in Settings → Advanced to use the phone microphone.'
+            message = 'Install scrcpy (Settings → Devices explains how) to use the phone microphone.'
         elif self.system.startswith('linux') or self.system == 'win32':
             try:
                 result = self.run([scrcpy, '--version'], capture_output=True, text=True, timeout=5,
@@ -277,7 +277,7 @@ class Microphone:
         worker = self.worker_factory()
         serial = worker.paired_serial(self.device_id)
         if not isinstance(serial, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.:\[\]-]{0,199}', serial) or not worker.adb:
-            raise ValueError('Authorized debugging is unavailable for this phone. See Settings → Advanced.')
+            raise ValueError('Authorized debugging is unavailable for this phone. Connect it over USB or wireless debugging and allow this computer. Optional tools in the setup guide shows whether adb is installed.')
         env = os.environ.copy()
         env['ADB'] = str(worker.adb)
         # Do not inherit a route that could override the deliberate private sink.
@@ -321,7 +321,7 @@ class Microphone:
                 return self.status()
             except (OSError, subprocess.SubprocessError, ValueError):
                 self.stop()
-                raise ValueError('Phone microphone could not start. Check Settings → Advanced.') from None
+                raise ValueError('Phone microphone could not start. Check Settings → Devices.') from None
 
     def _stop_capture(self):
         if self.process and self.process.poll() is None:
@@ -354,7 +354,7 @@ class Microphone:
                 return self.status()
             except (OSError, subprocess.SubprocessError, ValueError):
                 self.stop()
-                raise ValueError('Phone microphone stopped. Check Settings → Advanced.') from None
+                raise ValueError('Phone microphone stopped. Check Settings → Devices.') from None
 
     def stop(self):
         with self.lock:

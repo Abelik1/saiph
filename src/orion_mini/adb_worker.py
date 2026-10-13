@@ -54,4 +54,4 @@ class AdbWorker:
             raw=self.run('-s',fields[0],'shell','content','call','--uri',f'content://{PACKAGE}.worker.bridge','--method','status')
             status=dict(re.findall(r'(device_id)=([^,}\s]+)',raw))
             if status.get('device_id')==device_id:return fields[0]
-        raise ValueError('Authorized debugging is unavailable for this phone. See Settings → Advanced.')
+        raise ValueError('Authorized debugging is unavailable for this phone. Connect it over USB or wireless debugging and allow this computer. Optional tools in the setup guide shows whether adb is installed.')
