@@ -162,3 +162,13 @@ def test_mms_pictures_are_requested_held_privately_shown_and_saved(tmp_path, mon
     assert service.dispatch("phone.sms.attachment", {"device_id": "phone", "thread": 7, "message": 31, "part": 5}) == {"ready": True, "id": view["id"]}
     service.event(event("sms.remove", {"thread": 7}), None)
     assert service.snapshot()["attachments"] == []
+
+
+def test_group_replies_follow_the_phone_capability(tmp_path):
+    service, published = features(tmp_path, capabilities=["sms"])
+    service.event(event("sms.thread", {"thread": 8, "recipients": ["a", "b"], "message": {"id": 1, "body": "x", "timestamp": 1, "direction": "incoming"}}), None)
+    with pytest.raises(ValueError, match="Update Saiph"):
+        service.dispatch("phone.sms.send", {"device_id": "phone", "thread": 8, "text": "hi"})
+    grouped, published = features(tmp_path, capabilities=["sms", "sms-group"])
+    grouped.dispatch("phone.sms.send", {"device_id": "phone", "thread": 8, "text": "hi"})
+    assert published[-1]["type"] == "sms.send"

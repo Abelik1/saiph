@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef, useState } from "react";
-import { Image, LoaderCircle, MessageSquare, PhoneCall, Send, Smartphone } from "lucide-react";
+import { AppWindow, Image, LoaderCircle, MessageSquare, PhoneCall, Send, Smartphone } from "lucide-react";
 import type { Client } from "./types";
 import { Action, Empty, Form } from "./ui";
 import "./PhoneTabs.css";
@@ -71,10 +71,11 @@ function Messages({ info, phone, client }: { info: PhoneFeatureState; phone?: Ph
     : <button type="button" className="text-button" disabled={!available} onClick={() => setComposing(true)}>New message</button>;
   if (!thread) return <>{compose}<Empty title="Your messages appear here">Saiph loads conversations automatically from your phone.</Empty></>;
   const messages = info.messages.filter((r) => r.device_id === phone.id && r.thread === thread.thread).sort((a, b) => a.timestamp - b.timestamp);
+  const replyable = thread.recipients.length === 1 || (thread.recipients.length <= 10 && phone.capabilities.includes("sms-group"));
   return <>{compose}<div className="phone-messages">
     <aside aria-label="Conversations">{threads.map((r) => <button key={r.id} className={r.thread === thread.thread ? "selected" : ""} onClick={() => { setSelected(r.thread); setReply(""); setQueued(false); }}><strong>{r.recipients.join(", ") || "Conversation"}</strong><span>{r.message.body}</span></button>)}</aside>
     <section className="phone-conversation"><h2>{thread.recipients.join(", ") || "Conversation"}</h2><div className="phone-message-list">{messages.map((r) => <article key={r.id} className={"phone-message " + r.direction}>{r.body && <p>{r.body}</p>}<Attachments info={info} phone={phone} message={r} client={client} /><small>{new Date(r.timestamp).toLocaleString()}</small></article>)}</div>
-      <Form submit={async () => { await client.call("phone.sms.send", { device_id: phone.id, thread: thread.thread, text: reply }); setReply(""); setQueued(true); }}><label>Message<input aria-label="SMS reply" value={reply} maxLength={4096} disabled={!available || thread.recipients.length!==1} onChange={(e) => { setReply(e.target.value); setQueued(false); }} /></label><button disabled={!available || thread.recipients.length!==1 || !reply.trim()}><Send size={15} />Send</button>{queued && <small role="status">Reply queued for your phone.</small>}{thread.recipients.length!==1 && <small>Group replies stay in your phone's messaging app.</small>}</Form>
+      <Form submit={async () => { await client.call("phone.sms.send", { device_id: phone.id, thread: thread.thread, text: reply }); setReply(""); setQueued(true); }}><label>Message<input aria-label="SMS reply" value={reply} maxLength={4096} disabled={!available || !replyable} onChange={(e) => { setReply(e.target.value); setQueued(false); }} /></label><button disabled={!available || !replyable || !reply.trim()}><Send size={15} />Send</button>{queued && <small role="status">Reply queued for your phone.</small>}{!replyable && <small>Group replies stay in your phone's messaging app. Update Saiph on your phone to reply here.</small>}{replyable && thread.recipients.length > 1 && <small>Group replies are sent as MMS.</small>}</Form>
     </section>
   </div></>;
 }
@@ -132,7 +133,25 @@ function Files({ info, phone, client }: { info: PhoneFeatureState; phone?: Phone
   const rows = info.files.filter((r) => r.device_id === phone?.id);
   return <><div className="section-head"><div><h2>Shared files</h2><p className="muted">Files arrive in Downloads → Orion on either device.</p></div><Action disabled={!available} run={() => client.call("phone.file.choose", { device_id: phone?.id })}><Send size={15} />Send a file</Action></div>{rows.length ? <div className="phone-file-list">{rows.map((r) => <article key={r.id}><strong>{r.name}</strong><small>{(r.size / 1024).toFixed(1)} KB</small><Action className="text-button" run={() => client.call("phone.file.open", { id: r.id })}>Show in folder</Action></article>)}</div> : <Empty title="Send something across">Choose a file here, or use Share → Saiph on your phone.</Empty>}</>;
 }
+type PhoneApp = { package: string; name: string; system: boolean };
+/** Phone apps in their own windows, through scrcpy over the phone's authorised debugging connection. */
+function Apps({ phone, client }: { phone: PhoneDevice; client: Client }) {
+  const [apps, setApps] = useState<PhoneApp[] | null>(null);
+  const [filter, setFilter] = useState("");
+  const [notice, setNotice] = useState("");
+  const shown = (apps || []).filter((app) => !filter.trim() || app.name.toLowerCase().includes(filter.trim().toLowerCase()));
+  return <>
+    <div className="section-head"><div><h2>Phone apps</h2><p className="muted">Open a phone app in its own window here. Needs wireless or USB debugging, like the phone preview, and Android 10 or later.</p></div>
+      <Action disabled={!phone.online} run={async () => { const result = await client.call<{ apps: PhoneApp[] }>("phone.apps", { device_id: phone.id }); setApps(result.apps); }}>{apps ? "Refresh apps" : "Show phone apps"}</Action></div>
+    {notice && <p role="status">{notice}</p>}
+    {apps && <><label>Find an app<input aria-label="Find a phone app" value={filter} onChange={(e) => setFilter(e.target.value)} /></label>
+      <div className="phone-app-list">{shown.map((app) => <article key={app.package}><div className="grow"><b>{app.name}</b><small>{app.package}</small></div>
+        <Action className="text-button" ariaLabel={"Open " + app.name} disabled={!phone.online} run={() => client.call("phone.app.open", { device_id: phone.id, package: app.package, name: app.name })}>Open</Action>
+        <Action className="text-button" ariaLabel={"Pin " + app.name} run={async () => { await client.call("phone.app.pin", { package: app.package, name: app.name }); setNotice(app.name + " was added to your apps menu."); }}>Pin</Action>
+      </article>)}</div></>}
+  </>;
+}
 export function PhoneTabs({ features = noFeatures, phone, client }: { features?: PhoneFeatureState; phone?: PhoneDevice; client: Client }) {
   const [tab, setTab] = useState("Messages");
-  return <><nav className="phone-tabs" aria-label="Phone features">{[{ name: "Messages", icon: MessageSquare }, { name: "Photos", icon: Image }, { name: "Calls", icon: PhoneCall }, { name: "Files", icon: Send }].map(({ name, icon: Icon }) => <button key={name} aria-current={tab === name ? "page" : undefined} onClick={() => setTab(name)}><Icon size={17} />{name}</button>)}</nav><div className="phone-tab-content">{!phone ? <Empty title="Your phone, on this computer"><Smartphone size={40} />Use your server invitation to get started.</Empty> : tab === "Messages" ? <Messages info={features} phone={phone} client={client} /> : tab === "Photos" ? <Photos info={features} phone={phone} client={client} /> : tab === "Calls" ? <Calls info={features} phone={phone} client={client} /> : <Files info={features} phone={phone} client={client} />}</div></>;
+  return <><nav className="phone-tabs" aria-label="Phone features">{[{ name: "Messages", icon: MessageSquare }, { name: "Photos", icon: Image }, { name: "Calls", icon: PhoneCall }, { name: "Files", icon: Send }, { name: "Apps", icon: AppWindow }].map(({ name, icon: Icon }) => <button key={name} aria-current={tab === name ? "page" : undefined} onClick={() => setTab(name)}><Icon size={17} />{name}</button>)}</nav><div className="phone-tab-content">{!phone ? <Empty title="Your phone, on this computer"><Smartphone size={40} />Use your server invitation to get started.</Empty> : tab === "Messages" ? <Messages info={features} phone={phone} client={client} /> : tab === "Photos" ? <Photos info={features} phone={phone} client={client} /> : tab === "Calls" ? <Calls info={features} phone={phone} client={client} /> : tab === "Apps" ? <Apps phone={phone} client={client} /> : <Files info={features} phone={phone} client={client} />}</div></>;
 }

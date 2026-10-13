@@ -68,6 +68,6 @@ describe("Phone tabs",()=>{
   const group={...info,threads:[{...info.threads[0],recipients:["First","Second"]}]};
   render(<PhoneTabs features={group} phone={phone} client={{call:vi.fn().mockResolvedValue({})} as unknown as Client}/>);
   expect(screen.getByText("Synthetic SMS",{selector:"p"})).toBeVisible();expect(screen.getByRole("button",{name:"Send"})).toBeDisabled();
-  expect(screen.getByText("Group replies stay in your phone's messaging app.")).toBeVisible();
+  expect(screen.getByText(/Group replies stay in your phone's messaging app\./)).toBeVisible();
  });
 });

@@ -33,7 +33,8 @@ reports as of October 2026. Microsoft changes it often; recheck before release.
 | SMS: reply in existing one-to-one threads | Have | — |
 | SMS: start a new conversation, contact search | Built, acceptance pending | A1 |
 | MMS pictures (receive) | Built, acceptance pending | A2 |
-| Group replies and sending pictures | Missing | A3 |
+| Group replies | Built, acceptance pending | A3 |
+| Sending a picture by MMS from the computer | Not yet built (optional part of A3) | A3 |
 | Calls: answer or decline | Have | — |
 | Calls: dial from the PC, call history | Built, acceptance pending | B1 |
 | Calls: talk through the PC's microphone and speakers | Missing | B2 (research first) |
@@ -44,7 +45,7 @@ reports as of October 2026. Microsoft changes it often; recheck before release.
 | New screenshots and photos offered on the PC | Built, acceptance pending | G |
 | Phone panel in the Start menu, send-files drop zone | Partial (tray icon) | H |
 | Screen mirroring | Partial (scrcpy; needs wireless or USB debugging) | J |
-| Phone apps in their own windows, pin to taskbar | Missing (Phone Link: Samsung/Honor only) | J |
+| Phone apps in their own windows, pin to the apps menu | Built, acceptance pending (needs debugging) | J |
 | Instant hotspot | Partial (Android does not let apps switch it on) | — |
 | Continue websites from the phone | Covered by browser sync; Saiph's Open on desktop share | — |
 | Clipboard history sync (reported in testing) | Not planned until Microsoft ships it | — |

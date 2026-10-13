@@ -212,7 +212,10 @@ def apply(c,source,event,now):
                   'contacts.search':'contacts','sms.compose':'sms','phone.ringer':'ringer','call.dial':'call-dial','calls.log.request':'call-log','sms.attachment.request':'sms'}[event.type]
         if required not in caps:raise ValueError('Phone capability unavailable')
         if isinstance(value,Thread) and _get(c,owner,'thread',value.thread) is None:raise ValueError('Conversation unavailable')
-        if isinstance(value,SmsSend) and len((_get(c,owner,'thread',value.thread) or {}).get('recipients',[]))!=1:raise ValueError('Group messaging remains on the phone')
+        if isinstance(value,SmsSend):
+            recipients=len((_get(c,owner,'thread',value.thread) or {}).get('recipients',[]))
+            # Group replies need a phone that sends them as MMS (sms-group); older phones keep them.
+            if not 1<=recipients<=10 or (recipients>1 and 'sms-group' not in caps):raise ValueError('Group messaging remains on the phone')
         if isinstance(value,CallCommand) and (_get(c,owner,'call','current') or {}).get('state')!='ringing':raise ValueError('Call no longer ringing')
         if isinstance(value,PhotoRequest) and _get(c,owner,'photo',value.id) is None:raise ValueError('Photo unavailable')
         if isinstance(value,SmsAttachmentRequest) and value.part not in [p['part'] for p in (_get(c,owner,'attachment',f'{value.thread}:{value.message}') or {}).get('parts',[])]:

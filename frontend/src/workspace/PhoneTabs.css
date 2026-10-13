@@ -26,3 +26,7 @@
 .phone-now-playing { display: grid; gap: 2px; margin: 8px 0; }
 .phone-attachment { margin: 4px 0; display: grid; gap: 4px; }
 .phone-attachment img { max-width: 240px; max-height: 240px; border-radius: 8px; object-fit: contain; }
+.phone-app-list { display: grid; gap: 6px; margin-top: 8px; }
+.phone-app-list article { display: flex; align-items: center; gap: 8px; }
+.phone-app-list .grow { display: grid; flex: 1; min-width: 0; }
+.phone-app-list small { overflow-wrap: anywhere; }

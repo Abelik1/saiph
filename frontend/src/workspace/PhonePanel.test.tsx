@@ -78,3 +78,20 @@ describe("MMS pictures", () => {
     await waitFor(() => expect(call).toHaveBeenCalledWith("phone.sms.attachment.save", { id: "a" }));
   });
 });
+
+describe("Phone apps", () => {
+  it("lists apps on request, filters, opens and pins", async () => {
+    const call = vi.fn(async (method: string) => method === "phone.apps"
+      ? { apps: [{ package: "com.spotify.music", name: "Spotify", system: false }, { package: "com.android.settings", name: "Settings", system: true }] } : { opened: true });
+    render(<PhoneTabs features={empty} phone={phone([])} client={{ call } as unknown as Client} />);
+    fireEvent.click(screen.getByRole("button", { name: "Apps" }));
+    fireEvent.click(screen.getByRole("button", { name: "Show phone apps" }));
+    await waitFor(() => expect(screen.getByText("Spotify")).toBeVisible());
+    fireEvent.change(screen.getByLabelText("Find a phone app"), { target: { value: "spot" } });
+    expect(screen.queryByText("Settings")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Open Spotify" }));
+    await waitFor(() => expect(call).toHaveBeenCalledWith("phone.app.open", { device_id: "phone", package: "com.spotify.music", name: "Spotify" }));
+    fireEvent.click(screen.getByRole("button", { name: "Pin Spotify" }));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Spotify was added to your apps menu."));
+  });
+});

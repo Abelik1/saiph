@@ -19,7 +19,7 @@ data class FeatureAccess(val sms: Boolean = false, val calls: Boolean = false,
     }
     fun capabilities(): List<String> = buildList {
         add("files")
-        if (sms) add("sms")
+        if (sms) { add("sms"); add("sms-group") }
         if (calls) add("calls")
         if (calls && callControl) add("call-control")
         if (photos) add("photos")

@@ -48,7 +48,7 @@ class FeatureAccessTest {
         val access=FeatureAccess(sms=true,calls=true,notifications=false)
         assertEquals(listOf("call.state"),link.outgoing(true,access::allowsPublication).map { event(it).getValue("type").jsonPrimitive.content })
         assertEquals(listOf(1L to 8L),link.knownConversations())
-        assertEquals(listOf("files","sms","calls"),access.capabilities())
+        assertEquals(listOf("files","sms","sms-group","calls"),access.capabilities())
     }
     @Test fun callControlRequiresReadStateAndAnswerPermissionIndependently() {
         assertFalse("call-control" in FeatureAccess(callControl=true).capabilities())

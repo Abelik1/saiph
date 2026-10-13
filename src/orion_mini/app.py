@@ -127,6 +127,7 @@ class MainWindow(QMainWindow):
     automation_requested = Signal(object)
     security_alert = Signal(str)
     send_files_requested = Signal(object)
+    open_phone_app_requested = Signal(str)
 
     def __init__(self, data_dir=None, bootstrap=True):
         super().__init__()
@@ -210,6 +211,8 @@ class MainWindow(QMainWindow):
         # Send to phone from a file manager arrives on the API thread; confirm on the GUI thread.
         self.send_files_requested.connect(self.confirm_send_files)
         self.workspace.request_send_files = self.send_files_requested.emit
+        self.open_phone_app_requested.connect(self.open_phone_app)
+        self.workspace.request_open_phone_app = self.open_phone_app_requested.emit
         self.automation_requested.connect(self.run_automation)
         self.workspace.automation_call = Automation(self.workspace, self.run_on_gui, self.bridge.changed.emit)
         self.api = ApiServer(self.workspace, 0 if os.environ.get('ORION_MINI_TEST') else None)
@@ -308,6 +311,25 @@ class MainWindow(QMainWindow):
         start_update()
         QTimer.singleShot(400, self.quit_app)
         return {'ok': True}
+
+    def open_phone_app(self, package, attempts=0):
+        """A pinned phone app: open it from the first online phone over authorised debugging."""
+        phones = [d for d in (self.workspace.state().get('phone') or {}).get('devices', []) if d.get('online') and 'battery' in d.get('capabilities', [])]
+        if not phones:
+            if attempts < 7:
+                QTimer.singleShot(4000, lambda: self.open_phone_app(package, attempts + 1))
+            else:
+                self.tray.showMessage('Saiph', 'Your phone is offline. The app was not opened.', QSystemTrayIcon.Warning, 10000)
+            return
+        def run():
+            try:
+                from .adb_worker import AdbWorker
+                from .phone_apps import open_app
+                worker = AdbWorker()
+                open_app(worker.adb, worker.paired_serial(phones[0]['id']), package)
+            except Exception as error:
+                self.update_checked.emit(str(error))
+        threading.Thread(target=run, name='orion-phone-app', daemon=True).start()
 
     def confirm_send_files(self, paths, attempts=0):
         """The owner chooses the phone and confirms; nothing is sent before that."""
@@ -463,6 +485,13 @@ def main():
         return addon.worker_main()
     from .send_files import arguments as send_arguments
     sys.argv, send_paths = send_arguments(sys.argv)
+    phone_app = None
+    if '--open-phone-app' in sys.argv:
+        index = sys.argv.index('--open-phone-app')
+        if index + 1 >= len(sys.argv):
+            return 2
+        phone_app = sys.argv[index + 1]
+        del sys.argv[index:index + 2]
     invitation = None
     if '--enrollment' in sys.argv:
         index = sys.argv.index('--enrollment')
@@ -490,6 +519,9 @@ def main():
         if send_paths:
             from .send_files import forward
             return 0 if forward(app_data_dir(), send_paths) else 2
+        if phone_app:
+            from .enrollment import forward_local
+            return 0 if forward_local(app_data_dir(), '/v1/phone/app', {'package': phone_app}) else 2
         return 0
     app.setQuitOnLastWindowClosed(False)
     # Detection only, before any store opens: preserve evidence, never repair.
@@ -517,6 +549,8 @@ def main():
             from PySide6.QtWidgets import QMessageBox
             QMessageBox.warning(window, 'Server invitation', 'This invitation could not be opened or has expired. Ask your server for a fresh one.')
     window.show()
+    if phone_app:
+        QTimer.singleShot(4000, lambda: window.open_phone_app(phone_app))
     if send_paths:
         # Started from Send to while Saiph was closed: ask once the phone link has had time to connect.
         QTimer.singleShot(4000, lambda: window.confirm_send_files(send_paths))

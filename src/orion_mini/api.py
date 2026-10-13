@@ -192,6 +192,16 @@ class ApiServer:
                         return self.reply(503, {"error": "unavailable", "message": "Restart is unavailable in this process."})
                     self.reply(202, {"restarting": True, "pid": os.getpid()})
                     return restart()
+                if path == "/v1/phone/app" and method == "POST":
+                    # A pinned phone-app shortcut, forwarded to the running Saiph (live callers only).
+                    request = getattr(workspace, "request_open_phone_app", None)
+                    from .phone_apps import PACKAGE
+                    if request is None:
+                        return self.reply(503, {"error": "unavailable", "message": "Phone apps are unavailable in this process."})
+                    if not isinstance(body, dict) or set(body) != {"package"} or not isinstance(body["package"], str) or not PACKAGE.fullmatch(body["package"]):
+                        return self.reply(400, {"error": "invalid_body", "message": "Send one app package name."})
+                    request(body["package"])
+                    return self.reply(202, {"opening": True})
                 if path == "/v1/phone/send" and method == "POST":
                     # Live authenticated callers only (Send to phone from a file manager);
                     # the owner still confirms the phone before anything is sent.

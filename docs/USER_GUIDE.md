@@ -97,6 +97,14 @@ Offer new screenshots and photos in Settings → Advanced.
 The picture is fetched from the phone only then, kept in Saiph's own folder,
 shown in the conversation, and saved to Downloads → Orion on request.
 
+**Group conversations:** with an up-to-date Saiph on the phone, you can reply to
+group conversations from the computer; replies are sent as MMS.
+
+**Phone apps in their own windows:** the Apps tab lists the phone's apps and opens
+one in its own window through scrcpy; Pin adds it to the Start menu or the
+applications menu. It needs authorised wireless or USB debugging (as the phone
+preview does) and Android 10 or later.
+
 Smaller conveniences, each with a switch in Settings → Advanced:
 
 - **Verification codes:** a phone notification containing a one-time code shows

@@ -145,3 +145,10 @@ def test_mms_attachments_are_indexed_requested_and_offered_directly(hub):
     with pytest.raises(ValueError):apply(hub,phone,'sms.attachment.file',offer)
     apply(hub,phone,'sms.remove',{'thread':7})
     assert features.snapshot(hub.DB)['attachments']==[]
+def test_group_replies_need_a_phone_that_sends_them_as_mms(hub):
+    c=client(hub);_,phone=pair(hub,c);_,computer=pair(hub,c)
+    caps(hub,phone,['sms'])
+    apply(hub,phone,'sms.thread',{**thread(),'thread':8,'recipients':['first','second']})
+    with pytest.raises(ValueError):apply(hub,computer,'sms.send',{'thread':8,'text':'x'},[phone])
+    hub.DB.execute('UPDATE link_devices SET capabilities_json=? WHERE device_id=?',(json.dumps(['sms','sms-group']),phone))
+    apply(hub,computer,'sms.send',{'thread':8,'text':'x'},[phone])

@@ -456,6 +456,9 @@ class PhoneFeatures:
         result=self.command(device,'photo.request',{'id':str(photo)})
         self.pending[key]=time.time()
         return {**self._save_result(self._record_save(device,photo,'saving',started=time.time())),'queued':True,'id':result.get('id')}
+    def _has(self,device,capability):
+        phone=getattr(self.workspace,'phone',None)
+        return bool(phone) and any(d['id']==device and capability in d.get('capabilities',[]) for d in phone.snapshot()['devices'])
     def command(self,device,kind,payload):
         runtime=self.workspace.phone_runtime
         if not runtime or not runtime.client or not runtime.loop or not self.workspace.phone.connected:raise ValueError('Saiph is offline. This action has not been sent.')
@@ -485,7 +488,8 @@ class PhoneFeatures:
         if method=='phone.sms.open':return self.command(args['device_id'],'sms.open',{'thread':int(args['thread'])})
         if method=='phone.sms.send':
             thread=next((r for r in self.snapshot()['threads'] if r['device_id']==args['device_id'] and r['thread']==int(args['thread'])),None)
-            if not thread or len(thread['recipients'])!=1:raise ValueError('Group replies stay in your phone’s messaging app.')
+            if not thread or not 1<=len(thread['recipients'])<=10:raise ValueError('This conversation is unavailable.')
+            if len(thread['recipients'])>1 and not self._has(args['device_id'],'sms-group'):raise ValueError('Group replies stay in your phone’s messaging app. Update Saiph on your phone to reply here.')
             text=str(args['text'])
             if not text.strip() or len(text)>4096:raise ValueError('Enter a message up to 4096 characters.')
             return self.command(args['device_id'],'sms.send',{'thread':int(args['thread']),'text':text})

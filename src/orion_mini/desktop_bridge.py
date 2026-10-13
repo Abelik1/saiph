@@ -190,6 +190,17 @@ class DesktopBridge(QObject):
                 open_target(Path(row["path"]).parent);result={"opened":True}
             elif method == "phone.photo.drag":
                 self.photo_drag(request_id,args);return
+            elif method in {"phone.apps", "phone.app.open"}:
+                def apps():
+                    from .adb_worker import AdbWorker
+                    from .phone_apps import list_apps, open_app
+                    worker=AdbWorker();serial=worker.paired_serial(args["device_id"])
+                    if method=="phone.apps":return list_apps(worker.adb,serial)
+                    return open_app(worker.adb,serial,args.get("package"),args.get("name",""))
+                self.background(request_id,apps);return
+            elif method == "phone.app.pin":
+                from .phone_apps import pin
+                result=pin(args.get("package"),args.get("name",""))
             elif method == "phone.mirror":
                 def mirror():
                     from .adb_worker import AdbWorker

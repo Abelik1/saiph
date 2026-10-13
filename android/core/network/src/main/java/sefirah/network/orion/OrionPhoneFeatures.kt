@@ -69,7 +69,8 @@ class OrionPhoneFeatures @Inject constructor(private val context: Context,
                 val thread=body.getValue("thread").jsonPrimitive.long
                 val recipients=SMSHelper.getThreadRecipients(context,thread).take(10)
                 val text=body.getValue("text").jsonPrimitive.content
-                require(recipients.size==1 && text.isNotBlank() && text.length<=4096)
+                // Group replies go out as MMS through upstream's group setting.
+                require(recipients.size in 1..10 && text.isNotBlank() && text.length<=4096)
                 val subscription=SMSHelper.getNewestMessageRef(context,thread)?.let { SMSHelper.getMessagesByRefs(context,listOf(it)).firstOrNull()?.subscriptionID } ?: 0
                 sms.sendTextMessage("",TextMessage(uniqueId=(UUID.fromString(id).leastSignificantBits and Long.MAX_VALUE),addresses=recipients,body=text,subscriptionId=subscription))
             }
