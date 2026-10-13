@@ -5,6 +5,8 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Drawing.Text;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -77,7 +79,16 @@ public static class Setup {
         } catch (Exception failure) { Console.Error.WriteLine("Saiph installer failed: " + phase + "; " + failure.GetType().Name + "; " + failure.HResult); if (!silent) MessageBox.Show("Saiph could not complete installation. No user data was removed.", "Saiph"); return 1; }
     }
 
-    static void Progress(string message) { if (status != null) { status.Text = message; Application.DoEvents(); } }
+    static WaveSurface surface;
+    static void Progress(string message) { Progress(message, -1); }
+    // The wizard installs on a worker thread so its animation keeps running;
+    // the uninstall window still installs on the UI thread and pumps messages.
+    static void Progress(string message, double fraction) {
+        if (status == null) return;
+        Action update = delegate { status.Text = message; if (fraction >= 0 && surface != null) surface.Progress = fraction; };
+        if (!status.InvokeRequired) { update(); Application.DoEvents(); return; }
+        try { status.BeginInvoke(update); } catch (InvalidOperationException) { } // Window already gone; progress is cosmetic.
+    }
     static string LockName() {
         using (var hash = SHA256.Create()) {
             string key = WindowsIdentity.GetCurrent().User.Value + "\n" + destination.ToUpperInvariant();
@@ -86,42 +97,61 @@ public static class Setup {
     }
     // Welcome → Options → Installing → Done. Options map onto the same flags as silent mode.
     static void RunWizard() {
-        var window = new Form { Text = "Saiph setup", ClientSize = new Size(600, 360), StartPosition = FormStartPosition.CenterScreen,
-                                FormBorderStyle = FormBorderStyle.FixedDialog, MaximizeBox = false, Font = new Font("Segoe UI", 10) };
-        var heading = new Label { Left = 28, Top = 22, Width = 540, Height = 38, Font = new Font("Segoe UI", 19) };
-        var body = new Label { Left = 30, Top = 72, Width = 540, Height = 90 };
+        var window = new Form { Text = "Saiph setup", ClientSize = new Size(640, 420), StartPosition = FormStartPosition.CenterScreen,
+                                FormBorderStyle = FormBorderStyle.FixedDialog, MaximizeBox = false, Font = new Font("Segoe UI", 10),
+                                BackColor = WaveSurface.Footer };
+        window.HandleCreated += delegate { WaveSurface.DarkTitleBar(window.Handle); };
+        surface = new WaveSurface { Bounds = new Rectangle(0, 0, 640, 348) };
         bool upgrade = File.Exists(Path.Combine(destination, "orion-install.json"));
         bool startupNow = false;
         try { using (var key = Registry.CurrentUser.OpenSubKey(RunKey)) startupNow = key != null && key.GetValue("OrionMini") != null; } catch { }
-        var startup = new CheckBox { Left = 32, Top = 72, Width = 540, Height = 28, Text = "Start Saiph when I sign in", Checked = !upgrade || startupNow, Visible = false };
-        var sendTo = new CheckBox { Left = 32, Top = 104, Width = 540, Height = 28, Text = "Add \"Saiph (phone)\" to the Send to menu in File Explorer",
-                                    Checked = !upgrade || File.Exists(SendToShortcut), Visible = false };
-        var launch = new CheckBox { Left = 32, Top = 136, Width = 540, Height = 28, Text = "Open Saiph when setup finishes", Checked = !noLaunch, Visible = false };
-        var location = new Label { Left = 30, Top = 178, Width = 540, Height = 44, Text = "Installs for your Windows account only, in " + destination, Visible = false };
-        status = new Label { Left = 30, Top = 236, Width = 540, Height = 50, Text = "Internal preview · publisher signing and clean-device acceptance pending." };
-        var back = new Button { Left = 300, Top = 304, Width = 130, Height = 36, Text = "Back", Visible = false };
-        var next = new Button { Left = 440, Top = 304, Width = 130, Height = 36, Text = "Next" };
+        var startup = WaveSurface.Option("Start Saiph when I sign in", 146, !upgrade || startupNow);
+        var sendTo = WaveSurface.Option("Add \"Saiph (phone)\" to the Send to menu in File Explorer", 178, !upgrade || File.Exists(SendToShortcut));
+        var launch = WaveSurface.Option("Open Saiph when setup finishes", 210, !noLaunch);
+        var location = new Label { Left = 46, Top = 252, Width = 548, Height = 44, Text = "Installs for your Windows account only, in " + destination,
+                                   BackColor = WaveSurface.Card, ForeColor = WaveSurface.Muted, Font = new Font("Segoe UI", 9) };
+        status = new Label { Left = 24, Top = 362, Width = 340, Height = 48, Text = "Internal preview · publisher signing and clean-device acceptance pending.",
+                             BackColor = WaveSurface.Footer, ForeColor = WaveSurface.Muted, Font = new Font("Segoe UI", 9) };
+        var back = WaveSurface.Button("Back", 372, false);
+        var next = WaveSurface.Button("Next", 500, true);
         int page = 0;
+        bool installing = false;
         Action show = delegate {
-            heading.Text = page == 0 ? (upgrade ? "Update Saiph" : "Install Saiph") : page == 1 ? "Choose options" : page == 2 ? "Installing…" : "Saiph is ready";
-            body.Visible = page != 1; startup.Visible = sendTo.Visible = launch.Visible = location.Visible = page == 1;
-            body.Text = page == 0 ? "Saiph connects your Android phone and your computers. Your existing settings and device pairing are kept."
+            surface.Heading = page == 0 ? (upgrade ? "Update Saiph" : "Install Saiph") : page == 1 ? "Choose options" : page == 2 ? "Installing…" : "Saiph is ready";
+            surface.Body = page == 0 ? "Saiph connects your Android phone and your computers. Your existing settings and device pairing are kept."
                 + " After setup, Saiph's guide helps you sign in and add your phone."
                 : page == 2 ? "Installing Saiph. This takes a moment." : page == 3 ? "Saiph is installed. Open it from the Start menu any time." : "";
+            surface.ShowCard = page == 1; surface.Hero = page == 0;
+            startup.Visible = sendTo.Visible = launch.Visible = location.Visible = page == 1;
             back.Visible = page == 1; next.Enabled = page != 2;
             next.Text = page == 1 ? (upgrade ? "Update" : "Install") : page == 3 ? "Finish" : "Next";
+            surface.AccessibleName = surface.Heading; surface.AccessibleDescription = surface.Body;
+            surface.Invalidate();
         };
         back.Click += delegate { page = 0; show(); };
+        // Installation runs on its own thread; the window cannot close until it ends.
+        window.FormClosing += (sender, e) => { if (installing) e.Cancel = true; };
         next.Click += delegate {
             if (page == 0) { page = 1; show(); return; }
             if (page == 3) { window.Close(); return; }
             noStartup = removeStartup = !startup.Checked; noSendTo = !sendTo.Checked; noLaunch = !launch.Checked;
-            page = 2; show(); window.Refresh();
-            try { Perform(); page = 3; status.Text = ""; }
-            catch { page = 1; status.Text = "The installation could not finish. Your existing release and data were retained."; }
-            show();
+            page = 2; installing = true; status.Text = ""; surface.Progress = 0.02; surface.Working = true; show();
+            var worker = new Thread(delegate() {
+                bool done = false;
+                try { Perform(); done = true; } catch { }
+                window.BeginInvoke((Action)delegate {
+                    installing = false; surface.Working = false;
+                    if (done) { page = 3; status.Text = ""; surface.Progress = 1; surface.Celebrate(); }
+                    else { page = 1; surface.Progress = -1; status.Text = "The installation could not finish. Your existing release and data were retained."; }
+                    show();
+                });
+            });
+            // COM shell links are created on this thread.
+            worker.SetApartmentState(ApartmentState.STA);
+            worker.Start();
         };
-        foreach (Control control in new Control[] { heading, body, startup, sendTo, launch, location, status, back, next }) window.Controls.Add(control);
+        foreach (Control control in new Control[] { startup, sendTo, launch, location }) surface.Controls.Add(control);
+        foreach (Control control in new Control[] { surface, status, back, next }) window.Controls.Add(control);
         show(); Application.Run(window);
     }
 
@@ -229,7 +259,7 @@ public static class Setup {
                     string target = Under(stage, item.path); Directory.CreateDirectory(Path.GetDirectoryName(target));
                     using (var input = entry.Open()) using (var output = File.Create(target)) input.CopyTo(output);
                     if (SHA(target) != item.sha256) throw new InvalidDataException();
-                    if (++number % 80 == 0) Progress("Installing Saiph · " + number + " of " + manifest.files.Length + " files");
+                    if (++number % 40 == 0) Progress("Installing Saiph · " + number + " of " + manifest.files.Length + " files", 0.92 * number / manifest.files.Length);
                 }
                 File.WriteAllText(Path.Combine(stage, "package-manifest.json"), Json.Serialize(manifest));
             }
@@ -397,6 +427,177 @@ public static class Setup {
         File.WriteAllText(Marker, Json.Serialize(installation));
         if (File.Exists(Marker + ".previous")) File.Delete(Marker + ".previous");
         // Uninstall.exe may be the running file. Retain the small stub; never delete outside owned releases.
+    }
+}
+
+// Saiph's look for the setup window: deep blue, with strings that ripple like
+// plucked guitar strings. Purely visual; it never touches installation state.
+sealed class WaveSurface : Control {
+    public static readonly Color Footer = Color.FromArgb(5, 11, 26), Card = Color.FromArgb(11, 22, 46), Muted = Color.FromArgb(143, 163, 191);
+    static readonly Color Cyan = Color.FromArgb(34, 211, 238), Light = Color.FromArgb(103, 232, 249), Violet = Color.FromArgb(167, 139, 250);
+    public string Heading = "", Body = "";
+    public bool ShowCard, Hero, Working;
+    public double Progress = -1; // Below zero hides the progress string.
+    readonly Stopwatch clock = Stopwatch.StartNew();
+    readonly System.Windows.Forms.Timer timer = new System.Windows.Forms.Timer { Interval = 16 };
+    readonly List<double[]> plucks = new List<double[]>(); // x, y, strength, start
+    readonly Font headingFont = new Font("Segoe UI Semilight", 21), bodyFont = new Font("Segoe UI", 10), brandFont = new Font("Segoe UI Semibold", 15);
+    double shown, knot, last;
+    const int Strings = 24, BarLeft = 40, BarRight = 600, BarY = 236;
+
+    public WaveSurface() {
+        SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint | ControlStyles.ResizeRedraw, true);
+        AccessibleRole = AccessibleRole.StaticText;
+        timer.Tick += delegate { Invalidate(); };
+        if (AnimationsEnabled()) timer.Start();
+    }
+    protected override void Dispose(bool disposing) {
+        if (disposing) { timer.Dispose(); headingFont.Dispose(); bodyFont.Dispose(); brandFont.Dispose(); }
+        base.Dispose(disposing);
+    }
+
+    [DllImport("user32.dll")] static extern bool SystemParametersInfo(uint action, uint parameter, ref bool value, uint flags);
+    [DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr window, int attribute, ref int value, int size);
+    // Honour Windows' "Animation effects" setting.
+    static bool AnimationsEnabled() { bool on = true; try { SystemParametersInfo(0x1042, 0, ref on, 0); } catch { } return on; }
+    public static void DarkTitleBar(IntPtr handle) { int on = 1; try { DwmSetWindowAttribute(handle, 20, ref on, 4); } catch { } }
+
+    public static CheckBox Option(string text, int top, bool on) {
+        return new CheckBox { Left = 44, Top = top, Width = 552, Height = 28, Text = text, Checked = on, Visible = false,
+                              FlatStyle = FlatStyle.Flat, BackColor = Card, ForeColor = Color.FromArgb(227, 238, 251) };
+    }
+    public static Button Button(string text, int left, bool primary) {
+        var button = new Button { Left = left, Top = 366, Width = 116, Height = 36, Text = text, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand,
+                                  BackColor = primary ? Cyan : Color.FromArgb(18, 33, 62), ForeColor = primary ? Color.FromArgb(4, 16, 31) : Color.FromArgb(227, 238, 251),
+                                  Font = new Font("Segoe UI Semibold", 10) };
+        button.FlatAppearance.BorderColor = primary ? Cyan : Color.FromArgb(34, 55, 92);
+        button.FlatAppearance.MouseOverBackColor = primary ? Light : Color.FromArgb(28, 50, 90);
+        return button;
+    }
+
+    double Seconds { get { return clock.Elapsed.TotalSeconds; } }
+    void Pluck(double x, double y, double strength) { plucks.Add(new double[] { x, y, strength, Seconds }); if (plucks.Count > 16) plucks.RemoveAt(0); }
+    // Ripples run out along the finished string.
+    public void Celebrate() { for (int i = 0; i < 5; i++) Pluck(BarLeft + i * (BarRight - BarLeft) / 4.0, BarY, 1.2); }
+
+    protected override void OnPaint(PaintEventArgs e) {
+        var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
+        double t = Seconds, elapsed = Math.Min(0.1, t - last); last = t;
+        int width = ClientSize.Width, height = ClientSize.Height;
+        using (var background = new LinearGradientBrush(new Rectangle(0, 0, width, height + 1), Color.FromArgb(10, 24, 52), Color.FromArgb(4, 9, 23), 90f))
+            g.FillRectangle(background, 0, 0, width, height);
+        Glow(g, width * 0.12f, -40, 300, Cyan, 34);
+        Glow(g, width * 0.95f, height + 30, 280, Violet, 30);
+
+        // Progress and the "working" knot ease toward their targets.
+        if (Progress < 0) shown = 0; else shown += (Progress - shown) * Math.Min(1, elapsed * 4);
+        knot += ((Working ? 1 : 0) - knot) * Math.Min(1, elapsed * 3);
+        double headX = BarLeft + (BarRight - BarLeft) * shown;
+        plucks.RemoveAll(p => t - p[3] > 4);
+
+        float gap = height / (float)(Strings + 1);
+        var points = new PointF[width / 5 + 3];
+        for (int i = 1; i <= Strings; i++) {
+            double baseY = i * gap, depth = i / (double)(Strings + 1);
+            int alpha = (int)(255 * (0.06 + 0.24 * Math.Pow(Math.Sin(Math.PI * depth), 2)));
+            for (int n = 0; n < points.Length; n++) {
+                double x = n * 5 - 5, u = x / width;
+                double y = baseY + Math.Sin(u * 2.6 + depth * 4.1 + t * 0.12) * gap * 0.9 + Math.Sin(u * 6.3 - depth * 2.2 - t * 0.21) * gap * 0.25
+                         + Math.Sin(u * 22 - t * 0.9 + i * 0.7) * 1.2;
+                foreach (var p in plucks) {
+                    double age = t - p[3], dx = x - p[0], dy = baseY - p[1];
+                    double front = Math.Abs(dx) - age * 420;
+                    y += Math.Sin(dx * 0.05 - age * 18) * 14 * p[2] * Math.Exp(-dy * dy / (2 * 80.0 * 80.0)) * Math.Exp(-front * front / 7000) * Math.Exp(-age * 1.3);
+                }
+                if (knot > 0.01 && Progress >= 0) {
+                    // While installing, the strings near the head of the progress ring hard.
+                    double dx = x - headX, dy = baseY - BarY;
+                    double near = Math.Exp(-dx * dx / (2 * 70.0 * 70.0)) * Math.Exp(-dy * dy / (2 * 90.0 * 90.0));
+                    y -= dy * 0.35 * near * knot;
+                    y += Math.Sin(t * 17 + i * 1.9 + dx * 0.06) * 6 * near * knot;
+                }
+                points[n] = new PointF((float)x, (float)y);
+            }
+            using (var brush = new LinearGradientBrush(new PointF(0, 0), new PointF(width, 1), Color.FromArgb(alpha / 3, Cyan), Color.FromArgb(alpha / 2, Violet)))
+            using (var pen = new Pen(brush, 1f)) {
+                brush.InterpolationColors = new ColorBlend { Positions = new[] { 0f, 0.45f, 1f }, Colors = new[] { Color.FromArgb(alpha / 3, Cyan), Color.FromArgb(alpha, Light), Color.FromArgb(alpha / 2, Violet) } };
+                pen.Brush = brush;
+                g.DrawLines(pen, points);
+            }
+        }
+
+        Mark(g, 26, 20, 36, t);
+        using (var brand = new SolidBrush(Color.FromArgb(220, 240, 250))) g.DrawString("saiph", brandFont, brand, 68, 24);
+        using (var white = new SolidBrush(Color.FromArgb(240, 246, 252))) g.DrawString(Heading, headingFont, white, 26, 74);
+        if (Body.Length > 0) using (var muted = new SolidBrush(Color.FromArgb(185, 203, 226)))
+            g.DrawString(Body, bodyFont, muted, new RectangleF(29, 124, Hero ? 400 : 580, 90));
+        if (Hero) { Glow(g, 520, 190, 90, Light, 40); Mark(g, 452, 122, 136, t); }
+        if (ShowCard) {
+            using (var path = Rounded(new RectangleF(24, 124, 592, 184), 16))
+            using (var fill = new SolidBrush(Card)) using (var edge = new Pen(Color.FromArgb(60, Light), 1f)) { g.FillPath(fill, path); g.DrawPath(edge, path); }
+        }
+        if (Progress >= 0) ProgressString(g, t);
+    }
+
+    // The progress bar is a string: the finished stretch carries a travelling wave.
+    void ProgressString(Graphics g, double t) {
+        float head = (float)(BarLeft + (BarRight - BarLeft) * shown);
+        using (var rest = new Pen(Color.FromArgb(50, Light), 1f) { DashPattern = new[] { 2f, 5f } }) g.DrawLine(rest, head, BarY, BarRight, BarY);
+        int count = Math.Max(2, (int)((head - BarLeft) / 3) + 1);
+        var wave = new PointF[count];
+        double ring = 1 + 2.5 * knot;
+        for (int n = 0; n < count; n++) {
+            float x = BarLeft + (head - BarLeft) * n / (count - 1);
+            // Fixed at both ends, like a string held at the nut and at the fret.
+            double envelope = Math.Min(1, 3 * Math.Sin(Math.PI * n / (count - 1)));
+            wave[n] = new PointF(x, (float)(BarY + Math.Sin((x - BarLeft) / 40.0 * Math.PI * 2 - t * 9) * 3.2 * ring * envelope));
+        }
+        using (var brush = new LinearGradientBrush(new PointF(BarLeft, 0), new PointF(BarRight + 1, 0), Cyan, Violet))
+        using (var pen = new Pen(brush, 2.2f))
+        using (var halo = new Pen(Color.FromArgb(40, Light), 7f)) { g.DrawLines(halo, wave); g.DrawLines(pen, wave); }
+        Glow(g, head, BarY, 26 + (float)(6 * Math.Sin(t * 5)), Light, 90);
+        Star(g, new PointF(head, BarY), 5, Color.FromArgb(242, 248, 255));
+        Star(g, new PointF(BarLeft, BarY), 4, Light);
+        using (var caption = new SolidBrush(Muted))
+            g.DrawString(shown >= 0.995 ? "Done" : (int)(shown * 100) + "%", bodyFont, caption, BarLeft - 3, BarY + 18);
+    }
+
+    // Saiph's mark: three stars joined by a vibrating string held at the middle star.
+    static void Mark(Graphics g, float left, float top, float size, double t) {
+        float k = size / 40f;
+        Func<float, float, PointF> at = (x, y) => new PointF(left + x * k, top + y * k);
+        double a = 4.2 * Math.Cos(t * Math.PI * 2 / 1.1), echo = -2.6 * Math.Cos(t * Math.PI * 2 / 1.6);
+        Glow(g, left + 20 * k, top + 20 * k, (float)((10.5 + 1.8 * Math.Sin(t * 2)) * k), Light, 110);
+        using (var faint = new Pen(Color.FromArgb(90, Light), 0.9f * k)) Strand(g, faint, at, echo);
+        using (var brush = new LinearGradientBrush(at(8, 29), at(32.5f, 10.5f), Cyan, Violet))
+        using (var pen = new Pen(brush, 1.6f * k) { StartCap = LineCap.Round, EndCap = LineCap.Round }) Strand(g, pen, at, a);
+        Star(g, at(8, 29), 2.6f * k, Light); Star(g, at(20, 20), 3f * k, Color.FromArgb(242, 248, 255)); Star(g, at(32, 11), 2.6f * k, Color.FromArgb(185, 166, 251));
+    }
+    static void Strand(Graphics g, Pen pen, Func<float, float, PointF> at, double a) {
+        // Two quadratic halves, swinging in opposite directions about the middle star.
+        Half(g, pen, at(8, 29), at((float)(14 + 0.55 * a), (float)(24.5 + 0.83 * a)), at(20, 20));
+        Half(g, pen, at(20, 20), at((float)(26 - 0.55 * a), (float)(15.5 - 0.83 * a)), at(32, 11));
+    }
+    static void Half(Graphics g, Pen pen, PointF from, PointF control, PointF to) {
+        g.DrawBezier(pen, from, new PointF(from.X + (control.X - from.X) * 2 / 3, from.Y + (control.Y - from.Y) * 2 / 3),
+                     new PointF(to.X + (control.X - to.X) * 2 / 3, to.Y + (control.Y - to.Y) * 2 / 3), to);
+    }
+    static void Star(Graphics g, PointF centre, float radius, Color color) {
+        using (var brush = new SolidBrush(color)) g.FillEllipse(brush, centre.X - radius, centre.Y - radius, radius * 2, radius * 2);
+    }
+    static void Glow(Graphics g, float x, float y, float radius, Color color, int alpha) {
+        if (radius <= 1) return;
+        using (var path = new GraphicsPath()) {
+            path.AddEllipse(x - radius, y - radius, radius * 2, radius * 2);
+            using (var brush = new PathGradientBrush(path) { CenterColor = Color.FromArgb(alpha, color), SurroundColors = new[] { Color.FromArgb(0, color) } })
+                g.FillPath(brush, path);
+        }
+    }
+    static GraphicsPath Rounded(RectangleF box, float radius) {
+        var path = new GraphicsPath(); float d = radius * 2;
+        path.AddArc(box.Left, box.Top, d, d, 180, 90); path.AddArc(box.Right - d, box.Top, d, d, 270, 90);
+        path.AddArc(box.Right - d, box.Bottom - d, d, d, 0, 90); path.AddArc(box.Left, box.Bottom - d, d, d, 90, 90);
+        path.CloseFigure(); return path;
     }
 }
 

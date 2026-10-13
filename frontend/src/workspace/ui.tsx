@@ -4,6 +4,7 @@ import type { FormEvent, ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import { LoaderCircle, X } from "lucide-react";
 import type { Features, Job, Reminder } from "./types";
+import { useGather } from "./waves";
 
 export function Markdown({ text }: { text: string }) {
   return (
@@ -77,9 +78,13 @@ export function Action({
 }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
+  const button = useRef<HTMLButtonElement>(null);
+  // While it works, the background strings knot around the button.
+  useGather(button, pending);
   return (
     <>
       <button
+        ref={button}
         type="button"
         className={className}
         title={title}
