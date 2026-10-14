@@ -165,7 +165,9 @@ class OrionActivity : ComponentActivity() {
     override fun onPause() { poll?.cancel(); super.onPause() }
     private fun title(value: String) {
         root.removeAllViews(); header.removeAllViews(); dock.visibility = View.GONE
-        if (screen != shownScreen) { shownScreen = screen; scroll.scrollTo(0, 0) }
+        // A new screen opens at its top; a refresh of the same screen keeps its place. A fling still
+        // running from the last screen is stopped first, or it would carry on into the new one.
+        if (screen != shownScreen) { shownScreen = screen; scroll.fling(0); scroll.scrollTo(0, 0); scroll.post { scroll.scrollTo(0, 0) } }
         val paired = prefs.contains("device_id")
         if (paired && SetupNavigation.offersBack(screen, true)) header.addView(iconButton(R.drawable.saiph_ic_back, "Back") { goBack() })
         header.addView(text(value, 22f, Palette.TEXT, true).apply {
