@@ -1,5 +1,16 @@
 # Current release preparation status
 
+2026-10-14 the repository is public. The owner changed visibility after a fresh
+audit clone of every GitHub branch passed `check-public-data.py --history` and
+gitleaks; five fully merged branches were deleted first. `main` requires pull
+requests with the DCO `sign-off` check (administrators may bypass); `production`
+only moves by maintainers and cannot be force-pushed or deleted. Actions are on
+with read-only tokens and approval for all external contributors' runs.
+Private vulnerability reporting, secret scanning with push protection and
+Dependabot alerts are enabled. The independent review of friends-beta mode was
+not done before publication. The `Saiph checks` workflow has not yet run on
+GitHub; make its jobs required once they pass.
+
 2026-10-14 desktop executable rename: branch `feat/desktop-saiph-executable`
 renames the desktop executable from `OrionMini.exe`/`OrionMini` to
 `Saiph.exe`/`saiph` (PyInstaller bundle `dist/Saiph/`). Shortcuts, Send to,
