@@ -15,6 +15,6 @@ private security contact without including vulnerability details.
 Maintainers will assess reports and coordinate fixes and disclosure with the
 reporter. There is no guaranteed response deadline or paid bounty programme.
 
-Before public launch, administrators must enable GitHub private vulnerability
-reporting and subscribe to security notifications. A SECURITY.md file alone does
-not enable the private reporting form. See [GitHub's reporting documentation](https://docs.github.com/en/code-security/how-tos/report-and-fix-vulnerabilities/report-privately).
+Private vulnerability reporting, secret scanning with push protection and
+Dependabot alerts are enabled for this repository. See
+[GitHub's reporting documentation](https://docs.github.com/en/code-security/how-tos/report-and-fix-vulnerabilities/report-privately).
