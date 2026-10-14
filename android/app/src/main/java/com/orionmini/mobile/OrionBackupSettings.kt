@@ -32,12 +32,12 @@ class OrionBackupSettings(private val activity: ComponentActivity, private val c
     fun view() = LinearLayout(activity).apply {
         orientation = LinearLayout.VERTICAL
         addView(activity.section("Automatic backups"))
-        addView(Switch(activity).apply {
+        addView(Switch(activity).saiph().apply {
             text = "Back up Saiph received files and selected folders"; isChecked = preferences.getBoolean("enabled", true)
             setOnCheckedChangeListener { _, enabled -> preferences.edit().putBoolean("enabled", enabled).apply(); OrionBackupWorker.schedule(activity) }
         })
         addView(activity.text("Runs daily while charging, using unmetered network by default. Android only allows Saiph's own received files and folders you grant here; other apps' private data and Saiph's credentials are excluded.", 14f, Palette.MUTED))
-        addView(Switch(activity).apply {
+        addView(Switch(activity).saiph().apply {
             text = "Allow backup over mobile data"; isChecked = preferences.getBoolean("mobile_data", false)
             setOnCheckedChangeListener { _, enabled -> preferences.edit().putBoolean("mobile_data", enabled).apply(); OrionBackupWorker.schedule(activity) }
         })

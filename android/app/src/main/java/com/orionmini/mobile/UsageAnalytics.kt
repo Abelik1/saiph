@@ -158,7 +158,7 @@ object UsageAnalytics {
     fun settingsViews(activity: ComponentActivity): List<View> {
         if (!available(activity)) return emptyList()
         val status = activity.text(if (consent(activity) == "granted") "Anonymous daily counts are shared." else "Nothing is counted or sent.", 13f, Palette.MUTED)
-        val toggle = Switch(activity).apply {
+        val toggle = Switch(activity).saiph().apply {
             text = "Share anonymous usage statistics"; setTextColor(Palette.TEXT); isChecked = consent(activity) == "granted"
             setOnCheckedChangeListener { _, checked ->
                 setConsent(activity, checked)

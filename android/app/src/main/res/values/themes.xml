@@ -3,7 +3,23 @@
     <!--============-->
     <!-- Base Theme -->
     <!--============-->
-    <style name="Base.Theme.Sefirah" parent="Theme.Material3.DayNight.NoActionBar" />
+    <!-- Saiph is dark only, in the desktop's night, cyan and violet. System dialogs,
+         switches and the window behind every screen follow it. -->
+    <style name="Base.Theme.Sefirah" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="colorPrimary">@color/saiph_accent</item>
+        <item name="colorOnPrimary">@color/saiph_on_accent</item>
+        <item name="colorSecondary">@color/saiph_on_tonal</item>
+        <item name="colorTertiary">@color/saiph_violet</item>
+        <item name="android:colorBackground">@color/saiph_background</item>
+        <item name="colorSurface">@color/saiph_card</item>
+        <item name="colorOnSurface">@color/saiph_text</item>
+        <item name="colorSurfaceContainerHigh">@color/saiph_card</item>
+        <item name="colorOutline">@color/saiph_line_strong</item>
+        <item name="android:windowBackground">@color/saiph_background</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@color/saiph_background</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
 
 
     <!--== Default Theme ==-->
@@ -12,7 +28,7 @@
     <!--== Splash Theme ==-->
     <style name="Theme.Sefirah.SplashScreen" parent="Theme.SplashScreen">
         <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
-        <item name="windowSplashScreenBackground">#262424</item>
+        <item name="windowSplashScreenBackground">@color/saiph_background</item>
         <item name="postSplashScreenTheme">@style/Theme.Sefirah</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>

@@ -17,7 +17,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Saiph"
-            android:textColor="#FFFFFF"
+            android:textColor="@color/saiph_text"
             android:textSize="15sp"
             android:textStyle="bold" />
         <TextView
@@ -25,10 +25,13 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:maxLines="1"
-            android:textColor="#B9C1CB"
+            android:textColor="@color/saiph_muted"
             android:textSize="13sp" />
     </LinearLayout>
     <Button
+            android:background="@drawable/saiph_widget_button"
+            android:textAllCaps="false"
+            android:textColor="@color/saiph_on_tonal"
         android:id="@+id/saiph_widget_toggle"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"

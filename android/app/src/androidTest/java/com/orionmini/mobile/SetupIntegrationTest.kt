@@ -32,6 +32,8 @@ class SetupIntegrationTest {
     private fun views(view: View): List<View> = listOf(view) + if (view is ViewGroup)
         (0 until view.childCount).flatMap { views(view.getChildAt(it)) } else emptyList()
     private fun buttons(activity: OrionActivity) = views(activity.window.decorView).filterIsInstance<Button>()
+    /** Settings is the header's gear, an icon button named by its spoken label. */
+    private fun settingsButton(activity: OrionActivity) = views(activity.window.decorView).single { it.contentDescription == "Settings" }
 
     @Test fun pairedPhoneCanFinishOfflineWithoutFuturePermissionsOrVpnCheckbox() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
@@ -49,7 +51,7 @@ class SetupIntegrationTest {
                         activity.link.status.value = "Reconnecting"
                         buttons(activity).single { it.text == "Finish setup" }.performClick()
                         assertTrue(prefs.getBoolean("setup_done", false))
-                        assertTrue(buttons(activity).any { it.text == "Settings" })
+                        assertTrue(views(activity.window.decorView).any { it.contentDescription == "Settings" })
                         assertFalse(buttons(activity).any { it.text == "Finish setup" })
                     } finally { activity.link.status.value = state }
                 }
@@ -93,7 +95,7 @@ class SetupIntegrationTest {
         try {
             ActivityScenario.launch(OrionActivity::class.java).use { scenario ->
                 scenario.onActivity { activity ->
-                    buttons(activity).single { it.text == "Settings" }.performClick()
+                    settingsButton(activity).performClick()
                     buttons(activity).single { it.text == "Advanced" }.performClick()
                 }
                 scenario.moveToState(Lifecycle.State.CREATED).moveToState(Lifecycle.State.RESUMED)

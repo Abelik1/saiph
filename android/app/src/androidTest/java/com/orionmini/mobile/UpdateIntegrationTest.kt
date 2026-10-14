@@ -30,7 +30,7 @@ class UpdateIntegrationTest {
                     fun views(view: View): List<View> = listOf(view) + if (view is ViewGroup)
                         (0 until view.childCount).flatMap { views(view.getChildAt(it)) } else emptyList()
                     val root = activity.window.decorView
-                    views(root).filterIsInstance<Button>().single { it.text == "Settings" }.performClick()
+                    views(root).single { it.contentDescription == "Settings" }.performClick()
                     val buttons = views(root).filterIsInstance<Button>().map { it.text.toString() }
                     assertTrue(buttons.contains("Check for updates"))
                     assertFalse(buttons.any { it in setOf("Connect", "Refresh", "Sync") })

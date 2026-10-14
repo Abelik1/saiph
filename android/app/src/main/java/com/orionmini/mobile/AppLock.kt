@@ -106,7 +106,7 @@ class AppLock(private val activity: ComponentActivity) {
     }
 
     /** The owner's on/off switch for the open-app lock; changing it needs verification too. */
-    fun toggle(): Switch = Switch(activity).apply {
+    fun toggle(): Switch = Switch(activity).saiph().apply {
         text = "Require fingerprint, face or PIN to open Saiph"; setTextColor(Palette.TEXT)
         isChecked = enabled(activity)
         setOnCheckedChangeListener { view, checked ->

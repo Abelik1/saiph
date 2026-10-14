@@ -21,7 +21,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Saiph"
-                android:textColor="#FFFFFF"
+                android:textColor="@color/saiph_text"
                 android:textSize="15sp"
                 android:textStyle="bold" />
             <TextView
@@ -29,10 +29,13 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:maxLines="1"
-                android:textColor="#B9C1CB"
+                android:textColor="@color/saiph_muted"
                 android:textSize="13sp" />
         </LinearLayout>
         <Button
+            android:background="@drawable/saiph_widget_button"
+            android:textAllCaps="false"
+            android:textColor="@color/saiph_on_tonal"
             android:id="@+id/saiph_actions_toggle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -45,7 +48,7 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
         android:maxLines="2"
-        android:textColor="#B9C1CB"
+        android:textColor="@color/saiph_muted"
         android:textSize="12sp"
         android:visibility="gone" />
     <LinearLayout
@@ -54,6 +57,9 @@
         android:layout_marginTop="6dp"
         android:orientation="horizontal">
         <Button
+            android:background="@drawable/saiph_widget_button"
+            android:textAllCaps="false"
+            android:textColor="@color/saiph_on_tonal"
             android:id="@+id/saiph_actions_ring"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
@@ -61,6 +67,9 @@
             android:maxLines="1"
             android:text="Ring computer" />
         <Button
+            android:background="@drawable/saiph_widget_button"
+            android:textAllCaps="false"
+            android:textColor="@color/saiph_on_tonal"
             android:id="@+id/saiph_actions_photo"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
@@ -73,6 +82,9 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal">
         <Button
+            android:background="@drawable/saiph_widget_button"
+            android:textAllCaps="false"
+            android:textColor="@color/saiph_on_tonal"
             android:id="@+id/saiph_actions_sketch"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
@@ -80,6 +92,9 @@
             android:maxLines="1"
             android:text="Sketch" />
         <Button
+            android:background="@drawable/saiph_widget_button"
+            android:textAllCaps="false"
+            android:textColor="@color/saiph_on_tonal"
             android:id="@+id/saiph_actions_remote"
             android:layout_width="0dp"
             android:layout_height="wrap_content"

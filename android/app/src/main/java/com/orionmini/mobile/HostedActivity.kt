@@ -65,10 +65,11 @@ class HostedActivity : ComponentActivity() {
     private fun lockedScreen() {
         if (showingLock) return
         showingLock = true; poll?.cancel()
-        root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(22), dp(24), dp(22), dp(32)); setBackgroundColor(Palette.BG) }
-        setContentView(ScrollView(this).apply { addView(root) })
-        root.addView(heading("Saiph is locked")); root.addView(text("Confirm it's you to see Saiph Hosted."))
-        root.addView(button("Unlock", true) { lock.declined = false; lock.open({}, ::resumeUnlocked) })
+        shell("Saiph is locked")
+        root.addView(card().apply {
+            addView(text("Confirm it's you to see Saiph Hosted.", 15f))
+            actions(button("Unlock", true) { lock.declined = false; lock.open({}, ::resumeUnlocked) })
+        })
     }
     override fun onPause() { poll?.cancel(); super.onPause() }
     override fun onStop() { lock.stopped(); super.onStop() }
@@ -90,23 +91,56 @@ class HostedActivity : ComponentActivity() {
                 }.show()
         }.onFailure { message("Invalid or expired root code. Ask your computer for a new code.") }
     }
+    /** The same frame as the home screen: strings behind, a header with Back, then the page. */
+    private fun shell(title: String) {
+        root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(4), dp(18), dp(28)) }
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
+            setPadding(dp(10), dp(8), dp(10), dp(8)); minimumHeight = dp(64)
+            addView(iconButton(com.castle.sefirah.R.drawable.saiph_ic_back, "Back") { finish() })
+            addView(text(title, 22f, Palette.TEXT, true).apply { letterSpacing = -0.02f; androidx.core.view.ViewCompat.setAccessibilityHeading(this, true); setPadding(dp(2), 0, dp(8), 0) },
+                LinearLayout.LayoutParams(0, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        }
+        val column = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(header)
+            addView(ScrollView(context).apply { addView(root) }, LinearLayout.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        }
+        val frame = FrameLayout(this).apply { addView(StringField(context)); addView(column) }
+        frame.setOnApplyWindowInsetsListener { view, insets ->
+            if (android.os.Build.VERSION.SDK_INT >= 30) {
+                val bars = insets.getInsets(android.view.WindowInsets.Type.systemBars()); view.setPadding(0, bars.top, 0, bars.bottom)
+            } else {
+                @Suppress("DEPRECATION")
+                view.setPadding(0, insets.systemWindowInsetTop, 0, insets.systemWindowInsetBottom)
+            }
+            insets
+        }
+        setContentView(frame)
+    }
+    /** A titled group of related controls on one surface. */
+    private fun group(title: String, build: LinearLayout.() -> Unit) {
+        root.addView(section(title)); root.addView(card().apply(build))
+    }
+    private fun LinearLayout.actions(vararg buttons: Button) = addView(buttonRow(*buttons))
     private fun granted(permission: String) = checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
     /** Off by default: approved computers may act on texts and calls only after the owner turns this on here. */
-    private fun textsAndCalls() {
-        root.addView(heading("Texts and calls"))
-        root.addView(text("Show your texts and calls on your computers. From any computer approved for your Saiph account you can reply in " +
+    /** Off by default: approved computers may act on texts and calls only after the owner turns this on here. */
+    private fun textsAndCalls() = group("Texts and calls") {
+        addView(text("Show your texts and calls on your computers. From any computer approved for your Saiph account you can reply in " +
             "one-to-one conversations, start a new text, answer or decline a ringing call and dial a number, only while this is on. " +
             "If two computers answer or decline the same call, the first one wins and the other is told. " +
-            "Texts, numbers and names are end-to-end encrypted; Saiph Hosted cannot read them. Pictures (MMS), group replies and call audio stay on this phone."))
+            "Texts, numbers and names are end-to-end encrypted; Saiph Hosted cannot read them. Pictures (MMS), group replies and call audio stay on this phone.", 14f, Palette.MUTED))
         if (runtime.textsAndCalls()) {
-            root.addView(button("Turn off texts and calls") { runtime.setTextsAndCalls(false); render() })
+            addView(badge("On", Palette.GOOD, Palette.GOOD_SURFACE).apply { layoutParams = LinearLayout.LayoutParams(android.view.ViewGroup.LayoutParams.WRAP_CONTENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(10) } })
             val missing = PHONE_PERMISSIONS.filterNot(::granted)
-            if (missing.isEmpty()) root.addView(text("Android access for messages, calls and contacts is allowed.", 13f, Palette.MUTED))
+            if (missing.isEmpty()) addView(text("Android access for messages, calls and contacts is allowed.", 13f, Palette.MUTED).apply { setPadding(0, dp(8), 0, 0) })
             else {
-                root.addView(text("Some Android access is missing, so your computer shows less. Allow it, or manage it in Android Settings.", 13f, Palette.MUTED))
-                root.addView(button("Allow messages and calls access") { requestPermissions(missing.toTypedArray(), 47) })
+                addView(text("Some Android access is missing, so your computer shows less. Allow it, or manage it in Android Settings.", 13f, Palette.MUTED).apply { setPadding(0, dp(8), 0, 0) })
+                actions(button("Allow messages and calls access", tone = Tone.TONAL) { requestPermissions(missing.toTypedArray(), 47) })
             }
-        } else root.addView(button("Turn on texts and calls") {
+            actions(button("Turn off texts and calls") { runtime.setTextsAndCalls(false); render() })
+        } else actions(button("Turn on texts and calls", tone = Tone.TONAL) {
             verified("Let your computer send texts and handle calls") {
                 runtime.setTextsAndCalls(true)
                 PHONE_PERMISSIONS.filterNot(::granted).takeIf { it.isNotEmpty() }?.let { requestPermissions(it.toTypedArray(), 47) }
@@ -118,75 +152,104 @@ class HostedActivity : ComponentActivity() {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == 47 && !showingLock) render()
     }
-    private fun field(label: String, value: String = ""): EditText { root.addView(text(label)); return EditText(this).apply { setText(value); setTextColor(Palette.TEXT); contentDescription = label; root.addView(this) } }
+    private fun field(label: String, value: String = "", into: LinearLayout = root): EditText {
+        into.addView(text(label, 13f, Palette.MUTED).apply { setPadding(dp(2), dp(8), 0, dp(6)) })
+        // The shared field look from Ui.kt; a Context receiver reaches it rather than this method.
+        return (this as android.content.Context).field(label).apply { setText(value); hint = null; contentDescription = label; into.addView(this) }
+    }
     private fun render() {
-        root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(22), dp(24), dp(22), dp(32)); setBackgroundColor(Palette.BG) }
-        setContentView(ScrollView(this).apply { addView(root) })
-        root.addView(heading("Saiph Hosted preview")); root.addView(text("Activate your beta invitation on the account website first. Use the same account on your phone and computer. Saiph hosts the connection; no server or Tailscale is needed. Your computer approves this phone. Sync stops after 12 hours without renewal from your computer."))
-        status = text(runtime.status); root.addView(status)
-        if (getSharedPreferences("orion", 0).contains("device_id")) { root.addView(text("This phone is paired with a self-hosted Hub. Use an unpaired phone for Hosted.")); root.addView(button("Back") { finish() }); return }
-        if (!runtime.enabled() && !prefs.contains("device_id")) {
-            val packagedDefaults = runtime.hasPackagedDefaults()
-            if (packagedDefaults) {
-                root.addView(text("Connection settings are included in this beta build. Turn on Hosted to continue."))
-                root.addView(button(if (deploymentSettings) "Hide advanced connection settings" else "Advanced connection settings") { deploymentSettings = !deploymentSettings; render() })
+        shell("Saiph Hosted")
+        status = text(runtime.status, 13f, Palette.MUTED).apply { setPadding(dp(4), 0, 0, dp(6)) }; root.addView(status)
+        if (getSharedPreferences("orion", 0).contains("device_id")) {
+            root.addView(card().apply { addView(text("This phone is paired with a self-hosted Hub. Use an unpaired phone for Hosted.", 15f)) }); return
+        }
+        val enrolled = prefs.contains("device_id")
+        if (!runtime.enabled()) {
+            root.addView(card(strong = true).apply {
+                addView(text("Activate your beta invitation on the account website first. Use the same account on your phone and computer. Saiph hosts the connection; no server or Tailscale is needed. Your computer approves this phone. Sync stops after 12 hours without renewal from your computer.", 14f))
+                if (!enrolled) {
+                    val packagedDefaults = runtime.hasPackagedDefaults()
+                    if (packagedDefaults) {
+                        addView(text("Connection settings are included in this beta build. Turn on Hosted to continue.", 13f, Palette.MUTED).apply { setPadding(0, dp(8), 0, 0) })
+                        actions(button(if (deploymentSettings) "Hide advanced connection settings" else "Advanced connection settings", tone = Tone.TONAL) { deploymentSettings = !deploymentSettings; render() })
+                    }
+                    if (!packagedDefaults || deploymentSettings) {
+                        val origin = field("Hosted service address", prefs.getString("origin", "")!!, this)
+                        val issuer = field("Sign-in issuer (HTTPS, ending in /)", prefs.getString("issuer", "")!!, this)
+                        val audience = field("API audience", prefs.getString("audience", "")!!, this)
+                        val client = field("Android native client ID", prefs.getString("client_id", "")!!, this)
+                        val refresh = CheckBox(context).apply { text = "Keep me signed in with a protected rotating refresh token"; isChecked = prefs.getBoolean("refresh_tokens", false); setTextColor(Palette.TEXT); buttonTintList = android.content.res.ColorStateList.valueOf(Palette.ACCENT) }; addView(refresh)
+                        actions(button("Save deployment") { verified("Change the Saiph Hosted connection", requireScreenLock = false) {
+                            action { runtime.configure(origin.text.toString(), issuer.text.toString(), audience.text.toString(), client.text.toString(), refresh.isChecked) }
+                        } })
+                        addView(text("Register the native redirect: ${HostedAccount.REDIRECT}", 13f, Palette.MUTED).apply { setPadding(0, dp(8), 0, 0) })
+                    }
+                }
+                actions(button("Turn on Hosted", true) { toggleHosted() })
+            })
+            if (enrolled) root.addView(buttonRow(button("Retire this phone's Hosted identity", tone = Tone.DANGER) {
+                android.app.AlertDialog.Builder(this).setTitle("Retire Hosted identity?").setMessage("Revoke this phone on the root computer too. Its encrypted keys and trust history stay on this phone for recovery.")
+                    .setNegativeButton("Cancel", null).setPositiveButton("Retire") { _, _ -> verified("Retire this phone's Hosted identity", requireScreenLock = false) { action { runtime.retire() } } }.show()
+            }))
+        } else if (enrolled) {
+            // Daily use first: files across, then texts and calls.
+            group("Send and receive") {
+                addView(text("Send a file or photo to your computers, or save one they sent.", 14f, Palette.MUTED))
+                actions(button("Choose a file or photo to send", true) { sendFile.launch(arrayOf("*/*")) })
+                runtime.offers.forEach { (id, name) -> actions(button("Save $name", tone = Tone.TONAL) { saving = id; saveFile.launch(name) }) }
+                actions(button("Refresh received files", tone = Tone.TONAL) { render() })
             }
-            if (!packagedDefaults || deploymentSettings) {
-                val origin = field("Hosted service address", prefs.getString("origin", "")!!)
-                val issuer = field("Sign-in issuer (HTTPS, ending in /)", prefs.getString("issuer", "")!!)
-                val audience = field("API audience", prefs.getString("audience", "")!!)
-                val client = field("Android native client ID", prefs.getString("client_id", "")!!)
-                val refresh = CheckBox(this).apply { text = "Keep me signed in with a protected rotating refresh token"; isChecked = prefs.getBoolean("refresh_tokens", false); setTextColor(Palette.TEXT) }; root.addView(refresh)
-                root.addView(button("Save deployment") { verified("Change the Saiph Hosted connection", requireScreenLock = false) {
-                    action { runtime.configure(origin.text.toString(), issuer.text.toString(), audience.text.toString(), client.text.toString(), refresh.isChecked) }
-                } })
-                root.addView(text("Register the native redirect: ${HostedAccount.REDIRECT}"))
+            textsAndCalls()
+            group("This phone") {
+                addView(text("Your phone's full device fingerprint:\n${runtime.fingerprint}", 13f, Palette.MUTED))
+                actions(button("Show a fresh device request", tone = Tone.TONAL) { verified("Show a request to add this phone") { action { runtime.freshRequest() } } })
+                if (runtime.requestCode.isNotEmpty()) {
+                    addView(text("Paste this request into the computer, compare this phone's full fingerprint, then approve.", 13f, Palette.MUTED).apply { setPadding(0, dp(10), 0, dp(6)) })
+                    addView(context.field("Phone device approval request code").apply { setText(runtime.requestCode); isFocusable = false; contentDescription = "Phone device approval request code" })
+                }
+            }
+        } else {
+            group("Approve this phone") {
+                addView(text("Your computer approves this phone. Scan the root QR it shows, or paste its root approval code.", 14f, Palette.MUTED))
+                actions(button("Scan root QR from your computer", true) { scanRoot.launch(OrionQrActivity.hostedRoot(this@HostedActivity)) })
+                val code = field("Or paste the root approval code from your computer", into = this)
+                actions(button("Check root code", tone = Tone.TONAL) { checkRoot(code.text.toString()) })
             }
         }
-        root.addView(button(if (runtime.enabled()) "Turn off Hosted" else "Turn on Hosted") { action {
-            val enabled = !runtime.enabled()
-            if (enabled) runtime.applyPackagedDefaults()
-            runtime.setEnabled(enabled)
-            if (enabled) ContextCompat.startForegroundService(this@HostedActivity, Intent(this@HostedActivity, HostedSyncService::class.java)) else stopService(Intent(this@HostedActivity, HostedSyncService::class.java))
-        } })
         if (runtime.enabled()) {
-            root.addView(heading("Sharing permissions"))
-            root.addView(text("Choose only the features you want. Notification access lets Saiph share your phone notifications. Android may restrict clipboard access while Saiph is in the background."))
-            fun settings(label: String, target: Intent) { root.addView(button(label) {
-                runCatching { startActivity(target) }.onFailure { message("Open Android Settings to manage Saiph permissions.") }
-            }) }
-            settings("Choose phone notification access", Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-            settings("Saiph connection notifications", Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName))
-            settings("Battery and background settings", Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
-            if (account.signedIn()) root.addView(button("Sign out") { action { account.signOut() } })
-            else root.addView(button("Sign in with your browser") { runCatching {
-                val service = AuthorizationService(this)
-                try { login.launch(service.getAuthorizationRequestIntent(account.request())) } finally { service.dispose() }
-            }.onFailure { message("Could not open sign-in. Check deployment settings.") } })
-            if (!prefs.contains("device_id")) {
-                root.addView(button("Scan root QR from your computer") { scanRoot.launch(OrionQrActivity.hostedRoot(this)) })
-                val code = field("Or paste the root approval code from your computer")
-                root.addView(button("Check root code") { checkRoot(code.text.toString()) })
-            } else {
-                root.addView(text("Your phone's full device fingerprint:\n${runtime.fingerprint}"))
-                root.addView(button("Show a fresh device request") { verified("Show a request to add this phone") { action { runtime.freshRequest() } } })
-                if (runtime.requestCode.isNotEmpty()) {
-                    root.addView(text("Paste this request into the computer, compare this phone's full fingerprint, then approve."))
-                    root.addView(EditText(this).apply { setText(runtime.requestCode); setTextColor(Palette.TEXT); isFocusable = false; contentDescription = "Phone device approval request code" })
-                }
-                textsAndCalls()
-                root.addView(button("Choose a file or photo to send") { sendFile.launch(arrayOf("*/*")) })
-                root.addView(button("Refresh received files") { render() })
-                runtime.offers.forEach { (id, name) -> root.addView(button("Save $name") { saving = id; saveFile.launch(name) }) }
+            group("Account") {
+                if (account.signedIn()) actions(button("Sign out") { action { account.signOut() } })
+                else actions(button("Sign in with your browser", true) { runCatching {
+                    val service = AuthorizationService(this@HostedActivity)
+                    try { login.launch(service.getAuthorizationRequestIntent(account.request())) } finally { service.dispose() }
+                }.onFailure { message("Could not open sign-in. Check deployment settings.") } })
             }
-        } else if (prefs.contains("device_id")) root.addView(button("Retire this phone's Hosted identity") {
-            android.app.AlertDialog.Builder(this).setTitle("Retire Hosted identity?").setMessage("Revoke this phone on the root computer too. Its encrypted keys and trust history stay on this phone for recovery.")
-                .setNegativeButton("Cancel", null).setPositiveButton("Retire") { _, _ -> verified("Retire this phone's Hosted identity", requireScreenLock = false) { action { runtime.retire() } } }.show()
+            group("Sharing permissions") {
+                addView(text("Choose only the features you want. Notification access lets Saiph share your phone notifications. Android may restrict clipboard access while Saiph is in the background.", 14f, Palette.MUTED))
+                fun settings(label: String, target: Intent) = actions(button(label, tone = Tone.TONAL) {
+                    runCatching { startActivity(target) }.onFailure { message("Open Android Settings to manage Saiph permissions.") }
+                })
+                settings("Choose phone notification access", Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                settings("Saiph connection notifications", Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName))
+                settings("Battery and background settings", Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
+            }
+            group("Connection") {
+                addView(text("Saiph Hosted is on. Turning it off stops sync on this phone.", 14f, Palette.MUTED))
+                actions(button("Turn off Hosted") { toggleHosted() })
+            }
+        }
+        root.addView(section("Security"))
+        root.addView(card().apply {
+            addView(lock.toggle())
+            UsageAnalytics.settingsViews(this@HostedActivity).forEach(::addView)
+            runtime.securityEvents().forEach { addView(text(it, 13f, Palette.MUTED)) }
         })
-        root.addView(heading("Security"))
-        root.addView(lock.toggle())
-        UsageAnalytics.settingsViews(this).forEach(root::addView)
-        runtime.securityEvents().forEach { root.addView(text(it, 13f, Palette.MUTED)) }
-        root.addView(button("Back") { finish() })
+    }
+    /** One switch for the whole service; starting it also applies this build's connection defaults. */
+    private fun toggleHosted() = action {
+        val enabled = !runtime.enabled()
+        if (enabled) runtime.applyPackagedDefaults()
+        runtime.setEnabled(enabled)
+        if (enabled) ContextCompat.startForegroundService(this@HostedActivity, Intent(this@HostedActivity, HostedSyncService::class.java)) else stopService(Intent(this@HostedActivity, HostedSyncService::class.java))
     }
 }

@@ -17,6 +17,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.lifecycleScope
 import com.castle.sefirah.BuildConfig
+import com.castle.sefirah.R
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.*
 import kotlinx.serialization.json.buildJsonObject
@@ -36,7 +37,12 @@ class OrionActivity : ComponentActivity() {
     @Inject lateinit var link: OrionLink
     @Inject lateinit var worker: WorkerManager
     private lateinit var root: LinearLayout
-    private lateinit var navigation: LinearLayout
+    /** The bar above every screen: back (on inner screens), the title, then status and actions on the right. */
+    private lateinit var header: LinearLayout
+    /** Everyday actions on the home screen, fixed where the thumb rests so a long inbox never buries them. */
+    private lateinit var dock: LinearLayout
+    private lateinit var scroll: ScrollView
+    private var showAllRecent = false
     private var poll: Job? = null
     private var screen = "home"
     private var lastRender = ""
@@ -66,13 +72,25 @@ class OrionActivity : ComponentActivity() {
     override fun onCreate(state: Bundle?) {
         super.onCreate(state); Api.migrateMesh(this)
         backupSettings = OrionBackupSettings(this) { if (screen == "advanced") advanced() }
-        root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(22), dp(24), dp(22), dp(32)) }
-        val scroll = ScrollView(this).apply { setBackgroundColor(Palette.BG); addView(root) }
-        navigation = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(dp(22), dp(12), dp(22), 0) }
-        val shell = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL; setBackgroundColor(Palette.BG)
-            addView(navigation)
+        root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(4), dp(18), dp(28)) }
+        scroll = ScrollView(this).apply { addView(root); isFillViewport = true }
+        header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
+            setPadding(dp(10), dp(8), dp(10), dp(8)); minimumHeight = dp(64)
+        }
+        dock = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; visibility = View.GONE
+            background = outline(0xF20A1224.toInt(), Palette.LINE, 0); setPadding(dp(8), dp(6), dp(8), dp(6))
+        }
+        val column = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(header)
             addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+            addView(dock)
+        }
+        // The strings sit behind every screen; the column scrolls over them.
+        val shell = FrameLayout(this).apply {
+            addView(StringField(context)); addView(column)
         }
         // Keep navigation visible when the permission list is scrolled or a permission is denied.
         shell.setOnApplyWindowInsetsListener { view, insets ->
@@ -121,7 +139,7 @@ class OrionActivity : ComponentActivity() {
     private fun lockedScreen() {
         if (showingLock) return
         showingLock = true; poll?.cancel()
-        root.removeAllViews(); navigation.removeAllViews()
+        root.removeAllViews(); header.removeAllViews(); dock.visibility = View.GONE
         root.addView(heading("Saiph is locked")); root.addView(text("Confirm it's you to open Saiph.", 14f, Palette.MUTED))
         root.addView(buttonRow(button("Unlock", true) { lock.declined = false; lock.open({}, ::resumeUnlocked) }))
     }
@@ -145,20 +163,23 @@ class OrionActivity : ComponentActivity() {
     }
     override fun onPause() { poll?.cancel(); super.onPause() }
     private fun title(value: String) {
-        root.removeAllViews(); root.addView(heading(value)); navigation.removeAllViews()
-        if (!prefs.contains("device_id")) return
-        fun action(label: String, run: () -> Unit) {
-            navigation.addView(button(label,run=run),LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f).apply {
-                if(navigation.childCount>0)marginStart=dp(8)
-            })
-        }
-        if (screen == "home") action("Settings") { settings() }
-        else if (SetupNavigation.offersBack(screen, true)) {
-            action("Back to Saiph") { leaveForHome() }
-            action(if (screen == "settings") "Permissions" else "Settings") {
-                if (screen == "settings") setup() else settings()
-            }
-        }
+        root.removeAllViews(); header.removeAllViews(); dock.visibility = View.GONE
+        val paired = prefs.contains("device_id")
+        if (paired && SetupNavigation.offersBack(screen, true)) header.addView(iconButton(R.drawable.saiph_ic_back, "Back") { goBack() })
+        header.addView(text(value, 22f, Palette.TEXT, true).apply {
+            letterSpacing = -0.02f; maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
+            setPadding(if (header.childCount == 0) dp(8) else dp(2), 0, dp(8), 0)
+            androidx.core.view.ViewCompat.setAccessibilityHeading(this, true)
+        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        if (!paired) return
+        // Settings stays one tap away from every screen except Settings itself.
+        if (screen != "settings") header.addView(iconButton(R.drawable.saiph_ic_settings, "Settings") { settings() })
+    }
+    /** The header's back arrow goes where the system back gesture goes. */
+    private fun goBack() = when (SetupNavigation.back(screen)) {
+        "home" -> leaveForHome()
+        "settings" -> settings()
+        else -> homeLoop()
     }
     private fun leaveForHome() {
         // Leaving permission setup is separate from marking setup complete.
@@ -274,10 +295,11 @@ class OrionActivity : ComponentActivity() {
                  partiallyGranted: Boolean = false, action: () -> Unit) {
             root.addView(card().apply {
                 addView(text(label, 16f, bold = true))
-                addView(text(if (done) "Ready" else if (optional) "Optional · can wait" else "Recommended · can be set later", 13f, Palette.MUTED))
+                addView(if (done) badge("Ready", Palette.GOOD, Palette.GOOD_SURFACE).also { it.layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(6) } }
+                    else text(if (optional) "Optional · can wait" else "Recommended · can be set later", 13f, Palette.MUTED))
                 val actions = mutableListOf<Button>()
-                if (!done) actions += button("Set up") { action() }
-                if ((done || partiallyGranted) && manage != null) actions += button("Manage") { manage() }
+                if (!done) actions += button("Set up", tone = Tone.TONAL) { action() }
+                if ((done || partiallyGranted) && manage != null) actions += button("Manage", tone = Tone.SECONDARY) { manage() }
                 if (actions.isNotEmpty()) addView(buttonRow(*actions.toTypedArray()))
             })
         }
@@ -372,47 +394,76 @@ class OrionActivity : ComponentActivity() {
     }
     private fun render(items: JSONArray?, state: String) {
         title("Saiph")
-        if (OrionPause.paused(this)) {
+        val paused = OrionPause.paused(this)
+        // Status sits beside the title, so it is the first thing read.
+        header.addView(when {
+            paused -> badge("Paused", Palette.WARN, Palette.WARN_SURFACE)
+            state == "Online" -> badge("Online", Palette.GOOD, Palette.GOOD_SURFACE)
+            else -> badge("Reconnecting", Palette.MUTED, Palette.MUTED_FILL)
+        }, 1, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginEnd = dp(4) })
+        showDock()
+        if (paused) {
             root.addView(card(strong = true).apply {
                 addView(text("Saiph is paused. Nothing syncs until you resume it.", 15f))
                 addView(buttonRow(button("Resume", true) { OrionPause.set(this@OrionActivity, false); network.startService(); homeLoop() }))
             })
-        } else root.addView(text(state, 14f, Palette.MUTED))
+        } else if (state != "Online") root.addView(text(state, 13f, Palette.MUTED).apply { setPadding(dp(4), 0, 0, dp(4)) })
+        devicesSection()
         val all = items?.let { a -> (0 until a.length()).map(a::getJSONObject) }.orEmpty()
-        root.addView(section("Needs you")); val new = all.filter { it.getString("status") == "new" }
-        if (new.isEmpty()) root.addView(card().apply { addView(text(if (items == null) "Your inbox will return automatically." else "All clear", 16f)) })
+        val new = all.filter { it.getString("status") == "new" }
+        root.addView(section(if (new.isEmpty()) "Needs you" else "Needs you · ${new.size}"))
+        if (new.isEmpty()) root.addView(card().apply {
+            addView(text(if (items == null) "Your inbox will return automatically." else "All clear", 15f, Palette.MUTED))
+        })
         new.forEach { root.addView(itemCard(it)) }
-        root.addView(section("Recent decisions"))
-        all.filter { it.getString("status") != "new" }.take(10).forEach { root.addView(itemCard(it)) }
-        root.addView(section("Continuity"))
-        root.addView(buttonRow(button("Photo to computer") { startActivity(Intent(this, OrionCaptureActivity::class.java)) }, button("Hotspot settings") { hotspotSettings() }))
-        root.addView(buttonRow(button("Remote for computer apps") { startActivity(Intent(this, OrionRemoteActivity::class.java)) },
-            button("Sketch to computer") { startActivity(Intent(this, OrionSketchActivity::class.java)) }))
-        // Batteries and quick actions for every other paired device.
-        if (devices.isNotEmpty()) root.addView(section("Your devices"))
+        // Decided items are history: three are enough at a glance, the rest on request.
+        val decided = all.filter { it.getString("status") != "new" }.take(10)
+        if (decided.isNotEmpty()) {
+            root.addView(section("Recent decisions"))
+            (if (showAllRecent) decided else decided.take(3)).forEach { root.addView(itemCard(it)) }
+            if (decided.size > 3) root.addView(buttonRow(button(if (showAllRecent) "Show fewer" else "Show ${decided.size - 3} more", tone = Tone.TONAL) {
+                showAllRecent = !showAllRecent; lastRender = ""; render(items, state)
+            }))
+        }
+    }
+    /** Photo, sketch, remote and hotspot: fixed at the bottom of the home screen. */
+    private fun showDock() {
+        dock.removeAllViews(); dock.visibility = View.VISIBLE
+        fun add(icon: Int, label: String, run: () -> Unit) =
+            dock.addView(dockAction(icon, label, run), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        add(R.drawable.saiph_ic_photo, "Photo") { startActivity(Intent(this, OrionCaptureActivity::class.java)) }
+        add(R.drawable.saiph_ic_sketch, "Sketch") { startActivity(Intent(this, OrionSketchActivity::class.java)) }
+        add(R.drawable.saiph_ic_remote, "Remote") { startActivity(Intent(this, OrionRemoteActivity::class.java)) }
+        add(R.drawable.saiph_ic_hotspot, "Hotspot") { hotspotSettings() }
+    }
+    /** Every other paired device, with what it can do from here: ring, lock and wake. */
+    private fun devicesSection() {
+        val wake = runCatching { JSONArray(getSharedPreferences("orion_continuity",0).getString("wake_targets","[]")) }.getOrNull()
+            ?.let { list -> (0 until list.length()).map(list::getString) }.orEmpty()
+        if (devices.isEmpty() && wake.isEmpty()) return
+        root.addView(section("Your devices"))
         devices.forEach { device -> root.addView(card().apply {
-            addView(text(OrionComputers.summary(device), 15f))
+            val row = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL }
+            row.addView(text(OrionComputers.summary(device), 15f), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            row.addView(if (device.online) badge("Online", Palette.GOOD, Palette.GOOD_SURFACE) else badge("Offline", Palette.MUTED, Palette.MUTED_FILL))
+            addView(row)
             val actions = mutableListOf<Button>()
-            if (device.online && device.computer && "ring" in device.capabilities) actions += button("Ring") {
+            if (device.online && device.computer && "ring" in device.capabilities) actions += button("Ring", tone = Tone.TONAL) {
                 Toast.makeText(this@OrionActivity, if (OrionComputers.ring(link, device.id)) "Ringing ${device.name}…" else "Saiph is reconnecting. Nothing was sent.", Toast.LENGTH_SHORT).show()
             }
             // Opt-in on each computer: Phone remote with "This computer" turned on.
-            if (device.online && "remote" in device.capabilities) actions += button("Lock") {
+            if (device.online && "remote" in device.capabilities) actions += button("Lock", tone = Tone.TONAL) {
                 Toast.makeText(this@OrionActivity, if (OrionComputers.lock(link, device.id)) "Locking ${device.name}…" else "Saiph is reconnecting. Nothing was sent.", Toast.LENGTH_SHORT).show()
             }
             if (actions.isNotEmpty()) addView(buttonRow(*actions.toTypedArray()))
         }) }
-        val wake = runCatching { JSONArray(getSharedPreferences("orion_continuity",0).getString("wake_targets","[]")) }.getOrNull()
-        if(wake != null && wake.length()>0) {
-            root.addView(section("Computers"))
-            for(i in 0 until wake.length()) {
-                val target=wake.getString(i)
-                root.addView(buttonRow(button("Wake " + target.replace('-', ' ')) {
-                    if(link.status.value=="Online" && link.publish("wake",buildJsonObject { put("target",target) })) Toast.makeText(this,"Wake request queued.",Toast.LENGTH_SHORT).show()
-                    else Toast.makeText(this,"Saiph is reconnecting. The request has not been sent.",Toast.LENGTH_SHORT).show()
-                }))
-            }
-        }
+        if (wake.isNotEmpty()) root.addView(card().apply {
+            addView(text("Wake a computer", 15f))
+            wake.forEach { target -> addView(buttonRow(button("Wake " + target.replace('-', ' '), tone = Tone.TONAL) {
+                if(link.status.value=="Online" && link.publish("wake",buildJsonObject { put("target",target) })) Toast.makeText(this@OrionActivity,"Wake request queued.",Toast.LENGTH_SHORT).show()
+                else Toast.makeText(this@OrionActivity,"Saiph is reconnecting. The request has not been sent.",Toast.LENGTH_SHORT).show()
+            })) }
+        })
     }
     private fun itemCard(item: JSONObject): View {
         val kind = item.getString("kind"); val state = item.getString("status"); val open = state == "new"
@@ -437,11 +488,11 @@ class OrionActivity : ComponentActivity() {
             val buttons = mutableListOf<Button>()
             if (open && kind == "proposal") {
                 buttons += button(if (item.optJSONObject("proposal")?.has("action") == true) "Accept" else "Add to calendar", primary = true) { decide(item, "accept") }
-                buttons += button("Dismiss") { decide(item, "dismiss") }
+                buttons += button("Dismiss", tone = Tone.SECONDARY) { decide(item, "dismiss") }
             } else if (open) {
-                buttons += button("Clear") { decide(item, "done") }
+                buttons += button("Clear", tone = Tone.TONAL) { decide(item, "done") }
             }
-            if (link.startsWith("https://")) buttons += button("Open") { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link))) }
+            if (link.startsWith("https://")) buttons += button("Open", tone = Tone.TONAL) { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link))) }
             if (buttons.isNotEmpty()) addView(buttonRow(*buttons.toTypedArray()))
             if (!open) addView(text(outcome(item), 13f, Palette.MUTED).apply { setPadding(0, dp(8), 0, 0) })
         }
@@ -481,48 +532,48 @@ class OrionActivity : ComponentActivity() {
             prefs.edit().putBoolean("setup_deferred", true).apply()
         screen = "settings"; poll?.cancel(); title("Settings")
         UsageAnalytics.opened(this, "settings")
-        root.addView(section("Updates"))
-        root.addView(text("Saiph ${BuildConfig.VERSION_NAME}. Updates also check automatically.", 14f, Palette.MUTED))
-        val updateStatus = text("", 14f, Palette.MUTED)
-        val check = button("Check for updates") {}
-        check.setOnClickListener { updates.checkManual(check, updateStatus) }
-        root.addView(buttonRow(check))
-        root.addView(updateStatus)
+        // The two places people look for most often come first.
+        root.addView(buttonRow(button("Setup permissions", tone = Tone.TONAL) { setup() }, button("Advanced", tone = Tone.TONAL) { advanced() }).apply { setPadding(0, 0, 0, dp(4)) })
         root.addView(section("Saiph"))
-        root.addView(Switch(this).apply {
-            text = "Saiph is on"; isChecked = !OrionPause.paused(this@OrionActivity)
-            setOnCheckedChangeListener { _, on -> OrionPause.set(this@OrionActivity, !on); if (on) network.startService() else network.stopService() }
+        root.addView(card().apply {
+            addView(switchRow("Saiph is on", "Pause stops all syncing until you turn Saiph back on; pairing and settings are kept. The Saiph widget does the same from your home screen.",
+                !OrionPause.paused(this@OrionActivity)) { on -> OrionPause.set(this@OrionActivity, !on); if (on) network.startService() else network.stopService() })
         })
-        root.addView(text("Pause stops all syncing until you turn Saiph back on; pairing and settings are kept. The Saiph widget does the same from your home screen.", 13f, Palette.MUTED))
         root.addView(section("Focus"))
-        root.addView(Switch(this).apply {
-            text = "Share clipboard across my devices"; isChecked = prefs.getBoolean("clipboard_enabled", true)
-            setOnCheckedChangeListener { _, checked -> prefs.edit().putBoolean("clipboard_enabled", checked).apply();network.refreshCapabilities() }
-        })
-        root.addView(Switch(this).apply {
-            text = "Follow the shared sleep plan"; isChecked = prefs.getBoolean("focus_enabled", true)
-            setOnCheckedChangeListener { _, checked -> prefs.edit().putBoolean("focus_enabled", checked).apply(); lifecycleScope.launch(Dispatchers.IO) { runCatching { OrionContinuity(this@OrionActivity).tick() } } }
-        })
-        root.addView(Switch(this).apply {
-            text = "Sync Do Not Disturb with my devices"; isChecked = prefs.getBoolean("dnd_sync", true)
-            setOnCheckedChangeListener { _, checked -> prefs.edit().putBoolean("dnd_sync", checked).apply(); lifecycleScope.launch(Dispatchers.IO) { runCatching { OrionContinuity(this@OrionActivity).tick() } } }
+        root.addView(card().apply {
+            addView(switchRow("Share clipboard across my devices", checked = prefs.getBoolean("clipboard_enabled", true)) { checked ->
+                prefs.edit().putBoolean("clipboard_enabled", checked).apply(); network.refreshCapabilities() })
+            addView(switchRow("Follow the shared sleep plan", checked = prefs.getBoolean("focus_enabled", true)) { checked ->
+                prefs.edit().putBoolean("focus_enabled", checked).apply(); lifecycleScope.launch(Dispatchers.IO) { runCatching { OrionContinuity(this@OrionActivity).tick() } } })
+            addView(switchRow("Sync Do Not Disturb with my devices", checked = prefs.getBoolean("dnd_sync", true)) { checked ->
+                prefs.edit().putBoolean("dnd_sync", checked).apply(); lifecycleScope.launch(Dispatchers.IO) { runCatching { OrionContinuity(this@OrionActivity).tick() } } })
         })
         root.addView(section("Security"))
-        root.addView(lock.toggle())
+        root.addView(card().apply { addView(lock.toggle()) })
         UsageAnalytics.settingsViews(this).forEach(root::addView)
-        root.addView(buttonRow(button("Setup permissions") { setup() }, button("Advanced") { advanced() }))
-        root.addView(buttonRow(button("Back to Saiph") { homeLoop() }))
+        root.addView(section("Updates"))
+        root.addView(card().apply {
+            addView(text("Saiph ${BuildConfig.VERSION_NAME}. Updates also check automatically.", 14f, Palette.MUTED))
+            val updateStatus = text("", 14f, Palette.MUTED)
+            val check = button("Check for updates", tone = Tone.TONAL) {}
+            check.setOnClickListener { updates.checkManual(check, updateStatus) }
+            addView(buttonRow(check))
+            addView(updateStatus)
+        })
     }
     private fun advanced() {
         screen = "advanced"; poll?.cancel(); title("Advanced")
         UsageAnalytics.opened(this, "advanced")
-        root.addView(text("Hub: ${runCatching { Api.base(this) }.getOrDefault("Invalid saved configuration")}\nDevice: ${prefs.getString("device_id", "Unpaired")}\n${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})", 14f, Palette.MUTED))
-        root.addView(button("Saiph Hosted preview") { startActivity(Intent(this, HostedActivity::class.java)) })
+        root.addView(card().apply {
+            addView(text("Hub: ${runCatching { Api.base(this@OrionActivity) }.getOrDefault("Invalid saved configuration")}\nDevice: ${prefs.getString("device_id", "Unpaired")}\n${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})", 13f, Palette.MUTED))
+            addView(buttonRow(button("Saiph Hosted preview", tone = Tone.TONAL) { startActivity(Intent(this@OrionActivity, HostedActivity::class.java)) }))
+        })
         root.addView(section("Tailscale"))
-        root.addView(text("Saiph detects its connection automatically. Android's Always-on VPN setting cannot be verified here. In VPN settings, use Always-on on and Block connections without VPN off; use no exit node.", 14f, Palette.MUTED))
-        root.addView(buttonRow(button("VPN settings") { openSettings(Intent(Settings.ACTION_VPN_SETTINGS)) }))
-        root.addView(buttonRow(button("Open Tailscale") { openTailscale() }))
+        root.addView(card().apply {
+            addView(text("Saiph detects its connection automatically. Android's Always-on VPN setting cannot be verified here. In VPN settings, use Always-on on and Block connections without VPN off; use no exit node.", 14f, Palette.MUTED))
+            addView(buttonRow(button("VPN settings", tone = Tone.TONAL) { openSettings(Intent(Settings.ACTION_VPN_SETTINGS)) },
+                button("Open Tailscale", tone = Tone.TONAL) { openTailscale() }))
+        })
         root.addView(backupSettings.view())
-        root.addView(buttonRow(button("Back") { settings() }))
     }
 }

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="splash">@color/accent_blue</color>
+    <color name="splash">@color/saiph_background</color>
 
     <color name="cover_placeholder">#1F888888</color>
 
@@ -18,6 +18,23 @@
     <color name="amoled_surfaceContainer">#0C0C0C</color>
     <color name="amoled_surfaceContainerHigh">#131313</color>
     <color name="amoled_surfaceContainerHighest">#1B1B1B</color>
+
+    <!-- Saiph: the desktop design system's roles (frontend/src/design-system/tokens.css).
+         Ui.kt's Palette holds the same values; SaiphPaletteTest keeps them in step. -->
+    <color name="saiph_background">#FF040916</color>
+    <color name="saiph_background_raised">#FF081430</color>
+    <color name="saiph_card">#FF0A1224</color>
+    <color name="saiph_card_translucent">#E60A1224</color>
+    <color name="saiph_line">#FF1A2847</color>
+    <color name="saiph_line_strong">#FF273963</color>
+    <color name="saiph_text">#FFE7EBF4</color>
+    <color name="saiph_muted">#FF909FC1</color>
+    <color name="saiph_accent">#FF20D3EE</color>
+    <color name="saiph_on_accent">#FF050D1F</color>
+    <color name="saiph_tonal">#FF0C273A</color>
+    <color name="saiph_tonal_line">#FF114C61</color>
+    <color name="saiph_on_tonal">#FF89EBFA</color>
+    <color name="saiph_violet">#FFA689FA</color>
 
     <!-- Material Design Colors -->
     <color name="md_black_1000_12">#1F000000</color>

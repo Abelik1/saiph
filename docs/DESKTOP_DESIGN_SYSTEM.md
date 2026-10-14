@@ -87,6 +87,25 @@ mark and the selected-tab underline all share it, and all read `--wave-1` (cyan)
   while it works (every `Action` does this while pending).
 - The `wave-underline` class marks the current tab or navigation item.
 
+## Android
+
+The phone app (`android/app/src/main/java/com/orionmini/mobile/Ui.kt`) uses the same roles in
+`Palette`, with the same values in `res/values/colors.xml` for the widgets and the window theme.
+`SaiphPaletteTest` fails if the two drift, or if a widget states a colour instead of reading one.
+
+- **Buttons** are pills with the same jobs: the gradient `primary` for a screen's one main action,
+  `Tone.SECONDARY` for standalone actions, `Tone.TONAL` for actions on a card or row, and
+  `Tone.DANGER` for retiring or removing. Icon-only buttons (`iconButton`) always carry a label.
+- **Status** is a `badge` (Online, Paused, Reconnecting, Ready), **settings** are `switchRow`s in
+  cards, and every group of controls sits on a `card` under a `section` label.
+- **Layout.** A header with Back (on inner screens), the title, and status and Settings on the
+  right. On the home screen, Photo, Sketch, Remote and Hotspot sit in a dock fixed at the bottom,
+  so a long inbox never pushes them out of reach. Devices come before the inbox, and recent
+  decisions show three until asked for more. The Hosted screen leads with Send and receive and
+  Texts and calls; setup, permissions and the connection switch follow.
+- **The strings** are a static `StringField` behind every screen, built once per size and never
+  animated, to spare the battery.
+
 ## Cascade
 
 `src/index.css` declares `@layer theme, base, legacy, components, utilities`. The older page
