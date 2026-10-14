@@ -193,8 +193,8 @@ npm --prefix frontend run test:unit
 python scripts/build-native.py --profile link
 ```
 
-The native bundle is under `dist/OrionMini/`; the executable keeps its existing
-internal filename. Linux also needs Qt/WebEngine system libraries (see public CI).
+The native bundle is under `dist/Saiph/` (`dist/saiph/` on Linux) and its executable
+is `Saiph.exe` (`saiph`). Linux also needs Qt/WebEngine system libraries (see public CI).
 Hub dependencies and hosted tests run separately on Python 3.12 using
 `hub/requirements-hosted.txt`. See [contribution instructions](CONTRIBUTING.md).
 

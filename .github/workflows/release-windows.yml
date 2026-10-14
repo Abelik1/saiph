@@ -85,7 +85,7 @@ jobs:
           name: unsigned-app-${{ inputs.version }}
           retention-days: 1
           if-no-files-found: error
-          path: dist/OrionMini/
+          path: dist/Saiph/
       - name: Request executable signature (maintainer approves in SignPath)
         uses: signpath/github-action-submit-signing-request@c92b958760219087e01f8d67a1669ed57afe2627 # v2
         with:
@@ -100,7 +100,7 @@ jobs:
           wait-for-completion-timeout-in-seconds: 3600
           output-artifact-directory: build/signed-app
       - name: Accept the signed bundle only if just the project executable changed
-        run: python scripts/public-release/check-signed-bundle.py --unsigned dist/OrionMini --signed build/signed-app
+        run: python scripts/public-release/check-signed-bundle.py --unsigned dist/Saiph --signed build/signed-app
 
       # 2. Package the signed executable, then sign the finished installer.
       - name: Wrap and audit the signed bundle
@@ -137,7 +137,7 @@ jobs:
           New-Item -ItemType Directory -Force build/signed-release | Out-Null
           python scripts/public-release/verify-windows-signatures.py `
             --installer "build/signed-installer/Saiph-Link-$env:RELEASE_VERSION-windows-x86_64.exe" `
-            --executable "build/release-distribution/package-$env:RELEASE_VERSION-windows-x86_64/app/OrionMini.exe" `
+            --executable "build/release-distribution/package-$env:RELEASE_VERSION-windows-x86_64/app/Saiph.exe" `
             --publisher "$env:SAIPH_SIGNING_PUBLISHER" --certificate-sha256 "$env:SAIPH_SIGNING_CERTIFICATE_SHA256" `
             --version "$env:RELEASE_VERSION" --signtool $signtool.FullName --output build/signed-release/windows-signatures.json
           if ($LASTEXITCODE) { exit $LASTEXITCODE }

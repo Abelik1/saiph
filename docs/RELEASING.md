@@ -25,8 +25,11 @@ on dependencies. For SignPath, bind signing requests to the CI artifact's verifi
 origin and approved artifact policy. Never sign arbitrary contributor uploads.
 The native builder and installer generator set product metadata to Saiph with the
 same semantic product version; numeric Windows file versions include the build
-number (all four components must fit 0â€“65535). Do not change the compatibility
-filename `OrionMini.exe`.
+number (all four components must fit 0–65535). The project executable is
+`Saiph.exe`. The packager adds `OrionMini.exe`, a byte copy of the signed
+`Saiph.exe`, because updaters installed before the rename (0.1.0-beta.4 and
+older) relaunch that name. Keep the copy until no supported install predates
+the rename; removing it breaks in-app updates from those installs.
 
 Sign the project executable **before** packaging: `package-manifest.json` hashes
 the bundled executable. Then package the signed executable, and sign the completed
@@ -45,7 +48,7 @@ timestamp, pins the approved publisher/certificate and checks Saiph product/vers
 metadata. Run it against the final installer and its matching packaged executable:
 
 ```text
-python scripts/public-release/verify-windows-signatures.py --installer release-artifacts/Saiph-Link-VERSION-windows-x86_64.exe --executable build/ci-distribution/package-VERSION-windows-x86_64/app/OrionMini.exe --publisher "APPROVED_CERTIFICATE_SUBJECT" --certificate-sha256 APPROVED_LOWERCASE_CERTIFICATE_SHA256 --version VERSION --output release-artifacts/windows-signatures.json
+python scripts/public-release/verify-windows-signatures.py --installer release-artifacts/Saiph-Link-VERSION-windows-x86_64.exe --executable build/ci-distribution/package-VERSION-windows-x86_64/app/Saiph.exe --publisher "APPROVED_CERTIFICATE_SUBJECT" --certificate-sha256 APPROVED_LOWERCASE_CERTIFICATE_SHA256 --version VERSION --output release-artifacts/windows-signatures.json
 ```
 
 Obtain the expected certificate values through the signing provider's approved

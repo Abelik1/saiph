@@ -25,8 +25,10 @@ def fixture(tmp_path, platform='windows-x86_64'):
     version = '0.1.0-beta.1'
     (internal / 'distribution-release.json').write_text(json.dumps({'schema': 1, 'version': version, 'build': 0, 'platform': platform}))
     (internal / 'distribution-profile.json').write_text(json.dumps({'schema': 1, 'profile': 'link'}))
-    entrypoint = 'app/OrionMini.exe' if platform.startswith('windows') else 'app/OrionMini'
-    (package / entrypoint).write_bytes(b'MZ synthetic test payload' if platform.startswith('windows') else b'\x7fELF synthetic test payload')
+    entrypoint = 'app/Saiph.exe' if platform.startswith('windows') else 'app/saiph'
+    compatibility = 'app/OrionMini.exe' if platform.startswith('windows') else 'app/OrionMini'
+    for name in (entrypoint, compatibility):
+        (package / name).write_bytes(b'MZ synthetic test payload' if platform.startswith('windows') else b'\x7fELF synthetic test payload')
     sources = tmp_path / 'sources'
     sources.mkdir()
     archive = sources / 'synthetic-source.tar.xz'
@@ -123,7 +125,7 @@ def refresh_package_review(package, review):
 
 def test_metadata_only_package_cannot_pass_review(tmp_path):
     package, review, sources = fixture(tmp_path)
-    (package / 'app/OrionMini.exe').unlink()
+    (package / 'app/Saiph.exe').unlink()
     refresh_package_review(package, review)
     with pytest.raises(ValueError, match='Missing local evidence file'):
         readiness.check(package, review, sources)
@@ -142,9 +144,23 @@ def test_frozen_metadata_cannot_disagree_with_reviewed_package(tmp_path):
 
 def test_platform_magic_cannot_be_overridden_by_review(tmp_path):
     package, review, sources = fixture(tmp_path)
-    (package / 'app/OrionMini.exe').write_bytes(b'\x7fELF wrong platform')
+    (package / 'app/Saiph.exe').write_bytes(b'\x7fELF wrong platform')
     refresh_package_review(package, review)
     with pytest.raises(ValueError, match='does not match package platform'):
+        readiness.check(package, review, sources)
+
+
+@pytest.mark.parametrize('platform', ['windows-x86_64', 'linux-x86_64'])
+def test_compatibility_executable_must_be_a_byte_copy_of_the_entrypoint(tmp_path, platform):
+    package, review, sources = fixture(tmp_path, platform)
+    compatibility = package / ('app/OrionMini.exe' if platform.startswith('windows') else 'app/OrionMini')
+    compatibility.write_bytes(compatibility.read_bytes() + b' altered')
+    refresh_package_review(package, review)
+    with pytest.raises(ValueError, match='byte copy of the entrypoint'):
+        readiness.check(package, review, sources)
+    compatibility.unlink()
+    refresh_package_review(package, review)
+    with pytest.raises(ValueError, match='Missing local evidence file'):
         readiness.check(package, review, sources)
 
 

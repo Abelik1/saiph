@@ -16,22 +16,22 @@ SPEC.loader.exec_module(bundles)
 def pair(tmp_path):
     unsigned = tmp_path / 'unsigned'
     (unsigned / '_internal').mkdir(parents=True)
-    (unsigned / 'OrionMini.exe').write_bytes(b'MZ synthetic project executable')
+    (unsigned / 'Saiph.exe').write_bytes(b'MZ synthetic project executable')
     (unsigned / '_internal/Qt6Core.dll').write_bytes(b'MZ upstream dependency keeps its own signature')
     signed = tmp_path / 'signed'
     shutil.copytree(unsigned, signed)
-    with (signed / 'OrionMini.exe').open('ab') as output:
+    with (signed / 'Saiph.exe').open('ab') as output:
         output.write(b'synthetic certificate table')
     return unsigned, signed
 
 
 def test_only_the_project_executable_may_change(pair):
-    assert bundles.check(*pair) == {'files': 2, 'signed': ['OrionMini.exe']}
+    assert bundles.check(*pair) == {'files': 2, 'signed': ['Saiph.exe']}
 
 
 def test_unsigned_executable_is_rejected(pair):
     unsigned, signed = pair
-    shutil.copyfile(unsigned / 'OrionMini.exe', signed / 'OrionMini.exe')
+    shutil.copyfile(unsigned / 'Saiph.exe', signed / 'Saiph.exe')
     with pytest.raises(ValueError, match='not signed'):
         bundles.check(unsigned, signed)
 

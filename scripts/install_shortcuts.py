@@ -19,14 +19,14 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--name", default="Saiph")
 parser.add_argument("--desktop", action="store_true", help="also write a Desktop shortcut")
 parser.add_argument("--packaged", action="store_true",
-                    help="point at dist/OrionMini/OrionMini.exe instead of this checkout")
+                    help="point at dist/Saiph/Saiph.exe instead of this checkout")
 args = parser.parse_args()
 
 root = resource_root()
 if args.packaged:
-    target, arguments = root / "dist" / "OrionMini" / "OrionMini.exe", ""
+    target, arguments = root / "dist" / "Saiph" / "Saiph.exe", ""
     if not target.is_file():
-        raise SystemExit("Run scripts/build.ps1 first, or drop --packaged.")
+        raise SystemExit("Run scripts/build-native.py first, or drop --packaged.")
 else:
     executable = Path(sys.executable)
     windowless = executable.with_name("pythonw.exe")

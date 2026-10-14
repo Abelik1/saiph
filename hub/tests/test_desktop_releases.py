@@ -49,6 +49,38 @@ def test_publish_is_pinned_immutable_and_monotonic(tmp_path):
     assert releases.latest(data, 'windows-x86_64', 'link') == second
 
 
+def linux_package(tmp_path, executables, build=1):
+    import tarfile
+    version = f'0.1.0-preview.{build}'
+    elf = bytearray(64); elf[:6] = b'\x7fELF\x02\x01'; elf[18:20] = b'\x3e\0'
+    files = {'package-manifest.json': json.dumps({'format': 'orion-desktop-package', 'schema': 1, 'platform': 'linux-x86_64',
+                                                  'profile': 'link', 'version': version}).encode(),
+             'app/_internal/distribution-profile.json': json.dumps({'schema': 1, 'profile': 'link'}).encode(),
+             'app/_internal/distribution-release.json': json.dumps({'schema': 1, 'platform': 'linux-x86_64', 'build': build,
+                                                                    'version': version}).encode()}
+    files.update({'app/' + name: content if content is not None else bytes(elf) for name, content in executables.items()})
+    path = tmp_path / f'package-{build}-{len(executables)}.tar.gz'
+    with tarfile.open(path, 'w:gz') as archive:
+        for name, body in files.items():
+            info = tarfile.TarInfo('orion/' + name); info.size = len(body); info.mode = 0o755
+            archive.addfile(info, io.BytesIO(body))
+    return path
+
+
+@pytest.mark.parametrize('executables', [{'saiph': None, 'OrionMini': None}, {'saiph': None}, {'OrionMini': None}])
+def test_linux_packages_publish_with_the_renamed_or_pre_rename_executable(tmp_path, executables):
+    path = linux_package(tmp_path, executables)
+    published = releases.publish(tmp_path / 'data', path, 'linux-x86_64', 'link', 1, '0.1.0-preview.1')
+    assert releases.latest(tmp_path / 'data', 'linux-x86_64', 'link') == published
+
+
+@pytest.mark.parametrize('executables', [{}, {'saiph': b'#!/bin/sh\n'}, {'saiph': None, 'OrionMini': b'MZ not linux'}])
+def test_linux_package_needs_a_linux_executable(tmp_path, executables):
+    with pytest.raises(ValueError):
+        releases.publish(tmp_path / 'data', linux_package(tmp_path, executables), 'linux-x86_64', 'link', 1, '0.1.0-preview.1')
+    assert releases.latest(tmp_path / 'data', 'linux-x86_64', 'link') is None
+
+
 def test_wrong_label_or_native_format_cannot_replace_pointer(tmp_path):
     data = tmp_path / 'data'
     first = publish(data, installer(tmp_path))

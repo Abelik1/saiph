@@ -2,14 +2,15 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later
      Reference SignPath artifact configuration "saiph-app". Paste it into the
      SignPath project after acceptance and keep both copies identical.
-     Input: the GitHub artifact of dist/OrionMini/ (bundle contents at the zip root).
-     Signs only the project executable; bundled dependencies keep their own signatures. -->
+     Input: the GitHub artifact of dist/Saiph/ (bundle contents at the zip root).
+     Signs only the project executable; bundled dependencies keep their own signatures.
+     The packager later adds OrionMini.exe as a byte copy of the signed Saiph.exe. -->
 <artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
   <parameters>
     <parameter name="version" />
   </parameters>
   <zip-file>
-    <pe-file path="OrionMini.exe" product-name="Saiph" product-version="${version}">
+    <pe-file path="Saiph.exe" product-name="Saiph" product-version="${version}">
       <authenticode-sign />
     </pe-file>
   </zip-file>

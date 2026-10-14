@@ -32,7 +32,7 @@ def test_native_origins_cover_other_wheels_and_interpreter_exact_bytes(tmp_path,
     binaries = [{'path': '_internal/accelerator.pyd', 'sha256': wheel_hash.hex()},
                 {'path': '_internal/libssl.dll', 'sha256': notices.digest(library)},
                 {'path': '_internal/tampered/accelerator.pyd', 'sha256': hashlib.sha256(b'changed').hexdigest()},
-                {'path': 'OrionMini.exe', 'sha256': hashlib.sha256(b'project launcher').hexdigest()}]
+                {'path': 'Saiph.exe', 'sha256': hashlib.sha256(b'project launcher').hexdigest()}]
     notices.native_origin_records(binaries)
     assert binaries[0]['wheel_record_matches'] == [{'distribution': 'other-native-package', 'version': '2.0',
                                                     'wheel_path': 'some_other_package/accelerator.pyd'}]

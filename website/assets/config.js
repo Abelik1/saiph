@@ -8,8 +8,8 @@ window.ORION_SITE = {
   betaAccountUrl: "", // Authenticated friends-beta portal; independent of public releases.
   release: {}, // Generated from real artifact bytes and GitHub metadata.
   downloads: {
-    windows: "", // e.g. ".../releases/download/v0.1.0/OrionMini-Setup-0.1.0-windows-x86_64.exe"
-    linux: "",   // e.g. ".../releases/download/v0.1.0/orion-desktop-0.1.0-linux-x86_64.tar.gz"
+    windows: "", // e.g. ".../releases/download/v0.1.0/Saiph-Link-0.1.0-windows-x86_64.exe"
+    linux: "",   // e.g. ".../releases/download/v0.1.0/Saiph-Link-0.1.0-linux-x86_64.tar.gz"
     android: "", // e.g. ".../releases/download/v0.1.0/orion-android-0.1.0.apk"
     server: ""   // e.g. ".../releases/download/v0.1.0/orion-server-0.1.0.tar.gz"
   },

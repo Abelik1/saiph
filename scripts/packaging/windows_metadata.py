@@ -21,7 +21,7 @@ def write_version_resource(path: Path, version: str, build: int, profile: str):
     if profile not in {"link", "workspace"}:
         raise ValueError("Unknown desktop profile")
     strings = {"CompanyName": "Saiph contributors", "FileDescription": "Saiph " + profile.title(),
-               "FileVersion": version, "InternalName": "OrionMini", "OriginalFilename": "OrionMini.exe",
+               "FileVersion": version, "InternalName": "Saiph", "OriginalFilename": "Saiph.exe",
                "ProductName": "Saiph", "ProductVersion": version}
     entries = ",\n".join(f"            StringStruct({key!r}, {value!r})" for key, value in strings.items())
     path.write_text(f"""# UTF-8

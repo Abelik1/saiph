@@ -77,7 +77,8 @@ jobs:
           ORION_INSTALL_ISOLATED=1 ORION_INSTALL_ROOT="$RUNNER_TEMP/saiph-setup-install" XDG_CACHE_HOME="$RUNNER_TEMP/saiph-setup-cache" sh "$setup" --text
           installed="$RUNNER_TEMP/saiph-setup-install/current"
           cmp "$installed/package-manifest.json" build/ci-distribution/package-0.1.0-beta.2-linux-x86_64/package-manifest.json
-          cmp "$installed/app/OrionMini" build/ci-distribution/package-0.1.0-beta.2-linux-x86_64/app/OrionMini
+          cmp "$installed/app/saiph" build/ci-distribution/package-0.1.0-beta.2-linux-x86_64/app/saiph
+          cmp "$installed/app/OrionMini" "$installed/app/saiph"
       - name: Retain exact source and unsigned artifact evidence
         if: github.event_name == 'workflow_dispatch'
         shell: python

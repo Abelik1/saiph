@@ -67,12 +67,12 @@ def shell_path(path):
 def archive(tmp_path, version='1.0.0', files=None):
     """A release-shaped tar.gz; synthetic unless real installer files are given."""
     files = files or {'install.sh': SYNTHETIC_INSTALLER, 'SHA256SUMS': b'synthetic\n',
-                      'app/OrionMini': b'#!/bin/sh\nexit 0\n'}
+                      'app/saiph': b'#!/bin/sh\nexit 0\n'}
     path = tmp_path / ('Saiph-Link-' + version + '-linux-x86_64.tar.gz')
     with tarfile.open(path, 'w:gz') as output:
         for name, content in files.items():
             item = tarfile.TarInfo('orion/' + name)
-            item.size, item.mode = len(content), 0o755 if name in {'install.sh', 'app/OrionMini'} else 0o644
+            item.size, item.mode = len(content), 0o755 if name in {'install.sh', 'app/saiph', 'app/OrionMini'} else 0o644
             output.addfile(item, io.BytesIO(content))
     return path
 
@@ -320,7 +320,7 @@ def test_linux_setup_install_upgrade_and_uninstall_keep_installer_guarantees(she
     def release(version):
         files = {'install.sh': INSTALLER.read_bytes(), 'VERSION': (version + '\n').encode(),
                  'LINUX_COMPATIBILITY': b'linux-x86_64 glibc 2.17\n', 'package-manifest.json': b'{}',
-                 'app/OrionMini': b'#!/bin/sh\nexit 0\n', 'licenses/notice': b'synthetic notice'}
+                 'app/saiph': b'#!/bin/sh\nexit 0\n', 'app/OrionMini': b'#!/bin/sh\nexit 0\n', 'licenses/notice': b'synthetic notice'}
         files['SHA256SUMS'] = ''.join(hashlib.sha256(content).hexdigest() + '  ' + name + '\n'
                                       for name, content in files.items()).encode()
         folder = tmp_path / version; folder.mkdir()
@@ -343,7 +343,7 @@ def test_linux_setup_install_upgrade_and_uninstall_keep_installer_guarantees(she
     upgrade = release('1.0.1')
     assert run(shell, upgrade, environment).returncode == 0
     assert os.readlink(installed / 'current') == 'releases/1.0.1'
-    assert (installed / 'releases/1.0.0/app/OrionMini').is_file()
+    assert (installed / 'releases/1.0.0/app/saiph').is_file()
     assert b'enabled=false' in startup.read_bytes()
     assert {name: (appdata / name).read_bytes() for name in retained} == retained
     # Opening the same release again is reported as already installed and

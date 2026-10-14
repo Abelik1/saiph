@@ -68,8 +68,10 @@ trap cleanup EXIT
 trap 'exit 1' HUP INT TERM
 prepare_integration() {
   integration_work=$(mktemp -d "${TMPDIR:-/tmp}/orion-integration.XXXXXXXX")
-  printf '#!/bin/sh\n# ORION_OWNED=1\nif [ "$#" = 1 ]; then case "$1" in *.orion-enrollment) exec "%s/current/app/OrionMini" --enrollment "$1" ;; esac; fi\nexec "%s/current/app/OrionMini" "$@"\n' "$install_root" "$install_root" > "$integration_work/launcher"
+  printf '#!/bin/sh\n# ORION_OWNED=1\nif [ "$#" = 1 ]; then case "$1" in *.orion-enrollment) exec "%s/current/app/saiph" --enrollment "$1" ;; esac; fi\nexec "%s/current/app/saiph" "$@"\n' "$install_root" "$install_root" > "$integration_work/launcher"
   chmod u+x "$integration_work/launcher"
+  # Releases before the executable rename wrote this launcher; it stays Saiph's own.
+  sed 's#/current/app/saiph"#/current/app/OrionMini"#g' "$integration_work/launcher" > "$integration_work/legacy-launcher"
   printf '[Desktop Entry]\n# ORION_OWNED=1\nType=Application\nName=Saiph\nExec="%s" %%f\nIcon=%s/current/app/_internal/assets/orion-mini-icon.png\nTerminal=false\nCategories=Utility;\nMimeType=application/x-orion-enrollment;\n' "$launcher" "$install_root" > "$integration_work/desktop"
   printf '[Desktop Entry]\n# ORION_OWNED=1\nType=Application\nName=Saiph\nExec="%s"\nTerminal=false\nX-GNOME-Autostart-enabled=true\n' "$launcher" > "$integration_work/autostart"
   sed 's/X-GNOME-Autostart-enabled=true/X-GNOME-Autostart-enabled=false/' "$integration_work/autostart" > "$integration_work/autostart-disabled"
@@ -90,6 +92,7 @@ owned_integration() {
   safe_path "$target" && [ -f "$target" ] || return 1
   cmp -s "$target" "$integration_work/$name" && return 0
   if [ "$name" != launcher ] && cmp -s "$target" "$integration_work/orion-$name"; then return 0; fi
+  if [ "$name" = launcher ] && cmp -s "$target" "$integration_work/legacy-launcher"; then return 0; fi
   if [ "$name" = autostart ]; then
     cmp -s "$target" "$integration_work/autostart-disabled" && return 0
     cmp -s "$target" "$integration_work/orion-autostart-disabled" && return 0
@@ -203,7 +206,9 @@ cp -R "$source_dir/app" "$source_dir/licenses" "$source_dir/package-manifest.jso
 # never depends on retaining the extracted download. User data is preserved.
 cp "$source_dir/install.sh" "$source_dir/VERSION" "$stage/"
 chmod u+x "$stage/install.sh"
-chmod u+x "$stage/app/OrionMini"
+chmod u+x "$stage/app/saiph"
+# Byte copy kept for updaters installed before the rename, which relaunch it.
+[ ! -f "$stage/app/OrionMini" ] || chmod u+x "$stage/app/OrionMini"
 if [ "$isolated" != 1 ]; then
   mkdir -p "$HOME/.local/bin" "$data_root/applications" "$data_root/mime/packages" "$config_root/autostart"
   write_integration launcher "$launcher"

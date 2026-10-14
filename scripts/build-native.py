@@ -75,6 +75,8 @@ def main():
     workspace = workspace_source(parser, args.profile, args.workspace_source)
     sys.path.insert(0, str(root / 'scripts' / 'packaging'))
     from windows_metadata import version_tuple, write_version_resource
+    from desktop_names import bundle_name, host_platform
+    name = bundle_name(host_platform())
     import re
     if args.build_number < 0 or not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.-]+)?', args.version):
         parser.error('Use a nonnegative build number and explicit semantic version.')
@@ -106,7 +108,7 @@ def main():
     release_path.write_text(json.dumps({'schema': 1, 'version': args.version, 'build': args.build_number,
         'platform': 'windows-x86_64' if os.name == 'nt' else 'linux-x86_64'}), encoding='utf-8')
     command = [sys.executable, '-m', 'PyInstaller', '--noconfirm', '--clean', '--onedir', '--windowed',
-               '--name', 'OrionMini', '--distpath', args.distpath, '--workpath', args.workpath,
+               '--name', name, '--distpath', args.distpath, '--workpath', args.workpath,
                '--specpath', str((root / args.workpath / 'spec').resolve()),
                '--icon', str(root / 'assets/orion-mini-icon.ico'), '--runtime-hook', str(root / 'scripts/pyi_qt_path.py'),
                '--additional-hooks-dir', str(root / 'scripts/packaging/hooks'), '--paths', str(root / 'src')]
@@ -154,11 +156,11 @@ def main():
     subprocess.run(command, cwd=root, env=environment, check=True)
     if os.name == 'nt':
         from native_origins import audit_analysis
-        origins = audit_analysis(root / args.workpath / 'OrionMini/Analysis-00.toc',
-                                 root / args.distpath / 'OrionMini', trusted_native_roots)
+        origins = audit_analysis(root / args.workpath / name / 'Analysis-00.toc',
+                                 root / args.distpath / name, trusted_native_roots)
         (profile_path.parent / 'native-build-origins.json').write_text(json.dumps(origins, indent=2) + '\n', encoding='utf-8')
     if sys.platform == 'linux':
-        materialize_internal_links(root / args.distpath / 'OrionMini')
+        materialize_internal_links(root / args.distpath / name)
 
 
 if __name__ == '__main__':

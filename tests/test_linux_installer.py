@@ -97,6 +97,29 @@ def test_exact_owned_integrations_allow_upgrade_and_preserve_disabled_startup(sh
     assert {name: target.read_bytes() for name, target in paths.items()} == before
 
 
+def legacy_launcher(home):
+    """The launcher written by 0.1.0-beta.4 and earlier, which ran app/OrionMini."""
+    root = shell_path(home) + '/.local/lib/orion'
+    return ('#!/bin/sh\n# ORION_OWNED=1\nif [ "$#" = 1 ]; then case "$1" in *.orion-enrollment) exec "' + root
+            + '/current/app/OrionMini" --enrollment "$1" ;; esac; fi\nexec "' + root + '/current/app/OrionMini" "$@"\n').encode()
+
+
+def test_pre_rename_launcher_stays_owned_and_is_replaced_by_the_saiph_launcher(shell, tmp_path, profile):
+    home, paths, environment = profile
+    capture = tmp_path / 'generated'
+    assert run_preflight(shell, tmp_path, environment, capture).returncode == 0
+    assert b'/current/app/saiph" "$@"' in (capture / 'launcher').read_bytes()
+    assert b'OrionMini' not in (capture / 'launcher').read_bytes()
+    paths['launcher'].parent.mkdir(parents=True)
+    paths['launcher'].write_bytes(legacy_launcher(home))
+    result = run_preflight(shell, tmp_path, environment)
+    assert result.returncode == 0, result.stderr.decode(errors='replace')
+    # Any other edit to the old launcher is not Saiph's to overwrite.
+    paths['launcher'].write_bytes(legacy_launcher(home).replace(b'exec "', b'exec nice "', 1))
+    result = run_preflight(shell, tmp_path, environment)
+    assert result.returncode != 0 and b'unrelated integration' in result.stderr
+
+
 def test_symlink_integration_is_retained_even_when_content_looks_owned(shell, tmp_path, profile):
     home, paths, environment = profile
     target = paths['launcher']; target.parent.mkdir(parents=True)
@@ -135,13 +158,14 @@ def test_linux_upgrade_preserves_optout_uninstall_preserves_modified_integration
     home, paths, environment = profile
     package = tmp_path / 'package'; package.mkdir()
     shutil.copyfile(SCRIPT, package / 'install.sh')
-    (package / 'app').mkdir(); (package / 'app/OrionMini').write_bytes(b'#!/bin/sh\nexit 0\n')
+    (package / 'app').mkdir()
+    for name in ('saiph', 'OrionMini'): (package / 'app' / name).write_bytes(b'#!/bin/sh\nexit 0\n')
     (package / 'licenses').mkdir(); (package / 'licenses/notice').write_text('synthetic notice')
     (package / 'package-manifest.json').write_text('{}')
     (package / 'LINUX_COMPATIBILITY').write_text('linux-x86_64 glibc 2.17\n')
     def install(version, *arguments):
         (package / 'VERSION').write_text(version + '\n')
-        files = ['VERSION', 'LINUX_COMPATIBILITY', 'package-manifest.json', 'app/OrionMini', 'licenses/notice', 'install.sh']
+        files = ['VERSION', 'LINUX_COMPATIBILITY', 'package-manifest.json', 'app/saiph', 'app/OrionMini', 'licenses/notice', 'install.sh']
         (package / 'SHA256SUMS').write_text(''.join(hashlib.sha256((package / name).read_bytes()).hexdigest() + '  ' + name + '\n' for name in files))
         return subprocess.run([shell, str(package / 'install.sh'), *arguments], env=environment, capture_output=True, timeout=15)
     assert install('1.0.0').returncode == 0
@@ -151,6 +175,7 @@ def test_linux_upgrade_preserves_optout_uninstall_preserves_modified_integration
     # Simulate the exact launch integration of the earlier Orion release.
     for name in ('desktop', 'autostart', 'mime'):
         paths[name].write_bytes(paths[name].read_bytes().replace(b'Name=Saiph', b'Name=Orion').replace(b'Saiph device enrollment', b'Orion device enrollment'))
+    paths['launcher'].write_bytes(legacy_launcher(home))
     appdata = home / '.local/share/OrionMini'
     appdata.mkdir(parents=True)
     retained = {
@@ -166,6 +191,9 @@ def test_linux_upgrade_preserves_optout_uninstall_preserves_modified_integration
         paths['autostart'].write_bytes(paths['autostart'].read_bytes().replace(b'enabled=true', b'enabled=false'))
     assert install('1.0.1').returncode == 0
     assert b'Name=Saiph\n' in paths['desktop'].read_bytes()
+    assert b'/current/app/saiph" "$@"' in paths['launcher'].read_bytes()
+    assert os.access(home / '.local/lib/orion/current/app/saiph', os.X_OK)
+    assert os.access(home / '.local/lib/orion/current/app/OrionMini', os.X_OK)
     if startup_mode == 'removed':
         assert not paths['autostart'].exists()
     else:
@@ -181,7 +209,7 @@ def test_linux_upgrade_preserves_optout_uninstall_preserves_modified_integration
     assert result.returncode == 0
     assert paths['desktop'].read_text() == 'user modified desktop\n# ORION_OWNED=1\n'
     assert not paths['launcher'].exists() and not paths['mime'].exists()
-    assert (home / '.local/lib/orion/releases/1.0.0/app/OrionMini').is_file()
+    assert (home / '.local/lib/orion/releases/1.0.0/app/saiph').is_file()
 
 
 @pytest.mark.parametrize("disabled", [False, True])
@@ -211,12 +239,13 @@ def test_linux_same_version_reinstall_explains_nothing_changed(tmp_path, shell, 
     home, paths, environment = profile
     package = tmp_path / 'package'; package.mkdir()
     shutil.copyfile(SCRIPT, package / 'install.sh')
-    (package / 'app').mkdir(); (package / 'app/OrionMini').write_bytes(b'#!/bin/sh\nexit 0\n')
+    (package / 'app').mkdir()
+    for name in ('saiph', 'OrionMini'): (package / 'app' / name).write_bytes(b'#!/bin/sh\nexit 0\n')
     (package / 'licenses').mkdir(); (package / 'licenses/notice').write_text('synthetic notice')
     (package / 'package-manifest.json').write_text('{}')
     (package / 'LINUX_COMPATIBILITY').write_text('linux-x86_64 glibc 2.17\n')
     (package / 'VERSION').write_text('1.0.0\n')
-    files = ['VERSION', 'LINUX_COMPATIBILITY', 'package-manifest.json', 'app/OrionMini', 'licenses/notice', 'install.sh']
+    files = ['VERSION', 'LINUX_COMPATIBILITY', 'package-manifest.json', 'app/saiph', 'app/OrionMini', 'licenses/notice', 'install.sh']
     (package / 'SHA256SUMS').write_text(''.join(hashlib.sha256((package / name).read_bytes()).hexdigest() + '  ' + name + '\n' for name in files))
 
     def install(*arguments):
@@ -248,13 +277,14 @@ def test_linux_file_actions_follow_choice_and_never_return_unasked(tmp_path, she
     foreign = data / 'nautilus/scripts/Synthetic own script'
     package = tmp_path / 'package'; package.mkdir()
     shutil.copyfile(SCRIPT, package / 'install.sh')
-    (package / 'app').mkdir(); (package / 'app/OrionMini').write_bytes(b'#!/bin/sh\nexit 0\n')
+    (package / 'app').mkdir()
+    for name in ('saiph', 'OrionMini'): (package / 'app' / name).write_bytes(b'#!/bin/sh\nexit 0\n')
     (package / 'licenses').mkdir(); (package / 'licenses/notice').write_text('synthetic notice')
     (package / 'package-manifest.json').write_text('{}')
     (package / 'LINUX_COMPATIBILITY').write_text('linux-x86_64 glibc 2.17\n')
     def install(version, choice=None):
         (package / 'VERSION').write_text(version + '\n')
-        files = ['VERSION', 'LINUX_COMPATIBILITY', 'package-manifest.json', 'app/OrionMini', 'licenses/notice', 'install.sh']
+        files = ['VERSION', 'LINUX_COMPATIBILITY', 'package-manifest.json', 'app/saiph', 'app/OrionMini', 'licenses/notice', 'install.sh']
         (package / 'SHA256SUMS').write_text(''.join(hashlib.sha256((package / name).read_bytes()).hexdigest() + '  ' + name + '\n' for name in files))
         env = PrivateEnvironment({key: value for key, value in environment.items() if key != 'SAIPH_FILE_ACTIONS'})
         if choice:

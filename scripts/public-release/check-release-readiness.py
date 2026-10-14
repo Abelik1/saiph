@@ -66,7 +66,9 @@ def check(package, review_path=None, qt_source_dir=None):
             or not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.-]+)?', version)
             or type(build) is not int or build < 0):
         raise ValueError('Invalid native package platform/version/build')
-    entrypoint = 'app/OrionMini.exe' if platform.startswith('windows') else 'app/OrionMini'
+    entrypoint = 'app/Saiph.exe' if platform.startswith('windows') else 'app/saiph'
+    # Byte copy for updaters installed before the rename (0.1.0-beta.4 and older).
+    compatibility = 'app/OrionMini.exe' if platform.startswith('windows') else 'app/OrionMini'
     if manifest.get('entrypoint') != entrypoint:
         raise ValueError('Unexpected native package entrypoint')
     expected = set()
@@ -93,6 +95,8 @@ def check(package, review_path=None, qt_source_dir=None):
         magic = source.read(4)
     if (platform.startswith('windows') and magic[:2] != b'MZ') or (platform.startswith('linux') and magic != b'\x7fELF'):
         raise ValueError('Native executable does not match package platform')
+    if digest(local_file(package, compatibility)) != digest(executable):
+        raise ValueError('Compatibility executable must be a byte copy of the entrypoint')
     frozen_release = json.loads(local_file(package, 'app/_internal/distribution-release.json').read_text(encoding='utf-8'))
     frozen_profile = json.loads(local_file(package, 'app/_internal/distribution-profile.json').read_text(encoding='utf-8'))
     if (frozen_release != {'schema': 1, 'version': version, 'build': build, 'platform': platform}

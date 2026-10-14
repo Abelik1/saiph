@@ -96,25 +96,27 @@ def inspect_package(path, release):
             if source.read(2) != b'\x1f\x8b':
                 raise ValueError('Expected a Linux package archive')
         required = {'orion/package-manifest.json', 'orion/app/_internal/distribution-profile.json',
-                    'orion/app/_internal/distribution-release.json', 'orion/app/OrionMini'}
+                    'orion/app/_internal/distribution-release.json'}
+        # Packages from the rename on carry saiph and a byte copy named OrionMini for older updaters.
+        executables = {'orion/app/saiph', 'orion/app/OrionMini'}
         found = {}
         with tarfile.open(path, 'r:gz') as archive:
             for index, item in enumerate(archive):
                 if index >= 100000:
                     raise ValueError('Too many package members')
-                if item.name not in required:
+                if item.name not in required | executables:
                     continue
                 if not item.isfile() or item.name in found or item.size > 32 * 1024 * 1024:
                     raise ValueError('Invalid package metadata member')
                 source = archive.extractfile(item)
-                if item.name.endswith('/OrionMini'):
+                if item.name in executables:
                     header = source.read(20)
                     if len(header) < 20 or header[:6] != b'\x7fELF\x02\x01' or header[18:20] != b'\x3e\0':
                         raise ValueError('Expected an x86-64 Linux executable')
                     found[item.name] = True
                 else:
                     found[item.name] = _json(source.read())
-        if set(found) != required:
+        if not required <= set(found) or not executables & set(found):
             raise ValueError('Missing package metadata')
         package = found['orion/package-manifest.json']
         profile = found['orion/app/_internal/distribution-profile.json']

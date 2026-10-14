@@ -158,7 +158,7 @@ def native_origin_records(binaries):
         key = (Path(item['path']).name.casefold(), item['sha256'])
         item['wheel_record_matches'] = wheel_records.get(key, [])
         item['build_interpreter_matches'] = interpreter_records.get(key, [])
-        item['project_generated'] = item['path'] == 'OrionMini.exe'
+        item['project_generated'] = item['path'] == 'Saiph.exe'
 
 
 def collect(bundle, destination):

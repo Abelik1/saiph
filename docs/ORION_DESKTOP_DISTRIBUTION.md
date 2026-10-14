@@ -10,12 +10,15 @@ python scripts/packaging/build-desktop-distribution.py --platform windows-x86_64
 ```
 
 Use `--platform linux-x86_64` for a native Linux build. The wrapper requires the
-existing PyInstaller bundle under `dist/OrionMini/`. Windows also needs the .NET
+existing PyInstaller bundle under `dist/Saiph/` (`dist/saiph/` on Linux). Windows also needs the .NET
 Framework compiler; Linux needs the desktop runtime libraries listed in CI.
 
-Release filenames and installer display names use Saiph. Internal executable,
-application identity, install locations and `.orion-enrollment` associations
-retain Orion compatibility names. Windows installs per user beneath
+Release filenames, installer display names and the executable (`Saiph.exe`,
+`saiph` on Linux) use Saiph. Packages also carry `OrionMini.exe` (`OrionMini`), a
+byte copy that updaters installed before the rename relaunch; shortcuts, startup
+entries and the launcher use the Saiph name. Application identity, install and
+data locations, the `orion/` archive folder, registry and desktop-entry names and
+`.orion-enrollment` associations retain Orion compatibility names. Windows installs per user beneath
 `%LOCALAPPDATA%/Programs/OrionMini`; Linux uses `~/.local/lib/orion` and its owned
 launcher/menu integration. No target Python or Node development installation
 should be required for the packaged app.

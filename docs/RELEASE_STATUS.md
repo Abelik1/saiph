@@ -1,5 +1,28 @@
 # Current release preparation status
 
+2026-10-14 desktop executable rename: branch `feat/desktop-saiph-executable`
+renames the desktop executable from `OrionMini.exe`/`OrionMini` to
+`Saiph.exe`/`saiph` (PyInstaller bundle `dist/Saiph/`). Shortcuts, Send to,
+the startup entry, the enrollment association and the Linux launcher now run the
+new name; an upgrade moves beta.4 entries over. Packages still carry a
+byte-identical `OrionMini(.exe)` because installed 0.1.0-beta.4 updaters and the
+deployed Hub require that name. Install/data folders, registry and desktop-entry
+names, the AppUserModelID and the `orion/` archive prefix are unchanged. Checked
+on Windows 11, Python 3.12 venv: `verify-public.py` 1330 passed, 58 skipped
+(a first run had 1 timing failure in `test_phone_features` while the Hub suite ran
+alongside; it passed alone 3/3 and in the clean rerun); Hub 549 passed, 6
+skipped; frontend 161 passed; Windows installer tests including a synthetic
+beta.4-to-renamed upgrade, ownership and rollback probe. Linux installer, setup
+and updater-handoff tests passed in a `python:3.12.14-slim-bookworm` container
+(not a desktop session). `build-native.py --profile link` plus the Windows
+packager built an unsigned `0.1.0-rename.1` test installer: version info names
+`Saiph.exe`, the copy is identical, the current updater and the frozen beta.4
+updater (`tests/fixtures/legacy_package_updates_beta4.py`) both accept it, and an
+`--isolated` install/uninstall into a test folder succeeded. Not done: launching
+the built app, a real (non-isolated) beta.4 upgrade with shortcuts and startup on
+Windows or Linux, a Linux native build, signing (`signpath-app.xml` now names
+`Saiph.exe`; SignPath is still unconfigured). Not released or deployed.
+
 2026-10-14 deployment and publication preparation: the shared Hosted service
 runs the security release `b1fd50b` and serves the 0.1.0-beta.4 desktop catalog
 (operations record). The landing and account sites now deploy production only

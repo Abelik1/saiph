@@ -73,12 +73,13 @@ every value below is set. In order, it:
 
 1. builds Link with `scripts/build-native.py`, which already writes `ProductName`
    `Saiph` and the exact `ProductVersion` that SignPath enforces;
-2. uploads `dist/OrionMini/` and requests a signature for `OrionMini.exe` only
+2. uploads `dist/Saiph/` and requests a signature for `Saiph.exe` only
    ([`docs/signing/signpath-app.xml`](signing/signpath-app.xml));
-3. accepts the returned bundle only if `OrionMini.exe` is the single changed file
+3. accepts the returned bundle only if `Saiph.exe` is the single changed file
    (`scripts/public-release/check-signed-bundle.py`);
 4. packages that signed bundle into the installer, so `package-manifest.json`
-   hashes the signed executable;
+   hashes the signed executable. The packager adds `OrionMini.exe`, a byte copy
+   of the signed `Saiph.exe` for updaters installed before the rename;
 5. requests a signature for the finished installer
    ([`docs/signing/signpath-installer.xml`](signing/signpath-installer.xml)). The
    installer finds its payload just before the Authenticode certificate table,
