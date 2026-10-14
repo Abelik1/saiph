@@ -1,5 +1,18 @@
 # Current release preparation status
 
+2026-10-14 deployment and publication preparation: the shared Hosted service
+runs the security release `b1fd50b` and serves the 0.1.0-beta.4 desktop catalog
+(operations record). The landing and account sites now deploy production only
+from the `production` branch (created at `fa9b063`); `main` builds protected
+previews, and fork pull requests need maintainer authorization in Vercel. A
+fresh audit clone of GitHub plus local `main` passed
+`check-public-data.py --history` and gitleaks (files and all history). Still
+open before changing visibility: owner approval, independent review of
+friends-beta mode, and enabling branch rules, private vulnerability reporting,
+secret scanning and Actions with fork-PR approval right after the switch
+(private free repositories cannot use them). Paid Hosted remains disabled; its
+gates are tracked separately.
+
 2026-10-14 Hosted texts and calls: branch `feat/hosted-texts-calls` adds SMS
 threads, replies, new texts, call alerts, answer/decline, dialing, contact
 search and recent calls to Saiph Hosted inside the existing sealed envelopes,

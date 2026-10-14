@@ -58,3 +58,6 @@ android/app/src/beta/assets/hosted-defaults.json
 # Separate website account application
 account-web/.next/
 account-web/*.tsbuildinfo
+
+# Editor extension state
+.github/modernize/

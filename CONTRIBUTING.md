@@ -86,7 +86,13 @@ and licence notices.
 
 Private Workspace implementation, production settings and operations stay outside
 this product repository. Official signing and deployment are maintainer tasks;
-pull-request checks must work without production secrets. See the
+pull-request checks must work without production secrets.
+
+`main` is the development branch: pull requests target it, and its pushes build
+only private preview deployments. The public website and account site deploy
+from the separate `production` branch, which maintainers move forward to a
+tested `main` commit when releasing. Do not open pull requests against
+`production`. See the
 [repository layout](docs/REPOSITORY_LAYOUT.md) and
 [release status](docs/RELEASE_STATUS.md).
 
