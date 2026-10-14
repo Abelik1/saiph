@@ -2,7 +2,7 @@
 import "server-only";
 import {withBillingStore} from "./db";
 import {deriveEntitlement,type Entitlement} from "./entitlement.mjs";
-import {maySubscribe,planForPrice,readBillingConfig,type BillingMode} from "./policy";
+import {maySubscribe,planForPrice,readBillingConfig,reportBillingConfig,type BillingMode} from "./policy";
 import {subscriptionSummary} from "./presentation.mjs";
 
 type StoredRow={status:string;priceId:string;currentPeriodEnd:number|null;cancelAtPeriodEnd:boolean};
@@ -14,7 +14,8 @@ export type BillingView={mode:BillingMode;standing:Entitlement;subscriptions:{la
  * "unavailable" when storage cannot be read. Never reads the checkout return. */
 export async function billingView(subject:unknown):Promise<BillingView|null|"unavailable"> {
   const config=readBillingConfig(process.env);
-  if (!config || !maySubscribe(config,subject)) return null;
+  if (!config) {reportBillingConfig(process.env);return null;}
+  if (!maySubscribe(config,subject)) return null;
   try {
     return await withBillingStore(config,async(store)=>{
       const customer=await store.findCustomer(subject);

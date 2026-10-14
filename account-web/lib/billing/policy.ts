@@ -25,29 +25,51 @@ export function hostedOrigin(value:unknown):string|null {
  * for the mode is present. Mixed test/live configuration fails closed.
  */
 export function readBillingConfig(env:NodeJS.ProcessEnv):BillingConfig|null {
+  return checkBillingConfig(env).config;
+}
+/**
+ * Like readBillingConfig, plus the NAMES of the settings that failed (never
+ * their values), so a rejected configuration can be diagnosed from logs.
+ * Surrounding whitespace (for example a pasted trailing newline) is ignored.
+ */
+export function checkBillingConfig(env:NodeJS.ProcessEnv):{config:BillingConfig|null;problems:string[]} {
+  const mode=env.SAIPH_BILLING_MODE?.trim();
+  if (mode!=="owner-sandbox" && mode!=="live") return {config:null,problems:mode && mode!=="disabled"?["SAIPH_BILLING_MODE"]:[]};
+  const problems:string[]=[];
   const auth=readAuthConfig(env);
-  const mode=env.SAIPH_BILLING_MODE;
-  if ((mode!=="owner-sandbox" && mode!=="live") || !auth.ok || !auth.appBaseUrl || !auth.ownerSubject || !auth.domain) return null;
+  if (!auth.ok || !auth.appBaseUrl || !auth.ownerSubject || !auth.domain) problems.push("AUTH0 settings");
   const livemode=mode==="live";
-  const {STRIPE_SECRET_KEY:secretKey,STRIPE_WEBHOOK_SECRET:webhookSecret,STRIPE_EXPECTED_ACCOUNT_ID:accountId,
-    STRIPE_PRODUCT_ID:productId,STRIPE_PRICE_ID:monthlyPrice,STRIPE_YEARLY_PRICE_ID:yearlyPrice,
-    STRIPE_PORTAL_CONFIGURATION_ID:portalId,DATABASE_URL:databaseUrl,
-    SAIPH_BILLING_GRANT_KEY:encodedKey,SAIPH_BILLING_GRANT_KEY_ID:keyId,CRON_SECRET:cronSecret}=env;
-  const keyPattern=livemode?/^rk_live_[A-Za-z0-9]+$/:/^rk_test_[A-Za-z0-9]+$/;
-  const grantOrigin=hostedOrigin(env.SAIPH_HOSTED_API_URL);
-  if (!secretKey || !keyPattern.test(secretKey) || !webhookSecret || !/^whsec_[A-Za-z0-9]+$/.test(webhookSecret)
-    || !accountId || !/^acct_[A-Za-z0-9]+$/.test(accountId) || !productId || !/^prod_[A-Za-z0-9]+$/.test(productId)
-    || !monthlyPrice || !/^price_[A-Za-z0-9]+$/.test(monthlyPrice) || !yearlyPrice || !/^price_[A-Za-z0-9]+$/.test(yearlyPrice)
-    || monthlyPrice===yearlyPrice || !portalId || !/^bpc_[A-Za-z0-9]+$/.test(portalId) || !databaseUrl
-    || !grantOrigin || !keyId || !/^[a-z0-9-]{1,32}$/.test(keyId)
-    || (cronSecret!==undefined && cronSecret!=="" && !/^[A-Za-z0-9_-]{32,256}$/.test(cronSecret))) return null;
-  let key:KeyObject;
-  try {key=grantKey(encodedKey);} catch {return null;}
+  const value=(name:string)=>env[name]?.trim() ?? "";
+  const need=(name:string,pattern:RegExp)=>{const v=value(name);if(!pattern.test(v)) problems.push(name);return v;};
+  const secretKey=need("STRIPE_SECRET_KEY",livemode?/^rk_live_[A-Za-z0-9]+$/:/^rk_test_[A-Za-z0-9]+$/);
+  const webhookSecret=need("STRIPE_WEBHOOK_SECRET",/^whsec_[A-Za-z0-9]+$/);
+  const accountId=need("STRIPE_EXPECTED_ACCOUNT_ID",/^acct_[A-Za-z0-9]+$/);
+  const productId=need("STRIPE_PRODUCT_ID",/^prod_[A-Za-z0-9]+$/);
+  const monthlyPrice=need("STRIPE_PRICE_ID",/^price_[A-Za-z0-9]+$/);
+  const yearlyPrice=need("STRIPE_YEARLY_PRICE_ID",/^price_[A-Za-z0-9]+$/);
+  if (monthlyPrice && monthlyPrice===yearlyPrice) problems.push("STRIPE_YEARLY_PRICE_ID");
+  const portalId=need("STRIPE_PORTAL_CONFIGURATION_ID",/^bpc_[A-Za-z0-9]+$/);
+  if (!value("DATABASE_URL")) problems.push("DATABASE_URL");
+  const grantOrigin=hostedOrigin(value("SAIPH_HOSTED_API_URL"));
+  if (!grantOrigin) problems.push("SAIPH_HOSTED_API_URL");
+  const keyId=need("SAIPH_BILLING_GRANT_KEY_ID",/^[a-z0-9-]{1,32}$/);
+  const cronSecret=value("CRON_SECRET");
+  if (cronSecret && !/^[A-Za-z0-9_-]{32,256}$/.test(cronSecret)) problems.push("CRON_SECRET");
+  let key:KeyObject|null=null;
+  try {key=grantKey(value("SAIPH_BILLING_GRANT_KEY"));} catch {problems.push("SAIPH_BILLING_GRANT_KEY");}
+  if (problems.length || !key || !grantOrigin || !auth.ok || !auth.appBaseUrl || !auth.ownerSubject || !auth.domain) return {config:null,problems};
   const plan=(planKey:PlanKey,priceId:string):Plan=>({key:planKey,priceId,...PLAN_TERMS[planKey]});
-  return {mode,livemode,secretKey,webhookSecret,accountId,productId,portalId,origin:auth.appBaseUrl,ownerSubject:auth.ownerSubject,
+  return {problems,config:{mode,livemode,secretKey,webhookSecret,accountId,productId,portalId,origin:auth.appBaseUrl,ownerSubject:auth.ownerSubject,
     plans:{monthly:plan("monthly",monthlyPrice),yearly:plan("yearly",yearlyPrice)},
-    automaticTax:env.SAIPH_BILLING_AUTOMATIC_TAX==="true",
-    grant:{origin:grantOrigin,keyId,key,issuer:"https://"+auth.domain+"/"},cronSecret:cronSecret||null};
+    automaticTax:env.SAIPH_BILLING_AUTOMATIC_TAX?.trim()==="true",
+    grant:{origin:grantOrigin,keyId,key,issuer:"https://"+auth.domain+"/"},cronSecret:cronSecret||null}};
+}
+/** One log line per server instance naming rejected settings; values never appear. */
+let reported=false;
+export function reportBillingConfig(env:NodeJS.ProcessEnv) {
+  if (reported) return;
+  const {problems}=checkBillingConfig(env);
+  if (problems.length) {reported=true;console.error("Billing is enabled but these settings were rejected: "+problems.join(", "));}
 }
 /** In sandbox mode only the owner may subscribe (owner decision, 14 October 2026). */
 export function maySubscribe(config:BillingConfig,subject:unknown):subject is string {

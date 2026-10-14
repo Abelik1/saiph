@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import {timingSafeEqual} from "node:crypto";
 import type Stripe from "stripe";
-import {billingHeaders,maySubscribe,readBillingConfig,type BillingConfig,type PlanKey} from "./policy.ts";
+import {billingHeaders,maySubscribe,readBillingConfig,reportBillingConfig,type BillingConfig,type PlanKey} from "./policy.ts";
 import {BillingConflict,checkout,grantPolicy,portal,processWebhook,eventDescriptor,type BillingStore} from "./service.ts";
 import {syncGrants} from "./grant-sync.mjs";
 import type {GrantValue} from "./grant-push.mjs";
@@ -29,7 +29,7 @@ function planFrom(body:Buffer,contentType:string|null):PlanKey|null {
 }
 export async function accountAction(request:Request,action:"checkout"|"portal",deps:Dependencies):Promise<Response> {
   if (request.method!=="POST") return reply(405,"Method not allowed.");
-  const config=readBillingConfig(deps.env);if(!config) return reply(503,"Subscriptions are not available yet.");
+  const config=readBillingConfig(deps.env);if(!config) return reportBillingConfig(deps.env), reply(503,"Subscriptions are not available yet.");
   if (request.headers.get("origin")!==config.origin || request.headers.get("sec-fetch-site") && request.headers.get("sec-fetch-site")!=="same-origin"
     || new URL(request.url).search) return reply(403,"Request rejected.");
   let plan:PlanKey|null=null;
@@ -57,7 +57,7 @@ export async function accountAction(request:Request,action:"checkout"|"portal",d
 }
 export async function webhook(request:Request,deps:Dependencies):Promise<Response> {
   if(request.method!=="POST") return reply(405,"Method not allowed.");
-  const config=readBillingConfig(deps.env);if(!config) return reply(503,"Billing setup is pending.");
+  const config=readBillingConfig(deps.env);if(!config) return reportBillingConfig(deps.env), reply(503,"Billing setup is pending.");
   if (new URL(request.url).search || request.headers.get("content-type")?.split(";")[0].trim()!=="application/json") return reply(400,"Event rejected.");
   const signature=request.headers.get("stripe-signature");
   if (!signature || signature.length>4096) return reply(400,"Event rejected.");
@@ -80,7 +80,7 @@ export async function webhook(request:Request,deps:Dependencies):Promise<Respons
 /** Daily Vercel Cron: roll long grants forward and retry undelivered ones. */
 export async function refresh(request:Request,deps:Dependencies):Promise<Response> {
   if (request.method!=="GET") return reply(405,"Method not allowed.");
-  const config=readBillingConfig(deps.env);if(!config || !config.cronSecret) return reply(503,"Billing setup is pending.");
+  const config=readBillingConfig(deps.env);if(!config || !config.cronSecret) return reportBillingConfig(deps.env), reply(503,"Billing setup is pending.");
   const expected=Buffer.from("Bearer "+config.cronSecret), given=Buffer.from(request.headers.get("authorization") ?? "");
   if (given.length!==expected.length || !timingSafeEqual(given,expected) || new URL(request.url).search) return reply(401,"Unauthorized.");
   try {

@@ -224,3 +224,20 @@ test("daily refresh requires the exact cron secret and reports delivery",async()
  assert.equal((await refresh(cron("Bearer "+"c".repeat(40)),{...f.deps,env:{...env,CRON_SECRET:""}})).status,503);
  assert.equal((await refresh(new Request(config.origin+"/api/billing/refresh",{method:"POST",headers:{authorization:"Bearer "+"c".repeat(40)}}),f.deps)).status,405);
 });
+test("surrounding whitespace in pasted settings is ignored; rejected settings are named, never echoed",async()=>{
+ const padded={...env,SAIPH_BILLING_GRANT_KEY:env.SAIPH_BILLING_GRANT_KEY+"\n",CRON_SECRET:" "+env.CRON_SECRET+"\r\n",STRIPE_WEBHOOK_SECRET:env.STRIPE_WEBHOOK_SECRET+" ",SAIPH_BILLING_MODE:"owner-sandbox\n"};
+ const tolerant=readBillingConfig(padded);assert.ok(tolerant);assert.equal(tolerant.cronSecret,env.CRON_SECRET);assert.equal(tolerant.webhookSecret,env.STRIPE_WEBHOOK_SECRET);
+ const {checkBillingConfig,reportBillingConfig}=await import("../lib/billing/policy.ts");
+ assert.deepEqual(checkBillingConfig(env).problems,[]);
+ assert.deepEqual(checkBillingConfig({...env,SAIPH_BILLING_MODE:"disabled"}),{config:null,problems:[]},"disabled on purpose is silent");
+ assert.deepEqual(checkBillingConfig({...env,SAIPH_BILLING_MODE:"enabled"}).problems,["SAIPH_BILLING_MODE"]);
+ assert.deepEqual(checkBillingConfig({...env,SAIPH_BILLING_MODE:undefined}).problems,[]);
+ const broken={...env,STRIPE_SECRET_KEY:"sk_live_synthetic123",SAIPH_BILLING_GRANT_KEY:"not-a-key-secretvalue",CRON_SECRET:"short"};
+ const checked=checkBillingConfig(broken);assert.equal(checked.config,null);
+ assert.deepEqual(checked.problems,["STRIPE_SECRET_KEY","CRON_SECRET","SAIPH_BILLING_GRANT_KEY"]);
+ const logged=[];const original=console.error;console.error=(line)=>logged.push(String(line));
+ try {reportBillingConfig(broken);reportBillingConfig(broken);} finally {console.error=original;}
+ assert.equal(logged.length,1,"one line per server instance");
+ assert.match(logged[0],/STRIPE_SECRET_KEY, CRON_SECRET, SAIPH_BILLING_GRANT_KEY/);
+ assert.equal(/synthetic123|secretvalue|short/.test(logged[0]),false,"no value appears in the log");
+});
