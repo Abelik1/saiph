@@ -7,7 +7,9 @@ export type AIConfig = {
   ollama_url?: string;
 };
 export type CameraConfig = {enabled?:boolean;facing?:"front"|"back";quality?:"720p"|"1080p";rotation?:"0"|"90"|"180"|"270";v4l2_sink?:string;obs_profile?:string;obs_collection?:string;obs_scene?:string;obs_scene_file?:string;obs_executable?:string;scrcpy_executable?:string};
-export type CameraStatus = {available:boolean;running:boolean;verified:boolean;mode:"linux-v4l2"|"windows-obs"|"unavailable";device_id:string|null;message:string;facing?:"front"|"back";quality?:"720p"|"1080p";rotation?:string};
+export type CameraStatus = {available:boolean;running:boolean;verified:boolean;mode:"linux-v4l2"|"windows-obs"|"preview"|"unavailable";device_id:string|null;serial?:string|null;can_preview?:boolean;message:string;facing?:"front"|"back";quality?:"720p"|"1080p";rotation?:string};
+// A phone attached to this computer over USB or wireless debugging (no Hub needed).
+export type DebugPhone = {serial:string;state:"ready"|"unauthorized"|"offline"|"no_permission";model:string;connection:"usb"|"wifi"};
 export type MicrophoneConfig = {enabled?:boolean;scrcpy_executable?:string};
 export type MicrophoneStatus = {available:boolean;running:boolean;muted:boolean;verified:boolean;mode:"linux-pulse"|"windows-cable"|"unavailable";device_id:string|null;message:string};
 export type DeskflowConfig = {enabled?:boolean;role?:"desktop"|"laptop";desktop?:string;local?:string;certificate?:string;executable?:string};

@@ -127,6 +127,23 @@ one in its own window through scrcpy; Pin adds it to the Start menu or the
 applications menu. It needs authorised wireless or USB debugging (as the phone
 preview does) and Android 10 or later.
 
+**Phone as a webcam (optional):** the phone camera appears as a webcam in video
+calls through upstream scrcpy, with OBS Studio's Virtual Camera on Windows or a
+v4l2loopback device on Linux. The video goes directly from the phone to the
+computer over USB or wireless debugging on the local network, so it works with
+Saiph Hosted and needs no Hub, Saiph pairing or Tailscale. It needs Android 12
+or later and scrcpy 2.2 or later (scrcpy includes adb); installers do not bundle
+scrcpy, adb, OBS or v4l2loopback. Turn it on in Settings → Devices → Phone camera
+and follow **One-time camera setup**: Developer options and USB or Wireless
+debugging on the phone, then the OBS scene (Windows, using **Open camera
+preview** to create the window capture) or the loopback device (Linux). For
+Wi-Fi, **Connect over Wi-Fi** accepts the phone's pairing address and six-digit
+code once, then the address shown on the Wireless debugging screen each time it
+changes; only private or link-local network addresses are accepted. Without a
+self-hosted paired phone, **Find my phone** on the Phone page lists phones that
+have allowed this computer and **Use phone as webcam** starts the chosen one.
+Physical-device acceptance is pending.
+
 **Pause Saiph on the phone:** add the Saiph widget to your home screen to see
 whether Saiph is on and connected, and to pause or resume it with one tap.
 Settings in the phone app has the same switch. While paused, nothing syncs and

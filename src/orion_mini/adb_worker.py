@@ -21,7 +21,8 @@ def worker_command(status):
 class AdbWorker:
     def __init__(self):
         sdk=Path(__file__).resolve().parents[2]/'.orion-mini/android-sdk/platform-tools'
-        self.adb=tool_path('adb') or next((str(p) for p in (sdk/'adb.exe',sdk/'adb') if p.is_file()),None)
+        from .phone_debugging import adb_path  # Standard adb, else the one shipped beside scrcpy.
+        self.adb=adb_path(tool_path('scrcpy')) or next((str(p) for p in (sdk/'adb.exe',sdk/'adb') if p.is_file()),None)
         self.status='Authorized debugging is unavailable.'
     def run(self,*args):
         if not self.adb:return ''
