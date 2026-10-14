@@ -32,6 +32,9 @@ class OrionBackupSettings(private val activity: ComponentActivity, private val c
     fun view() = LinearLayout(activity).apply {
         orientation = LinearLayout.VERTICAL
         addView(activity.section("Automatic backups"))
+        addView(activity.card().apply { content() })
+    }
+    private fun LinearLayout.content() {
         addView(Switch(activity).saiph().apply {
             text = "Back up Saiph received files and selected folders"; isChecked = preferences.getBoolean("enabled", true)
             setOnCheckedChangeListener { _, enabled -> preferences.edit().putBoolean("enabled", enabled).apply(); OrionBackupWorker.schedule(activity) }
@@ -50,7 +53,7 @@ class OrionBackupSettings(private val activity: ComponentActivity, private val c
             else -> "Waiting for charging and network. Connection failures retry automatically."
         }
         addView(activity.text(state, 14f, Palette.MUTED))
-        addView(activity.buttonRow(activity.button("Choose backup folder") { picker.launch(null) }))
+        addView(activity.buttonRow(activity.button("Choose backup folder", tone = Tone.TONAL) { picker.launch(null) }))
         val folders = preferences.getStringSet("folders", emptySet()).orEmpty().toSet()
         folders.forEachIndexed { index, uri ->
             addView(activity.buttonRow(activity.button("Remove folder ${index + 1}") {

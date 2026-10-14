@@ -43,6 +43,7 @@ class OrionActivity : ComponentActivity() {
     private lateinit var dock: LinearLayout
     private lateinit var scroll: ScrollView
     private var showAllRecent = false
+    private var shownScreen = ""
     private var poll: Job? = null
     private var screen = "home"
     private var lastRender = ""
@@ -164,6 +165,9 @@ class OrionActivity : ComponentActivity() {
     override fun onPause() { poll?.cancel(); super.onPause() }
     private fun title(value: String) {
         root.removeAllViews(); header.removeAllViews(); dock.visibility = View.GONE
+        // A new screen opens at its top; a refresh of the same screen keeps its place. A fling still
+        // running from the last screen is stopped first, or it would carry on into the new one.
+        if (screen != shownScreen) { shownScreen = screen; scroll.fling(0); scroll.scrollTo(0, 0); scroll.post { scroll.scrollTo(0, 0) } }
         val paired = prefs.contains("device_id")
         if (paired && SetupNavigation.offersBack(screen, true)) header.addView(iconButton(R.drawable.saiph_ic_back, "Back") { goBack() })
         header.addView(text(value, 22f, Palette.TEXT, true).apply {
@@ -442,9 +446,14 @@ class OrionActivity : ComponentActivity() {
             ?.let { list -> (0 until list.length()).map(list::getString) }.orEmpty()
         if (devices.isEmpty() && wake.isEmpty()) return
         root.addView(section("Your devices"))
-        devices.forEach { device -> root.addView(card().apply {
+        // One card, one row per device: its name, battery and status, then what it can do.
+        val list = card()
+        root.addView(list)
+        devices.forEachIndexed { index, device -> list.apply {
+            if (index > 0) addView(divider())
             val row = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL }
-            row.addView(text(OrionComputers.summary(device), 15f), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            val battery = device.battery?.takeIf { device.online }?.let { " · $it%" + if (device.charging) " · charging" else "" } ?: ""
+            row.addView(text(device.name + battery, 15f), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             row.addView(if (device.online) badge("Online", Palette.GOOD, Palette.GOOD_SURFACE) else badge("Offline", Palette.MUTED, Palette.MUTED_FILL))
             addView(row)
             val actions = mutableListOf<Button>()
@@ -456,14 +465,16 @@ class OrionActivity : ComponentActivity() {
                 Toast.makeText(this@OrionActivity, if (OrionComputers.lock(link, device.id)) "Locking ${device.name}…" else "Saiph is reconnecting. Nothing was sent.", Toast.LENGTH_SHORT).show()
             }
             if (actions.isNotEmpty()) addView(buttonRow(*actions.toTypedArray()))
-        }) }
-        if (wake.isNotEmpty()) root.addView(card().apply {
+        } }
+        if (wake.isNotEmpty()) list.apply {
+            if (devices.isNotEmpty()) addView(divider())
             addView(text("Wake a computer", 15f))
             wake.forEach { target -> addView(buttonRow(button("Wake " + target.replace('-', ' '), tone = Tone.TONAL) {
                 if(link.status.value=="Online" && link.publish("wake",buildJsonObject { put("target",target) })) Toast.makeText(this@OrionActivity,"Wake request queued.",Toast.LENGTH_SHORT).show()
                 else Toast.makeText(this@OrionActivity,"Saiph is reconnecting. The request has not been sent.",Toast.LENGTH_SHORT).show()
             })) }
-        })
+        }
+        if (devices.isEmpty() && wake.isEmpty()) root.removeView(list)
     }
     private fun itemCard(item: JSONObject): View {
         val kind = item.getString("kind"); val state = item.getString("status"); val open = state == "new"
@@ -474,7 +485,11 @@ class OrionActivity : ComponentActivity() {
             head.addView(text(When.ago(item.optString("created_at")), 12f, Palette.MUTED))
             addView(head)
             addView(text(item.getString("title"), 16f, Palette.TEXT, true).apply { setPadding(0, dp(6), 0, 0) })
-            item.optString("body").takeIf { it.isNotBlank() }?.let { addView(text(it, 14f, Palette.MUTED).apply { setPadding(0, dp(4), 0, 0) }) }
+            // Long bodies fold to four lines; a tap shows the rest.
+            item.optString("body").takeIf { it.isNotBlank() }?.let { addView(text(it, 14f, Palette.MUTED).apply {
+                setPadding(0, dp(4), 0, 0); maxLines = 4; ellipsize = android.text.TextUtils.TruncateAt.END
+                setOnClickListener { maxLines = if (maxLines == 4) Int.MAX_VALUE else 4 }
+            }) }
             item.optJSONObject("proposal")?.optJSONArray("events")?.let { events ->
                 for (i in 0 until events.length()) addView(eventLine(events.getJSONObject(i)))
             }

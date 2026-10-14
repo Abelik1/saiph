@@ -165,7 +165,7 @@ object UsageAnalytics {
                 status.text = if (checked) "Anonymous daily counts are shared." else "Nothing is counted or sent. Local counts were deleted."
             }
         }
-        val show = activity.button("See what Saiph sends") {
+        val show = activity.button("See what Saiph sends", tone = Tone.TONAL) {
             val waiting = pending(activity).joinToString("\n\n") { it.toString(2) }.ifEmpty { "Nothing is waiting. Today's counts are sent after the day ends." }
             val last = prefs(activity).getString("last_sent", null)?.let { runCatching { JSONObject(it).toString(2) }.getOrNull() }
             val body = TextView(activity).apply {
@@ -175,7 +175,9 @@ object UsageAnalytics {
             AlertDialog.Builder(activity).setTitle("What Saiph sends").setView(android.widget.ScrollView(activity).apply { addView(body) })
                 .setPositiveButton("Close", null).show()
         }
-        return listOf(activity.section("Usage statistics"), toggle, status, show)
+        return listOf(activity.section("Usage statistics"), activity.card().apply {
+            addView(toggle); addView(status.apply { setPadding(activity.dp(4), 0, 0, 0) }); addView(activity.buttonRow(show))
+        })
     }
 
     /** Called when an activity opens: count it and send anything due, off the main thread. */

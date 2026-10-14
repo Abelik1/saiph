@@ -19,6 +19,23 @@
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@color/saiph_background</item>
         <item name="android:windowLightStatusBar">false</item>
+        <item name="android:alertDialogTheme">@style/Theme.Saiph.Dialog</item>
+        <item name="alertDialogTheme">@style/Theme.Saiph.Dialog</item>
+    </style>
+
+    <!-- Dialogs: a night card with a hairline, cyan actions in sentence case. -->
+    <style name="Theme.Saiph.Dialog" parent="android:Theme.Material.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/saiph_dialog_background</item>
+        <item name="android:colorBackground">@color/saiph_card</item>
+        <item name="android:colorAccent">@color/saiph_accent</item>
+        <item name="android:textColorPrimary">@color/saiph_text</item>
+        <item name="android:textColorSecondary">@color/saiph_muted</item>
+        <item name="android:buttonBarButtonStyle">@style/Saiph.DialogButton</item>
+    </style>
+    <style name="Saiph.DialogButton" parent="android:Widget.Material.Button.Borderless.Colored">
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textColor">@color/saiph_on_tonal</item>
+        <item name="android:textSize">15sp</item>
     </style>
 
 

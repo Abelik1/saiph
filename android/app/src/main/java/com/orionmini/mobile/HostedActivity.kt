@@ -241,9 +241,9 @@ class HostedActivity : ComponentActivity() {
         root.addView(section("Security"))
         root.addView(card().apply {
             addView(lock.toggle())
-            UsageAnalytics.settingsViews(this@HostedActivity).forEach(::addView)
             runtime.securityEvents().forEach { addView(text(it, 13f, Palette.MUTED)) }
         })
+        UsageAnalytics.settingsViews(this).forEach(root::addView)
     }
     /** One switch for the whole service; starting it also applies this build's connection defaults. */
     private fun toggleHosted() = action {
