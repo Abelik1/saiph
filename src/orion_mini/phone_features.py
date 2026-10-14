@@ -458,8 +458,14 @@ class PhoneFeatures:
         return {**self._save_result(self._record_save(device,photo,'saving',started=time.time())),'queued':True,'id':result.get('id')}
     def _has(self,device,capability):
         phone=getattr(self.workspace,'phone',None)
-        return bool(phone) and any(d['id']==device and capability in d.get('capabilities',[]) for d in phone.snapshot()['devices'])
+        hosted=getattr(self.workspace,'hosted_phones',None)
+        devices=(phone.snapshot()['devices'] if phone else [])+(hosted() if hosted else [])
+        return any(d['id']==device and capability in d.get('capabilities',[]) for d in devices)
     def command(self,device,kind,payload):
+        # Saiph Hosted phones take the same actions through sealed envelopes.
+        hosted=getattr(self.workspace,'hosted_phone_command',None)
+        result=hosted(device,kind,payload) if hosted else None
+        if result is not None:return result
         runtime=self.workspace.phone_runtime
         if not runtime or not runtime.client or not runtime.loop or not self.workspace.phone.connected:raise ValueError('Saiph is offline. This action has not been sent.')
         capability={'sms.open':'sms','sms.send':'sms','photo.request':'photos','call.command':'call-control','file.offer':'files','phone.ring':'ring',
@@ -472,6 +478,9 @@ class PhoneFeatures:
         event={'id':str(uuid4()),'type':kind,'ttl_seconds':30 if kind!='file.offer' else 300,'targets':[device],'payload':payload}
         runtime.loop.call_soon_threadsafe(runtime.client.publish,event);return {'queued':True,'id':event['id']}
     def send_file(self,device,path):
+        hosted=getattr(self.workspace,'hosted_phone_file',None)
+        result=hosted(device,path) if hosted else None
+        if result is not None:return result
         if self.file_server is None:
             config=dict(self.workspace.settings['hub'])
             self.file_server=FileServer(self.workspace.root,config)

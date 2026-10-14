@@ -47,9 +47,14 @@ Each profile/device uses either a self-hosted Hub or Hosted. Existing self-hoste
 pairing prevents enabling Hosted, and a retained Hosted identity prevents desktop
 Hub pairing until explicitly retired. Retirement preserves encrypted key/trust
 material for owner recovery; it is not account deletion. Root transfer and lost
-root-key recovery are not implemented. SMS/call commands, remote phone actions,
-photo-library browsing and clipboard images are outside this preview. Photos
-can be shared explicitly through the file picker.
+root-key recovery are not implemented. Texts and calls (2026-10-14, source only)
+are opt-in on the phone and limited to one-to-one replies, new texts to one
+number, answering/declining, dialing, contact search and recent calls; see
+[the friends beta scope](HOSTED_FRIENDS_BETA.md#scope-and-remaining-gates) and
+the [security model](SECURITY_MODEL.md#hosted-texts-and-calls). MMS, group
+replies, call audio, other remote phone actions, photo-library browsing and
+clipboard images are outside this preview. Photos can be shared explicitly
+through the file picker.
 
 ## Deployment and acceptance still required
 

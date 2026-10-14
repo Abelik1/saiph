@@ -1,5 +1,16 @@
 # Current release preparation status
 
+2026-10-14 Hosted texts and calls: branch `feat/hosted-texts-calls` adds SMS
+threads, replies, new texts, call alerts, answer/decline, dialing, contact
+search and recent calls to Saiph Hosted inside the existing sealed envelopes,
+with no hosted service change. Any approved computer that subscribes may act
+(calls first come, first served on the phone); actions need a new phone-side
+Texts and calls switch (off by default) plus Android permissions. A second,
+non-root computer cannot yet join an account in the desktop app. Covered by
+desktop, frontend and Android JVM unit tests only; physical-device acceptance
+([friends beta steps 10-12](HOSTED_FRIENDS_BETA.md#test-sequence)),
+a release and independent review are pending. Not deployed or released.
+
 2026-10-14 phone webcam without a Hub: branch `feat/hosted-webcam` lets the
 desktop phone camera use a phone allowed over USB or Android wireless debugging
 (pairing code on the local network), so Saiph Hosted users no longer need a

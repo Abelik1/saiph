@@ -13,12 +13,15 @@ export type PhonePhoto = { id: string; photo_id: string; device_id: string; name
 export type PhotoSave = { id?: string; device_id?: string; photo_id?: string; status: "saving" | "saved" | "failed"; name?: string | null; path?: string | null; folder?: string | null; file_id?: string | null; error?: string | null; updated_at?: string; existing?: boolean };
 export type MediaSession = { source: string; app: string; title: string; artist: string; playing: boolean; can_play: boolean; can_pause: boolean; can_next: boolean; can_previous: boolean; can_seek: boolean; position_ms: number; length_ms: number; volume: number };
 export type CallLogEntry = { number: string; name: string; timestamp: number; duration: number; type: "incoming" | "outgoing" | "missed" | "rejected" | "other" };
-export type PhoneFeatureState = { threads: SmsThread[]; messages: SmsMessage[]; calls: { device_id: string; state: "ringing" | "active" | "missed" | "ended"; number: string; name: string }[]; photos: PhonePhoto[]; files: { id: string; device_id: string; name: string; path: string; size: number }[]; photo_saves?: PhotoSave[];
+export type PhoneFeatureState = { threads: SmsThread[]; messages: SmsMessage[]; calls: { device_id: string; state: "ringing" | "active" | "missed" | "ended"; number: string; name: string; handled?: "answer" | "reject" | null; handled_by?: string | null }[]; photos: PhonePhoto[]; files: { id: string; device_id: string; name: string; path: string; size: number }[]; photo_saves?: PhotoSave[];
   media?: { device_id: string; sessions: MediaSession[] }[]; ringers?: { device_id: string; mode: "ring" | "vibrate" | "silent" }[];
   contacts?: { device_id: string; query: string; contacts: { name: string; numbers: string[] }[] }[]; call_logs?: { device_id: string; calls: CallLogEntry[] }[];
   attachments?: { device_id: string; thread: number; message: number; parts: { part: number; mime: string; name: string }[] }[];
   attachment_files?: { id: string; device_id: string; thread: number; message: number; part: number; name: string; mime: string; size: number; preview?: string; ready: boolean }[] };
-type PhoneDevice = { id: string; name: string; online: boolean; capabilities: string[] };
+type PhoneDevice = { id: string; name: string; online: boolean; capabilities: string[]; hosted?: boolean; call_notice?: string | null };
+/** Saiph Hosted phones also need the phone's own Texts and calls switch. */
+const hostedPermission = (permission: string, result: string) =>
+  `Turn on Texts and calls in Saiph Hosted on your phone and allow ${permission} to ${result}.`;
 const noFeatures: PhoneFeatureState = { threads: [], messages: [], calls: [], photos: [], files: [] };
 
 /** A new conversation: contact suggestions come from the phone on request and are not stored. */
@@ -120,7 +123,7 @@ function Messages({
   if (!phone?.capabilities.includes("sms"))
     return (
       <Empty title="Messages permission">
-        Allow SMS in Saiph on your phone to see conversations and reply here.
+        {phone?.hosted ? hostedPermission("SMS", "see conversations and reply here") : "Allow SMS in Saiph on your phone to see conversations and reply here."}
       </Empty>
     );
   const compose = composing || !thread
@@ -232,7 +235,8 @@ function Messages({
             <small role="status">Reply queued for your phone.</small>
           )}
           {!replyable && (
-            <small>Group replies stay in your phone's messaging app. Update Saiph on your phone to reply here.</small>
+            <small>{phone.hosted ? "Group replies stay in your phone's messaging app with Saiph Hosted."
+              : "Group replies stay in your phone's messaging app. Update Saiph on your phone to reply here."}</small>
           )}
           {replyable && thread.recipients.length > 1 && <small>Group replies are sent as MMS.</small>}
         </Form>
@@ -245,12 +249,15 @@ function Calls({ info, phone, client }: { info: PhoneFeatureState; phone?: Phone
   const [number, setNumber] = useState("");
   const history = phone?.online && phone.capabilities.includes("call-log");
   useEffect(() => { if (history) void client.call("phone.calls.log", { device_id: phone!.id }).catch(() => {}); }, [history, client, phone?.id]);
-  if (!phone?.capabilities.includes("calls")) return <Empty title="Calls permission">Allow phone access in Saiph on your phone to see incoming calls here.</Empty>;
+  if (!phone?.capabilities.includes("calls")) return <Empty title="Calls permission">{phone?.hosted ? hostedPermission("phone access", "see incoming calls here") : "Allow phone access in Saiph on your phone to see incoming calls here."}</Empty>;
   const call = info.calls.find((r) => r.device_id === phone.id);
   const control = phone.online && phone.capabilities.includes("call-control");
   const dial = phone.online && phone.capabilities.includes("call-dial");
   const recent = info.call_logs?.find((row) => row.device_id === phone.id)?.calls || [];
-  return <><section className="phone-call"><PhoneCall size={42} strokeWidth={1} /><h2>{call?.state === "ringing" ? "Incoming call" : call?.state === "active" ? "Call in progress" : "Calls"}</h2><p>{call?.name || call?.number || "Incoming calls appear automatically."}</p><p className="muted">Call audio stays on your phone.</p>{call?.state === "ringing" && <div className="phone-call-actions"><Action disabled={!control} run={() => client.call("phone.call", { device_id: phone.id, operation: "answer" })}>Answer</Action><Action disabled={!control} run={() => client.call("phone.call", { device_id: phone.id, operation: "reject" })}>Decline</Action></div>}{call?.state === "ringing" && !control && <small>Answer on your phone, or allow call control in Saiph settings.</small>}</section>
+  return <><section className="phone-call"><PhoneCall size={42} strokeWidth={1} /><h2>{call?.state === "ringing" ? "Incoming call" : call?.state === "active" ? "Call in progress" : "Calls"}</h2><p>{call?.name || call?.number || "Incoming calls appear automatically."}</p><p className="muted">Call audio stays on your phone.</p>
+    {call && call.state !== "ringing" && call.handled_by && <p>{call.handled === "reject" ? "Declined" : "Answered"} on {call.handled_by}</p>}
+    {phone.call_notice && <p role="status">{phone.call_notice}</p>}
+    {call?.state === "ringing" && <div className="phone-call-actions"><Action disabled={!control} run={() => client.call("phone.call", { device_id: phone.id, operation: "answer" })}>Answer</Action><Action disabled={!control} run={() => client.call("phone.call", { device_id: phone.id, operation: "reject" })}>Decline</Action></div>}{call?.state === "ringing" && !control && <small>Answer on your phone, or allow call control in Saiph settings.</small>}</section>
     {phone.capabilities.includes("call-dial") && <Form submit={async () => { await client.call("phone.dial", { device_id: phone.id, number }); setNumber(""); }}>
       <label>Number<input aria-label="Number to call" value={number} inputMode="tel" maxLength={40} onChange={(e) => setNumber(e.target.value)} /></label>
       <button disabled={!dial || !number.trim()}><PhoneCall size={15} />Call on phone</button>

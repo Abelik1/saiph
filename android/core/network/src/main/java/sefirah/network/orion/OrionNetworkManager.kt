@@ -34,7 +34,24 @@ class OrionNetworkManager @Inject constructor(private val context: Context, priv
     override suspend fun approveDeviceConnection(deviceId: String) { throw UnsupportedOperationException("Use Saiph QR pairing") }
     override suspend fun rejectDeviceConnection(deviceId: String) {}
     override fun broadcastMessage(message: SocketMessage) { sendMessage("", message) }
+    /**
+     * Texts and call state for one subscribed computer: in Hosted the retained
+     * features run once per subscriber, so [deviceId] names the computer. The
+     * runtime rechecks the owner's switch and the subscription before sending.
+     */
+    private fun sendHostedPhone(deviceId: String, message: SocketMessage): Boolean {
+        val event = if (message is CallInfo) {
+            HostedCallRace.shared.observe(message, message.callState)
+            message.copy(callState = HostedCallRace.shared.published(message.callState))
+        } else message
+        val payloads = HostedPhoneFrames.encode(event) ?: return false
+        val known = HostedSmsKnown(context, deviceId)
+        return payloads.withIndex().all { (index, payload) ->
+            HostedFeatureBridge.sendPhone(deviceId, payload) { if (index == payloads.lastIndex) known.sent(message) }
+        }
+    }
     override fun sendMessage(deviceId: String, message: SocketMessage): Boolean {
+        if (hostedEnabled() && HostedPhoneFrames.carries(message)) return sendHostedPhone(deviceId, message)
         if (hostedEnabled()) return when (message) {
             is ClipboardInfo -> if (clipboardEnabled() && message.clipboardType == "text/plain") HostedFeatureBridge.send("clipboard.text", buildJsonObject { put("text", message.content) }) else false
             is NotificationInfo -> if (message.infoType == NotificationInfoType.Removed)

@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package com.orionmini.mobile
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.net.Uri
 import android.provider.Settings
@@ -14,6 +16,10 @@ import kotlinx.coroutines.*
 import net.openid.appauth.AuthorizationResponse
 import net.openid.appauth.AuthorizationService
 import sefirah.network.orion.HostedApprovalCodes
+
+private val PHONE_PERMISSIONS = listOf(Manifest.permission.READ_SMS, Manifest.permission.SEND_SMS, Manifest.permission.RECEIVE_SMS,
+    Manifest.permission.READ_PHONE_STATE, Manifest.permission.ANSWER_PHONE_CALLS, Manifest.permission.CALL_PHONE,
+    Manifest.permission.READ_CALL_LOG, Manifest.permission.READ_CONTACTS)
 
 /** A separate preview screen; opening it leaves the setting off. */
 class HostedActivity : ComponentActivity() {
@@ -84,6 +90,34 @@ class HostedActivity : ComponentActivity() {
                 }.show()
         }.onFailure { message("Invalid or expired root code. Ask your computer for a new code.") }
     }
+    private fun granted(permission: String) = checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
+    /** Off by default: approved computers may act on texts and calls only after the owner turns this on here. */
+    private fun textsAndCalls() {
+        root.addView(heading("Texts and calls"))
+        root.addView(text("Show your texts and calls on your computers. From any computer approved for your Saiph account you can reply in " +
+            "one-to-one conversations, start a new text, answer or decline a ringing call and dial a number, only while this is on. " +
+            "If two computers answer or decline the same call, the first one wins and the other is told. " +
+            "Texts, numbers and names are end-to-end encrypted; Saiph Hosted cannot read them. Pictures (MMS), group replies and call audio stay on this phone."))
+        if (runtime.textsAndCalls()) {
+            root.addView(button("Turn off texts and calls") { runtime.setTextsAndCalls(false); render() })
+            val missing = PHONE_PERMISSIONS.filterNot(::granted)
+            if (missing.isEmpty()) root.addView(text("Android access for messages, calls and contacts is allowed.", 13f, Palette.MUTED))
+            else {
+                root.addView(text("Some Android access is missing, so your computer shows less. Allow it, or manage it in Android Settings.", 13f, Palette.MUTED))
+                root.addView(button("Allow messages and calls access") { requestPermissions(missing.toTypedArray(), 47) })
+            }
+        } else root.addView(button("Turn on texts and calls") {
+            verified("Let your computer send texts and handle calls") {
+                runtime.setTextsAndCalls(true)
+                PHONE_PERMISSIONS.filterNot(::granted).takeIf { it.isNotEmpty() }?.let { requestPermissions(it.toTypedArray(), 47) }
+                render()
+            }
+        })
+    }
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 47 && !showingLock) render()
+    }
     private fun field(label: String, value: String = ""): EditText { root.addView(text(label)); return EditText(this).apply { setText(value); setTextColor(Palette.TEXT); contentDescription = label; root.addView(this) } }
     private fun render() {
         root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(22), dp(24), dp(22), dp(32)); setBackgroundColor(Palette.BG) }
@@ -140,6 +174,7 @@ class HostedActivity : ComponentActivity() {
                     root.addView(text("Paste this request into the computer, compare this phone's full fingerprint, then approve."))
                     root.addView(EditText(this).apply { setText(runtime.requestCode); setTextColor(Palette.TEXT); isFocusable = false; contentDescription = "Phone device approval request code" })
                 }
+                textsAndCalls()
                 root.addView(button("Choose a file or photo to send") { sendFile.launch(arrayOf("*/*")) })
                 root.addView(button("Refresh received files") { render() })
                 runtime.offers.forEach { (id, name) -> root.addView(button("Save $name") { saving = id; saveFile.launch(name) }) }

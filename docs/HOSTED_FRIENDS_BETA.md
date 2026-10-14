@@ -68,6 +68,32 @@ devices or disposable OS profiles for the first acceptance pass.
 9. Repeat clean installation on Windows and Linux. Check Linux Secret Service,
    system prerequisites, desktop entries, browser callbacks and uninstall. Record
    all manual steps and confusing messages as onboarding issues.
+10. Texts: on the phone turn on Texts and calls in Saiph Hosted (it asks for the
+    screen lock and Android permissions). Check the computer's Phone page lists
+    the phone and its recent conversations, a received text appears within
+    seconds, a reply and a new text to a second spare number are delivered from
+    the right SIM, a group thread shows the "stays on your phone" note, and
+    turning the switch off stops new texts and refuses replies. Revoke the phone
+    and confirm its texts and calls disappear from the computer.
+11. Calls: call the phone from a spare number. Check the computer's alert and
+    Calls tab show the caller within about five seconds, Answer and Decline work
+    while ringing (Android 12-16, dual SIM if available), a missed call raises a
+    missed-call alert, dialing places the call with audio on the phone, `*`/`#`
+    codes are refused and recent calls list on request. Repeat with the
+    phone's Texts and calls switch off: nothing is shown or carried out.
+12. Two computers (blocked until a second computer can join an account; the
+    desktop app can only be the root today): with both showing the ringing
+    call, press Answer on one and Decline on the other as close together as
+    possible. Exactly one action happens on the phone; both computers stop
+    ringing within a few seconds; the losing computer shows "Answered on
+    <name>" or "Declined on <name>" (or "Already handled on another computer"),
+    not an error. Repeat with Answer on both and Decline on both. Dial from both
+    at once: one call is placed and the other computer says the phone is
+    already placing a call; dial while on a call and check the "already on a
+    call" note. Check texts reach both computers, a full resync of one computer
+    does not resend everything to the other, a contact search or call history
+    appears only on the computer that asked, and revoking one computer stops
+    its texts at the phone's next roster refresh while the other keeps working.
 
 Record platform/build/source, fresh versus existing profile, network and results
 without tokens, codes or private content. Passing builds/tests is not physical
@@ -76,10 +102,28 @@ an automated acceptance script.
 
 ## Scope and remaining gates
 
-Hosted currently covers text clipboard, notifications/dismissal and explicitly
-selected files/photos. SMS/call commands, remote phone actions, clipboard images
-and photo-library browsing are outside the preview. Self-host feature parity is
-an outstanding product decision. The optional phone webcam does not use the Hosted
+Hosted covers text clipboard, notifications/dismissal, explicitly selected
+files/photos and, since 2026-10-14 in source only, texts and calls: the phone's
+conversations and call state on the computer, one-to-one replies, a new text to
+one number, answering or declining a ringing call, dialing an ordinary number,
+contact search and recent calls. All of it travels inside the existing sealed
+envelopes; the service stores and forwards ciphertext and never sees message
+text, numbers or names. The phone accepts these actions from any approved
+computer that subscribed to it (root or not), only after its owner turns on
+Texts and calls in Saiph Hosted on the phone (off by default) and grants the
+Android permissions. Calls are first come, first served: the first answer or
+decline wins, every computer is told at once and later attempts get a plain
+"Answered on <computer>" note; a dial is refused while the phone is on or
+placing a call. Joining an account as a second, non-root computer is not yet
+implemented in the desktop app, so the multi-computer path is unit-tested only
+(step 12 waits for it). MMS pictures,
+group replies, call audio through the computer, other remote phone actions
+(ringer, media, ring), clipboard images and photo-library browsing are outside
+the preview. Texts and calls have unit tests only; they need the physical
+acceptance in test steps 10 to 12 before friends are told they work. Once a
+phone shares texts or calls, the desktop polls for sealed events every four
+seconds instead of every fifteen, so a ringing call arrives in time.
+The optional phone webcam does not use the Hosted
 relay: it runs locally over USB or wireless debugging with user-installed scrcpy,
 OBS (Windows) or v4l2loopback (Linux); see the user guide. Its physical acceptance
 (USB, wireless pairing, OBS Virtual Camera, v4l2loopback in a meeting app) is a
