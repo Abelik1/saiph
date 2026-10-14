@@ -1,15 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import {betaCall} from "../../lib/beta";
+import {hostedAccess} from "../../lib/beta";
+import type {BillingView} from "../../lib/billing/view";
+import SubscriptionCard from "./SubscriptionCard";
 import Link from "next/link";
-export default async function BetaAccount() {
-  const access = await betaCall("/v1/beta/access").catch(() => null);
+export default async function BetaAccount({billing, notice}: {billing: BillingView | "unavailable" | null; notice: "returned" | "cancelled" | null}) {
+  const access = await hostedAccess().catch(() => null);
+  const paid = access?.kinds?.includes("paid") ?? false;
+  const source = access?.kinds == null ? "" : paid && access.kinds.length > 1 ? " through your subscription and invitation"
+    : paid ? " through your subscription" : " through your beta invitation";
   return <>
     <p className="eyebrow">Your Saiph account</p>
-    <h1>{access?.entitled ? "Welcome to the beta." : "Join the friends beta."}</h1>
-    <p className="lede">Use the same account on your computer and phone. Your beta invitation provides access without a paid subscription.</p>
+    <h1>{access?.entitled ? (paid ? "Welcome to Saiph Hosted." : "Welcome to the beta.") : billing ? "Get Saiph Hosted." : "Join the friends beta."}</h1>
+    <p className="lede">Use the same account on your computer and phone.{billing ? " Subscribe below, or enter a beta invitation code." : " Your beta invitation provides access without a paid subscription."}</p>
     {access?.entitled ? <section className="card" aria-labelledby="beta-access-title">
-      <h2 id="beta-access-title">Beta access active</h2>
-      <p>Access ends {new Date(access.until! * 1000).toISOString().slice(0,10)}. No payment is required.</p>
+      <h2 id="beta-access-title">Hosted access active</h2>
+      <p>Access is active{source} until {new Date(access.until! * 1000).toISOString().slice(0,10)}.{paid ? "" : " No payment is required."}</p>
       <p>Install the apps below. Turn on Hosted, sign in on both devices, then approve your phone from your computer.</p>
       <p><Link className="button" href="/setup">Follow the setup guide</Link></p>
       <p>Windows installers currently have no trusted publisher signature. These are development beta builds.</p>
@@ -36,6 +41,7 @@ export default async function BetaAccount() {
         <button type="submit">Activate beta access</button>
       </form>
     </section>}
+    {billing && <SubscriptionCard view={billing} notice={notice} />}
     <p><a className="button secondary" href="/auth/logout">Sign out</a></p>
   </>;
 }

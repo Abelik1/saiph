@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuth0 } from "./lib/auth";
 import {canUseAccount} from "./lib/beta-policy.mjs";
-import { webhookPath } from "./lib/billing/policy";
+import { refreshPath, webhookPath } from "./lib/billing/policy";
 import { expireDeniedSessionCookies } from "./lib/denied-session.mjs";
 import {readAuthConfig} from "./lib/policy.mjs";
 import {canonicalDestination, contentSecurityPolicy, responseReferrerPolicy} from "./lib/security.mjs";
@@ -45,6 +45,8 @@ export async function proxy(request: NextRequest) {
   // Only this exact receiver bypasses browser sessions. It verifies the raw-body
   // Stripe signature itself; Vercel Deployment Protection remains unchanged.
   if (path === webhookPath) return secure(NextResponse.next());
+  // The daily grant refresh authenticates Vercel Cron with CRON_SECRET itself.
+  if (path === refreshPath && request.method === "GET") return secure(NextResponse.next());
   const allowedAuthRoutes = ["/auth/login", "/auth/logout", "/auth/callback"];
   if (path.startsWith("/auth/") && !allowedAuthRoutes.includes(path)) {
     return new NextResponse("Not found", {status: 404, headers: responseHeaders});

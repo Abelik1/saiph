@@ -136,6 +136,7 @@ separate open check.
 The shared account boundary and entitlement enforcement are the proposed customer
 design. Initial storage is one host with separate account SQLite workspaces;
 horizontal routing/storage and automatic capacity scaling are not implemented.
-Beta grants are durable and expire. Paid subscription webhooks are not connected
-to these grants, so beta acceptance does not validate paid lifecycle behavior.
+Beta grants are durable and expire. Paid subscriptions add a separate `paid`
+grant beside them ([paid Hosted](PAID_HOSTED.md), source only, not deployed),
+so beta acceptance does not validate paid lifecycle behavior.
 Physical acceptance and independent security review remain open.

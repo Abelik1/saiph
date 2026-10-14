@@ -36,7 +36,11 @@ def main():
     from .hosted_downloads import Downloads
     downloads = Downloads(registry, download_directory) if download_directory else None
     tokens = AccessTokens(auth, mfa_claim=claim)
-    uvicorn.run(SharedHosted(registry, tokens=tokens, web_tokens=web_tokens, downloads=downloads), host='127.0.0.1', port=8767,
+    from .hosted_billing import BillingGrants
+    billing = BillingGrants.from_environment(os.environ)
+    if billing is not None and web_tokens is None:
+        raise ValueError('Paid grants need the account website client')
+    uvicorn.run(SharedHosted(registry, tokens=tokens, web_tokens=web_tokens, downloads=downloads, billing=billing), host='127.0.0.1', port=8767,
                 access_log=False, proxy_headers=False, server_header=False, limit_concurrency=128)
 
 

@@ -2,9 +2,10 @@
 import "server-only";
 import {getAuth0} from "./auth";
 import {readBetaConfig} from "./beta-policy.mjs";
-import {checkedAccess} from "./beta-http.mjs";
+import {checkedAccess,checkedHostedAccess,type HostedAccess} from "./beta-http.mjs";
 
-async function call(path: "/v1/beta/access"|"/v1/beta/redeem"|"/v1/beta/download", payload?:Record<string,string>) {
+type Path = "/v1/beta/access"|"/v1/beta/redeem"|"/v1/beta/download"|"/v1/billing/access";
+async function call(path: Path, payload?:Record<string,string>) {
   const config = readBetaConfig(process.env), auth0 = getAuth0();
   if (!config || !auth0) throw new Error("Beta access unavailable");
   const {token} = await auth0.getAccessToken();
@@ -31,6 +32,13 @@ async function call(path: "/v1/beta/access"|"/v1/beta/redeem"|"/v1/beta/download
 
 export async function betaCall(path: "/v1/beta/access"|"/v1/beta/redeem", code?:string) {
   return checkedAccess(await call(path, code === undefined ? undefined : {code}));
+}
+
+/** Hosted access with its source (beta, paid, admin). A service release without
+ * /v1/billing/access still answers the beta status, with the source unknown. */
+export async function hostedAccess(): Promise<HostedAccess | (ReturnType<typeof checkedAccess> & {kinds: null})> {
+  try { return checkedHostedAccess(await call("/v1/billing/access")); }
+  catch { return {...await betaCall("/v1/beta/access"), kinds: null}; }
 }
 
 export async function betaDownload(artifact:string) {

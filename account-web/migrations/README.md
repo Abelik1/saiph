@@ -8,6 +8,11 @@ No schema statement contains deployment secrets or an owner identity.
   `subscriptions_customer` and `processed_events_subscription`, and an
   append-only trigger on `processed_events` (deleting a receipt would allow a
   replay to be processed again). Backward compatible with the previous code.
+- `0003_paid_hosted.sql` (docs/PAID_HOSTED.md): `settings` (one Stripe mode per
+  database), `subscriptions.payment_failed_at`, `disputes`, dispute receipts in
+  `processed_events` (exactly one subscription or dispute target), the
+  `grant_sequence` sequence and `grant_state` delivery table, backfilled for
+  existing subscriptions. Additive: code from 0002 keeps working against it.
 - `manifest.json`: SHA-256 of the exact canonical LF SQL bytes.
 - `reviewed-migration.sql`: generated **complete transaction** for the Neon SQL editor.
   It includes schema/ledger creation, an advisory transaction lock, migration
@@ -34,10 +39,12 @@ SELECT
   (SELECT count(*) FROM saiph_billing.processed_events) AS processed_event_count;
 ```
 
-The initial receipt must show versions 1 and 2 with the manifest checksums
-(`manifest.json`), five tables (including `schema_migrations`), the indexes
-`processed_events_customer`, `processed_events_subscription` and
-`subscriptions_customer` (plus primary/unique keys), and zero business rows. Rerunning the complete
+The receipt must show versions 1, 2 and 3 with the manifest checksums
+(`manifest.json`), eight tables (`customer_creation_intents`, `customers`,
+`disputes`, `grant_state`, `processed_events`, `schema_migrations`, `settings`,
+`subscriptions`), the indexes `disputes_customer`, `processed_events_customer`,
+`processed_events_subscription` and `subscriptions_customer` (plus primary/unique
+keys), and on a fresh database zero business rows. Rerunning the complete
 export is safe. Changed/unknown applied history fails the transaction. If the
 editor reports an error with an open transaction, run `ROLLBACK;` before retrying.
 Do not edit applied migrations or reset the ledger to force a match. This project
@@ -90,8 +97,9 @@ development records must be reviewed before public onboarding.
 
 Not applied by the billing-lifecycle change: no database credential was
 available to it, and none should be copied into chat, Git or a command line
-argument. Apply both versions **before** deploying code that writes `cancel_at`
-(older deployed code keeps working against the migrated schema). Choose one:
+argument. Apply all versions **before** deploying code that needs them (0003
+before `feat/paid-hosted`); older deployed code keeps working against the
+migrated schema. Choose one:
 
 1. Neon SQL editor (no connection string leaves Neon): open the
    isolated development account project/database, paste the **entire**
@@ -111,7 +119,7 @@ argument. Apply both versions **before** deploying code that writes `cancel_at`
    Bash: `DATABASE_URL_UNPOOLED="$(neonctl connection-string --project-id <id> --database-name <db> --role-name <role>)" npm run db:migrate`.
    The value must be the direct (non `-pooler`) host with `sslmode=require`;
    Vercel's `DATABASE_URL_UNPOOLED` for the project is equivalent. The runner
-   expects `{"appliedVersions":[1,2],"verifiedVersions":[1,2]}` on first run and
+   expects `{"appliedVersions":[1,2,3],"verifiedVersions":[1,2,3]}` on first run and
    `[]` applied on a repeat.
 3. psql with the same private variable:
    `psql "$DATABASE_URL_UNPOOLED" -v ON_ERROR_STOP=1 -f account-web/migrations/reviewed-migration.sql`

@@ -48,4 +48,6 @@ paths = [
   '''(^|[\\/])account-web[\\/]tests[\\/]http-smoke\.mjs$''',
 ]
 regexTarget = "secret"
-regexes = ['''^rk_test_synthetic123$''', '''^whsec_synthetic123$''']
+# rk_live_/sk_live_synthetic123 test that live mode needs a live restricted key
+# (docs/PAID_HOSTED.md); they are not keys and cannot authenticate.
+regexes = ['''^rk_test_synthetic123$''', '''^whsec_synthetic123$''', '''^rk_live_synthetic123$''', '''^sk_live_synthetic123$''']

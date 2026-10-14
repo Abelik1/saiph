@@ -37,9 +37,9 @@ async function checkPage(session,active) {
   const response=await request("/account?checkout=returned&entitled=true",session);
   assert.equal(response.status,200);assert.match(response.headers.get("cache-control"),/no-store/);
   assert.equal(response.headers.get("referrer-policy"),"same-origin");
-  const html=await response.text();assert.match(html,active?/Beta access active/:/Enter your invitation code/);
+  const html=await response.text();assert.match(html,active?/Hosted access active/:/Enter your invitation code/);
   for(const hidden of [code,"synthetic-token-","synthetic|friend",'action="/api/billing/checkout"']) assert.equal(html.includes(hidden),false,hidden);
-  assert.equal(html.includes("Beta access active"),active);
+  assert.equal(html.includes("Hosted access active"),active);
 }
 try {
   let ready=false;let startupStatus;

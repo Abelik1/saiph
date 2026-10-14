@@ -5,7 +5,7 @@ import Stripe from "stripe";
 import {spawn} from "node:child_process";
 import {once} from "node:events";
 import assert from "node:assert/strict";
-import {randomBytes} from "node:crypto";
+import {generateKeyPairSync, randomBytes} from "node:crypto";
 import {setTimeout as delay} from "node:timers/promises";
 import {fileURLToPath} from "node:url";
 import {accountCookieName, isAccountCookie} from "../lib/policy.mjs";
@@ -14,8 +14,10 @@ const sdk = new URL("./cookies.js", import.meta.resolve("@auth0/nextjs-auth0/ser
 const {encrypt, setChunkedCookie, RequestCookies, ResponseCookies} = await import(sdk.href);
 const cwd = fileURLToPath(new URL("../", import.meta.url));
 const secret = randomBytes(32).toString("hex");
+const cronSecret = randomBytes(32).toString("base64url");
+const grantKey = generateKeyPairSync("ed25519").privateKey.export({format:"der",type:"pkcs8"}).toString("base64url");
 const base = "http://127.0.0.1:3211";
-const child = spawn(process.execPath, [fileURLToPath(new URL("../node_modules/next/dist/bin/next", import.meta.url)), "start", "--hostname", "127.0.0.1", "--port", "3211"], {cwd, env: {...process.env, NODE_ENV:"production", NEXT_TELEMETRY_DISABLED:"1", AUTH0_DOMAIN:"synthetic.us.auth0.com", AUTH0_CLIENT_ID:"synthetic_client", AUTH0_CLIENT_SECRET:"synthetic_not_real", AUTH0_SECRET:secret, APP_BASE_URL:"https://account.saiph.test", SAIPH_OWNER_SUBJECT:"synthetic|owner",SAIPH_BILLING_MODE:"owner-sandbox",STRIPE_EXPECTED_ACCOUNT_ID:"acct_synthetic",STRIPE_PRODUCT_ID:"prod_synthetic",STRIPE_PRICE_ID:"price_synthetic",STRIPE_PORTAL_CONFIGURATION_ID:"bpc_synthetic",STRIPE_SECRET_KEY:"rk_test_synthetic123",STRIPE_WEBHOOK_SECRET:"whsec_synthetic123",DATABASE_URL:"synthetic-not-a-database-url"}, stdio:["ignore","pipe","pipe"]});
+const child = spawn(process.execPath, [fileURLToPath(new URL("../node_modules/next/dist/bin/next", import.meta.url)), "start", "--hostname", "127.0.0.1", "--port", "3211"], {cwd, env: {...process.env, NODE_ENV:"production", NEXT_TELEMETRY_DISABLED:"1", AUTH0_DOMAIN:"synthetic.us.auth0.com", AUTH0_CLIENT_ID:"synthetic_client", AUTH0_CLIENT_SECRET:"synthetic_not_real", AUTH0_SECRET:secret, APP_BASE_URL:"https://account.saiph.test", SAIPH_OWNER_SUBJECT:"synthetic|owner",SAIPH_BILLING_MODE:"owner-sandbox",STRIPE_EXPECTED_ACCOUNT_ID:"acct_synthetic",STRIPE_PRODUCT_ID:"prod_synthetic",STRIPE_PRICE_ID:"price_synthetic",STRIPE_YEARLY_PRICE_ID:"price_yearly",SAIPH_HOSTED_API_URL:"https://api.saiph.test",SAIPH_BILLING_GRANT_KEY:grantKey,SAIPH_BILLING_GRANT_KEY_ID:"smoke-1",CRON_SECRET:cronSecret,STRIPE_PORTAL_CONFIGURATION_ID:"bpc_synthetic",STRIPE_SECRET_KEY:"rk_test_synthetic123",STRIPE_WEBHOOK_SECRET:"whsec_synthetic123",DATABASE_URL:"synthetic-not-a-database-url"}, stdio:["ignore","pipe","pipe"]});
 let logs = "";child.stdout.on("data", c => logs += c);child.stderr.on("data", c => logs += c);
 const checks = [];
 async function request(path, cookie, method="GET", headers={}, body=undefined) {
@@ -57,13 +59,14 @@ try {
  const ownerCookie=await sessionCookie("synthetic|owner");
  const otherCookie=await sessionCookie("synthetic|other");
  // Checkout return parameters are feedback only, never payment evidence.
- for (const [query,expected] of [["returned","You’re back from test checkout."],["cancelled","Test checkout was closed."]]) {
+ for (const [query,expected] of [["returned","Thanks. Stripe is confirming your payment."],["cancelled","Checkout was closed."]]) {
   const r=await request("/account?checkout="+query,ownerCookie);
   assert.equal(r.status,200);
   const html=await r.text();
   assert.ok(html.includes(expected));
-  assert.match(html,/Stripe test setup pending/);
-  assert.equal(html.includes("Test subscription active"),false);
+  // Billing storage is unreachable here: the return alone shows no subscription.
+  assert.match(html,/Subscription details are temporarily unavailable/);
+  assert.equal(html.includes("Subscription active"),false);
   assert.equal(html.includes('action="/api/billing/checkout"'),false);
   checks.push({case:"checkout "+query+" does not grant payment status or enable unavailable billing",status:200});
  }
@@ -85,6 +88,12 @@ try {
  const signature=sdkStripe.webhooks.generateTestHeaderString({payload,secret:"whsec_synthetic123"});
  const unavailableDb=await request("/api/stripe/webhook",undefined,"POST",{"content-type":"application/json","stripe-signature":signature},payload);
  assert.equal(unavailableDb.status,503);assert.match(unavailableDb.headers.get("cache-control"),/no-store/);assert.equal((await unavailableDb.text()).includes("DATABASE_URL"),false);checks.push({case:"signed webhook missing durable store fails without acknowledgement",status:503});
+ // The daily refresh bypasses browser sessions and requires the exact cron secret.
+ for(const [label,headers,status] of [["absent",{},401],["wrong",{authorization:"Bearer "+"x".repeat(43)},401],["correct, storage unavailable",{authorization:"Bearer "+cronSecret},503]]) {
+  const r=await request("/api/billing/refresh",undefined,"GET",headers);assert.equal(r.status,status,label);assert.match(r.headers.get("cache-control"),/no-store/);
+  assert.equal((await r.text()).includes("DATABASE_URL"),false);checks.push({case:"refresh "+label,status:r.status});
+ }
+ assert.equal((await request("/api/billing/refresh",undefined,"POST",{authorization:"Bearer "+cronSecret})).status,307);checks.push({case:"refresh POST needs a session",status:307});
  const methodResponse=await request("/api/billing/checkout",ownerCookie);assert.equal(methodResponse.status,405);checks.push({case:"checkout GET",status:405});
  console.log(JSON.stringify({checks,scope:"Actual Next.js production HTTP + official SDK encrypted synthetic sessions; no real provider login"},null,2));
 } finally {

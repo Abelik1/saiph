@@ -8,5 +8,10 @@
     "version": 2,
     "file": "0002_billing_lifecycle.sql",
     "sha256": "3c11e9eae5bfaae7e7e473dadde4a88c15ff8e078e654d6fd7829d533616c36a"
+  },
+  {
+    "version": 3,
+    "file": "0003_paid_hosted.sql",
+    "sha256": "e156e85386e79105f09d5c1c0ad8ca3f9964fd3760aa813c5cb68db479d07e63"
   }
 ]

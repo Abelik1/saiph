@@ -28,6 +28,7 @@ from starlette.responses import JSONResponse, Response
 
 from .hosted import DEVICE, HostedConfig, body, create_app, exact, reject
 from .hosted_auth import AccessTokens, Auth0Config, ServiceAuth0Config
+from .hosted_billing import MAX_BODY as MAX_GRANT_BODY
 from .hosted_maintenance import WorkspaceCleanup, maintenance_context
 from .hosted_usage import MAX_BATCH_BYTES, UsageStore
 
@@ -58,6 +59,9 @@ class AccountRegistry:
                     redeemed_by TEXT REFERENCES accounts(id));
                 CREATE TABLE IF NOT EXISTS beta_attempts(identity TEXT NOT NULL, attempted_at INTEGER NOT NULL);
                 CREATE INDEX IF NOT EXISTS attempts_time ON beta_attempts(attempted_at);
+                CREATE TABLE IF NOT EXISTS paid_grants(
+                    reference TEXT PRIMARY KEY, account TEXT NOT NULL REFERENCES accounts(id),
+                    sequence INTEGER NOT NULL CHECK(sequence > 0));
             ''')
             db.execute('INSERT OR IGNORE INTO policy VALUES(1,?)', (policy,))
             if db.execute('SELECT body FROM policy WHERE id=1').fetchone()[0] != policy:
@@ -157,12 +161,66 @@ class AccountRegistry:
             db.execute("INSERT OR IGNORE INTO access_grants VALUES(?,'beta',?,?,0)", (identifier, digest, row['expires_at']))
             return {'entitled': True, 'until': row['expires_at']}
 
+    def apply_paid_grant(self, issuer, subject, reference, until, sequence):
+        """Set one subscription's paid grant from a verified website push.
+
+        Pushes carry the website's per-subscription sequence; an equal or older
+        sequence is a no-op, so repeats and late deliveries cannot undo a newer
+        decision. A subscription stays bound to the account it first named.
+        Suspended accounts keep their recorded grant but remain blocked.
+        """
+        if issuer != self.auth.issuer or not self.valid_subject(subject):
+            reject(403)
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            row = db.execute('SELECT id FROM accounts WHERE issuer=? AND subject=?', (issuer, subject)).fetchone()
+            if row:
+                identifier = row['id']
+            else:
+                identifier = str(uuid4())
+                db.execute('INSERT INTO accounts VALUES(?,?,?,1)', (identifier, issuer, subject))
+            prior = db.execute('SELECT account,sequence FROM paid_grants WHERE reference=?', (reference,)).fetchone()
+            if prior and prior['account'] != identifier:
+                reject(409)
+            if prior and sequence <= prior['sequence']:
+                return {'applied': False}
+            db.execute('INSERT INTO paid_grants VALUES(?,?,?) ON CONFLICT(reference) DO UPDATE SET sequence=excluded.sequence',
+                       (reference, identifier, sequence))
+            db.execute("INSERT INTO access_grants VALUES(?,'paid',?,?,0) ON CONFLICT(kind,reference) DO UPDATE SET expires_at=excluded.expires_at",
+                       (identifier, reference, until))
+            return {'applied': True}
+
+    def access(self, identity):
+        """Like status(), plus which kinds of grant currently provide access."""
+        with self.connect() as db:
+            row = db.execute('SELECT id FROM accounts WHERE issuer=? AND subject=? AND active=1',
+                             (identity['issuer'], identity['subject'])).fetchone()
+            if row is None:
+                return {'entitled': False, 'until': None, 'kinds': []}
+            rows = db.execute('SELECT kind,max(expires_at) AS until FROM access_grants WHERE account=? AND revoked=0 AND expires_at>? GROUP BY kind ORDER BY kind',
+                              (row['id'], int(time.time()))).fetchall()
+            until = max((r['until'] for r in rows), default=None)
+            return {'entitled': until is not None, 'until': until, 'kinds': [r['kind'] for r in rows]}
+
     def status(self, identity):
         with self.connect() as db:
             row = db.execute('SELECT id FROM accounts WHERE issuer=? AND subject=? AND active=1',
                              (identity['issuer'], identity['subject'])).fetchone()
             until = self._entitled(db, row['id']) if row else None
             return {'entitled': until is not None, 'until': until}
+
+    def grants(self, identifier):
+        """Administrator view: grant kinds and expiry for one account, no codes or subjects."""
+        if not isinstance(identifier, str) or str(UUID(identifier)) != identifier:
+            raise ValueError('Use the account identifier')
+        with self.connect() as db:
+            account = db.execute('SELECT active FROM accounts WHERE id=?', (identifier,)).fetchone()
+            if account is None:
+                raise ValueError('Unknown account')
+            rows = db.execute('SELECT kind,expires_at,revoked FROM access_grants WHERE account=? ORDER BY kind,expires_at',
+                              (identifier,)).fetchall()
+        return {'account': identifier, 'active': bool(account['active']),
+                'grants': [{'kind': r['kind'], 'expires_at': r['expires_at'], 'revoked': bool(r['revoked'])} for r in rows]}
 
     def set_active(self, identifier, active):
         if type(active) is not bool:
@@ -269,13 +327,14 @@ class BoundTokens:
 
 class SharedHosted:
     """One API origin; bounded process cache, durable routing across restarts."""
-    def __init__(self, registry: AccountRegistry, *, tokens=None, web_tokens=None, downloads=None, cache_size=64, usage=None):
+    def __init__(self, registry: AccountRegistry, *, tokens=None, web_tokens=None, downloads=None, cache_size=64, usage=None, billing=None):
         if type(cache_size) is not int or not 1 <= cache_size <= 256:
             raise ValueError('Bound the workspace application cache')
         self.registry = registry
         self.tokens = tokens or AccessTokens(registry.auth)
         self.web_tokens = web_tokens
         self.downloads = downloads
+        self.billing = billing
         self.cache_size = cache_size
         self.apps = OrderedDict()
         self.lock = threading.Lock()
@@ -342,13 +401,33 @@ class SharedHosted:
                     reject(404)
                 response = await asyncio.to_thread(self.downloads.response, path.removeprefix('/v1/download/'),
                                                   method=request.method, range_header=request.headers.get('range'))
-            elif path in ('/v1/beta/redeem', '/v1/beta/access', '/v1/beta/download'):
+            elif path == '/v1/billing/grant' and request.method == 'POST':
+                # Server-to-server push signed by the account website's billing key only.
+                if (self.billing is None or request.headers.get('origin') or request.cookies
+                        or request.headers.get('authorization') or request.url.query
+                        or len(request.headers.getlist('saiph-billing-signature')) != 1):
+                    reject(404 if self.billing is None else 403)
+                length = request.headers.get('content-length')
+                if length is not None and (not length.isdecimal() or int(length) > MAX_GRANT_BODY):
+                    reject(413)
+                raw = bytearray()
+                async for chunk in request.stream():
+                    raw.extend(chunk)
+                    if len(raw) > MAX_GRANT_BODY:
+                        reject(413)
+                value = self.billing.verify(request.headers.get('saiph-billing-signature'), bytes(raw))
+                result = await asyncio.to_thread(self.registry.apply_paid_grant, value['issuer'], value['subject'],
+                                                 value['grant'], value['until'], value['sequence'])
+                response = JSONResponse(result)
+            elif path in ('/v1/beta/redeem', '/v1/beta/access', '/v1/beta/download', '/v1/billing/access'):
                 if self.web_tokens is None:
                     reject(404)
                 if request.headers.get('origin') or request.cookies or request.url.query:
                     reject(403)
                 identity = await asyncio.to_thread(self.web_tokens.principal, request)
-                if path.endswith('/access') and request.method == 'GET':
+                if path == '/v1/billing/access' and request.method == 'GET':
+                    result = await asyncio.to_thread(self.registry.access, identity)
+                elif path.endswith('/access') and request.method == 'GET':
                     result = await asyncio.to_thread(self.registry.status, identity)
                 elif path.endswith('/redeem') and request.method == 'POST':
                     _, value = await body(request)
