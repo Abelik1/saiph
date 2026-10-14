@@ -72,16 +72,18 @@ def test_existing_output_is_never_overwritten(tmp_path):
         site.prepare(ROOT / 'website', tmp_path / 'existing', {})
 
 
-def test_private_source_landing_has_truthful_link_and_no_checkout(tmp_path):
+def test_public_source_landing_has_truthful_link_and_no_checkout(tmp_path):
     settings = json.loads((ROOT / 'website/landing-settings.json').read_text())
     output = tmp_path / 'landing'
     site.prepare(ROOT / 'website', output, settings)
     config = (output / 'assets/config.js').read_text()
     assert 'https://github.com/Abelik1/saiph' in config
-    assert '"sourceVisibility": "private"' in config
+    assert '"sourceVisibility": "public"' in config
     assert '"subscribeUrl": ""' in config
     assert '"waitlistUrl": ""' in config
-    with pytest.raises(ValueError, match='public source visibility'):
+    # Public source alone does not open launch mode: release downloads and the
+    # reviewed waitlist remain separate gates.
+    with pytest.raises(ValueError, match='Launch requires'):
         site.validate_settings(settings, 'launch')
     assert 'design preview' in (output / 'hosted.html').read_text()
 
@@ -336,6 +338,11 @@ def test_early_access_opens_the_friends_beta_until_signup_or_payment_opens():
     assert result['subscribeText'] == 'Join the friends beta' and result['subscribeDisabled'] == ''
     assert result['hostedStatus'] == 'Invite-only beta'
     del settings['betaAccountUrl']
+    # Without the beta link, public source points people to the repository.
+    result = render_site_script(settings)
+    assert result['subscribe'] == settings['githubUrl'] and result['subscribeDisabled'] == ''
+    assert result['subscribeText'] == 'Follow progress on GitHub'
+    settings['sourceVisibility'] = 'private'
     result = render_site_script(settings)
     assert result['subscribe'] == '' and result['subscribeDisabled'] == 'true'
     assert result['subscribeText'] == 'Early access coming soon'
