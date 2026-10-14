@@ -43,6 +43,14 @@ describe("Saiph Hosted phone on the Phone page", () => {
     expect(screen.queryByText(/Clipboard isn't shared/)).toBeNull();
     expect(screen.getByText("Synthetic SMS", { selector: "p" })).toBeVisible();
   });
+  it("finds a Saiph Hosted phone for the webcam over USB or Wi-Fi, never by its Hosted id", async () => {
+    const call = vi.fn().mockResolvedValue({ adb: true, devices: [] });
+    const state = { ...hostedState(), camera: { available: true, running: false } } as unknown as State;
+    render(<Phone state={state} client={client(call)} />);
+    fireEvent.click(screen.getByRole("button", { name: "Webcam" }));
+    expect(await screen.findByRole("button", { name: "Find my phone" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Use phone as webcam" })).toBeDisabled();
+  });
   it("explains how a hosted phone appears before it shares texts or calls", () => {
     render(<Phone state={hostedState(null)} client={client()} />);
     expect(screen.getByText(/turn on Texts and calls in Saiph Hosted on the phone/)).toBeVisible();

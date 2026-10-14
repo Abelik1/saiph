@@ -249,11 +249,11 @@ export function Phone({
         {phone && <Action variant="secondary" size="sm" title={"Show " + phone.name + "'s screen on this computer"} disabled={!phone.online} run={() => client.call("phone.mirror", { device_id: phone.id })}><MonitorSmartphone />Mirror screen</Action>}
         {camera && !cameraLive && <Popover>
           <PopoverTrigger asChild><Button variant="secondary" size="sm" title="Use your phone as this computer's webcam"><Video />Webcam</Button></PopoverTrigger>
-          <PopoverContent className="w-80 p-0"><PhoneCamera camera={state.camera} config={state.settings?.link?.camera} deviceId={phone?.online ? phone.id : undefined} client={client} /></PopoverContent>
+          <PopoverContent className="w-96 p-0"><PhoneCamera camera={state.camera} config={state.settings?.link?.camera} deviceId={phone?.online && !phone.hosted ? phone.id : undefined} client={client} /></PopoverContent>
         </Popover>}
         {microphone && !microphoneLive && <Popover>
           <PopoverTrigger asChild><Button variant="secondary" size="sm" title="Use your phone as this computer's microphone"><Mic />Microphone</Button></PopoverTrigger>
-          <PopoverContent className="w-80 p-0"><PhoneMicrophone microphone={state.microphone} deviceId={phone?.online ? phone.id : undefined} deviceName={phone?.name} client={client} /></PopoverContent>
+          <PopoverContent className="w-80 p-0"><PhoneMicrophone microphone={state.microphone} deviceId={phone?.online && !phone.hosted ? phone.id : undefined} deviceName={phone?.name} client={client} /></PopoverContent>
         </Popover>}
         {state.settings?.hub?.paired && <Dialog open={adding} onOpenChange={addDevice}>
           <DialogTrigger asChild><Button variant="tonal" size="sm"><Plus />Add a device</Button></DialogTrigger>
@@ -292,9 +292,9 @@ export function Phone({
         {/* The phone shares its clipboard only while Saiph's helper runs; this computer starts it with adb. */}
         {phone?.online && !phone.hosted && state.settings?.link?.clipboard !== false && !phone.capabilities.includes("clipboard") && <ClipboardNotice phone={phone} />}
         {(cameraLive || microphoneLive) && <Card className="string-edge shrink-0 gap-0 border-secondary-border py-0" aria-label="Capturing now">
-          {cameraLive && <PhoneCamera camera={state.camera} config={state.settings?.link?.camera} deviceId={phone?.online ? phone.id : undefined} client={client} />}
+          {cameraLive && <PhoneCamera camera={state.camera} config={state.settings?.link?.camera} deviceId={phone?.online && !phone.hosted ? phone.id : undefined} client={client} />}
           {cameraLive && microphoneLive && <Separator />}
-          {microphoneLive && <PhoneMicrophone microphone={state.microphone} deviceId={phone?.online ? phone.id : undefined} deviceName={phones.find(row=>row.id===state.microphone?.device_id)?.name} client={client} />}
+          {microphoneLive && <PhoneMicrophone microphone={state.microphone} deviceId={phone?.online && !phone.hosted ? phone.id : undefined} deviceName={phones.find(row=>row.id===state.microphone?.device_id)?.name} client={client} />}
         </Card>}
         {quick && <Card className="shrink-0 gap-4 p-4" aria-label="Quick controls">
           <PhonePanel features={state.phone_features} phone={phone} client={client} />

@@ -352,8 +352,8 @@ function Calls({ info, phone, client }: { info: PhoneFeatureState; phone?: Phone
       <Input aria-label="Number to call" placeholder="Number" value={number} inputMode="tel" maxLength={40} onChange={(e) => setNumber(e.target.value)} className="h-9 w-48" />
       <Button type="submit" variant="default" size="sm" className="h-9" disabled={!dial || !number.trim()}><PhoneCall />Call on phone</Button>
     </Form>}>Call audio stays on your phone.</TabHead>
-    {handled && <p className="mb-2 text-[13px] text-muted-foreground">{handled.handled === "reject" ? "Declined" : "Answered"} on {handled.handled_by}</p>}
-    {phone.call_notice && <p role="status" className="mb-4 text-[13px] text-muted-foreground">{phone.call_notice}</p>}
+    {handled && <p className="m-0 mb-2 text-[13px] text-muted-foreground">{handled.handled === "reject" ? "Declined" : "Answered"} on {handled.handled_by}</p>}
+    {phone.call_notice && <p role="status" className="m-0 mb-4 text-[13px] text-muted-foreground">{phone.call_notice}</p>}
     {call && <section className="string-edge mb-5 flex flex-wrap items-center gap-4 rounded-[14px] border border-secondary-border bg-field/50 px-5 py-4" aria-label="Current call">
       <span className="flex size-11 items-center justify-center rounded-full bg-secondary text-secondary-foreground"><PhoneCall className="size-5" strokeWidth={1.5} /></span>
       <div className="grid min-w-0 flex-1">
