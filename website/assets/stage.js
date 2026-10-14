@@ -7,7 +7,6 @@
   const inner = root.querySelector(".stage-inner");
   const caption = document.querySelector("[data-stage-caption]");
   const tabs = Array.from(document.querySelectorAll("[data-scene]"));
-  const pauseBtn = document.querySelector("[data-stage-pause]");
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   const screens = {};
@@ -51,7 +50,6 @@
 
   // ---------- scene runtime ----------
   let runId = 0;
-  let paused = false;
   let current = 0;
   class Abort extends Error {}
 
@@ -69,7 +67,6 @@
       async wait(ms) {
         live();
         if (!reduced) await new Promise((r) => setTimeout(r, ms));
-        while (paused && id === runId) await new Promise((r) => setTimeout(r, 120));
         live();
       },
       async type(el, text, speed = 42) {
@@ -329,21 +326,6 @@
     const i = order.indexOf(b.dataset.gotoScene);
     if (i >= 0) { play(i); root.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "center" }); }
   }));
-
-  if (pauseBtn) {
-    const icons = {
-      pause: `<svg viewBox="0 0 14 14" fill="currentColor"><rect x="2" y="1" width="3.5" height="12" rx="1"/><rect x="8.5" y="1" width="3.5" height="12" rx="1"/></svg>`,
-      play: `<svg viewBox="0 0 14 14" fill="currentColor"><path d="M3 1.5v11l9-5.5z"/></svg>`,
-    };
-    pauseBtn.innerHTML = icons.pause;
-    pauseBtn.addEventListener("click", () => {
-      paused = !paused;
-      pauseBtn.innerHTML = paused ? icons.play : icons.pause;
-      pauseBtn.setAttribute("aria-label", paused ? "Play animation" : "Pause animation");
-      inner.querySelectorAll("*").forEach((n) => n.getAnimations().forEach((a) => (paused ? a.pause() : a.play())));
-    });
-    if (reduced) pauseBtn.hidden = true;
-  }
 
   // Start when visible; pause off-screen so it doesn't burn CPU.
   let started = false;
