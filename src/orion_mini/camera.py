@@ -13,10 +13,13 @@ import threading
 
 from .adb_worker import AdbWorker
 from .companion_tools import tool_path
+from .phone_debugging import SERIAL, PhoneDebugging, adb_path
 
 WINDOW_TITLE = 'Orion Phone Camera'
 OBS_NAME = 'Orion Phone'
 SETUP_MESSAGE = 'Complete the one-time phone camera setup in Settings → Devices.'
+MIN_SCRCPY = (2, 2)  # First release with --video-source=camera.
+MIN_ANDROID_SDK = 31  # Android 12: scrcpy camera capture needs it on the phone.
 
 
 def validate_options(options):
@@ -98,25 +101,48 @@ def obs_configuration(config):
     except (OSError, ValueError, TypeError, AttributeError, KeyError, RecursionError):return None
 
 
+def scrcpy_version(executable, run=subprocess.run):
+    """(major, minor) from `scrcpy --version`, or None when it cannot be read."""
+    try:
+        result = run([executable, '--version'], capture_output=True, text=True, timeout=5,
+                     creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    match = re.search(r'^scrcpy v?([0-9]{1,3})\.([0-9]{1,3})', result.stdout or '', re.M)
+    return (int(match.group(1)), int(match.group(2))) if result.returncode == 0 and match else None
+
+
 class Camera:
-    def __init__(self, workspace, *, system=None, popen=subprocess.Popen, run=subprocess.run, worker_factory=AdbWorker, verify_sink=loopback_sink):
+    def __init__(self, workspace, *, system=None, popen=subprocess.Popen, run=subprocess.run, worker_factory=AdbWorker,
+                 verify_sink=loopback_sink, debugging_factory=PhoneDebugging):
         self.workspace = workspace
         self.system = system or sys.platform
         self.popen, self.run, self.worker_factory, self.verify_sink = popen, run, worker_factory, verify_sink
+        self.debugging_factory = debugging_factory
         self.lock = threading.RLock()
         self.processes = []
         self.device_id = None
+        self.serial = None
+        self.mode = None
         self.error = ''
         self.capture_options = {}
         self.monitor_stop = None
+        self._version_cache = None
 
     def _check_session(self):
         if not self.processes:return
-        device=next((row for row in self.workspace.phone.snapshot()['devices'] if row.get('id')==self.device_id),None)
-        if self._config().get('enabled',True) is False or not device or not device.get('online',False):
-            self.stop();self.error='Phone camera stopped. Your phone must stay online and paired.'
-        elif not all(process.poll() is None for process in self.processes):
-            self.stop();self.error='Phone camera stopped. Start it again when you are ready.'
+        if self._config().get('enabled',True) is False:
+            self.stop();self.error='Phone camera stopped because it was switched off in Settings.'
+            return
+        if self.device_id is not None:
+            # Self-hosted pairing: the paired phone must stay online through the Hub.
+            device=next((row for row in self.workspace.phone.snapshot()['devices'] if row.get('id')==self.device_id),None)
+            if not device or not device.get('online',False):
+                self.stop();self.error='Phone camera stopped. Your phone must stay online and paired.'
+                return
+        if not all(process.poll() is None for process in self.processes):
+            self.stop();self.error=('Phone camera stopped. Keep the phone connected and unlocked, then start it again.'
+                                    if self.device_id is None else 'Phone camera stopped. Start it again when you are ready.')
 
     def _monitor(self,finished):
         while not finished.wait(1):
@@ -126,11 +152,30 @@ class Camera:
 
     def _config(self):return (self.workspace.settings.get('link') or {}).get('camera') or {}
 
-    def _prepared(self):
+    def _version(self, executable):
+        try:key=(executable, os.stat(executable).st_mtime_ns)
+        except OSError:return None
+        if self._version_cache is None or self._version_cache[0]!=key:
+            self._version_cache=(key, scrcpy_version(executable, self.run))
+        return self._version_cache[1]
+
+    def _scrcpy(self, config):
+        executable = tool_path('scrcpy', config.get('scrcpy_executable'))
+        if not executable:
+            return None, 'Install scrcpy 2.2 or later to use the phone camera. Settings → Devices explains how.'
+        version = self._version(executable)
+        if version is not None and version < MIN_SCRCPY:
+            return None, (f'This computer has scrcpy {version[0]}.{version[1]}. The phone camera needs scrcpy 2.2 or later; '
+                          'Settings → Devices explains how to get it.')
+        return executable, ''
+
+    def _prepared(self, preview=False):
         config = self._config()
         if config.get('enabled',True) is False:return None, 'Phone camera is switched off in Settings.'
-        executable = tool_path('scrcpy', config.get('scrcpy_executable'))
-        if not executable:return None, 'Install scrcpy (Settings → Devices explains how) to use the phone camera.'
+        executable, message = self._scrcpy(config)
+        if not executable:return None, message
+        if preview:
+            return {'mode':'preview','scrcpy':executable}, ''
         if self.system.startswith('linux'):
             sink = config.get('v4l2_sink')
             if not self.verify_sink(sink):return None, SETUP_MESSAGE
@@ -149,45 +194,97 @@ class Camera:
             running = bool(self.processes) and all(process.poll() is None for process in self.processes)
             if self.processes and not running:
                 self.stop(); self.error = 'Phone camera stopped. Start it again when you are ready.'
+            can_preview = self._config().get('enabled',True) is not False and self._scrcpy(self._config())[0] is not None
+            if running and self.mode=='preview':
+                ready = 'The camera preview window is open. Use it to set up OBS, then choose Close camera preview.'
+            elif running:
+                ready = 'Camera processes are running; select the camera in your meeting app.'
+            else:
+                ready = 'Ready to start the phone camera.'
             return {'available':prepared is not None,'running':running,'verified':False,
-                    'mode':prepared['mode'] if prepared else 'unavailable',
+                    'mode':(self.mode if running else prepared['mode'] if prepared else 'unavailable'),
                     'device_id':self.device_id if running else None,
+                    'serial':self.serial if running else None,
+                    'can_preview':can_preview,
                     **self.capture_options,
-                    'message':self.error or message or ('Camera processes are running; select the camera in your meeting app.' if running else 'Ready to start the phone camera.')}
+                    'message':self.error or ('' if running else message) or ready}
 
-    def start(self, device_id):
-        """Call only from the explicit local UI action; revalidate phone/ADB trust here."""
+    def _adb_for(self, config):
+        return adb_path(tool_path('scrcpy', config.get('scrcpy_executable')))
+
+    def debug_devices(self):
+        """Phones attached over USB or wireless debugging. Lists only; starts nothing."""
+        adb = self._adb_for(self._config())
+        return {'adb': bool(adb), 'devices': self.debugging_factory(adb, run=self.run).devices() if adb else []}
+
+    def pair(self, address, code):
+        return self.debugging_factory(self._adb_for(self._config()), run=self.run).pair(address, code)
+
+    def connect(self, address):
+        return self.debugging_factory(self._adb_for(self._config()), run=self.run).connect(address)
+
+    def _require_camera_android(self, adb, serial, flags):
+        """scrcpy can open the phone camera only on Android 12 (API 31) or later."""
+        try:
+            result = self.run([adb,'-s',serial,'shell','getprop','ro.build.version.sdk'],capture_output=True,text=True,timeout=10,creationflags=flags)
+            text = (result.stdout or '').strip()
+            sdk = int(text) if result.returncode==0 and text.isdigit() else None
+        except (OSError, subprocess.SubprocessError):
+            sdk = None
+        if sdk is not None and sdk < MIN_ANDROID_SDK:
+            raise ValueError('Using the phone as a webcam needs Android 12 or later on the phone.')
+
+    def start(self, device_id=None, serial=None, preview=False):
+        """Call only from the explicit local UI action; revalidate phone/ADB trust here.
+
+        `device_id` is a phone paired through a self-hosted Hub. `serial` is a phone
+        that has allowed this computer over USB or wireless debugging; that is how
+        Saiph Hosted and Hub-less computers reach the phone camera."""
+        if (device_id is None) == (serial is None):raise ValueError('Choose one phone for the camera.')
+        if type(preview) is not bool:raise ValueError('Choose whether to open a camera preview.')
         with self.lock:
             if self._config().get('enabled',True) is False:
                 self.stop();raise ValueError('Phone camera is switched off in Settings.')
             if self.processes:
                 if all(process.poll() is None for process in self.processes):
-                    if device_id!=self.device_id:raise ValueError('Stop the current phone camera first.')
+                    if (device_id,serial)!=(self.device_id,None if self.device_id else self.serial) or (self.mode=='preview')!=preview:
+                        raise ValueError('Stop the current phone camera first.')
                     return self.status()
                 self.stop()
-            device=next((device for device in self.workspace.phone.snapshot()['devices'] if device.get('id')==device_id),None)
-            if not device:raise ValueError('Choose a paired phone.')
-            if not device.get('online',False):raise ValueError('Your paired phone must be online before starting its camera.')
+            if device_id is not None:
+                device=next((device for device in self.workspace.phone.snapshot()['devices'] if device.get('id')==device_id),None)
+                if not device:raise ValueError('Choose a paired phone.')
+                if not device.get('online',False):raise ValueError('Your paired phone must be online before starting its camera.')
             config=validate_options(self._config())
-            prepared, message = self._prepared()
+            prepared, message = self._prepared(preview)
             if prepared is None:raise ValueError(message)
-            worker = self.worker_factory()
-            serial = worker.paired_serial(device_id)
-            if not isinstance(serial,str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.:\[\]-]{0,199}',serial) or not worker.adb:
-                raise ValueError('Authorized debugging is unavailable for this phone. Connect it over USB or wireless debugging and allow this computer. Optional tools in the setup guide shows whether adb is installed.')
+            unavailable = ('Authorized debugging is unavailable for this phone. Connect it over USB or wireless debugging '
+                           'and allow this computer. Settings → Devices explains the one-time phone setup.')
+            if device_id is not None:
+                worker = self.worker_factory()
+                if not worker.adb:worker.adb = adb_path(prepared['scrcpy'])
+                if not worker.adb:raise ValueError(unavailable)
+                found = worker.paired_serial(device_id)
+                adb = worker.adb
+            else:
+                adb = adb_path(prepared['scrcpy'])
+                if not adb:raise ValueError('adb was not found. Install scrcpy (it includes adb), then try again.')
+                found = self.debugging_factory(adb, run=self.run).ready(serial)['serial']
+            if not isinstance(found,str) or not SERIAL.fullmatch(found):raise ValueError(unavailable)
             flags = subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0
+            self._require_camera_android(adb, found, flags)
             if prepared['mode']=='windows-obs':
                 try:
                     existing = self.run(['tasklist','/FI','IMAGENAME eq obs64.exe','/FO','CSV','/NH'],capture_output=True,text=True,timeout=5,creationflags=flags)
                 except (OSError,subprocess.SubprocessError):raise ValueError('Cannot confirm whether OBS is already in use.') from None
                 if existing.returncode or 'obs64.exe' in existing.stdout.lower():
-                    raise ValueError('OBS is already in use. Saiph cannot take over its camera session.')
+                    raise ValueError('OBS is already in use. Close OBS completely (File → Exit), then start the phone camera again.')
             facing=config.get('facing','front');quality=config.get('quality','720p');rotation=config.get('rotation','0')
-            args = [prepared['scrcpy'],'--serial',serial,'--video-source=camera','--camera-facing='+facing,
+            args = [prepared['scrcpy'],'--serial',found,'--video-source=camera','--camera-facing='+facing,
                     '--max-size='+('1280' if quality=='720p' else '1920'),'--camera-ar=16:9','--camera-fps=30',
                     '--orientation='+rotation,'--no-audio','--no-control','--window-title',WINDOW_TITLE]
             if prepared['mode']=='linux-v4l2':args += ['--v4l2-sink='+prepared['sink'],'--no-playback']
-            environment = os.environ.copy(); environment['ADB'] = str(worker.adb)
+            environment = os.environ.copy(); environment['ADB'] = str(adb)
             options = {'stdin':subprocess.DEVNULL,'stdout':subprocess.DEVNULL,'stderr':subprocess.DEVNULL,'creationflags':flags}
             try:
                 self.processes.append(self.popen(args,env=environment,**options))
@@ -195,7 +292,7 @@ class Camera:
                     obs_args = [prepared['obs'],'--profile',prepared['profile'],'--collection',prepared['collection'],
                                 '--scene',prepared['scene'],'--startvirtualcam','--minimize-to-tray']
                     self.processes.append(self.popen(obs_args,cwd=str(Path(prepared['obs']).parent),**options))
-                self.device_id = device_id; self.error = ''
+                self.device_id = device_id; self.serial = found; self.mode = prepared['mode']; self.error = ''
                 self.capture_options={'facing':facing,'quality':quality,'rotation':rotation}
                 self.monitor_stop=threading.Event()
                 threading.Thread(target=self._monitor,args=(self.monitor_stop,),name='orion-camera',daemon=True).start()
@@ -213,5 +310,5 @@ class Camera:
                     except subprocess.TimeoutExpired:
                         process.kill();process.wait(timeout=3)
                     except OSError:pass
-            self.processes.clear();self.device_id = None;self.capture_options={}
+            self.processes.clear();self.device_id = None;self.serial = None;self.mode = None;self.capture_options={}
             return {'stopped':True}

@@ -202,7 +202,20 @@ class DesktopBridge(QObject):
                     self.background(request_id, lambda: self.window.workspace.dispatch(method, chosen)); return
                 result = {'cancelled': True}
             elif method == 'camera.start':
-                self.background(request_id,lambda:self.window.workspace.camera.start(args['device_id']));return
+                # A self-hosted paired phone (device_id) or a phone allowed over USB/wireless debugging (serial).
+                if not isinstance(args, dict) or set(args) - {'device_id', 'serial', 'preview'} or len(set(args) & {'device_id', 'serial'}) != 1 \
+                        or not all(isinstance(args[key], str) for key in set(args) & {'device_id', 'serial'}) or type(args.get('preview', False)) is not bool:
+                    raise ValueError('Choose one phone for the camera.')
+                self.background(request_id,lambda:self.window.workspace.camera.start(args.get('device_id'), args.get('serial'), args.get('preview', False)));return
+            elif method == 'camera.devices':
+                if args:raise ValueError('Unknown camera action.')
+                self.background(request_id,self.window.workspace.camera.debug_devices);return
+            elif method == 'camera.pair':
+                if set(args) != {'address', 'code'}:raise ValueError('Enter the pairing address and code from your phone.')
+                self.background(request_id,lambda:self.window.workspace.camera.pair(args['address'], args['code']));return
+            elif method == 'camera.connect':
+                if set(args) != {'address'}:raise ValueError('Enter the address from your phone.')
+                self.background(request_id,lambda:self.window.workspace.camera.connect(args['address']));return
             elif method == 'camera.stop':
                 self.background(request_id,self.window.workspace.camera.stop);return
             elif method == 'camera.status':

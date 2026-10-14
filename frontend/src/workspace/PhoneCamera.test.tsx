@@ -126,3 +126,119 @@ describe("Phone camera", () => {
     expect(screen.queryByLabelText("Linux loopback device")).toBeNull();
   });
 });
+
+describe("Phone camera without a self-hosted Hub", () => {
+  const phones = [
+    { serial: "SYNTHUSB01", state: "ready", model: "Synthetic Phone", connection: "usb" },
+    { serial: "192.168.50.20:41234", state: "ready", model: "Wifi Phone", connection: "wifi" },
+    { serial: "SYNTHLOCKED", state: "unauthorized", model: "Locked Phone", connection: "usb" },
+  ];
+  it("finds a phone allowed over USB or Wi-Fi and starts the chosen one by serial", async () => {
+    const call = vi.fn(async (method: string) =>
+      method === "camera.devices" ? { adb: true, devices: phones } : {},
+    );
+    render(<PhoneCamera camera={ready} client={{ call } as unknown as Client} />);
+    expect(call).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Use phone as webcam" })).toBeDisabled();
+    expect(screen.getByText("Find your phone to start the camera.")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Find my phone" }));
+    await waitFor(() => expect(call).toHaveBeenCalledWith("camera.devices"));
+    expect(
+      await screen.findByText(
+        "Unlock Locked Phone and tap Allow on the debugging prompt, then choose Find again.",
+      ),
+    ).toBeVisible();
+    fireEvent.change(screen.getByLabelText("Phone for the camera"), {
+      target: { value: "192.168.50.20:41234" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Use phone as webcam" }));
+    await waitFor(() =>
+      expect(call).toHaveBeenCalledWith("camera.start", { serial: "192.168.50.20:41234" }),
+    );
+    expect(call).not.toHaveBeenCalledWith(
+      "camera.start",
+      expect.objectContaining({ device_id: expect.anything() }),
+    );
+  });
+  it("explains a missing adb or an empty list in plain language", async () => {
+    const call = vi
+      .fn()
+      .mockResolvedValueOnce({ adb: false, devices: [] })
+      .mockResolvedValueOnce({ adb: true, devices: [] });
+    render(<PhoneCamera camera={ready} client={{ call } as unknown as Client} />);
+    fireEvent.click(screen.getByRole("button", { name: "Find my phone" }));
+    expect(await screen.findByText(/adb was not found\. Install scrcpy/)).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Find again" }));
+    expect(await screen.findByText(/No phone found\. Check the cable/)).toBeVisible();
+    expect(screen.getByRole("button", { name: "Use phone as webcam" })).toBeDisabled();
+  });
+  it("pairs and connects over Wi-Fi, then refreshes the phone list", async () => {
+    const call = vi.fn(async (method: string) =>
+      method === "camera.devices" ? { adb: true, devices: phones.slice(1, 2) } : {},
+    );
+    render(<PhoneCamera camera={ready} client={{ call } as unknown as Client} />);
+    fireEvent.click(screen.getByText("Connect over Wi‑Fi", { selector: "summary" }));
+    fireEvent.change(screen.getByLabelText("Pairing IP address and port"), {
+      target: { value: " 192.168.50.20:37000 " },
+    });
+    fireEvent.change(screen.getByLabelText("Wi‑Fi pairing code"), {
+      target: { value: "123456" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Pair this computer" }));
+    await waitFor(() =>
+      expect(call).toHaveBeenCalledWith("camera.pair", {
+        address: "192.168.50.20:37000",
+        code: "123456",
+      }),
+    );
+    expect(await screen.findByText(/^Paired\./)).toBeVisible();
+    fireEvent.change(screen.getByLabelText("Phone IP address and port"), {
+      target: { value: "192.168.50.20:41234" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Connect over Wi‑Fi" }));
+    await waitFor(() =>
+      expect(call).toHaveBeenCalledWith("camera.connect", { address: "192.168.50.20:41234" }),
+    );
+    expect(await screen.findByText("Using Wifi Phone · Wi‑Fi")).toBeVisible();
+    expect(call).not.toHaveBeenCalledWith("camera.start", expect.anything());
+  });
+  it("offers a preview window for OBS setup before the webcam is ready", async () => {
+    const call = vi.fn(async (method: string) =>
+      method === "camera.devices" ? { adb: true, devices: phones.slice(0, 1) } : {},
+    );
+    const unready: CameraStatus = { ...ready, available: false, can_preview: true, mode: "unavailable" };
+    const view = render(<PhoneCamera camera={unready} client={{ call } as unknown as Client} />);
+    expect(screen.getByRole("button", { name: "Open camera preview" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Find my phone" }));
+    await screen.findByText("Using Synthetic Phone · USB cable");
+    expect(screen.getByRole("button", { name: "Use phone as webcam" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Open camera preview" }));
+    await waitFor(() =>
+      expect(call).toHaveBeenCalledWith("camera.start", { serial: "SYNTHUSB01", preview: true }),
+    );
+    view.rerender(
+      <PhoneCamera
+        camera={{ ...unready, running: true, mode: "preview", serial: "SYNTHUSB01" }}
+        client={{ call } as unknown as Client}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Close camera preview" }));
+    await waitFor(() => expect(call).toHaveBeenCalledWith("camera.stop"));
+  });
+  it("explains the one-time phone and OS setup without a Hub", () => {
+    const props = {
+      settings: { link: { camera: {} } } as Settings,
+      client: { call: vi.fn() } as unknown as Client,
+    };
+    const view = render(<CameraSettings {...props} platform="windows" />);
+    expect(
+      screen.getByText(/works with Saiph Hosted and without a server or Tailscale/),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/tap Build number seven times/)).toBeInTheDocument();
+    expect(screen.getByText(/Set up OBS Studio once/)).toBeInTheDocument();
+    expect(screen.queryByText(/v4l2loopback-dkms/)).toBeNull();
+    view.rerender(<CameraSettings {...props} platform="linux" />);
+    expect(screen.getByText(/v4l2loopback-dkms/)).toBeInTheDocument();
+    expect(screen.queryByText(/Set up OBS Studio once/)).toBeNull();
+  });
+});

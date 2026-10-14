@@ -79,7 +79,11 @@ an automated acceptance script.
 Hosted currently covers text clipboard, notifications/dismissal and explicitly
 selected files/photos. SMS/call commands, remote phone actions, clipboard images
 and photo-library browsing are outside the preview. Self-host feature parity is
-an outstanding product decision.
+an outstanding product decision. The optional phone webcam does not use the Hosted
+relay: it runs locally over USB or wireless debugging with user-installed scrcpy,
+OBS (Windows) or v4l2loopback (Linux); see the user guide. Its physical acceptance
+(USB, wireless pairing, OBS Virtual Camera, v4l2loopback in a meeting app) is a
+separate open check.
 
 The shared account boundary and entitlement enforcement are the proposed customer
 design. Initial storage is one host with separate account SQLite workspaces;

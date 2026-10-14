@@ -1,5 +1,13 @@
 # Current release preparation status
 
+2026-10-14 phone webcam without a Hub: branch `feat/hosted-webcam` lets the
+desktop phone camera use a phone allowed over USB or Android wireless debugging
+(pairing code on the local network), so Saiph Hosted users no longer need a
+self-hosted paired phone. It adds a camera preview for OBS setup, scrcpy 2.2 and
+Android 12 checks and plain setup guidance. Synthetic unit tests only; the
+0.1.0-beta.4 installers do not contain it. scrcpy, adb, OBS and v4l2loopback stay
+user-installed. Physical acceptance on Windows and Linux is pending.
+
 2026-10-13 account security: [account and device controls](ACCOUNT_SECURITY.md)
 are in source with synthetic tests — Windows Hello before device changes,
 device-list alerts on desktop and Android, Android biometric confirmation and
