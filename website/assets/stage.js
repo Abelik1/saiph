@@ -223,12 +223,11 @@
       call.querySelector(".ring").classList.remove("ring");
       const label = call.querySelector("span");
       td.classList.add("out");
-      tl.querySelector(".t-text").textContent = "On call · 00:00";
-      tl.querySelector(".t-actions").innerHTML = `<span>Mute</span><span class="bad">End call</span>`;
-      c.say("Answer or decline from your computer.");
+      tl.querySelector(".t-text").textContent = "Answered · talk on your phone";
+      tl.querySelector(".t-actions").remove();
+      c.say("Answer or decline from your computer, then talk on your phone.");
       for (let s = 0; s < 5; s++) {
         label.textContent = "Connected · 00:0" + s;
-        tl.querySelector(".t-text").textContent = "On call · 00:0" + s;
         await c.wait(650);
       }
     },
