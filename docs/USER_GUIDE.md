@@ -3,7 +3,7 @@
 Saiph Link contains **Phone**, **Cloud** and **Settings**. By default Saiph
 connects through a **Saiph account**: Saiph runs the connection, so you need only
 the desktop and Android apps, with no server and no Tailscale or other network
-software on your phone or computer. Saiph accounts are in a friends beta; these
+software on your phone or computer. Saiph accounts are in an invite-only beta; these
 instructions do not create one.
 
 Self-hosting is optional and only for people who choose it during setup. It

@@ -1,4 +1,4 @@
-# Hosted friends beta acceptance
+# Hosted beta acceptance
 
 The shared-account implementation is merged; deployment and clean-install
 acceptance must still be checked before invitations. Friends use the customer website/account/API, their own
