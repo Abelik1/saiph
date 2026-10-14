@@ -72,11 +72,46 @@ The server still observes account/device and routing metadata, sizes, timing and
 availability. Encryption does not prevent traffic analysis, denial of service or
 compromise of an authorized endpoint.
 
+### Hosted texts and calls
+
+Texts, call state, contact results and call history travel inside the same
+sealed envelopes as clipboard text; the event type is inside the ciphertext, so
+the hosted service relays them without seeing message text, numbers, names or
+which kind of event it carries. No server change was needed. What the server can
+still learn is traffic shape: a burst of events while conversations sync, a
+quicker desktop poll once a phone shares texts or calls, and event timing that
+can correlate with incoming texts and calls.
+
+Decryption proves which approved device sent an event, not that it may act. A
+phone carries out a text reply, a new text, answering or declining a call,
+dialing, a contact search or a call-history request only when all of these hold:
+the sender is the root computer (other approved phones are refused), the phone's
+owner turned on Texts and calls in Saiph Hosted (off by default, confirmed with
+the screen lock), the matching Android permission is granted, the payload has
+the exact shape and limits of its type, and, for a text, a call answer or
+decline or a dial, the event's receipt has not been claimed before (each runs
+at most once; an interrupted one is not retried). Replies go only to one-person
+threads; dialing refuses `*` and `#`. The root computer sends an action only to
+an approved phone that advertised the capability and was heard from in the last
+five minutes, and checks that a reply thread exists and a call is still ringing.
+It shows phone data only from approved non-root devices that advertised the
+matching capability; contact results and call history are accepted only within
+a minute of its own request and are kept in memory. Revoking a phone deletes its
+texts and calls from the computer.
+
+Anyone who controls the root computer while it is unlocked, or its hosted keys,
+can read the phone's synced texts and act on them within these limits, just as
+with clipboard and notifications. A lost root computer should be revoked from
+the account and the phone's Texts and calls switch turned off.
+
 ## What remains
 
 An off-by-default development preview now connects native sign-in, approval
-screens and encrypted clipboard text, notifications and explicit file/photo
-sharing on desktop and Android. See [preview scope and acceptance](HOSTED_PREVIEW.md).
+screens and encrypted clipboard text, notifications, explicit file/photo
+sharing and (opt-in on the phone) texts and calls on desktop and Android. See
+[preview scope and acceptance](HOSTED_PREVIEW.md) and the
+[friends beta scope](HOSTED_FRIENDS_BETA.md#scope-and-remaining-gates); texts
+and calls have unit tests only.
 Physical-device acceptance, deployed Auth0/relay acceptance and independent
 security review remain unfinished. Do not describe existing installed apps, ordinary Hub,
 Seafile or Immich integrations as covered by the hosted prototype's encryption.

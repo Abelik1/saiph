@@ -68,6 +68,19 @@ devices or disposable OS profiles for the first acceptance pass.
 9. Repeat clean installation on Windows and Linux. Check Linux Secret Service,
    system prerequisites, desktop entries, browser callbacks and uninstall. Record
    all manual steps and confusing messages as onboarding issues.
+10. Texts: on the phone turn on Texts and calls in Saiph Hosted (it asks for the
+    screen lock and Android permissions). Check the computer's Phone page lists
+    the phone and its recent conversations, a received text appears within
+    seconds, a reply and a new text to a second spare number are delivered from
+    the right SIM, a group thread shows the "stays on your phone" note, and
+    turning the switch off stops new texts and refuses replies. Revoke the phone
+    and confirm its texts and calls disappear from the computer.
+11. Calls: call the phone from a spare number. Check the computer's alert and
+    Calls tab show the caller within about five seconds, Answer and Decline work
+    while ringing (Android 12-16, dual SIM if available), a missed call raises a
+    missed-call alert, dialing places the call with audio on the phone, `*`/`#`
+    codes are refused and recent calls list on request. Repeat with the
+    phone's Texts and calls switch off: nothing is shown or carried out.
 
 Record platform/build/source, fresh versus existing profile, network and results
 without tokens, codes or private content. Passing builds/tests is not physical
@@ -76,10 +89,21 @@ an automated acceptance script.
 
 ## Scope and remaining gates
 
-Hosted currently covers text clipboard, notifications/dismissal and explicitly
-selected files/photos. SMS/call commands, remote phone actions, clipboard images
-and photo-library browsing are outside the preview. Self-host feature parity is
-an outstanding product decision.
+Hosted covers text clipboard, notifications/dismissal, explicitly selected
+files/photos and, since 2026-10-14 in source only, texts and calls: the phone's
+conversations and call state on the computer, one-to-one replies, a new text to
+one number, answering or declining a ringing call, dialing an ordinary number,
+contact search and recent calls. All of it travels inside the existing sealed
+envelopes; the service stores and forwards ciphertext and never sees message
+text, numbers or names. The phone accepts these actions only from the root
+computer and only after its owner turns on Texts and calls in Saiph Hosted on
+the phone (off by default) and grants the Android permissions. MMS pictures,
+group replies, call audio through the computer, other remote phone actions
+(ringer, media, ring), clipboard images and photo-library browsing are outside
+the preview. Texts and calls have unit tests only; they need the physical
+acceptance in test steps 10 and 11 before friends are told they work. Once a
+phone shares texts or calls, the desktop polls for sealed events every four
+seconds instead of every fifteen, so a ringing call arrives in time.
 
 The shared account boundary and entitlement enforcement are the proposed customer
 design. Initial storage is one host with separate account SQLite workspaces;

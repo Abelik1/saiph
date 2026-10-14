@@ -1,5 +1,14 @@
 # Current release preparation status
 
+2026-10-14 Hosted texts and calls: branch `feat/hosted-texts-calls` adds SMS
+threads, replies, new texts, call alerts, answer/decline, dialing, contact
+search and recent calls to Saiph Hosted inside the existing sealed envelopes,
+with no hosted service change. Phone actions are root-only and need a new
+phone-side Texts and calls switch (off by default) plus Android permissions.
+Covered by desktop, frontend and Android JVM unit tests only; physical-device
+acceptance ([friends beta steps 10-11](HOSTED_FRIENDS_BETA.md#test-sequence)),
+a release and independent review are pending. Not deployed or released.
+
 2026-10-13 account security: [account and device controls](ACCOUNT_SECURITY.md)
 are in source with synthetic tests — Windows Hello before device changes,
 device-list alerts on desktop and Android, Android biometric confirmation and

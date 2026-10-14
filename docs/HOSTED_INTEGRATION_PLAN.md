@@ -21,7 +21,9 @@ on `feat/hosted-user-flow`; their real-device exit checks remain open. See
    detection) are allowed.
 4. **Which features move first.** Suggested: clipboard text, then notifications,
    then files/photos (attachments already exist). SMS and call commands last,
-   because they need their own authorization and replay rules.
+   because they need their own authorization and replay rules. (2026-10-14: the
+   owner approved texts and calls; root-only actions behind a phone-side opt-in,
+   see `src/orion_mini/hosted_features.py`.)
 5. **Coexistence.** Whether a device can be paired to a self-hosted Hub and a
    hosted deployment at once, and which wins for each feature.
 
