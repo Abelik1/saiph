@@ -304,7 +304,7 @@ export type State = {
   phone?: {
     status: string;
     error: string;
-    devices: { id: string; name: string; online: boolean; last_seen_at: string | null; capabilities: string[]; battery?: { battery_level: number; is_charging: boolean; updated_at: number } | null }[];
+    devices: { id: string; name: string; online: boolean; last_seen_at: string | null; capabilities: string[]; hosted?: boolean; battery?: { battery_level: number; is_charging: boolean; updated_at: number } | null }[];
     notifications: PhoneNotification[];
   };
   settings: Settings;
