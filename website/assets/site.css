@@ -564,6 +564,11 @@ footer a:hover { color: var(--text); }
 /* Landing: short statements instead of paragraphs */
 #features h2 { max-width: 28ch; margin: 0 auto 36px; }
 .feature-cards .card h3 { margin-bottom: 4px; }
+.feature-cards .card { display: flex; flex-direction: column; }
+.feature-cards .card p { margin-bottom: 0; }
+.feature-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; padding-top: 12px; }
+.feature-tags .tag { margin-left: 0; white-space: nowrap; }
+.feature-note { font-size: .92rem; margin: 22px auto 0; max-width: 60ch; }
 .pillars {
   list-style: none; padding: 0; margin: 28px auto 24px; display: flex; flex-wrap: wrap;
   justify-content: center; gap: 12px; max-width: 760px;
