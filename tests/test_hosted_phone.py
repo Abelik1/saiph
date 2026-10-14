@@ -79,6 +79,55 @@ def test_phone_data_rejects_every_other_shape(payload):
         read_phone_data(deepcopy(payload))
 
 
+@pytest.mark.parametrize("payload", [
+    {"type": "call.handled", "operation": "answer", "by": "Synthetic desk"},
+    {"type": "call.handled", "operation": "reject", "by": ""},
+    {"type": "call.refused", "request": "answer", "reason": "handled", "handled": "reject", "by": "Synthetic laptop"},
+    {"type": "call.refused", "request": "reject", "reason": "not_ringing", "handled": "", "by": ""},
+    {"type": "call.refused", "request": "dial", "reason": "in_call", "handled": "", "by": ""},
+    {"type": "call.refused", "request": "dial", "reason": "dialing", "handled": "", "by": ""},
+])
+def test_call_race_results_have_exact_shapes(payload):
+    assert read_phone_data(deepcopy(payload)) == (payload["type"], {k: v for k, v in payload.items() if k != "type"})
+
+
+@pytest.mark.parametrize("payload", [
+    {"type": "call.handled", "operation": "dial", "by": ""},
+    {"type": "call.handled", "operation": "answer", "by": "x" * 41},
+    {"type": "call.handled", "operation": "answer", "by": "Desk\nPC"},
+    {"type": "call.handled", "operation": "answer"},
+    {"type": "call.refused", "request": "answer", "reason": "handled", "handled": "", "by": ""},  # Handled by what?
+    {"type": "call.refused", "request": "answer", "reason": "not_ringing", "handled": "answer", "by": ""},
+    {"type": "call.refused", "request": "answer", "reason": "in_call", "handled": "", "by": ""},  # Dial reasons only.
+    {"type": "call.refused", "request": "dial", "reason": "not_ringing", "handled": "", "by": ""},
+    {"type": "call.refused", "request": "send", "reason": "handled", "handled": "answer", "by": ""},
+])
+def test_call_race_results_refuse_other_shapes(payload):
+    with pytest.raises(FeatureError):
+        read_phone_data(deepcopy(payload))
+
+
+def test_subscribe_names_this_computer_in_one_short_line():
+    assert hf.subscribe_payload("Synthetic desk") == {"type": "phone.subscribe", "label": "Synthetic desk"}
+    assert hf.subscribe_payload("  Desk\n\tPC  ")["label"] == "DeskPC"
+    assert hf.subscribe_payload("   ")["label"] == "Computer"
+    assert len(hf.subscribe_payload("x" * 80)["label"]) == 40
+    assert hf.read_subscribe({"type": "phone.subscribe", "label": "Synthetic desk"}) == "Synthetic desk"
+    for bad in ({"type": "phone.subscribe", "label": ""}, {"type": "phone.subscribe", "label": "a\x00b"},
+                {"type": "phone.subscribe", "label": "x" * 41}, {"type": "phone.subscribe", "label": "A", "root": True}):
+        with pytest.raises(FeatureError):
+            hf.read_subscribe(bad)
+
+
+def test_refusals_are_plain_words():
+    from orion_mini.hosted_runtime import refusal_text
+    assert refusal_text({"reason": "handled", "handled": "answer", "by": "Kitchen PC"}) == "Answered on Kitchen PC."
+    assert refusal_text({"reason": "handled", "handled": "reject", "by": "Kitchen PC"}) == "Declined on Kitchen PC."
+    assert refusal_text({"reason": "handled", "handled": "answer", "by": ""}) == "Already handled on another computer."
+    assert refusal_text({"reason": "in_call", "handled": "", "by": ""}) == "Not dialed: your phone is already on a call."
+    assert refusal_text({"reason": "dialing", "handled": "", "by": ""}) == "Not dialed: your phone is already placing a call."
+
+
 def test_phone_commands_are_built_exactly_and_bounded():
     assert phone_command("sms.sync", {}) == {"type": "sms.sync"}
     assert phone_command("sms.open", {"thread": 7}) == {"type": "sms.open", "thread": 7}
@@ -129,6 +178,12 @@ def test_wire_contract_matches_the_android_phone():
     assert read_phone_data(json.loads(thread_wire))[0] == "sms.thread"
     send_wire = '{"text":"On my way \\ud83d\\ude00","thread":7,"type":"sms.send"}'
     assert canonical(phone_command("sms.send", {"thread": 7, "text": "On my way \U0001F600"})) == send_wire.encode()
+    assert canonical(hf.subscribe_payload("Synthetic desk")) == b'{"label":"Synthetic desk","type":"phone.subscribe"}'
+    handled = '{"by":"Synthetic laptop","operation":"answer","type":"call.handled"}'
+    refused = '{"by":"Synthetic laptop","handled":"answer","reason":"handled","request":"reject","type":"call.refused"}'
+    busy = '{"by":"","handled":"","reason":"in_call","request":"dial","type":"call.refused"}'
+    for wire in (handled, refused, busy):
+        assert canonical(json.loads(wire)) == wire.encode() and read_phone_data(json.loads(wire))
 
 
 def test_read_phone_command_rejects_data_and_extra_fields():
@@ -205,7 +260,7 @@ def hosted(tmp_path, monkeypatch):
                 return {"ok": True}
             pytest.fail(f"Unexpected synthetic Hosted route: {method} {path}")
 
-    profile = SimpleNamespace(root=tmp_path / "desktop", settings={}, save=lambda: None,
+    profile = SimpleNamespace(root=tmp_path / "desktop", settings={"machine": {"name": "Synthetic desk"}}, save=lambda: None,
                               store=Store(tmp_path / "desktop" / "store"), user_presence=Presence())
     profile.phone_features = PhoneFeatures(profile)
     alerts, call_states = [], []
@@ -219,8 +274,14 @@ def hosted(tmp_path, monkeypatch):
     device = "dev_" + uuid4().hex
     signing, encryption = ec.generate_private_key(ec.SECP256R1()), generate_recipient()
     controller.approve(make_request_code(root, device, signing, encryption), "Synthetic phone", True)
+    # A second approved, non-root device: the roster cannot say whether it is a computer.
+    other = "dev_" + uuid4().hex
+    other_signing, other_encryption = ec.generate_private_key(ec.SECP256R1()), generate_recipient()
+    controller.approve(make_request_code(root, other, other_signing, other_encryption), "Synthetic laptop", True)
     phone = SealedSession(tmp_path / "phone.sqlite3", deployment, root.signing_key, device, signing, encryption)
     phone.accept_chain(deepcopy(chain))
+    laptop = SealedSession(tmp_path / "laptop.sqlite3", deployment, root.signing_key, other, other_signing, other_encryption)
+    laptop.accept_chain(deepcopy(chain))
     controller.step()
     published.clear()
 
@@ -235,7 +296,7 @@ def hosted(tmp_path, monkeypatch):
         published.clear()
         return result
 
-    return SimpleNamespace(controller=controller, profile=profile, device=device, root=root, phone=phone,
+    return SimpleNamespace(controller=controller, profile=profile, device=device, root=root, phone=phone, laptop=laptop,
                            send=send, received=received, alerts=alerts, call_states=call_states, chain=chain,
                            incoming=incoming, published=published, deployment=deployment)
 
@@ -251,9 +312,20 @@ def test_capabilities_list_a_hosted_phone_and_ask_once_for_its_conversations(hos
     [phone] = h.controller.phones()
     assert phone["id"] == h.device and phone["name"] == "Synthetic phone" and phone["hosted"] and phone["online"]
     assert phone["capabilities"] == ["files", "sms", "calls", "call-control"]
-    assert h.received() == [{"type": "sms.sync"}]
+    # This computer names itself to the phone, then asks once for the conversation list.
+    assert h.received() == [{"type": "phone.subscribe", "label": "Synthetic desk"}, {"type": "sms.sync"}]
     h.send({"type": "phone.capabilities", "capabilities": ["files", "sms", "calls", "call-control"]})
-    assert h.received() == []  # Asked once per run, not on every heartbeat.
+    assert h.received() == []  # Asked once per run, and the subscription is renewed only every 90 s.
+
+
+def test_subscription_is_renewed_with_later_heartbeats(hosted, monkeypatch):
+    h = hosted
+    h.send({"type": "phone.capabilities", "capabilities": ["calls"]})
+    assert h.received() == [{"type": "phone.subscribe", "label": "Synthetic desk"}]
+    later = time.time() + 95
+    monkeypatch.setattr(h.controller, "clock", lambda: later)
+    h.send({"type": "phone.capabilities", "capabilities": ["calls"]})
+    assert h.received() == [{"type": "phone.subscribe", "label": "Synthetic desk"}]
 
 
 def test_texts_and_calls_arrive_on_the_shared_phone_page(hosted):
@@ -341,6 +413,59 @@ def test_root_sends_actions_only_to_a_capable_online_phone(hosted):
         c.phone_command(c.info.device_id, "sms.sync", {})
 
 
+def test_a_call_answered_elsewhere_stops_ringing_here_at_once(hosted):
+    h = hosted
+    c = h.controller
+    h.send({"type": "phone.capabilities", "capabilities": ["calls", "call-control"]})
+    h.received()
+    h.send({"type": "call.state", "state": "ringing", "number": "+15550100", "name": "Synthetic Caller"})
+    h.send({"type": "call.handled", "operation": "answer", "by": "Synthetic laptop"})
+    [call] = features(h)["calls"]
+    assert (call["state"], call["handled"], call["handled_by"], call["name"]) == ("active", "answer", "Synthetic laptop", "Synthetic Caller")
+    assert h.call_states[-1] == "active" and len(h.alerts) == 1  # Only the ringing alert; no error.
+    with pytest.raises(ValueError, match="^Answered on Synthetic laptop.$"):
+        c.phone_command(h.device, "call.command", {"operation": "reject"})
+    h.send({"type": "call.state", "state": "ended", "number": "+15550100", "name": ""})
+    assert features(h)["calls"][0]["handled_by"] == "Synthetic laptop"  # Kept until the next call rings.
+    h.send({"type": "call.state", "state": "ringing", "number": "+15550101", "name": ""})
+    assert "handled_by" not in features(h)["calls"][0]
+
+
+def test_losing_a_call_race_shows_who_won_rather_than_an_error(hosted, monkeypatch):
+    h = hosted
+    c = h.controller
+    h.send({"type": "phone.capabilities", "capabilities": ["calls", "call-control", "call-dial"]})
+    h.received()
+    refused = {"type": "call.refused", "request": "answer", "reason": "handled", "handled": "reject", "by": "Synthetic laptop"}
+    h.send(refused)  # Not asked by this computer: ignored.
+    assert c.phones()[0]["call_notice"] is None
+    h.send({"type": "call.state", "state": "ringing", "number": "+15550100", "name": ""})
+    assert c.phone_command(h.device, "call.command", {"operation": "answer"})["queued"]
+    h.send(refused)
+    assert c.phones()[0]["call_notice"] == "Declined on Synthetic laptop."
+    h.send({"type": "call.handled", "operation": "reject", "by": "Synthetic laptop"})
+    assert features(h)["calls"][0]["state"] == "ended"
+    # Two dials at once: the phone refuses the second and says why.
+    c.phone_command(h.device, "call.dial", {"number": "+15550101"})
+    assert c.phones()[0]["call_notice"] is None  # A new request clears the old note.
+    h.send({"type": "call.refused", "request": "dial", "reason": "dialing", "handled": "", "by": ""})
+    assert c.phones()[0]["call_notice"] == "Not dialed: your phone is already placing a call."
+    later = time.time() + 61
+    monkeypatch.setattr(c, "clock", lambda: later)
+    assert c.phones()[0]["call_notice"] is None
+    h.send({"type": "call.refused", "request": "dial", "reason": "in_call", "handled": "", "by": ""})
+    assert c.phones()[0]["call_notice"] is None  # Outside this computer's request window.
+
+
+def test_another_approved_device_cannot_act_through_this_computer(hosted):
+    """Subscriptions and phone actions are for phones; this computer ignores them."""
+    h = hosted
+    h.send({"type": "phone.subscribe", "label": "Synthetic laptop"}, source=h.laptop)
+    h.send({"type": "call.command", "operation": "answer"}, source=h.laptop)
+    h.send({"type": "call.handled", "operation": "answer", "by": "Synthetic laptop"}, source=h.laptop)
+    assert h.received() == [] and features(h)["calls"] == [] and h.controller.phones() == []
+
+
 def test_group_threads_are_not_replied_to_from_hosted(hosted):
     h = hosted
     h.send({"type": "phone.capabilities", "capabilities": ["sms"]})
@@ -365,6 +490,7 @@ def test_contact_results_and_call_history_answer_only_a_recent_request_and_stay_
     results = {"type": "contacts.results", "query": "Syn", "contacts": [{"name": "Synthetic Caller", "numbers": ["+15550100"]}]}
     history = {"type": "calls.log", "calls": [{"number": "+15550100", "name": "", "timestamp": 1, "duration": 0, "type": "missed"}]}
     h.send({"type": "phone.capabilities", "capabilities": ["contacts", "call-log"]})
+    h.received()
     h.send(results)
     h.send(history)
     assert features(h)["contacts"] == [] and features(h)["call_logs"] == []  # Unrequested answers are dropped.

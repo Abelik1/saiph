@@ -91,11 +91,12 @@ class HostedActivity : ComponentActivity() {
         }.onFailure { message("Invalid or expired root code. Ask your computer for a new code.") }
     }
     private fun granted(permission: String) = checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
-    /** Off by default: the root computer may act on texts and calls only after the owner turns this on here. */
+    /** Off by default: approved computers may act on texts and calls only after the owner turns this on here. */
     private fun textsAndCalls() {
         root.addView(heading("Texts and calls"))
-        root.addView(text("Show your texts and calls on your computer. From it you can reply in one-to-one conversations, start a new text, " +
-            "answer or decline a ringing call and dial a number. Only your root computer can ask, and only while this is on. " +
+        root.addView(text("Show your texts and calls on your computers. From any computer approved for your Saiph account you can reply in " +
+            "one-to-one conversations, start a new text, answer or decline a ringing call and dial a number, only while this is on. " +
+            "If two computers answer or decline the same call, the first one wins and the other is told. " +
             "Texts, numbers and names are end-to-end encrypted; Saiph Hosted cannot read them. Pictures (MMS), group replies and call audio stay on this phone."))
         if (runtime.textsAndCalls()) {
             root.addView(button("Turn off texts and calls") { runtime.setTextsAndCalls(false); render() })

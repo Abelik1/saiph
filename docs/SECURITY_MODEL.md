@@ -82,27 +82,53 @@ still learn is traffic shape: a burst of events while conversations sync, a
 quicker desktop poll once a phone shares texts or calls, and event timing that
 can correlate with incoming texts and calls.
 
+Each sealed event has exactly one recipient. The phone sends its capabilities
+to every other approved device; each computer answers with `phone.subscribe`
+and its display name, renewed about every two minutes and kept by the phone for
+ten. Live text updates and call state are copied to every current subscriber.
+A full conversation sync goes only to the computer that asked for it, and
+contact results, call history and refusals go only to the requesting computer.
+The roster does not record device kinds: any approved device that subscribes
+is treated as a computer and receives the phone's texts and call state.
+
 Decryption proves which approved device sent an event, not that it may act. A
 phone carries out a text reply, a new text, answering or declining a call,
 dialing, a contact search or a call-history request only when all of these hold:
-the sender is the root computer (other approved phones are refused), the phone's
-owner turned on Texts and calls in Saiph Hosted (off by default, confirmed with
-the screen lock), the matching Android permission is granted, the payload has
-the exact shape and limits of its type, and, for a text, a call answer or
-decline or a dial, the event's receipt has not been claimed before (each runs
-at most once; an interrupted one is not retried). Replies go only to one-person
-threads; dialing refuses `*` and `#`. The root computer sends an action only to
-an approved phone that advertised the capability and was heard from in the last
-five minutes, and checks that a reply thread exists and a call is still ringing.
-It shows phone data only from approved non-root devices that advertised the
-matching capability; contact results and call history are accepted only within
-a minute of its own request and are kept in memory. Revoking a phone deletes its
-texts and calls from the computer.
+the sender is a current roster member that subscribed in the last ten minutes
+(root or not), the phone's owner turned on Texts and calls in Saiph Hosted (off
+by default, confirmed with the screen lock), the matching Android permission is
+granted, the payload has the exact shape and limits of its type, and, for a
+text, a call answer or decline or a dial, the event's receipt has not been
+claimed before (each runs at most once; an interrupted one is not retried).
+Replies go only to one-person threads; dialing refuses `*` and `#`.
 
-Anyone who controls the root computer while it is unlocked, or its hosted keys,
-can read the phone's synced texts and act on them within these limits, just as
-with clipboard and notifications. A lost root computer should be revoked from
-the account and the phone's Texts and calls switch turned off.
+Several computers can act on the same call. The phone settles it first come,
+first served: it carries out the first answer or decline for a ringing call,
+immediately sends `call.handled` (which action, which computer) to every
+subscribed computer so they stop ringing, and answers any later answer or
+decline for that call with `call.refused`, shown on the losing computer as
+"Answered on <computer>" or "Already handled on another computer". A dial is
+refused while the phone is on a call or placed another call in the last ten
+seconds. A call declined from a computer is reported as ended, not missed. The
+computer's name in these messages is chosen by that computer and is not
+authenticated beyond its roster membership.
+
+Each computer sends an action only to an approved phone that advertised the
+capability and was heard from in the last five minutes, and checks that a reply
+thread exists and a call is still ringing. It shows phone data only from
+approved devices that advertised the matching capability; contact results,
+call history and refusals are accepted only within a minute of that computer's
+own request and are kept in memory. Revoking a phone deletes its texts and calls
+from the computer that revokes it (today, the root); the phone stops sending to
+a revoked computer at its next roster refresh.
+
+Anyone who controls an approved computer while it is unlocked, or its hosted
+keys, can read the phone's synced texts and act on them within these limits,
+just as with clipboard and notifications. A lost computer should be revoked
+from the account and the phone's Texts and calls switch turned off until then.
+The desktop app can currently only be the root; a second computer cannot yet
+join an account, so the multi-computer path is implemented in the protocol and
+on the phone and tested with synthetic devices only.
 
 ## What remains
 

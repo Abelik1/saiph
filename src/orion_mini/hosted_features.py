@@ -7,17 +7,33 @@ from a current roster member; it does not authorize an effect by itself.
 Data effects: clipboard text, notification display/dismissal, explicitly
 saved file offers, and the phone's texts and call state shown on the computer.
 
-Phone actions (owner decision 2026-10-14, reversing the earlier provisional
-"no SMS or calls"): the root computer may ask a phone to reply in a one-to-one
+Phone actions (owner decisions 2026-10-14, reversing the earlier provisional
+"no SMS or calls", and then the first draft's root-only rule): any approved
+computer on the roster, root or not, may ask a phone to reply in a one-to-one
 text conversation, start a new text to one number, answer or decline a ringing
 call, dial an ordinary number, search contacts and list recent calls. Each is a
-separate event type with an exact shape and fixed limits. Only the root may
-issue them; the phone refuses them unless its owner turned on texts and calls
-for Hosted and granted the matching Android permission. The computer accepts
-phone data only from an approved non-root member that advertised the matching
-capability, and contact results or call history only in answer to its own
-recent request (kept in memory, never stored). MMS pictures, group replies and
-call audio are not defined. These paths still need physical-device acceptance.
+separate event type with an exact shape and fixed limits.
+
+A computer announces itself to a phone with `phone.subscribe` (its display
+name) after the phone advertises its capabilities. The phone sends texts and
+call state to each current, recently subscribed roster member, and acts only
+for them, only while its owner's Texts and calls switch is on and only with the
+matching Android permission. The roster has no device kinds, so any approved
+device that subscribes is treated as a computer. Each sealed event has one
+recipient: live updates are copied to every subscriber, a full conversation
+sync goes only to the computer that asked, and contact results, call history
+and refusals go only to the requester.
+
+Calls are first come, first served: the phone carries out the first answer or
+decline for a ringing call, tells every computer with `call.handled` (who and
+what) and answers later attempts with `call.refused`. A dial is refused while
+the phone is on a call or already placing one.
+
+The computer accepts phone data only from an approved member that advertised
+the matching capability, and contact results, call history or refusals only in
+answer to its own recent request (kept in memory, never stored). MMS pictures,
+group replies and call audio are not defined. These paths still need
+physical-device acceptance.
 """
 from __future__ import annotations
 
@@ -41,13 +57,21 @@ SMS_MESSAGES = "sms.messages"
 SMS_REMOVE = "sms.remove"
 SMS_INDEX = "sms.index"
 CALL_STATE = "call.state"
+CALL_HANDLED = "call.handled"  # First answer/decline won; sent to every subscribed computer.
+CALL_REFUSED = "call.refused"  # A later answer/decline, or a dial while busy; requester only.
 CONTACTS_RESULTS = "contacts.results"
 CALLS_LOG = "calls.log"
 DATA_CAPABILITY = {SMS_THREAD: "sms", SMS_MESSAGES: "sms", SMS_REMOVE: "sms", SMS_INDEX: "sms",
-                   CALL_STATE: "calls", CONTACTS_RESULTS: "contacts", CALLS_LOG: "call-log"}
-PHONE_DATA = frozenset({PHONE_CAPABILITIES, *DATA_CAPABILITY})
+                   CALL_STATE: "calls", CALL_HANDLED: "calls", CONTACTS_RESULTS: "contacts", CALLS_LOG: "call-log"}
+PHONE_DATA = frozenset({PHONE_CAPABILITIES, CALL_REFUSED, *DATA_CAPABILITY})
 
-# Phone actions, root computer -> phone. The phone checks the same table.
+# Computer -> phone: "send me your texts and calls"; the phone keeps it ten minutes.
+PHONE_SUBSCRIBE = "phone.subscribe"
+MAX_LABEL = 40
+_REFUSED_REQUESTS = {"answer": "call.command", "reject": "call.command", "dial": "call.dial"}
+_REFUSED_REASONS = ("handled", "not_ringing", "in_call", "dialing")
+
+# Phone actions, any subscribed computer -> phone. The phone checks the same table.
 SMS_SYNC = "sms.sync"
 SMS_OPEN = "sms.open"
 SMS_SEND = "sms.send"
@@ -201,6 +225,20 @@ def read_phone_data(payload) -> tuple[str, dict]:
         if number:
             _address(number)
         return kind_, {"state": payload["state"], "number": number, "name": _text(payload["name"], 240)}
+    if kind_ == CALL_HANDLED:
+        _exact(payload, kind_, {"operation", "by"})
+        if payload["operation"] not in ("answer", "reject"):
+            raise FeatureError()
+        return kind_, {"operation": payload["operation"], "by": _label(payload["by"], empty=True)}
+    if kind_ == CALL_REFUSED:
+        _exact(payload, kind_, {"request", "reason", "handled", "by"})
+        if (payload["request"] not in _REFUSED_REQUESTS or payload["reason"] not in _REFUSED_REASONS
+                or payload["handled"] not in ("answer", "reject", "")
+                or (payload["reason"] == "handled") != (payload["handled"] != "")
+                or (payload["request"] == "dial") != (payload["reason"] in ("in_call", "dialing"))):
+            raise FeatureError()
+        return kind_, {"request": payload["request"], "reason": payload["reason"], "handled": payload["handled"],
+                       "by": _label(payload["by"], empty=True)}
     if kind_ == CONTACTS_RESULTS:
         _exact(payload, kind_, {"query", "contacts"})
         contacts = payload["contacts"]
@@ -228,6 +266,32 @@ def read_phone_data(payload) -> tuple[str, dict]:
                          "duration": _integer(call["duration"], high=10**9), "type": call["type"]})
         return kind_, {"calls": rows}
     raise FeatureError()
+
+
+def _label(value, *, empty=False):
+    """A computer's display name as shown to other computers: one short printable line."""
+    text = _text(value, MAX_LABEL, empty=empty)
+    if any(ord(c) < 32 or ord(c) == 127 for c in text) or (text and not text.strip()):
+        raise FeatureError()
+    return text
+
+
+def refused_request(body) -> str:
+    """The phone action type a `call.refused` answers, for the request window."""
+    return _REFUSED_REQUESTS[body["request"]]
+
+
+def subscribe_payload(label) -> dict:
+    """Ask a phone for its texts and calls, naming this computer to the others."""
+    if type(label) is not str:
+        raise FeatureError()
+    clean = "".join(c for c in label if ord(c) >= 32 and ord(c) != 127 and not 0xD800 <= ord(c) <= 0xDFFF).strip()
+    return {"type": PHONE_SUBSCRIBE, "label": _label(clean[:MAX_LABEL].strip() or "Computer")}
+
+
+def read_subscribe(payload) -> str:
+    _exact(payload, PHONE_SUBSCRIBE, {"label"})
+    return _label(payload["label"])
 
 
 def _sms_text(value):

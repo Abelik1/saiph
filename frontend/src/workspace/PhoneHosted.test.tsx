@@ -81,6 +81,23 @@ describe("Saiph Hosted phone on the Phone page", () => {
     expect(screen.getByText(/Turn on Texts and calls in Saiph Hosted on your phone and allow phone access/)).toBeVisible();
     expect(screen.queryByRole("button", { name: "Answer" })).toBeNull();
   });
+  it("stops offering answer once another computer handled the call and says which", () => {
+    const handled = { ...features, calls: [{ ...features.calls[0], state: "active" as const, handled: "answer" as const, handled_by: "Synthetic laptop" }] };
+    render(<PhoneTabs features={handled} phone={hostedPhone} client={client()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Calls" }));
+    expect(screen.getByText("Call in progress")).toBeVisible();
+    expect(screen.getByText("Answered on Synthetic laptop")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Answer" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Decline" })).toBeNull();
+  });
+  it("shows a lost race or a refused dial as a plain note, not an error", () => {
+    const declined = { ...features, calls: [{ ...features.calls[0], state: "ended" as const, handled: "reject" as const, handled_by: "Synthetic laptop" }] };
+    render(<PhoneTabs features={declined} phone={{ ...hostedPhone, call_notice: "Not dialed: your phone is already on a call." }} client={client()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Calls" }));
+    expect(screen.getByText("Not dialed: your phone is already on a call.")).toHaveAttribute("role", "status");
+    expect(screen.getByText("Declined on Synthetic laptop")).toBeVisible();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
   it("keeps group threads on the phone without suggesting an update", () => {
     const group = { ...features, threads: [{ ...features.threads[0], recipients: ["+15550100", "+15550101"] }] };
     render(<PhoneTabs features={group} phone={hostedPhone} client={client()} />);

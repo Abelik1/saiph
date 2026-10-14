@@ -11,6 +11,10 @@ class HostedPhoneFramesTest {
     companion object {
         const val THREAD_WIRE = """{"message":{"addresses":["+15550100"],"body":"Synthetic hello","direction":"incoming","id":41,"subscription":1,"timestamp":1760000000000},"recipients":["+15550100"],"thread":7,"type":"sms.thread"}"""
         const val SEND_WIRE = """{"text":"On my way 😀","thread":7,"type":"sms.send"}"""
+        const val SUBSCRIBE_WIRE = """{"label":"Synthetic desk","type":"phone.subscribe"}"""
+        const val HANDLED_WIRE = """{"by":"Synthetic laptop","operation":"answer","type":"call.handled"}"""
+        const val REFUSED_WIRE = """{"by":"Synthetic laptop","handled":"answer","reason":"handled","request":"reject","type":"call.refused"}"""
+        const val BUSY_WIRE = """{"by":"","handled":"","reason":"in_call","request":"dial","type":"call.refused"}"""
     }
     private val everything = FeatureAccess(sms = true, calls = true, callControl = true, contacts = true, callLog = true, callDial = true)
     private val root = "dev_root"
@@ -28,16 +32,74 @@ class HostedPhoneFramesTest {
         assertFalse(HostedPhoneFrames.mayPublish("clipboard.text", everything, true))
     }
 
-    @Test fun onlyTheRootMayCauseAPhoneActionAndOnlyWhenAllowed() {
-        assertTrue(HostedPhoneFrames.allowed("sms.send", root, root, everything, true))
-        assertFalse(HostedPhoneFrames.allowed("sms.send", "dev_other_phone", root, everything, true))
-        assertFalse(HostedPhoneFrames.allowed("sms.send", root, root, everything, false))
-        assertFalse(HostedPhoneFrames.allowed("sms.send", root, root, FeatureAccess(calls = true), true))
-        assertFalse(HostedPhoneFrames.allowed("call.command", root, root, FeatureAccess(calls = true), true))
-        assertTrue(HostedPhoneFrames.allowed("call.command", root, root, FeatureAccess(calls = true, callControl = true), true))
-        assertFalse(HostedPhoneFrames.allowed("call.dial", root, root, FeatureAccess(calls = true, callControl = true), true))
-        assertFalse(HostedPhoneFrames.allowed("phone.ring", root, root, everything, true))
-        assertFalse(HostedPhoneFrames.allowed("sms.attachment.request", root, root, everything, true))
+    @Test fun anySubscribedComputerMayCauseAPhoneActionButOnlyWhenAllowed() {
+        val computers = setOf(root, "dev_laptop")
+        assertTrue(HostedPhoneFrames.allowed("sms.send", root, computers, everything, true))
+        assertTrue(HostedPhoneFrames.allowed("call.command", "dev_laptop", computers, everything, true)) // Not only the root.
+        assertFalse(HostedPhoneFrames.allowed("sms.send", "dev_unsubscribed", computers, everything, true))
+        assertFalse(HostedPhoneFrames.allowed("sms.send", root, emptySet(), everything, true))
+        assertFalse(HostedPhoneFrames.allowed("sms.send", root, computers, everything, false))
+        assertFalse(HostedPhoneFrames.allowed("sms.send", root, computers, FeatureAccess(calls = true), true))
+        assertFalse(HostedPhoneFrames.allowed("call.command", root, computers, FeatureAccess(calls = true), true))
+        assertTrue(HostedPhoneFrames.allowed("call.command", root, computers, FeatureAccess(calls = true, callControl = true), true))
+        assertFalse(HostedPhoneFrames.allowed("call.dial", root, computers, FeatureAccess(calls = true, callControl = true), true))
+        assertFalse(HostedPhoneFrames.allowed("phone.ring", root, computers, everything, true))
+        assertFalse(HostedPhoneFrames.allowed("sms.attachment.request", root, computers, everything, true))
+        assertTrue(HostedPhoneFrames.mayPublish("call.refused", FeatureAccess(callDial = true), true))
+        assertFalse(HostedPhoneFrames.mayPublish("call.refused", everything, false))
+        assertFalse(HostedPhoneFrames.mayPublish("call.handled", FeatureAccess(callControl = true), true))
+    }
+
+    @Test fun subscriptionsNameAComputerInOneShortLine() {
+        fun subscribe(json: String) = HostedPhoneFrames.subscribe(Json.parseToJsonElement(json).jsonObject)
+        assertEquals("Synthetic desk", subscribe(SUBSCRIBE_WIRE))
+        listOf("""{"type":"phone.subscribe","label":""}""", """{"type":"phone.subscribe","label":"  "}""",
+            """{"type":"phone.subscribe","label":"Desk\nPC"}""", """{"type":"phone.subscribe","label":"${"x".repeat(41)}"}""",
+            """{"type":"phone.subscribe","label":7}""", """{"type":"phone.subscribe","label":"Desk","root":true}""",
+            """{"type":"sms.sync","label":"Desk"}""").forEach { assertNull(it, subscribe(it)) }
+    }
+
+    @Test fun theFirstAnswerOrDeclineWinsAndLaterOnesAreToldWho() {
+        var now = 1_000L
+        val race = HostedCallRace { now }
+        val ringing = Any()
+        assertEquals(HostedCallRace.Refused("not_ringing"), race.claimCall("Synthetic desk", true, phoneRinging = true))
+        race.observe(ringing, CallState.Ringing)
+        race.observe(ringing, CallState.Ringing) // The same event copied for two computers counts once.
+        assertEquals(HostedCallRace.Refused("not_ringing"), race.claimCall("Synthetic desk", true, phoneRinging = false))
+        assertEquals(HostedCallRace.Won, race.claimCall("Synthetic laptop", false, phoneRinging = true))
+        assertEquals(HostedCallRace.Refused("handled", "reject", "Synthetic laptop"), race.claimCall("Synthetic desk", true, phoneRinging = true))
+        assertEquals(HostedCallRace.Refused("handled", "reject", "Synthetic laptop"), race.claimCall("Synthetic desk", false, phoneRinging = true))
+        // Declining ends the call; Android then reports it as missed, which computers must not alert on.
+        now += 2_000
+        assertEquals(CallState.Ended, race.published(CallState.MissedCall))
+        race.observe(Any(), CallState.Ended)
+        now += 20_000
+        assertEquals(CallState.MissedCall, race.published(CallState.MissedCall))
+        // A new call starts a new race.
+        race.observe(Any(), CallState.Ringing)
+        assertEquals(HostedCallRace.Won, race.claimCall("Synthetic desk", true, phoneRinging = true))
+        assertEquals(HostedCallRace.Refused("handled", "answer", "Synthetic desk"), race.claimCall("Synthetic laptop", false, phoneRinging = false))
+        assertEquals(CallState.MissedCall, race.published(CallState.MissedCall)) // Answered, so not a remote decline.
+    }
+
+    @Test fun aDialIsRefusedWhileThePhoneIsOnACallOrAlreadyPlacingOne() {
+        var now = 0L
+        val race = HostedCallRace { now }
+        assertEquals(HostedCallRace.Refused("in_call"), race.claimDial(phoneBusy = true))
+        assertEquals(HostedCallRace.Won, race.claimDial(phoneBusy = false))
+        assertEquals(HostedCallRace.Refused("dialing"), race.claimDial(phoneBusy = false))
+        now += 11_000
+        assertEquals(HostedCallRace.Won, race.claimDial(phoneBusy = false))
+        race.observe(Any(), CallState.Ended) // A finished call frees the phone at once.
+        assertEquals(HostedCallRace.Won, race.claimDial(phoneBusy = false))
+    }
+
+    @Test fun raceResultsMatchTheDesktopWire() {
+        assertEquals(HANDLED_WIRE, String(HostedEnvelope.canonical(HostedPhoneFrames.callHandled(true, "Synthetic laptop")), Charsets.US_ASCII))
+        assertEquals(REFUSED_WIRE, String(HostedEnvelope.canonical(HostedPhoneFrames.callRefused("reject",
+            HostedCallRace.Refused("handled", "answer", "Synthetic laptop"))), Charsets.US_ASCII))
+        assertEquals(BUSY_WIRE, String(HostedEnvelope.canonical(HostedPhoneFrames.callRefused("dial", HostedCallRace.Refused("in_call"))), Charsets.US_ASCII))
     }
 
     private fun parse(json: String) = HostedPhoneFrames.command(Json.parseToJsonElement(json).jsonObject)

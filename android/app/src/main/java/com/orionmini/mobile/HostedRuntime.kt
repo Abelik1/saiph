@@ -18,8 +18,8 @@ import java.util.concurrent.ArrayBlockingQueue
 
 /**
  * One pinned Android member; no root creation. Phone actions (texts and calls)
- * run only for the root computer, only while the owner's "Texts and calls"
- * switch is on and only with the matching Android permission.
+ * run only for approved computers that subscribed, only while the owner's
+ * "Texts and calls" switch is on and only with the matching Android permission.
  */
 class HostedRuntime private constructor(private val context: Context) {
     companion object {
@@ -34,16 +34,29 @@ class HostedRuntime private constructor(private val context: Context) {
     private var session: HostedSession? = null
     private var transport: HostedHttpTransport? = null
     private val outgoing = ArrayBlockingQueue<JsonObject>(64)
-    // Conversation sync is bulk and lower priority than clipboard, notifications and calls.
-    private val texts = ArrayBlockingQueue<Pair<JsonObject, () -> Unit>>(256)
-    /** Wakes the sync loop for a ringing call or an answer the computer is waiting for. */
+    // Phone data for one subscribed computer each: call state and answers first,
+    // then conversation sync, which is bulk and lower priority than everything else.
+    private class Delivery(val target: String, val payload: JsonObject, val delivered: () -> Unit)
+    private val calls = ArrayBlockingQueue<Delivery>(64)
+    private val texts = ArrayBlockingQueue<Delivery>(256)
+    /** Computers that asked for texts and calls: device ID to display name and time. */
+    private val subscriptions = java.util.concurrent.ConcurrentHashMap<String, Pair<String, Long>>()
+    @Volatile private var members: Set<String> = emptySet()
+    /** Wakes the sync loop for a ringing call or an answer a computer is waiting for. */
     val wake = Channel<Unit>(Channel.CONFLATED)
     @Volatile var ringing = false
         private set
     private var advertised: List<String>? = null
     private var advertisedAt = 0L
-    /** Installed by the sync service; runs one validated phone action. */
-    var phone: ((String, HostedPhoneCommand) -> Unit)? = null
+    /** Installed by the sync service; runs one validated phone action (event ID, sender, action). */
+    var phone: ((String, String, HostedPhoneCommand) -> Unit)? = null
+    /** Current roster members that subscribed in the last ten minutes, with their names. */
+    fun subscribers(): Map<String, String> {
+        val now = System.currentTimeMillis()
+        return subscriptions.filter { (id, value) -> id in members && now - value.second in 0..HostedPhoneFrames.SUBSCRIPTION_MILLIS }
+            .mapValues { it.value.first }
+    }
+    fun label(device: String) = subscriptions[device]?.first.orEmpty()
     private val cache = ClipboardCache()
     private val receipts = CommandReceipts(context)
     @Volatile var status = "Off"
@@ -61,10 +74,10 @@ class HostedRuntime private constructor(private val context: Context) {
     fun textsAndCalls() = prefs.getBoolean("texts_and_calls", false)
     fun setTextsAndCalls(value: Boolean) {
         check(prefs.edit().putBoolean("texts_and_calls", value).commit())
-        if (!value) { texts.clear(); ringing = false }
+        if (!value) { texts.clear(); calls.clear(); ringing = false }
         advertised = null
     }
-    fun textBacklog() = texts.isNotEmpty()
+    fun textBacklog() = texts.isNotEmpty() || calls.isNotEmpty()
     fun hasPackagedDefaults(): Boolean = runCatching {
         context.assets.open("hosted-defaults.json").use { it.read() != -1 }
     }.getOrDefault(false)
@@ -82,7 +95,8 @@ class HostedRuntime private constructor(private val context: Context) {
     }
     @Synchronized fun invalidate() {
         generation++; session?.invalidate(); session = null; transport = null
-        outgoing.clear(); texts.clear(); ringing = false; advertised = null
+        outgoing.clear(); texts.clear(); calls.clear(); ringing = false; advertised = null
+        subscriptions.clear(); members = emptySet()
         offers = emptyList(); status = if (enabled()) "Sign in again" else "Off"
     }
     fun configure(origin: String, issuer: String, audience: String, client: String, refresh: Boolean) {
@@ -153,25 +167,24 @@ class HostedRuntime private constructor(private val context: Context) {
                 buildJsonObject { put("type", type); put("text", text); put("sha256", ClipboardCache.hash(bytes)) }
             }
             "notification.upsert", "notification.remove" -> if (access.notifications) value else return false
-            // Call state and answers to the computer's own requests go first.
-            "call.state", "contacts.results", "calls.log" -> {
-                if (!HostedPhoneFrames.mayPublish(type, access, textsAndCalls()) || value["type"] != JsonPrimitive(type) || !HostedPhoneFrames.fits(value)) return false
-                if (type == "call.state") ringing = value["state"] == JsonPrimitive("ringing")
-                value
-            }
             else -> return false
         }
         val queued = outgoing.offer(payload)
-        if (queued && type in HostedPhoneFrames.DATA_CAPABILITY) wake.trySend(Unit)
-        else if (queued) UsageAnalytics.count(context, if (type == "clipboard.text") "clipboard_sent" else "notification_shared")
+        if (queued) UsageAnalytics.count(context, if (type == "clipboard.text") "clipboard_sent" else "notification_shared")
         return queued
     }
-    /** Conversation sync to the root computer; false when off, not permitted or the queue is full. */
-    fun enqueueText(value: JsonObject, delivered: () -> Unit): Boolean {
-        if (!enabled() || status != "Connected" || !HostedAccount.get(context).signedIn()) return false
+    /**
+     * Texts and calls for one subscribed computer; false when off, not permitted,
+     * not subscribed or the queue is full. Call state and answers go first.
+     */
+    fun enqueuePhone(target: String, value: JsonObject, delivered: () -> Unit): Boolean {
+        if (!enabled() || status != "Connected" || !HostedAccount.get(context).signedIn() || target !in subscribers()) return false
         val type = (value["type"] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: return false
-        if (!type.startsWith("sms.") || !HostedPhoneFrames.mayPublish(type, OrionPermissions.read(context), textsAndCalls()) || !HostedPhoneFrames.fits(value)) return false
-        return texts.offer(value to delivered)
+        if (!HostedPhoneFrames.mayPublish(type, OrionPermissions.read(context), textsAndCalls()) || type == HostedPhoneFrames.CAPABILITIES
+            || !HostedPhoneFrames.fits(value)) return false
+        if (type.startsWith("sms.")) return texts.offer(Delivery(target, value, delivered))
+        if (type == "call.state") ringing = value["state"] == JsonPrimitive("ringing")
+        return calls.offer(Delivery(target, value, delivered)).also { if (it) wake.trySend(Unit) }
     }
     suspend fun step() = mutex.withLock {
         if (!enabled()) { invalidate(); return@withLock }
@@ -185,10 +198,13 @@ class HostedRuntime private constructor(private val context: Context) {
         }
         gate(); status = "Connected"
         runCatching { watchMembers(current) }
-        // Tell the root computer what this phone offers, on change and every two minutes.
+        members = current.currentMembers().keys - current.deviceId
+        subscriptions.keys.retainAll(members) // A revoked computer stops receiving at once.
+        // Tell every approved device what this phone offers, on change and every two
+        // minutes; computers answer with phone.subscribe. The roster has no device kinds.
         val offered = HostedPhoneFrames.capabilities(OrionPermissions.read(context), textsAndCalls())
         if (offered != advertised || System.currentTimeMillis() - advertisedAt > 120_000) {
-            gate(); transport!!.send(current.root.deviceId, HostedPhoneFrames.capabilitiesPayload(offered))
+            for (member in members) { gate(); transport!!.send(member, HostedPhoneFrames.capabilitiesPayload(offered)) }
             advertised = offered; advertisedAt = System.currentTimeMillis()
         }
         while (true) {
@@ -196,17 +212,18 @@ class HostedRuntime private constructor(private val context: Context) {
             val type = payload["type"]?.jsonPrimitive?.content
             val access = OrionPermissions.read(context)
             if (type == "clipboard.text" && !access.clipboard || type?.startsWith("notification.") == true && !access.notifications) continue
-            if (type != null && type in HostedPhoneFrames.DATA_CAPABILITY && !HostedPhoneFrames.mayPublish(type, access, textsAndCalls())) continue
             gate(); transport!!.send(current.root.deviceId, payload)
         }
+        // Each phone delivery names one computer, which must still be subscribed and approved.
+        fun deliver(item: Delivery) {
+            val type = item.payload.getValue("type").jsonPrimitive.content
+            if (item.target !in subscribers() || !HostedPhoneFrames.mayPublish(type, OrionPermissions.read(context), textsAndCalls())) return
+            gate(); transport!!.send(item.target, item.payload)
+            runCatching(item.delivered)
+        }
+        while (true) deliver(calls.poll() ?: break)
         // A bounded share of the conversation sync per pass; the rest follows shortly.
-        repeat(32) {
-            val (payload, delivered) = texts.poll() ?: return@repeat
-            val type = payload.getValue("type").jsonPrimitive.content
-            if (!HostedPhoneFrames.mayPublish(type, OrionPermissions.read(context), textsAndCalls())) return@repeat
-            gate(); transport!!.send(current.root.deviceId, payload)
-            runCatching(delivered)
-        }
+        repeat(32) { deliver(texts.poll() ?: return@repeat) }
         gate(); transport!!.pollIntoEncryptedInbox()
         val files = mutableListOf<Pair<String, String>>()
         for (envelope in current.pendingIncoming()) {
@@ -232,13 +249,17 @@ class HostedRuntime private constructor(private val context: Context) {
                     check(Regex("[A-Za-z0-9._:|/+=@-]{1,256}").matches(key))
                     if (OrionPermissions.read(context).notifications && receipts.claim("hosted:$id")) dismiss?.invoke(key)
                 }
-                // Decryption proves origin only. Texts and calls need the root as sender,
-                // the owner's switch and the Android permission, checked here at execution.
+                // A computer, root or not, asks for texts and calls under its display name.
+                HostedPhoneFrames.SUBSCRIBE -> HostedPhoneFrames.subscribe(payload)?.let { name ->
+                    if (source in members) subscriptions[source] = name to System.currentTimeMillis()
+                }
+                // Decryption proves origin only. Texts and calls need a subscribed roster member
+                // as sender, the owner's switch and the Android permission, checked at execution.
                 in HostedPhoneFrames.COMMAND_CAPABILITY -> {
                     val command = HostedPhoneFrames.command(payload)
                     // Texts and calls run at most once; reads (sync, open, search, history) may repeat.
-                    if (command != null && HostedPhoneFrames.allowed(type, source, current.root.deviceId, OrionPermissions.read(context), textsAndCalls())
-                        && (!HostedPhoneFrames.isEffect(command) || receipts.claim("hosted:$id"))) runCatching { phone?.invoke(id, command) }
+                    if (command != null && HostedPhoneFrames.allowed(type, source, subscribers().keys, OrionPermissions.read(context), textsAndCalls())
+                        && (!HostedPhoneFrames.isEffect(command) || receipts.claim("hosted:$id"))) runCatching { phone?.invoke(id, source, command) }
                 }
             }
             if (payload["type"] != JsonPrimitive("file.encrypted")) current.completeIncoming(id)
@@ -272,7 +293,7 @@ class HostedRuntime private constructor(private val context: Context) {
         // Keystore keys and encrypted trust history stay available for explicit
         // recovery. A newly enrolled member gets a fresh unique device ID.
         prefs.edit().remove("device_id").remove("root").remove("recipient").remove("seen_members").remove("texts_and_calls").commit()
-        HostedSmsKnown(context).clear()
+        HostedSmsKnown.clearAll(context)
     }
 
     /**

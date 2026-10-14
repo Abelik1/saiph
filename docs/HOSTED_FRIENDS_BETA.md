@@ -81,6 +81,19 @@ devices or disposable OS profiles for the first acceptance pass.
     missed-call alert, dialing places the call with audio on the phone, `*`/`#`
     codes are refused and recent calls list on request. Repeat with the
     phone's Texts and calls switch off: nothing is shown or carried out.
+12. Two computers (blocked until a second computer can join an account; the
+    desktop app can only be the root today): with both showing the ringing
+    call, press Answer on one and Decline on the other as close together as
+    possible. Exactly one action happens on the phone; both computers stop
+    ringing within a few seconds; the losing computer shows "Answered on
+    <name>" or "Declined on <name>" (or "Already handled on another computer"),
+    not an error. Repeat with Answer on both and Decline on both. Dial from both
+    at once: one call is placed and the other computer says the phone is
+    already placing a call; dial while on a call and check the "already on a
+    call" note. Check texts reach both computers, a full resync of one computer
+    does not resend everything to the other, a contact search or call history
+    appears only on the computer that asked, and revoking one computer stops
+    its texts at the phone's next roster refresh while the other keeps working.
 
 Record platform/build/source, fresh versus existing profile, network and results
 without tokens, codes or private content. Passing builds/tests is not physical
@@ -95,13 +108,19 @@ conversations and call state on the computer, one-to-one replies, a new text to
 one number, answering or declining a ringing call, dialing an ordinary number,
 contact search and recent calls. All of it travels inside the existing sealed
 envelopes; the service stores and forwards ciphertext and never sees message
-text, numbers or names. The phone accepts these actions only from the root
-computer and only after its owner turns on Texts and calls in Saiph Hosted on
-the phone (off by default) and grants the Android permissions. MMS pictures,
+text, numbers or names. The phone accepts these actions from any approved
+computer that subscribed to it (root or not), only after its owner turns on
+Texts and calls in Saiph Hosted on the phone (off by default) and grants the
+Android permissions. Calls are first come, first served: the first answer or
+decline wins, every computer is told at once and later attempts get a plain
+"Answered on <computer>" note; a dial is refused while the phone is on or
+placing a call. Joining an account as a second, non-root computer is not yet
+implemented in the desktop app, so the multi-computer path is unit-tested only
+(step 12 waits for it). MMS pictures,
 group replies, call audio through the computer, other remote phone actions
 (ringer, media, ring), clipboard images and photo-library browsing are outside
 the preview. Texts and calls have unit tests only; they need the physical
-acceptance in test steps 10 and 11 before friends are told they work. Once a
+acceptance in test steps 10 to 12 before friends are told they work. Once a
 phone shares texts or calls, the desktop polls for sealed events every four
 seconds instead of every fifteen, so a ringing call arrives in time.
 

@@ -17,15 +17,16 @@ sealed interface HostedPhoneCommand {
 }
 
 /**
- * Saiph Hosted texts and calls, carried inside sealed envelopes to and from the
- * root computer only. Pure codec and policy; the desktop's `hosted_features.py`
- * applies the same shapes and limits.
+ * Saiph Hosted texts and calls, carried inside sealed envelopes between the phone
+ * and every approved computer that subscribed with `phone.subscribe`. Pure codec
+ * and policy; the desktop's `hosted_features.py` applies the same shapes and limits.
  *
  * Decryption proves which approved device sent an envelope, not that it may act.
- * Phone actions are accepted only from the root computer, only while the owner's
- * "Texts and calls" switch for Hosted is on, and only with the matching Android
- * permission. Phone data is published under the same switch and permissions.
- * MMS pictures, group replies and call audio are not part of Hosted.
+ * Phone actions are accepted only from a current roster member that subscribed in
+ * the last ten minutes, only while the owner's "Texts and calls" switch for Hosted
+ * is on, and only with the matching Android permission. Phone data is published
+ * under the same switch and permissions. Calls are first come, first served (see
+ * [HostedCallRace]). MMS pictures, group replies and call audio are not part of Hosted.
  */
 object HostedPhoneFrames {
     /** Below the sealed 24,000-byte plaintext limit, leaving room for the signature. */
@@ -33,10 +34,15 @@ object HostedPhoneFrames {
     private const val MAX_SAFE = 9_007_199_254_740_991L
     private const val MAX_TIMESTAMP = 253_402_300_799_999L
     const val CAPABILITIES = "phone.capabilities"
+    const val SUBSCRIBE = "phone.subscribe"
+    /** A subscription lasts this long; computers renew it with each capabilities heartbeat. */
+    const val SUBSCRIPTION_MILLIS = 600_000L
     val COMMAND_CAPABILITY = mapOf("sms.sync" to "sms", "sms.open" to "sms", "sms.send" to "sms", "sms.compose" to "sms",
         "call.command" to "call-control", "call.dial" to "call-dial", "contacts.search" to "contacts", "calls.log.request" to "call-log")
     val DATA_CAPABILITY = mapOf("sms.thread" to "sms", "sms.messages" to "sms", "sms.remove" to "sms", "sms.index" to "sms",
-        "call.state" to "calls", "contacts.results" to "contacts", "calls.log" to "call-log")
+        "call.state" to "calls", "call.handled" to "calls", "contacts.results" to "contacts", "calls.log" to "call-log")
+    /** Sent only to the computer whose answer, decline or dial was overtaken. */
+    const val REFUSED = "call.refused"
 
     /** "files" is the existing encrypted file offer; the rest need the owner's switch. */
     fun capabilities(access: FeatureAccess, textsAndCalls: Boolean): List<String> = buildList {
@@ -55,13 +61,36 @@ object HostedPhoneFrames {
     }
 
     /** Publication gate, rechecked when queued and again just before sending. */
-    fun mayPublish(type: String, access: FeatureAccess, textsAndCalls: Boolean): Boolean =
-        type == CAPABILITIES || DATA_CAPABILITY[type]?.let { it in capabilities(access, textsAndCalls) } == true
+    fun mayPublish(type: String, access: FeatureAccess, textsAndCalls: Boolean): Boolean {
+        val offered = capabilities(access, textsAndCalls)
+        return type == CAPABILITIES || (type == REFUSED && ("call-control" in offered || "call-dial" in offered)) ||
+            DATA_CAPABILITY[type]?.let { it in offered } == true
+    }
 
-    /** Only the root computer may cause a phone action, and only one the owner allowed. */
-    fun allowed(type: String, source: String, root: String, access: FeatureAccess, textsAndCalls: Boolean): Boolean {
+    /** Any subscribed approved computer may cause a phone action, and only one the owner allowed. */
+    fun allowed(type: String, source: String, subscribers: Set<String>, access: FeatureAccess, textsAndCalls: Boolean): Boolean {
         val capability = COMMAND_CAPABILITY[type] ?: return false
-        return source == root && capability in capabilities(access, textsAndCalls)
+        return source in subscribers && capability in capabilities(access, textsAndCalls)
+    }
+
+    /** A computer's display name, one printable line of up to 40 characters; null if malformed. */
+    fun subscribe(payload: JsonObject): String? = runCatching {
+        require(payload.keys == setOf("type", "label") && text(payload, "type") == SUBSCRIBE)
+        text(payload, "label").takeIf { label ->
+            label.isNotBlank() && label.codePointCount(0, label.length) <= 40 && wellFormed(label) && label.none { it.code < 32 || it.code == 127 }
+        }
+    }.getOrNull()
+
+    /** Every computer stops ringing at once and learns which computer won. */
+    fun callHandled(answer: Boolean, by: String) = buildJsonObject {
+        put("type", "call.handled"); put("operation", if (answer) "answer" else "reject"); put("by", clean(by, 40))
+    }
+
+    /** Why the requester's answer, decline or dial was not carried out. */
+    fun callRefused(request: String, refusal: HostedCallRace.Refused) = buildJsonObject {
+        require(request in setOf("answer", "reject", "dial"))
+        put("type", REFUSED); put("request", request); put("reason", refusal.reason)
+        put("handled", refusal.handled); put("by", clean(refusal.by, 40))
     }
 
     /** Actions with an effect outside Saiph; each runs at most once per event. */
@@ -109,7 +138,10 @@ object HostedPhoneFrames {
         return null
     }
 
-    /** Phone data for the root computer; null for messages that are not texts or calls. */
+    fun carries(value: SocketMessage) = value is ConversationInfo || value is MessageList || value is RemoveConversation ||
+        value is MessageIndex || value is CallInfo
+
+    /** Phone data for a subscribed computer; null for messages that are not texts or calls. */
     fun encode(value: SocketMessage): List<JsonObject>? = when (value) {
         is ConversationInfo -> listOfNotNull(fitted { limit -> buildJsonObject {
             put("type", "sms.thread"); put("thread", id(value.threadId)); put("recipients", addresses(value.recipients))

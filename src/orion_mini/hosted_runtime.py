@@ -9,9 +9,12 @@ PROVISIONAL decisions (see docs/HOSTED_INTEGRATION_PLAN.md):
 - rosters last 12 h and are renewed when 4 h remain (`hosted_renewal`);
 - clipboard text is the first synced feature, then notifications and files;
 - a device is either self-hosted or hosted, never both;
-- texts and calls (owner decision 2026-10-14): this root computer alone sends
-  phone actions, to an approved phone that advertised the capability; phone
-  data is shown through the shared Phone page store (see `hosted_features`).
+- texts and calls (owner decisions 2026-10-14): every approved computer, root
+  or not, subscribes to a phone and may send phone actions to an approved phone
+  that advertised the capability; calls are first come, first served on the
+  phone. Phone data is shown through the shared Phone page store (see
+  `hosted_features`). This desktop app itself can so far only be the root:
+  joining an account as a second, non-root computer is not implemented yet.
 
 Not a security review. Physical-device acceptance, hosted deployment checks
 and independent review remain open.
@@ -37,10 +40,10 @@ from .hosted_approval import (
 )
 from .hosted_crypto import EnvelopeError, canonical
 from .hosted_features import (
-    ANSWERS, CALL_COMMAND, CALL_STATE, CLIPBOARD_TEXT, COMMAND_CAPABILITY, DATA_CAPABILITY, FILE_OFFER,
-    NOTIFICATION_REMOVE, NOTIFICATION_UPSERT, PHONE_CAPABILITIES, PHONE_DATA, SMS_OPEN, SMS_SEND, SMS_SYNC,
-    FeatureError, clipboard_payload, dismiss_payload, kind, phone_command, read_clipboard, read_notification,
-    read_phone_data,
+    ANSWERS, CALL_COMMAND, CALL_DIAL, CALL_HANDLED, CALL_REFUSED, CALL_STATE, CLIPBOARD_TEXT, COMMAND_CAPABILITY,
+    DATA_CAPABILITY, FILE_OFFER, NOTIFICATION_REMOVE, NOTIFICATION_UPSERT, PHONE_CAPABILITIES, PHONE_DATA, SMS_OPEN,
+    SMS_SEND, SMS_SYNC, FeatureError, clipboard_payload, dismiss_payload, kind, phone_command, read_clipboard,
+    read_notification, read_phone_data, refused_request, subscribe_payload,
 )
 from .hosted_identity import HostedIdentity
 from .hosted_keys import KeyStorageError
@@ -54,7 +57,9 @@ from .user_presence import confirm as confirm_user, status as user_verification
 from .usage import record as record_usage
 
 PHONE_ONLINE_SECONDS = 300  # Phones re-advertise their capabilities every two minutes.
-ANSWER_WINDOW_SECONDS = 60  # Contact results and call history answer a recent request only.
+ANSWER_WINDOW_SECONDS = 60  # Contact results, call history and refusals answer a recent request only.
+SUBSCRIBE_SECONDS = 90  # Renew this computer's subscription with each phone heartbeat (phones keep it 10 min).
+NOTICE_SECONDS = 60  # "Answered on <computer>" and similar notes stay this long.
 FAST_POLL_SECONDS = 4  # Ringing calls need prompt delivery once texts and calls are on.
 EXCLUSIVE = ("This computer is paired with a self-hosted Hub. A device uses either a self-hosted Hub "
              "or Saiph Hosted, never both.")
@@ -123,6 +128,17 @@ def qr_modules(text: str) -> list[str]:
     return ["".join("1" if cell else "0" for cell in row) for row in qr.get_matrix()]
 
 
+def refusal_text(body) -> str:
+    """Plain words for a call action another computer, or the phone's state, overtook."""
+    if body["reason"] == "handled":
+        if not body["by"]:
+            return "Already handled on another computer."
+        return ("Answered on " if body["handled"] == "answer" else "Declined on ") + body["by"] + "."
+    return {"not_ringing": "The call is no longer ringing.",
+            "in_call": "Not dialed: your phone is already on a call.",
+            "dialing": "Not dialed: your phone is already placing a call."}[body["reason"]]
+
+
 def device_fingerprint(member: dict) -> str:
     """Display-only comparison value for a request code's device keys."""
     raw = hashlib.sha256(b"Orion hosted device fingerprint v1\0" + canonical(member)).hexdigest().upper()
@@ -158,6 +174,8 @@ class HostedController:
         self._asked = {}  # (phone, request type) -> when this computer asked; memory only.
         self._seen = {}  # phone -> last authenticated event time; memory only.
         self._sync_requested = set()
+        self._subscribed = {}  # phone -> when this computer last subscribed to it; memory only.
+        self._notices = {}  # phone -> {"text", "at"}: why a call action was not carried out.
         self.next_poll_at = 0.0
         # Installed by the desktop window: pause media while a call rings, and
         # show incoming/missed calls as system notifications.
@@ -334,6 +352,8 @@ class HostedController:
         self.session = self.transport = self.mailbox = self.root = self.info = self.signing = None
         self._offers.clear()
         self._asked.clear()
+        self._subscribed.clear()
+        self._notices.clear()
         self._outgoing_clipboard = None
         self.decision = None
         self.status, self.error = status, ""
@@ -692,7 +712,7 @@ class HostedController:
                 elif event in PHONE_DATA:
                     self._phone_data(envelope["header"]["source"], event_id, payload)
                     outcome = "succeeded"
-                # Anything else, including phone actions sent to this root, has no effect here.
+                # Anything else, including phone actions sent to a computer, has no effect here.
             except (FeatureError, ValueError, OSError):
                 outcome = "failed"
             finally:
@@ -823,6 +843,11 @@ class HostedController:
         now = int(self.clock())
         if kind_ == PHONE_CAPABILITIES:
             self.workspace.store.save("hosted_phone", {"id": source, "capabilities": body["capabilities"], "seen_at": now})
+            if now - self._subscribed.get(source, 0) >= SUBSCRIBE_SECONDS:
+                # Any approved computer, root or not, asks for texts and calls by name.
+                self.mailbox.stage(source, subscribe_payload(self.label()), ttl_seconds=300)
+                self._subscribed[source] = now
+                self._wake.set()
             if "sms" not in body["capabilities"]:
                 self._sync_requested.discard(source)
             elif source not in self._sync_requested and not any(
@@ -832,8 +857,18 @@ class HostedController:
                 self.mailbox.stage(source, phone_command(SMS_SYNC, {}), ttl_seconds=60)
                 self._wake.set()
             return
+        if kind_ == CALL_REFUSED:
+            # Only in answer to this computer's own recent call action.
+            asked = self._asked.get((source, refused_request(body)))
+            if asked is None or not 0 <= now - asked <= ANSWER_WINDOW_SECONDS:
+                raise FeatureError()
+            self._notices[source] = {"text": refusal_text(body), "at": now}
+            return
         if DATA_CAPABILITY[kind_] not in self._capabilities(source):
             raise FeatureError()
+        if kind_ == CALL_HANDLED:
+            self._call_handled(source, event_id, body)
+            return
         if kind_ in ANSWERS:
             asked = self._asked.get((source, ANSWERS[kind_]))
             if asked is None or not 0 <= now - asked <= ANSWER_WINDOW_SECONDS:
@@ -841,9 +876,34 @@ class HostedController:
         features = getattr(self.workspace, "phone_features", None)
         if features is None:
             raise FeatureError()
+        if kind_ == CALL_STATE and body["state"] != "ringing":
+            # Keep "Answered on <computer>" while the same call continues or ends.
+            current = next((row for row in self.workspace.store.all("phone_call") if row.get("device_id") == source), {})
+            if current.get("handled_by") is not None and current.get("state") != "ringing":
+                body = {**body, "handled": current.get("handled"), "handled_by": current["handled_by"]}
         features.event({"id": event_id, "type": kind_, "payload": body, "source": source}, None)
         if kind_ == CALL_STATE:
             self._call(body)
+
+    def label(self) -> str:
+        """This computer's name as other computers see it in "Answered on ..."."""
+        name = (self.workspace.settings.get("machine") or {}).get("name")
+        return name if type(name) is str and name.strip() else "Computer"
+
+    def _call_handled(self, source, event_id, body):
+        """Another computer (or this one) won the race: stop ringing everywhere at once."""
+        features = getattr(self.workspace, "phone_features", None)
+        if features is None:
+            raise FeatureError()
+        current = next((row for row in self.workspace.store.all("phone_call") if row.get("device_id") == source), {})
+        state = "active" if body["operation"] == "answer" else "ended"
+        row = {"state": state, "number": current.get("number", ""), "name": current.get("name", ""),
+               "handled": body["operation"], "handled_by": body["by"]}
+        features.event({"id": event_id, "type": CALL_STATE, "payload": row, "source": source}, None)
+        try:
+            self.call_state(state)
+        except Exception:
+            pass
 
     def _call(self, body):
         try:
@@ -886,7 +946,9 @@ class HostedController:
                 if members is not None and row["id"] not in members:
                     continue
                 seen = max(int(row.get("seen_at") or 0), self._seen.get(row["id"], 0))
+                notice = self._notices.get(row["id"])
                 result.append({"id": row["id"], "name": labels.get(row["id"], "Phone"), "hosted": True,
+                               "call_notice": notice["text"] if notice and 0 <= now - notice["at"] <= NOTICE_SECONDS else None,
                                "online": members is not None and now - seen <= PHONE_ONLINE_SECONDS,
                                "capabilities": list(row.get("capabilities") or []),
                                "last_seen_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(seen)) if seen else None})
@@ -898,8 +960,10 @@ class HostedController:
     def phone_command(self, device, kind_, body) -> dict:
         """Queue one phone action for an approved phone that offers it.
 
-        The phone repeats every check: it acts only for this root, only with its
-        owner's texts-and-calls setting and the matching Android permission.
+        The phone repeats every check: it acts only for current, subscribed roster
+        members, only with its owner's texts-and-calls setting and the matching
+        Android permission, and settles call races itself (first answer or
+        decline wins; the others get `call.refused`, shown as a notice here).
         """
         capability = COMMAND_CAPABILITY.get(kind_)
         if capability is None:
@@ -928,15 +992,20 @@ class HostedController:
                     raise HostedError("This conversation is unavailable.")
                 if kind_ == SMS_SEND and len(thread.get("recipients") or []) != 1:
                     raise HostedError("Group replies stay in your phone's messaging app.")
-            if kind_ == CALL_COMMAND and not any(row.get("device_id") == device and row.get("state") == "ringing"
-                                                 for row in self.workspace.store.all("phone_call")):
-                raise HostedError("The call is no longer ringing.")
+            if kind_ == CALL_COMMAND:
+                call = next((row for row in self.workspace.store.all("phone_call") if row.get("device_id") == device), {})
+                if call.get("state") != "ringing":
+                    handled = call.get("handled_by")
+                    raise HostedError(refusal_text({"reason": "handled", "handled": call.get("handled"), "by": handled})
+                                      if handled is not None else "The call is no longer ringing.")
             try:
                 event_id = self.mailbox.stage(device, payload, ttl_seconds=30 if kind_ == CALL_COMMAND else 60)
             except EnvelopeError:
                 raise HostedError("This request could not be sent. Shorten the message and try again.") from None
-            if kind_ in ANSWERS.values():
+            if kind_ in ANSWERS.values() or kind_ in (CALL_COMMAND, CALL_DIAL):
+                # Answers and refusals are accepted only for this computer's own recent request.
                 self._asked[(device, kind_)] = int(self.clock())
+                self._notices.pop(device, None)
             self._wake.set()
         return {"queued": True, "id": event_id}
 
