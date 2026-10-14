@@ -5,8 +5,10 @@ threads, replies, new texts, call alerts, answer/decline, dialing, contact
 search and recent calls to Saiph Hosted inside the existing sealed envelopes,
 with no hosted service change. Any approved computer that subscribes may act
 (calls first come, first served on the phone); actions need a new phone-side
-Texts and calls switch (off by default) plus Android permissions. A second,
-non-root computer cannot yet join an account in the desktop app. Covered by
+Texts and calls switch (off by default) plus Android permissions. A second
+computer joins an account as a member (branch `feat/hosted-second-computer`):
+it pins the main computer's code after a full fingerprint comparison and is
+approved there; it never signs or renews rosters. Covered by
 desktop, frontend and Android JVM unit tests only; physical-device acceptance
 ([friends beta steps 10-12](HOSTED_FRIENDS_BETA.md#test-sequence)),
 a release and independent review are pending. Not deployed or released.

@@ -18,7 +18,8 @@ from .user_presence import confirm as confirm_user
 # setting is on; with it off, self-hosted behaviour is unchanged.
 HOSTED_METHODS = frozenset({'hosted.configure', 'hosted.enable', 'hosted.sign_in', 'hosted.sign_out', 'hosted.setup_root',
                             'hosted.root_code', 'hosted.request.inspect', 'hosted.approve', 'hosted.revoke', 'hosted.forget',
-                            'hosted.notification.dismiss', 'hosted.file.send', 'hosted.file.save'})
+                            'hosted.notification.dismiss', 'hosted.file.send', 'hosted.file.save',
+                            'hosted.join.inspect', 'hosted.join', 'hosted.join.request'})
 _HOSTED_OFF = {'available': False, 'enabled': False, 'status': 'off', 'identity': False}
 
 
@@ -382,6 +383,12 @@ class LinkOperations:
             return controller.setup_root()
         if method == 'hosted.root_code':
             return controller.root_code()
+        if method == 'hosted.join.inspect':
+            return controller.inspect_join(args.get('code'))
+        if method == 'hosted.join':
+            return controller.join(args.get('code'), args.get('confirmed'))
+        if method == 'hosted.join.request':
+            return controller.request_code()
         if method == 'hosted.request.inspect':
             return controller.inspect_request(args.get('code'))
         if method == 'hosted.approve':

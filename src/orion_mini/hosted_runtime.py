@@ -13,8 +13,10 @@ PROVISIONAL decisions (see docs/HOSTED_INTEGRATION_PLAN.md):
   or not, subscribes to a phone and may send phone actions to an approved phone
   that advertised the capability; calls are first come, first served on the
   phone. Phone data is shown through the shared Phone page store (see
-  `hosted_features`). This desktop app itself can so far only be the root:
-  joining an account as a second, non-root computer is not implemented yet.
+  `hosted_features`).
+- a second computer joins as a member, the way a phone does: it pins the root
+  code after the owner compares the full fingerprint, shows a request code the
+  root approves, and never signs, renews, approves or revokes rosters.
 
 Not a security review. Physical-device acceptance, hosted deployment checks
 and independent review remain open.
@@ -35,8 +37,8 @@ from uuid import UUID
 
 from .clipboard import RecentClipboard
 from .hosted_approval import (
-    ApprovalError, RootApproval, initialize_root, local_root, make_root_code, prepare_anchored_catchup,
-    verify_request_code,
+    ApprovalError, RootApproval, TrustedRoot, initialize_root, inspect_root_code, local_root, make_request_code,
+    make_root_code, prepare_anchored_catchup, trust_root_code, verify_request_code,
 )
 from .hosted_crypto import EnvelopeError, canonical
 from .hosted_features import (
@@ -61,6 +63,7 @@ ANSWER_WINDOW_SECONDS = 60  # Contact results, call history and refusals answer 
 SUBSCRIBE_SECONDS = 90  # Renew this computer's subscription with each phone heartbeat (phones keep it 10 min).
 NOTICE_SECONDS = 60  # "Answered on <computer>" and similar notes stay this long.
 FAST_POLL_SECONDS = 4  # Ringing calls need prompt delivery once texts and calls are on.
+ROOT_ONLY = "Only your main computer can approve or remove devices."
 EXCLUSIVE = ("This computer is paired with a self-hosted Hub. A device uses either a self-hosted Hub "
              "or Saiph Hosted, never both.")
 HOSTED_ACTIVE = ("This computer uses Saiph Hosted. A device uses either Saiph Hosted or a self-hosted Hub, "
@@ -364,9 +367,14 @@ class HostedController:
             return
         config = self._config()
         info, signing, encryption = self.identity.load()
-        if info.role != "root":
+        if info.role == "root":
+            root = local_root(info.deployment_id, info.device_id, signing, encryption)
+        elif info.role == "member":
+            root = self._pinned_root()
+            if root is None or root.deployment_id != info.deployment_id or root.device_id == info.device_id:
+                raise KeyStorageError()
+        else:
             raise KeyStorageError()
-        root = local_root(info.deployment_id, info.device_id, signing, encryption)
         session = SealedSession(self.folder / "trust.sqlite3", info.deployment_id, root.signing_key, info.device_id,
                                 signing, encryption)
         self.transport = self._transport_factory(config["service_url"], session)
@@ -402,9 +410,12 @@ class HostedController:
                 finally:
                     probe.close()
                 if page["chain"]:
-                    raise HostedError("This hosted account already has a root device. Root transfer is not available.")
+                    raise HostedError("This Saiph account already has a main computer. To add this computer, "
+                                      "choose Join as another computer and approve it on your main computer.")
                 self.identity.create(deployment, role="root")
             self._open()
+            if not self.is_root():
+                raise HostedError("This computer joined as another computer. Its main computer approves devices.")
             self._genesis(token)
             self._watch_members()  # Baseline: only this computer, so the first approval alerts.
             self.status = "active"
@@ -450,6 +461,8 @@ class HostedController:
             self._require_enabled()
             if self.root is None:
                 self._open()
+            if not self.is_root():
+                raise HostedError("Show the code from your main computer; it approves new devices.")
             code = make_root_code(self.root, self.signing, ttl_seconds=300)
             return {"modules": qr_modules(code), "code": code, "expires_in": 300,
                     "expires_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(self.clock() + 300)),
@@ -490,6 +503,7 @@ class HostedController:
         with self.lock:
             self._require_enabled()
             self._open()
+            self._require_root()
             try:
                 request = verify_request_code(code, self.root)
             except ApprovalError:
@@ -505,6 +519,7 @@ class HostedController:
         with self.lock:
             self._require_enabled()
             self._open()
+            self._require_root()
             try:
                 verify_request_code(code, self.root)
             except ApprovalError:
@@ -539,6 +554,10 @@ class HostedController:
     def revoke(self, device_id) -> dict:
         if type(device_id) is not str:
             raise HostedError("Choose an approved device.")
+        with self.lock:
+            self._require_enabled()
+            self._open()
+            self._require_root()
         confirm_user(self.workspace, "remove a device from your Saiph account")
         with self.lock:
             self._require_enabled()
@@ -561,6 +580,105 @@ class HostedController:
             self._forget_phone(device_id)
         self.changed()
         return {"revoked": device_id}
+
+    # ------------------------------------------------------ second computer
+    def is_root(self) -> bool:
+        return self.info is not None and self.info.role == "root"
+
+    def _require_root(self):
+        if not self.is_root():
+            raise HostedError(ROOT_ONLY)
+
+    @property
+    def _pin_path(self) -> Path:
+        return self.folder / "root-pin.json"
+
+    def _pinned_root(self):
+        """The main computer this member trusts, pinned once after a fingerprint comparison."""
+        try:
+            raw = self._pin_path.read_bytes()
+            value = json.loads(raw) if len(raw) <= 4096 else None
+            if type(value) is not dict or set(value) != {"deployment_id", "device_id", "signing_key", "encryption_key"}:
+                return None
+            return TrustedRoot(value["deployment_id"], value["device_id"], value["signing_key"], value["encryption_key"])
+        except (OSError, ValueError, ApprovalError):
+            return None
+
+    def inspect_join(self, code) -> dict:
+        """What the main computer's code says, for comparison before anything is created."""
+        with self.lock:
+            self._require_enabled()
+            if self.identity.exists():
+                raise HostedError("This computer already has a Saiph Hosted identity.")
+            try:
+                info = inspect_root_code(code)
+            except ApprovalError:
+                raise HostedError("This code is invalid or expired. Show a fresh code on your main computer.") from None
+            return {"device_id": info["device_id"], "fingerprint": info["display_fingerprint"]}
+
+    def join(self, code, confirmed) -> dict:
+        """Join the signed-in account as another computer, approved later by its main computer.
+
+        The pin comes only from the code the owner compared, group by group, with the
+        main computer's screen. Joining creates new keys and a pending request; it
+        grants nothing until the main computer approves this computer's fingerprint.
+        """
+        if confirmed is not True:
+            raise HostedError("Compare the whole fingerprint with your main computer's screen, then confirm.")
+        with self.lock:
+            self._require_enabled()
+            if self.identity.exists():
+                raise HostedError("This computer already has a Saiph Hosted identity.")
+            try:
+                root = trust_root_code(code, trusted_out_of_band=True)
+            except ApprovalError:
+                raise HostedError("This code is invalid or expired. Show a fresh code on your main computer.") from None
+            config = self._config()
+            token = self._token_or_error()
+            probe = self._transport_factory(config["service_url"], None)
+            try:
+                deployment = probe.discover_account(token)
+                page = probe.roster_page(token)
+            except TransportError:
+                raise HostedError("Saiph Hosted is unreachable. Try again when you are online.") from None
+            finally:
+                probe.close()
+            if deployment != root.deployment_id:
+                raise HostedError("This code belongs to a different Saiph account. Sign in with the account your main computer uses.")
+            if not page["chain"]:
+                raise HostedError("This Saiph account has no main computer yet. Set this computer up as the main computer instead.")
+            # Record the pin before creating keys: an interrupted join keeps its keys and
+            # needs an explicit Forget, never a silent replacement.
+            self.folder.mkdir(mode=0o700, parents=True, exist_ok=True)
+            temporary = self._pin_path.with_suffix(".tmp")
+            temporary.write_text(json.dumps({"deployment_id": root.deployment_id, "device_id": root.device_id,
+                                             "signing_key": root.signing_key, "encryption_key": root.encryption_key},
+                                            sort_keys=True), encoding="utf-8")
+            temporary.replace(self._pin_path)
+            self.identity.create(root.deployment_id, role="member")
+            self._open()
+            self.status, self.error = "awaiting_approval", ""
+        self.changed()
+        return self.request_code()
+
+    def request_code(self) -> dict:
+        """A fresh request code for the main computer, with this computer's fingerprint."""
+        with self.lock:
+            self._require_enabled()
+            self._open()
+            if self.is_root():
+                raise HostedError("This is your main computer; it approves other devices.")
+            token = self._token_or_error()
+            try:
+                code = make_request_code(self.root, self.info.device_id, self.signing, self.session.encryption)
+                candidate = enrollment(self.info.deployment_id, self.info.device_id, self.signing, self.session.encryption)
+                # The main computer approves exactly the pending request this computer submitted.
+                self._pending(self.transport.enroll(token, candidate), candidate["device"])
+            except (ApprovalError, TransportError):
+                raise HostedError("The request could not be sent to Saiph Hosted. Try again shortly.") from None
+            return {"code": code, "modules": qr_modules(code), "expires_in": 300,
+                    "fingerprint": device_fingerprint(candidate["device"]),
+                    "root_fingerprint": self.root.display_fingerprint}
 
     def _labels(self) -> dict:
         try:
@@ -644,13 +762,13 @@ class HostedController:
                 self._open()
                 self._refresh(token)
                 expires = self.session.roster["expires_at"] if self._active() else None
-                if expires is None and self.session.history_cursor()["after_version"] == 0:
+                if expires is None and self.is_root() and self.session.history_cursor()["after_version"] == 0:
                     self._genesis(token)
                     expires = self.session.roster["expires_at"] if self._active() else None
                 self.decision = assess(expires, self.clock(), server_offset=getattr(self.transport, "server_offset", None))
                 if self.decision.blocked:
                     self.status, self.error = "clock", "Correct this computer's clock to keep devices approved."
-                elif self.decision.due:
+                elif self.decision.due and self.is_root():
                     approval = RootApproval(self.session, self.root)
                     pending = approval.pending_proposal()
                     proposal = pending if pending is not None else approval.renew(roster_ttl_seconds=self.decision.ttl_seconds)
@@ -663,6 +781,14 @@ class HostedController:
                     if self.status == "active":
                         self.error = ""
                     self._sync()
+                elif not self.decision.blocked and not self.is_root():
+                    membership = self.session.membership()
+                    if membership == "removed":
+                        self.status, self.error = "removed", "Your main computer removed this computer from your Saiph account."
+                    elif membership == "pending":
+                        self.status, self.error = "awaiting_approval", ""
+                    else:
+                        self.status, self.error = "renewal_pending", "Waiting for your main computer to renew device approvals."
                 elif not self.decision.blocked:
                     self.status, self.error = "renewal_pending", "Waiting to renew device approvals. Saiph will retry."
             except KeyStorageError:
@@ -1043,7 +1169,10 @@ class HostedController:
             if self.account is not None:
                 result["account"] = self.account.snapshot()
             if self.info is not None:
-                result.update(role=self.info.role, device_id=self.info.device_id, fingerprint=self.root.display_fingerprint)
+                own = {"id": self.info.device_id, "signing_key": self.info.signing_key, "encryption_key": self.info.encryption_key}
+                result.update(role=self.info.role, device_id=self.info.device_id,
+                              fingerprint=self.root.display_fingerprint if self.is_root() else device_fingerprint(own),
+                              root_fingerprint=self.root.display_fingerprint)
             if self.session is not None and self._active():
                 labels = self._labels()
                 members = self.session.current()
@@ -1052,8 +1181,9 @@ class HostedController:
                 result["roster"] = {
                     "version": self.session.roster["version"], "expires_at": expires,
                     "renew_at": expires - 4 * 3600, "clock_warning": bool(decision and decision.skew_warning),
-                    "members": [{"id": key, "root": key == self.info.device_id,
-                                 "label": "This computer" if key == self.info.device_id else labels.get(key, "Device"),
+                    "members": [{"id": key, "root": key == self.root.device_id, "self": key == self.info.device_id,
+                                 "label": "This computer" if key == self.info.device_id
+                                 else labels.get(key, "Main computer" if key == self.root.device_id else "Device"),
                                  "fingerprint": device_fingerprint(value)} for key, value in sorted(members.items())]}
             for event_id, envelope in list(self._offers.items()):
                 try:

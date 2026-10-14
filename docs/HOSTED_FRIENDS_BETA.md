@@ -81,8 +81,11 @@ devices or disposable OS profiles for the first acceptance pass.
     missed-call alert, dialing places the call with audio on the phone, `*`/`#`
     codes are refused and recent calls list on request. Repeat with the
     phone's Texts and calls switch off: nothing is shown or carried out.
-12. Two computers (blocked until a second computer can join an account; the
-    desktop app can only be the root today): with both showing the ringing
+12. Two computers: on the second computer turn on Hosted, sign in with the same
+    account, open Join as another computer, paste the main computer's root
+    code, compare every fingerprint group and join; paste its request code on
+    the main computer, compare that fingerprint and approve. Check clipboard
+    and a file both ways between the computers, then with both showing the ringing
     call, press Answer on one and Decline on the other as close together as
     possible. Exactly one action happens on the phone; both computers stop
     ringing within a few seconds; the losing computer shows "Answered on
@@ -114,9 +117,10 @@ Texts and calls in Saiph Hosted on the phone (off by default) and grants the
 Android permissions. Calls are first come, first served: the first answer or
 decline wins, every computer is told at once and later attempts get a plain
 "Answered on <computer>" note; a dial is refused while the phone is on or
-placing a call. Joining an account as a second, non-root computer is not yet
-implemented in the desktop app, so the multi-computer path is unit-tested only
-(step 12 waits for it). MMS pictures,
+placing a call. A second computer joins as a member: it pins the main
+computer's code after a full fingerprint comparison and the main computer
+approves it; only the main computer approves, removes or renews devices.
+The multi-computer path is unit-tested only until step 12. MMS pictures,
 group replies, call audio through the computer, other remote phone actions
 (ringer, media, ring), clipboard images and photo-library browsing are outside
 the preview. Texts and calls have unit tests only; they need the physical

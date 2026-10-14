@@ -3,11 +3,12 @@ import { useState } from "react";
 import type { Client, HostedConfig, HostedState } from "./types";
 import { Action, Card, Form } from "./ui";
 import { validQr } from "./PairingQr";
+import { HostedJoin } from "./HostedJoin";
 
 type RootCode = {code: string; fingerprint: string; modules: string[]; expires_at: string; expires_in: number};
 type Request = {device_id: string; fingerprint: string; expires_at: number};
 const emptyConfig: HostedConfig = {service_url: "", issuer: "", audience: "", client_id: "", refresh_tokens: false};
-const statuses: Record<string, string> = {off: "Off", starting: "Starting", setup: "Set up this computer as root", active: "Connected", signed_out: "Signed out", sign_in_required: "Sign in again", offline: "Offline; reconnecting", renewal_pending: "Waiting to renew device approvals", retrying: "Reconnecting", clock: "Check this computer's clock", keys_unavailable: "Hosted keys could not be unlocked"};
+const statuses: Record<string, string> = {off: "Off", starting: "Starting", setup: "Set up this computer as root", active: "Connected", signed_out: "Signed out", sign_in_required: "Sign in again", offline: "Offline; reconnecting", renewal_pending: "Waiting to renew device approvals", retrying: "Reconnecting", clock: "Check this computer's clock", keys_unavailable: "Hosted keys could not be unlocked", awaiting_approval: "Waiting for your main computer to approve this computer", removed: "Removed by your main computer"};
 
 /** Tells the person whether approving or removing devices needs their face, fingerprint or PIN. */
 export function VerificationNote({value}: {value?: string}) {
@@ -59,14 +60,18 @@ export function HostedSettings({hosted, client}: {hosted?: HostedState; client: 
   const [config, setConfig] = useState<HostedConfig>(() => hosted?.config || emptyConfig);
   const [forget, setForget] = useState(false);
   const [target, setTarget] = useState("");
-  const members = hosted?.roster?.members.filter(member => !member.root) || [];
+  // Every other approved device; a joined computer also sends to its main computer.
+  const members = hosted?.roster?.members.filter(member => member.self === undefined ? !member.root : !member.self) || [];
+  const isMember = hosted?.role === "member";
   const enabled = hosted?.enabled === true;
   const signedIn = hosted?.account?.status === "signed_in";
   const active = enabled && signedIn && !!hosted?.roster;
   return <Card title="Saiph Hosted preview" subtitle="Sign in with your Saiph account after activating your beta invitation.">
     <p role="status">{statuses[hosted?.status || "off"] || "Starting"}</p>
     {!hosted?.available ? <p>This build does not include Hosted support.</p> : <>
-      <p className="muted">This computer is the root device. Keep it online to renew approvals every 8 hours. Devices stop syncing after 12 hours without renewal. Lost root keys cannot be recovered or transferred yet.</p>
+      {isMember
+        ? <p className="muted">This computer joined your account as another computer. Your main computer approves and removes devices and renews approvals; keep it online at least every 12 hours.</p>
+        : <p className="muted">This computer is the root device. Keep it online to renew approvals every 8 hours. Devices stop syncing after 12 hours without renewal. Lost root keys cannot be recovered or transferred yet.</p>}
       <details><summary>Deployment settings</summary><Form submit={() => client.call("hosted.configure", {...config})}>
         {([['service_url', 'Hosted service address'], ['issuer', 'Sign-in issuer'], ['audience', 'API audience'], ['client_id', 'Desktop client ID']] as const).map(([key, title]) => <label key={key}>{title}<input value={config[key]} required disabled={enabled} onChange={event => setConfig({...config, [key]: event.target.value})} /></label>)}
         <label><input type="checkbox" checked={config.refresh_tokens} disabled={enabled} onChange={event => setConfig({...config, refresh_tokens: event.target.checked})} /> Keep me signed in using a protected rotating refresh token (requires deployment support)</label>
@@ -77,11 +82,14 @@ export function HostedSettings({hosted, client}: {hosted?: HostedState; client: 
         <p>{hosted.account?.status === "signing_in" ? "Finish sign-in in your browser." : signedIn ? "Signed in" : "Sign in to continue"}</p>
         {signedIn ? <Action run={() => client.call("hosted.sign_out")}>Sign out</Action> : <Action disabled={hosted.account?.status === "signing_in"} run={() => client.call("hosted.sign_in")}>Sign in with your browser</Action>}
         {hosted.account?.error && <p role="alert">{hosted.account.error}</p>}
-        {signedIn && <HostedRootCode hosted={hosted} client={client} />}
+        {signedIn && !isMember && <HostedRootCode hosted={hosted} client={client} />}
+        {signedIn && !hosted.identity && <details><summary>Join as another computer</summary><HostedJoin client={client} waiting={false} /></details>}
+        {signedIn && isMember && hosted.status === "awaiting_approval" && <HostedJoin client={client} waiting />}
+        {isMember && hosted.root_fingerprint && <p className="muted">Main computer fingerprint: <code>{hosted.root_fingerprint}</code></p>}
         {active && <>
-          <HostedApproveDevice hosted={hosted} client={client} />
+          {!isMember && <HostedApproveDevice hosted={hosted} client={client} />}
           <p>Approvals expire at {new Date(hosted.roster!.expires_at * 1000).toLocaleString()}.</p>
-          {members.map(member => <div className="list-row" key={member.id}><div className="grow"><b>{member.label}</b><small>{member.fingerprint}</small></div><Action run={() => client.call("hosted.revoke", {device_id: member.id})}>Revoke {member.label}</Action></div>)}
+          {members.map(member => <div className="list-row" key={member.id}><div className="grow"><b>{member.label}</b><small>{member.fingerprint}</small></div>{!isMember && <Action run={() => client.call("hosted.revoke", {device_id: member.id})}>Revoke {member.label}</Action>}</div>)}
           {members.length > 0 && <><label>Send file to<select value={target} onChange={event => setTarget(event.target.value)}><option value="">Choose device</option>{members.map(member => <option key={member.id} value={member.id}>{member.label}</option>)}</select></label><Action disabled={!target} run={() => client.call("hosted.file.choose", {target})}>Choose file to send</Action></>}
           {hosted.offers?.map(offer => <div className="list-row" key={offer.id}><span>{offer.name} ({offer.size} bytes)</span><Action run={() => client.call("hosted.file.save", {id: offer.id})}>Save {offer.name}</Action></div>)}
           {!!hosted.security_events?.length && <details><summary>Recent device changes</summary>{hosted.security_events.map(event => <p key={event.id}>{event.kind === "added" ? "Approved" : "Removed"} {event.label} · {new Date(event.at * 1000).toLocaleString()}</p>)}</details>}
@@ -89,7 +97,7 @@ export function HostedSettings({hosted, client}: {hosted?: HostedState; client: 
         </>}
         {hosted.error && <p role="alert">{hosted.error}</p>}
       </>}
-      {!enabled && hosted.identity && <><label><input type="checkbox" checked={forget} onChange={event => setForget(event.target.checked)} /> Retire this computer's root identity; other devices will stop syncing when approvals expire</label><Action disabled={!forget} run={() => client.call("hosted.forget", {confirm: true})}>Forget Hosted on this computer</Action></>}
+      {!enabled && hosted.identity && <><label><input type="checkbox" checked={forget} onChange={event => setForget(event.target.checked)} /> {isMember ? "Retire this computer's Hosted identity; remove it on your main computer too" : "Retire this computer's root identity; other devices will stop syncing when approvals expire"}</label><Action disabled={!forget} run={() => client.call("hosted.forget", {confirm: true})}>Forget Hosted on this computer</Action></>}
     </>}
   </Card>;
 }

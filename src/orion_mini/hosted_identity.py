@@ -23,7 +23,8 @@ from .hosted_keys import KeyStorageError, RecipientVault
 from .hosted_session import public_signing_key, read_signing_key
 from .hosted_storage import ProtectedBlob, private_folder
 
-ROLES = ("root",)
+# The root approves and renews devices; a member computer joins like a phone.
+ROLES = ("root", "member")
 
 
 @dataclass(frozen=True)

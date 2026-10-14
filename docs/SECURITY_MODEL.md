@@ -126,9 +126,18 @@ Anyone who controls an approved computer while it is unlocked, or its hosted
 keys, can read the phone's synced texts and act on them within these limits,
 just as with clipboard and notifications. A lost computer should be revoked
 from the account and the phone's Texts and calls switch turned off until then.
-The desktop app can currently only be the root; a second computer cannot yet
-join an account, so the multi-computer path is implemented in the protocol and
-on the phone and tested with synthetic devices only.
+A second computer joins an account as a member, the way a phone does. The
+owner pastes the main (root) computer's code, compares its complete fingerprint
+on both screens and confirms; only then is that root pinned and new member keys
+created. The joining computer's request code carries its own fingerprint, which
+the owner compares again before approving on the root. Joining alone grants
+nothing, a code from another account or an account without a root is refused,
+and an existing identity is never replaced. A member computer never signs,
+renews, approves or revokes rosters: it reports "waiting for approval" until a
+verified roster lists it, "removed" after a verified roster drops it, and
+"waiting for renewal" if the root stays offline past the 12-hour expiry. The
+multi-computer path is tested offline with real cryptography and synthetic
+devices only; physical acceptance is pending.
 
 ## What remains
 

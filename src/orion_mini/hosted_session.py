@@ -367,6 +367,23 @@ class SealedSession:
             self.roster, self.digest = None, None
             raise EnvelopeError("Cannot verify device trust.") from None
 
+    def membership(self):
+        """This device's place in the newest verified roster, without granting authority.
+
+        "pending" before any verified roster lists it, "member" when the newest one
+        lists it with these keys (it may still be expired), "removed" after a
+        verified roster dropped it. Only `current()` authorizes content.
+        """
+        with self.connect() as db:
+            anchor = self._load_anchor(db)
+        if anchor is None:
+            return "pending"
+        entry, _, used = anchor
+        own = {item["id"]: item for item in entry["roster"]["members"]}.get(self.device)
+        if own and own["signing_key"] == public_signing_key(self.signing.public_key())                 and own["encryption_key"] == export_public(self.encryption):
+            return "member"
+        return "removed" if self.device in used else "pending"
+
     def current(self):
         if self.roster is None or self.roster["expires_at"] <= int(time.time()):
             raise EnvelopeError("Current device approval is required.")
