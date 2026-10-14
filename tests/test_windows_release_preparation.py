@@ -24,14 +24,15 @@ metadata = load('windows_metadata_tested', 'scripts/packaging/windows_metadata.p
 signatures = load('windows_signatures_tested', 'scripts/public-release/verify-windows-signatures.py')
 
 
-def test_metadata_preserves_semver_and_internal_filename(tmp_path):
+def test_metadata_preserves_semver_and_names_the_saiph_executable(tmp_path):
     resource, assembly = tmp_path / 'version.txt', tmp_path / 'assembly.cs'
     metadata.write_version_resource(resource, '1.2.3-beta.4', 9, 'link')
     metadata.write_assembly_metadata(assembly, '1.2.3-beta.4', 9, 'link')
     text = resource.read_text()
     assert "filevers=(1, 2, 3, 9)" in text
     assert "StringStruct('ProductName', 'Saiph')" in text
-    assert "StringStruct('OriginalFilename', 'OrionMini.exe')" in text
+    assert "StringStruct('OriginalFilename', 'Saiph.exe')" in text
+    assert "StringStruct('InternalName', 'Saiph')" in text
     assert "StringStruct('ProductVersion', '1.2.3-beta.4')" in text
     assert 'AssemblyFileVersion("1.2.3.9")' in assembly.read_text()
     assert 'AssemblyInformationalVersion("1.2.3-beta.4")' in assembly.read_text()
@@ -46,7 +47,7 @@ def test_windows_metadata_rejects_unrepresentable_versions(version, build):
 
 @pytest.fixture
 def signature_probe(tmp_path, monkeypatch):
-    installer, executable = tmp_path / 'setup.exe', tmp_path / 'OrionMini.exe'
+    installer, executable = tmp_path / 'setup.exe', tmp_path / 'Saiph.exe'
     installer.write_bytes(b'synthetic installer')
     executable.write_bytes(b'synthetic app')
     state = {'status': 'Valid', 'type': 'Authenticode', 'publisher': 'CN=Approved publisher',

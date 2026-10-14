@@ -35,6 +35,9 @@ public static class Setup {
     const string UninstallKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\OrionMini";
     const string EnrollmentExtension = @"Software\Classes\.orion-enrollment";
     const string EnrollmentClass = @"Software\Classes\Orion.Enrollment";
+    // Releases before the rename launch OrionMini.exe. Newer packages keep a byte copy
+    // under that name for older updaters; shortcuts and startup use Saiph.exe.
+    const string Entrypoint = "app/Saiph.exe", LegacyEntrypoint = "app/OrionMini.exe";
     static bool silent, isolated, uninstall, noStartup, noLaunch, noSendTo;
     // Set only by the options page: an explicit untick also removes the owned integration.
     static bool removeStartup;
@@ -174,7 +177,7 @@ public static class Setup {
             string foreign = startup.Checked ? ForeignStartup() : null;
             if (foreign != null) {
                 // For example a copy run from source. Never replace it without asking.
-                var answer = MessageBox.Show("Another startup entry named OrionMini starts a different copy of Saiph or Orion:\n\n" + foreign
+                var answer = MessageBox.Show("Saiph's sign-in startup entry currently starts a different copy of Saiph:\n\n" + foreign
                     + "\n\nReplace it so this Saiph starts when you sign in? Choose No to install without starting at sign-in.",
                     "Saiph setup", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
                 if (answer == DialogResult.Cancel) return;
@@ -288,7 +291,7 @@ public static class Setup {
                 foreach (var entry in zip.Entries) Under(stage, entry.FullName); // Validate every path before any extraction.
                 var member = zip.GetEntry("package-manifest.json"); if (member == null || member.Length > 32 * 1024 * 1024) throw new InvalidDataException();
                 using (var input = new StreamReader(member.Open())) manifest = Json.Deserialize<Package>(input.ReadToEnd());
-                if (manifest.format != "orion-desktop-package" || manifest.schema != 1 || manifest.platform != "windows-x86_64" || !Version.IsMatch(manifest.version) || manifest.entrypoint != "app/OrionMini.exe" || manifest.files == null || manifest.files.Length > 30000) throw new InvalidDataException();
+                if (manifest.format != "orion-desktop-package" || manifest.schema != 1 || manifest.platform != "windows-x86_64" || !Version.IsMatch(manifest.version) || manifest.entrypoint != Entrypoint || manifest.files == null || manifest.files.Length > 30000) throw new InvalidDataException();
                 var known = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "package-manifest.json" };
                 long bytes = 0;
                 foreach (var item in manifest.files) {
@@ -322,7 +325,7 @@ public static class Setup {
             }
             // Integration follows complete extraction. The current marker is the final commit point.
             if (!isolated) {
-                integration.Add(Path.Combine(release, "app", "OrionMini.exe"));
+                integration.Add(Under(release, Entrypoint)); integration.Add(Under(release, LegacyEntrypoint));
                 Integrate(release, old == null, integration);
             }
             phase = "current-marker";
@@ -355,11 +358,14 @@ public static class Setup {
             string path = Under(release, "package-manifest.json");
             if (!File.Exists(path)) throw new InvalidDataException();
             var manifest = Json.Deserialize<Package>(File.ReadAllText(path));
-            if (manifest.format != "orion-desktop-package" || manifest.schema != 1 || manifest.version != version || manifest.platform != "windows-x86_64" || manifest.entrypoint != "app/OrionMini.exe" || manifest.files == null) throw new InvalidDataException();
-            var executable = manifest.files.SingleOrDefault(item => item.path == manifest.entrypoint);
-            string target = Under(release, manifest.entrypoint);
-            // Removed or locally changed releases confer no ownership of external entries.
-            if (executable != null && Hash.IsMatch(executable.sha256) && File.Exists(target) && new FileInfo(target).Length == executable.bytes && SHA(target) == executable.sha256) targets.Add(target);
+            if (manifest.format != "orion-desktop-package" || manifest.schema != 1 || manifest.version != version || manifest.platform != "windows-x86_64" || (manifest.entrypoint != Entrypoint && manifest.entrypoint != LegacyEntrypoint) || manifest.files == null) throw new InvalidDataException();
+            // The entrypoint and, from the rename on, its compatibility copy; startup entries may name either.
+            foreach (string name in new[] { Entrypoint, LegacyEntrypoint }) {
+                var executable = manifest.files.SingleOrDefault(item => item.path == name);
+                string target = Under(release, name);
+                // Removed or locally changed releases confer no ownership of external entries.
+                if (executable != null && Hash.IsMatch(executable.sha256) && File.Exists(target) && new FileInfo(target).Length == executable.bytes && SHA(target) == executable.sha256) targets.Add(target);
+            }
         }
         return targets;
     }
@@ -402,7 +408,7 @@ public static class Setup {
         }
         var uninstallValues = ReadTree(UninstallKey);
         if (uninstallValues != null && !IntegrationPolicy.OwnUninstall(uninstallValues, destination))
-            throw new SetupBlocked("Windows lists another program under Saiph's uninstall entry (OrionMini). Uninstall that program first, then try again.");
+            throw new SetupBlocked("Windows lists another program under Saiph's uninstall entry. Uninstall that program first, then try again.");
         var extension = ReadTree(EnrollmentExtension);
         var command = ReadTree(EnrollmentClass);
         // A bare extension owned by another application is never overwritten.
@@ -419,10 +425,16 @@ public static class Setup {
             }
         } catch { return null; }  // An unreadable installation is reported by the install itself.
     }
+    // A rollback re-integrates an older release, whose manifest may still name OrionMini.exe.
+    static string ReleaseExecutable(string release) {
+        var manifest = Json.Deserialize<Package>(File.ReadAllText(Under(release, "package-manifest.json")));
+        if (manifest.format != "orion-desktop-package" || manifest.schema != 1 || (manifest.entrypoint != Entrypoint && manifest.entrypoint != LegacyEntrypoint)) throw new InvalidDataException();
+        return Under(release, manifest.entrypoint);
+    }
     static void Integrate(string release, bool first, List<string> targets) {
         // Check again immediately before integration, including on rollback.
         PreflightIntegration(targets);
-        string exe = Path.Combine(release, "app", "OrionMini.exe"); string icon = Path.Combine(release, "app", "_internal", "assets", "orion-mini-icon.ico");
+        string exe = ReleaseExecutable(release); string icon = Path.Combine(release, "app", "_internal", "assets", "orion-mini-icon.ico");
         string menu = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "Saiph"); Directory.CreateDirectory(menu);
         Shortcut.Create(MenuShortcut, exe, icon, "OrionMini.Desktop");
         if (noSendTo) { if (OwnShortcut(SendToShortcut, targets, SendFilesArgument)) File.Delete(SendToShortcut); }
@@ -694,7 +706,7 @@ public static class IntegrationPolicy {
     // Another program's startup entry blocks only when Saiph would write its own and the person has not agreed to replace it.
     public static string StartupConflict(object value, IEnumerable<string> targets, bool startupWanted, bool replaceApproved) {
         if (value == null || !startupWanted || replaceApproved || OwnRun(value, targets)) return null;
-        return "Another startup entry named OrionMini starts a different program. Untick \"Start Saiph when I sign in\", or choose Replace when asked, then try again.";
+        return "Saiph's sign-in startup entry starts a different program. Untick \"Start Saiph when I sign in\", or choose Replace when asked, then try again.";
     }
     public static bool Matches(Dictionary<string, object> actual, Dictionary<string, object> expected) {
         if (actual == null || actual.Count != expected.Count) return false;

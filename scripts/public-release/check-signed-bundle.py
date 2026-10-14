@@ -14,7 +14,7 @@ import hashlib
 import json
 from pathlib import Path
 
-PROJECT_EXECUTABLES = ('OrionMini.exe',)
+PROJECT_EXECUTABLES = ('Saiph.exe',)
 
 
 def digest(path: Path) -> str:

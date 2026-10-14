@@ -17,6 +17,9 @@ import tarfile
 import zipfile
 
 HERE = Path(__file__).resolve().parent
+if str(HERE) not in sys.path:
+    sys.path.insert(0, str(HERE))
+from desktop_names import bundle_name, executable, legacy_executable  # noqa: E402
 VERSION = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.-]+)?$")
 
 
@@ -37,7 +40,7 @@ def safe_path(value):
 
 def audit_installed_modules(bundle, platform, profile):
     from PyInstaller.archive.readers import CArchiveReader
-    entry = bundle / ('OrionMini.exe' if platform.startswith('windows') else 'OrionMini')
+    entry = bundle / executable(platform)
     archive = CArchiveReader(str(entry)).open_embedded_archive('PYZ.pyz')
     audit_profile_contents(bundle, profile, archive.toc)
 
@@ -61,7 +64,7 @@ def audit_profile_contents(bundle, profile, modules):
 
 
 def audit_bundle(bundle, platform):
-    entry = bundle / ("OrionMini.exe" if platform.startswith("windows") else "OrionMini")
+    entry = bundle / executable(platform)
     if not entry.is_file(): raise ValueError("Native PyInstaller bundle is missing its executable")
     magic = entry.open('rb').read(4)
     if platform.startswith('windows') and magic[:2] != b'MZ': raise ValueError("Windows packaging requires a PE executable")
@@ -163,6 +166,11 @@ def prepare(bundle, staging, version, platform, analysis, frontend):
         raise ValueError('Native release metadata does not match the selected package version/platform')
     staging.mkdir(parents=True, exist_ok=False)
     shutil.copytree(bundle, staging / 'app')
+    # Installed beta.4 and older updaters, and the deployed Hub, still look for this
+    # name. A byte copy made after signing keeps it signed and identical.
+    if (staging / 'app' / legacy_executable(platform)).exists():
+        raise ValueError('Native bundle already contains the compatibility executable name')
+    shutil.copy2(staging / 'app' / executable(platform), staging / 'app' / legacy_executable(platform))
     license_inventory(staging / 'licenses', analysis, frontend)
     native_notices.collect(bundle, staging / 'licenses')
     project_license = HERE.parents[1] / 'LICENSE'
@@ -172,7 +180,7 @@ def prepare(bundle, staging, version, platform, analysis, frontend):
     files = [{'path': safe_path(p.relative_to(staging).as_posix()), 'bytes': p.stat().st_size, 'sha256': digest(p)}
              for p in sorted(staging.rglob('*')) if p.is_file()]
     manifest = {'format': 'orion-desktop-package', 'schema': 1, 'version': version, 'platform': platform, 'profile': profile, 'build': release['build'],
-                'entrypoint': 'app/OrionMini.exe' if platform.startswith('windows') else 'app/OrionMini',
+                'entrypoint': 'app/' + executable(platform),
                 'release_state': 'internal-preview', 'license_inventory': 'licenses/inventory.json', 'files': files}
     (staging / 'package-manifest.json').write_text(json.dumps(manifest, indent=2), encoding='utf-8')
     return manifest
@@ -183,7 +191,6 @@ def aligned_padding(length, alignment=8):
 
 
 def build_windows(staging, output, compiler):
-    sys.path.insert(0, str(HERE))
     from windows_metadata import write_assembly_metadata
     staging, output, compiler = staging.absolute(), output.absolute(), compiler.absolute()
     stub = output.with_suffix('.stub.exe')
@@ -281,11 +288,11 @@ def build_linux_setup(archive, output):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--bundle', type=Path, default=Path('dist/OrionMini'))
+    parser.add_argument('--bundle', type=Path, help='Native PyInstaller bundle (default dist/Saiph, or dist/saiph on Linux)')
     parser.add_argument('--version', required=True)
     parser.add_argument('--platform', choices=['windows-x86_64', 'linux-x86_64'], required=True)
     parser.add_argument('--output', type=Path, default=Path('test-artifacts/distribution'))
-    parser.add_argument('--analysis', type=Path, default=Path('build/OrionMini/Analysis-00.toc'))
+    parser.add_argument('--analysis', type=Path, help='PyInstaller Analysis TOC (default build/<bundle name>/Analysis-00.toc)')
     parser.add_argument('--frontend', type=Path, default=Path('frontend'))
     parser.add_argument('--linux-setup', action='store_true',
                         help='Also write a self-extracting .run setup around the unchanged Linux .tar.gz')
@@ -293,6 +300,8 @@ def main():
     args = parser.parse_args()
     if args.linux_setup and not args.platform.startswith('linux'):
         parser.error('--linux-setup is only available for Linux packages')
+    args.bundle = args.bundle or Path('dist') / bundle_name(args.platform)
+    args.analysis = args.analysis or Path('build') / bundle_name(args.platform) / 'Analysis-00.toc'
     profile = audit_bundle(args.bundle, args.platform)
     audit_installed_modules(args.bundle, args.platform, profile)
     args.output.mkdir(parents=True, exist_ok=True)

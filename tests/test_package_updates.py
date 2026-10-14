@@ -43,7 +43,7 @@ def native(release):
         body = pe + zipped + struct.pack('<Q', len(zipped)) + b'ORIONZIP'
     else:
         elf = bytearray(64); elf[:6] = b'\x7fELF\x02\x01'; elf[18:20] = b'\x3e\0'
-        files.update({'app/OrionMini': bytes(elf), 'install.sh': b'#!/bin/sh\nexit 0\n', 'VERSION': release['version'].encode(), 'SHA256SUMS': b'',
+        files.update({'app/saiph': bytes(elf), 'app/OrionMini': bytes(elf), 'install.sh': b'#!/bin/sh\nexit 0\n', 'VERSION': release['version'].encode(), 'SHA256SUMS': b'',
                       'LINUX_COMPATIBILITY': b'linux-x86_64 glibc 2.35\n'})
         with tarfile.open(fileobj=payload, mode='w:gz') as archive:
             for name, body in files.items():
@@ -242,7 +242,7 @@ def real_linux_package(tmp_path, monkeypatch, release):
     spec.loader.exec_module(packaging)
     staging = tmp_path / 'package'
     elf = bytearray(64); elf[:6] = b'\x7fELF\x02\x01'; elf[18:20] = b'\x3e\0'
-    files = {'app/OrionMini': bytes(elf),
+    files = {'app/saiph': bytes(elf), 'app/OrionMini': bytes(elf),
              'app/_internal/distribution-profile.json': json.dumps({'schema': 1, 'profile': release['profile']}).encode(),
              'app/_internal/distribution-release.json': json.dumps({key: release[key] for key in ('schema', 'build', 'version', 'platform')}).encode(),
              'licenses/inventory.json': b'{}', 'components.json': b'{}',
@@ -285,8 +285,66 @@ def test_linux_package_without_compatibility_receipt_is_refused(tmp_path):
         updates._extract_linux(path, tmp_path)
 
 
+def legacy_updater():
+    """The updater installed with 0.1.0-beta.4, which newer packages must still satisfy."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location('orion_mini._legacy_package_updates_beta4',
+                                                  Path(__file__).parent / 'fixtures/legacy_package_updates_beta4.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_renamed_linux_package_still_installs_through_the_beta4_updater(tmp_path, monkeypatch):
+    release = metadata(platform='linux-x86_64')
+    path = real_linux_package(tmp_path, monkeypatch, release)
+    legacy = legacy_updater()
+    legacy._verify(path, release)
+    installer = legacy._extract_linux(path, tmp_path)
+    # beta.4 relaunches app/OrionMini after installing; it is the same program as app/saiph.
+    app = installer.parent / 'app'
+    assert (app / 'OrionMini').read_bytes() == (app / 'saiph').read_bytes()
+    current = tmp_path / 'current'; current.mkdir()
+    updates._verify(path, release)
+    assert (updates._extract_linux(path, current).parent / 'app/saiph').is_file()
+
+
+def test_linux_package_without_the_renamed_executable_is_refused(tmp_path):
+    release = metadata(platform='linux-x86_64')
+    source = tmp_path / 'source.tar.gz'; source.write_bytes(native(release))
+    path = tmp_path / 'legacy-only.tar.gz'
+    with tarfile.open(source, 'r:gz') as original, tarfile.open(path, 'w:gz') as archive:
+        for item in original:
+            if item.name != 'orion/app/saiph':
+                archive.addfile(item, original.extractfile(item))
+    with pytest.raises(ValueError, match='Incomplete Linux native package'):
+        updates._package_metadata(path, release)
+
+
 @pytest.mark.parametrize('target', ['windows-x86_64', 'linux-x86_64'])
-def test_explicit_install_revalidates_and_waits_only_owned_app_pid(packaged, monkeypatch, tmp_path, target):
+def test_only_the_installed_executable_names_may_start_an_install(packaged, monkeypatch, tmp_path, target):
+    root, _ = packaged
+    release = metadata(platform=target); body = native(release)
+    monkeypatch.setattr(updates, 'current', lambda: {key: metadata(build=1, platform=target)[key]
+                                                  for key in ('schema', 'build', 'version', 'platform', 'profile')})
+    monkeypatch.setattr(updates.hub_client, 'signed', lambda *args: {'release': release})
+    download(monkeypatch, body, release)
+    staged = updates.stage(root, CONFIG, release)
+    local = tmp_path / 'Local'; monkeypatch.setenv('LOCALAPPDATA', str(local)); monkeypatch.setattr(Path, 'home', lambda: local)
+    app = (local / 'Programs/OrionMini/releases/0.1.0-preview.1/app' if target == 'windows-x86_64'
+           else local / '.local/lib/orion/releases/0.1.0-preview.1/app')
+    calls = []
+    monkeypatch.setattr(updates.subprocess, 'Popen', lambda *args, **kwargs: calls.append(args))
+    for name in ('python.exe', 'Saiph-portable.exe', 'saiph-copy'):
+        monkeypatch.setattr(sys, 'executable', str(app / name))
+        with pytest.raises(ValueError, match='native package'):
+            updates.install(root, staged)
+    assert calls == []
+
+
+@pytest.mark.parametrize('running', ['renamed', 'compatibility'])
+@pytest.mark.parametrize('target', ['windows-x86_64', 'linux-x86_64'])
+def test_explicit_install_revalidates_and_waits_only_owned_app_pid(packaged, monkeypatch, tmp_path, target, running):
     root, _ = packaged
     release = metadata(platform=target); body = native(release)
     monkeypatch.setattr(updates, 'current', lambda: {key: metadata(build=1, platform=target)[key]
@@ -296,13 +354,13 @@ def test_explicit_install_revalidates_and_waits_only_owned_app_pid(packaged, mon
     staged = updates.stage(root, CONFIG, release)
     local = tmp_path / 'Local'; monkeypatch.setenv('LOCALAPPDATA', str(local))
     if target == 'windows-x86_64':
-        current_exe = local / 'Programs/OrionMini/releases/0.1.0-preview.1/app/OrionMini.exe'
+        current_exe = local / 'Programs/OrionMini/releases/0.1.0-preview.1/app' / ('Saiph.exe' if running == 'renamed' else 'OrionMini.exe')
         # This fixture validates command construction on either build host.
         monkeypatch.setattr(updates.subprocess, 'CREATE_NO_WINDOW', 0, raising=False)
         monkeypatch.setattr(updates.subprocess, 'CREATE_NEW_PROCESS_GROUP', 0, raising=False)
     else:
         monkeypatch.setattr(Path, 'home', lambda: local)
-        current_exe = local / '.local/lib/orion/releases/0.1.0-preview.1/app/OrionMini'
+        current_exe = local / '.local/lib/orion/releases/0.1.0-preview.1/app' / ('saiph' if running == 'renamed' else 'OrionMini')
     monkeypatch.setattr(sys, 'executable', str(current_exe))
     calls = []
     monkeypatch.setattr(updates.subprocess, 'Popen', lambda *args, **kwargs: calls.append((args, kwargs)))
@@ -311,6 +369,9 @@ def test_explicit_install_revalidates_and_waits_only_owned_app_pid(packaged, mon
     if target == 'windows-x86_64':
         assert command[command.index('-AppPid') + 1] == str(os.getpid())
         assert command[command.index('-Package') + 1] == staged['path']
+        # A beta.4 updater relaunches the compatibility copy once; later updates open Saiph.exe.
+        assert command[command.index('-NextExe') + 1] == str(local / 'Programs/OrionMini/releases' / release['version'] / 'app/Saiph.exe')
+        assert command[command.index('-OldExe') + 1] == str(current_exe)
         helper = Path(staged['path']).parent / 'install.ps1'
         assert 'Wait-Process' in helper.read_text(encoding='utf-8-sig')
         assert '--no-launch' in helper.read_text(encoding='utf-8-sig')
@@ -318,6 +379,7 @@ def test_explicit_install_revalidates_and_waits_only_owned_app_pid(packaged, mon
     else:
         assert command[:3] == ['/bin/sh', str(Path(staged['path']).parent / 'install.sh'), str(os.getpid())]
         assert command[3] == staged['path'] and command[7] == str(current_exe)
+        assert command[6] == str(local / '.local/lib/orion/releases' / release['version'] / 'app/saiph')
         assert calls[0][1]['start_new_session'] is True
         assert Path(command[5]).is_file()
     assert calls[0][1]['stdout'] == updates.subprocess.DEVNULL

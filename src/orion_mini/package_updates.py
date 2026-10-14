@@ -197,7 +197,7 @@ def _package_metadata(path, release):
             build = read('app/_internal/distribution-release.json')
     else:
         required = {'orion/package-manifest.json', 'orion/app/_internal/distribution-profile.json',
-                    'orion/app/_internal/distribution-release.json', 'orion/app/OrionMini'}
+                    'orion/app/_internal/distribution-release.json', 'orion/app/saiph'}
         found = {}; names = set(); total = 0
         with tarfile.open(path, 'r:gz') as archive:
             for count, item in enumerate(archive):
@@ -211,7 +211,7 @@ def _package_metadata(path, release):
                 if item.name in found or not item.isfile() or item.size > 32 * 1024 * 1024:
                     raise ValueError('Invalid package metadata')
                 source = archive.extractfile(item)
-                if item.name.endswith('/OrionMini'):
+                if item.name.endswith('/saiph'):
                     header = source.read(20)
                     if len(header) < 20 or header[:6] != b'\x7fELF\x02\x01' or header[18:20] != b'\x3e\0':
                         raise ValueError('Expected an x86-64 Linux executable')
@@ -265,7 +265,7 @@ def _extract_linux(path, folder):
                 with archive.extractfile(item) as source, destination.open('xb') as output:
                     shutil.copyfileobj(source, output, 1024 * 1024)
                 destination.chmod(0o700 if item.mode & 0o111 else 0o600)
-    for name in ('install.sh', 'VERSION', 'SHA256SUMS', 'LINUX_COMPATIBILITY', 'package-manifest.json', 'app/OrionMini'):
+    for name in ('install.sh', 'VERSION', 'SHA256SUMS', 'LINUX_COMPATIBILITY', 'package-manifest.json', 'app/saiph'):
         if not (target / 'orion' / name).is_file():
             raise ValueError('Linux package is missing its installer')
     return target / 'orion' / 'install.sh'
@@ -402,6 +402,13 @@ exec "$next"
 '''
 
 
+def _running_executable(folder, *names):
+    """This process's installed executable: its name, or the pre-rename compatibility copy
+    that older updaters relaunch. Portable and source copies match neither."""
+    running = Path(sys.executable).resolve()
+    return next((folder / name for name in names if running == (folder / name).resolve()), None)
+
+
 def install(root, staged):
     """Explicit action only. Caller must quit after this returns; no processes are killed."""
     installed = current()
@@ -424,21 +431,21 @@ def install(root, staged):
     environment = {key: value for key, value in os.environ.items() if not key.startswith('_PYI') and key != '_MEIPASS2'}
     if release['platform'] == 'windows-x86_64':
         base = Path(os.environ['LOCALAPPDATA']) / 'Programs' / 'OrionMini'
-        expected = base / 'releases' / installed['version'] / 'app' / 'OrionMini.exe'
-        if Path(sys.executable).resolve() != expected.resolve():
+        expected = _running_executable(base / 'releases' / installed['version'] / 'app', 'Saiph.exe', 'OrionMini.exe')
+        if expected is None:
             raise ValueError('This portable build can stage updates; install its native package before using automatic installation')
         helper = path.parent / 'install.ps1'
         with helper.open('x', encoding='utf-8-sig') as output:
             output.write(WINDOWS_HANDOFF)
         command = ['powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', str(helper),
                    '-AppPid', str(os.getpid()), '-Package', str(path), '-Digest', release['sha256'],
-                   '-NextExe', str(base / 'releases' / release['version'] / 'app' / 'OrionMini.exe'),
+                   '-NextExe', str(base / 'releases' / release['version'] / 'app' / 'Saiph.exe'),
                    '-OldExe', str(expected), '-StatusFile', str(updates / 'update-status.json')]
         options = {'creationflags': subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP}
     else:
         base = Path.home() / '.local/lib/orion'
-        expected = base / 'releases' / installed['version'] / 'app/OrionMini'
-        if Path(sys.executable).resolve() != expected.resolve():
+        expected = _running_executable(base / 'releases' / installed['version'] / 'app', 'saiph', 'OrionMini')
+        if expected is None:
             raise ValueError('Install this native package before using automatic installation')
         installer = _extract_linux(path, path.parent)
         helper = path.parent / 'install.sh'
@@ -446,7 +453,7 @@ def install(root, staged):
             output.write(LINUX_HANDOFF)
         helper.chmod(0o700)
         command = ['/bin/sh', str(helper), str(os.getpid()), str(path), release['sha256'], str(installer),
-                   str(base / 'releases' / release['version'] / 'app/OrionMini'), str(expected), str(updates / 'update-status.json')]
+                   str(base / 'releases' / release['version'] / 'app/saiph'), str(expected), str(updates / 'update-status.json')]
         options = {'start_new_session': True}
     write_json(updates / 'update-status.json', {'state': 'waiting', 'code': ''})
     try:

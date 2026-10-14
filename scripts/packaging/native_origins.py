@@ -77,7 +77,7 @@ def audit_analysis(analysis, bundle, trusted_roots):
         if not target.is_file():
             continue
         relative = target.relative_to(bundle).as_posix()
-        if target.suffix.lower() in {'.exe', '.dll', '.pyd'} and relative != 'OrionMini.exe':
+        if target.suffix.lower() in {'.exe', '.dll', '.pyd'} and relative != 'Saiph.exe':
             if relative not in records:
                 raise ValueError('Collected native file has no audited Analysis input: ' + relative)
     return {'schema': 1, 'format': 'saiph-native-build-origins',

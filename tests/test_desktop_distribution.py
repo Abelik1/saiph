@@ -21,7 +21,7 @@ SPEC.loader.exec_module(packaging)
 def bundle(tmp_path, magic=b'MZ'):
     root = tmp_path / 'bundle'
     root.mkdir()
-    (root / 'OrionMini.exe').write_bytes(magic + b'synthetic executable fixture')
+    (root / 'Saiph.exe').write_bytes(magic + b'synthetic executable fixture')
     (root / '_internal').mkdir()
     (root / '_internal/runtime.txt').write_text('packaged runtime fixture')
     (root / '_internal/distribution-profile.json').write_text(json.dumps({'schema': 1, 'profile': 'link'}))
@@ -77,7 +77,7 @@ def test_native_build_takes_the_workspace_add_on_only_from_an_explicit_checkout(
 
 def test_linux_requires_actual_linux_executable(tmp_path):
     root = bundle(tmp_path)
-    (root / 'OrionMini').write_bytes(b'MZ-not-linux')
+    (root / 'saiph').write_bytes(b'MZ-not-linux')
     with pytest.raises(ValueError, match='Linux-built ELF'): packaging.audit_bundle(root, 'linux-x86_64')
 
 
@@ -97,12 +97,29 @@ def test_manifest_has_exact_bytes_hashes_and_preview_state(tmp_path, monkeypatch
     manifest = packaging.prepare(root, staging, '0.1.0-preview.1', 'windows-x86_64', tmp_path / 'absent', tmp_path)
     assert manifest['release_state'] == 'internal-preview'
     assert manifest['profile'] == 'link'
-    assert manifest['entrypoint'] == 'app/OrionMini.exe'
+    assert manifest['entrypoint'] == 'app/Saiph.exe'
+    # Updaters installed before the rename relaunch OrionMini.exe; it is a recorded byte copy.
+    assert (staging / 'app/OrionMini.exe').read_bytes() == (staging / 'app/Saiph.exe').read_bytes()
+    assert {'app/Saiph.exe', 'app/OrionMini.exe'} <= {item['path'] for item in manifest['files']}
     for item in manifest['files']:
         assert packaging.digest(staging / item['path']) == item['sha256']
         assert (staging / item['path']).stat().st_size == item['bytes']
     with pytest.raises(ValueError, match='semantic version'):
         packaging.prepare(root, tmp_path / 'bad', '../escape', 'windows-x86_64', tmp_path, tmp_path)
+    (root / 'OrionMini.exe').write_bytes(b'MZ stale copy')
+    with pytest.raises(ValueError, match='compatibility executable'):
+        packaging.prepare(root, tmp_path / 'stale', '0.1.0-preview.1', 'windows-x86_64', tmp_path / 'absent', tmp_path)
+
+
+def windows_payload(version, legacy=False, executable=b'MZ synthetic'):
+    """Package files and manifest: the pre-rename layout, or Saiph.exe with its compatibility copy."""
+    files = {'app/OrionMini.exe': executable} if legacy else {'app/Saiph.exe': executable, 'app/OrionMini.exe': executable}
+    files['licenses/inventory.json'] = b'{}'
+    items = [{'path': path, 'bytes': len(content), 'sha256': packaging.hashlib.sha256(content).hexdigest()} for path, content in files.items()]
+    manifest = {'format': 'orion-desktop-package', 'schema': 1, 'version': version, 'platform': 'windows-x86_64', 'profile': 'link', 'build': 7,
+                'entrypoint': 'app/OrionMini.exe' if legacy else 'app/Saiph.exe', 'files': items, 'release_state': 'internal-preview',
+                'license_inventory': 'licenses/inventory.json'}
+    return files, manifest
 
 
 @pytest.fixture
@@ -140,10 +157,10 @@ def test_native_installer_upgrade_uninstall_and_corruption_preserve_user_data(na
                    check=True, capture_output=True)
 
     def installer(version, corrupt=False, escape=False):
-        files = {'app/OrionMini.exe': b'MZ synthetic', 'licenses/inventory.json': b'{}'}
-        if escape: files['../owner-data/pairing-key.txt'] = b'changed'
-        items = [{'path': path, 'bytes': len(content), 'sha256': packaging.hashlib.sha256(content).hexdigest()} for path, content in files.items()]
-        manifest = {'format': 'orion-desktop-package', 'schema': 1, 'version': version, 'platform': 'windows-x86_64', 'profile': 'link', 'build': 7, 'entrypoint': 'app/OrionMini.exe', 'files': items, 'release_state': 'internal-preview', 'license_inventory': 'licenses/inventory.json'}
+        files, manifest = windows_payload(version, legacy=version == '0.1.0-preview.1')
+        if escape:
+            files['../owner-data/pairing-key.txt'] = b'changed'
+            manifest['files'].append({'path': '../owner-data/pairing-key.txt', 'bytes': 7, 'sha256': packaging.hashlib.sha256(b'changed').hexdigest()})
         archive = tmp_path / (version + '.zip')
         with zipfile.ZipFile(archive, 'w') as output:
             for path, content in files.items(): output.writestr(path, content + (b'broken' if corrupt else b''))
@@ -210,6 +227,75 @@ while(!File.Exists(args[3])) Thread.Sleep(20); mutex.ReleaseMutex(); }
     assert run(installer('0.1.0-preview.6')) == 0
 
 
+@pytest.mark.skipif(sys.platform != 'win32', reason='Windows native installer')
+def test_upgrade_from_pre_rename_release_owns_both_names_and_rolls_back_to_its_entrypoint(native_fixture_root):
+    tmp_path = native_fixture_root
+    compiler = Path('C:/Windows/Microsoft.NET/Framework64/v4.0.30319/csc.exe')
+    if not compiler.is_file(): pytest.skip('Windows Framework compiler absent')
+    references = ['/reference:System.Windows.Forms.dll', '/reference:System.Drawing.dll', '/reference:System.IO.Compression.dll',
+                  '/reference:System.IO.Compression.FileSystem.dll', '/reference:System.Web.Extensions.dll']
+    stubs = {}
+    for name, source in (('current', ROOT / 'scripts/packaging/WindowsSetup.cs'), ('legacy', ROOT / 'tests/fixtures/legacy_orion_windows_setup.cs')):
+        copy = tmp_path / (name + '.cs'); copy.write_bytes(source.read_bytes())
+        stubs[name] = tmp_path / (name + '-stub.exe')
+        subprocess.run([str(compiler), '/nologo', '/target:winexe', '/platform:x64', '/out:' + str(stubs[name]), *references, str(copy)],
+                       check=True, capture_output=True)
+
+    def installer(version, stub, legacy):
+        files, manifest = windows_payload(version, legacy=legacy)
+        archive = tmp_path / (version + '.zip')
+        with zipfile.ZipFile(archive, 'w') as output:
+            for path, content in files.items(): output.writestr(path, content)
+            output.writestr('package-manifest.json', json.dumps(manifest))
+        executable = tmp_path / (version + '.exe')
+        shutil.copyfile(stubs[stub], executable)
+        with executable.open('ab') as output:
+            output.write(archive.read_bytes()); output.write(struct.pack('<Q', archive.stat().st_size) + b'ORIONZIP')
+        return executable
+
+    install = tmp_path / 'installed'
+    def run(executable, *extra):
+        return subprocess.run([str(executable), '--silent', '--isolated', '--no-launch', '--destination', str(install), *extra],
+                              capture_output=True, timeout=30).returncode
+
+    # A beta.4-style release (OrionMini.exe only), then the renamed release.
+    assert run(installer('0.1.0-beta.4', 'legacy', legacy=True)) == 0
+    assert run(installer('0.1.0-beta.5', 'current', legacy=False)) == 0
+    renamed = install / 'releases/0.1.0-beta.5/app'
+    assert (renamed / 'Saiph.exe').read_bytes() == (renamed / 'OrionMini.exe').read_bytes()
+    # The renamed installer only accepts packages built with the new entrypoint.
+    assert run(installer('0.1.0-beta.6', 'current', legacy=True)) != 0
+    assert not (install / 'releases/0.1.0-beta.6').exists()
+
+    probe = tmp_path / 'Probe.cs'
+    probe.write_text(r'''using System; using System.Collections; using System.IO; using System.Reflection;
+class Probe { static void Main(string[] args) {
+var type = Assembly.LoadFile(args[0]).GetType("Setup");
+var flags = BindingFlags.NonPublic | BindingFlags.Static;
+type.GetField("destination", flags).SetValue(null, args[1]);
+type.GetField("isolated", flags).SetValue(null, true);
+Func<string, string> relative = path => path.Substring(args[1].Length + 1).Replace('\\', '/');
+var existing = type.GetMethod("Existing", flags).Invoke(null, null);
+foreach (string path in (IEnumerable)type.GetMethod("OwnedExecutables", flags).Invoke(null, new[] { existing })) Console.WriteLine("owned " + relative(path));
+foreach (string version in new[] { args[2], args[3] })
+    Console.WriteLine("entry " + relative((string)type.GetMethod("ReleaseExecutable", flags).Invoke(null, new object[] { Path.Combine(args[1], "releases", version) })));
+}}''')
+    checker = tmp_path / 'probe.exe'
+    subprocess.run([str(compiler), '/nologo', '/platform:x64', '/out:' + str(checker), str(probe)], check=True, capture_output=True)
+    lines = subprocess.run([str(checker), str(stubs['current']), str(install), '0.1.0-beta.4', '0.1.0-beta.5'],
+                           capture_output=True, text=True, timeout=30, check=True).stdout.splitlines()
+    # Startup entries and shortcuts naming any of these are Saiph's own to migrate or remove.
+    assert sorted(line for line in lines if line.startswith('owned ')) == [
+        'owned releases/0.1.0-beta.4/app/OrionMini.exe', 'owned releases/0.1.0-beta.5/app/OrionMini.exe',
+        'owned releases/0.1.0-beta.5/app/Saiph.exe']
+    # Rolling integration back to beta.4 points shortcuts at its own executable.
+    assert [line for line in lines if line.startswith('entry ')] == [
+        'entry releases/0.1.0-beta.4/app/OrionMini.exe', 'entry releases/0.1.0-beta.5/app/Saiph.exe']
+
+    assert run(install / 'Uninstall.exe', '--uninstall') == 0
+    assert not (install / 'releases/0.1.0-beta.4').exists() and not (install / 'releases/0.1.0-beta.5').exists()
+
+
 def windows_sdk_signtool():
     kits = Path('C:/Program Files (x86)/Windows Kits/10/bin')
     found = sorted(kits.glob('10.*/x64/signtool.exe')) if kits.is_dir() else []
@@ -239,13 +325,11 @@ def test_authenticode_signed_installer_still_finds_its_payload(native_fixture_ro
                     '-passout', 'pass:synthetic', '-keypbe', 'PBE-SHA1-3DES', '-certpbe', 'PBE-SHA1-3DES', '-macalg', 'sha1'], check=True, capture_output=True)
 
     def installer(version, aligned=True):
-        content = b'MZ synthetic'
-        items = [{'path': 'app/OrionMini.exe', 'bytes': len(content), 'sha256': packaging.hashlib.sha256(content).hexdigest()}]
-        manifest = {'format': 'orion-desktop-package', 'schema': 1, 'version': version, 'platform': 'windows-x86_64', 'profile': 'link', 'build': 7,
-                    'entrypoint': 'app/OrionMini.exe', 'files': items, 'release_state': 'internal-preview', 'license_inventory': 'licenses/inventory.json'}
+        files, manifest = windows_payload(version)
         archive = tmp_path / (version + '.zip')
         with zipfile.ZipFile(archive, 'w') as output:
-            output.writestr('app/OrionMini.exe', content); output.writestr('package-manifest.json', json.dumps(manifest))
+            for path, content in files.items(): output.writestr(path, content)
+            output.writestr('package-manifest.json', json.dumps(manifest))
         executable = tmp_path / (version + '.exe')
         shutil.copyfile(stub, executable)
         padding = packaging.aligned_padding(stub.stat().st_size + archive.stat().st_size + 16)

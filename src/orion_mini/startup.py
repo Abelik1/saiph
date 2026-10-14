@@ -25,6 +25,11 @@ def set_start_with_windows(enabled: bool) -> None:
 def startup_command() -> str:
     executable = Path(sys.executable)
     if getattr(sys, "frozen", False):
+        # Older updaters relaunch through the OrionMini.exe compatibility copy; the
+        # installer's shortcuts and startup entry name Saiph.exe beside it.
+        preferred = executable.with_name("Saiph.exe")
+        if executable.name.lower() == "orionmini.exe" and preferred.is_file():
+            executable = preferred
         return f'"{executable}"'
     windowless = executable.with_name("pythonw.exe")
     return f'"{windowless if windowless.exists() else executable}" -m orion_mini'
