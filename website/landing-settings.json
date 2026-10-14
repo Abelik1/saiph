@@ -12,6 +12,8 @@
     "contactProcessing": ""
   },
   "waitlistUrl": "",
+  "androidBetaUrl": "https://appdistribution.firebase.dev/i/127ea32988e8362f",
+  "betaAccountUrl": "https://account.dev.usesaiph.com/account",
   "waitlistPrivacyUrl": "privacy.html#waitlist",
   "waitlistNotice": "I agree to receive the Saiph launch announcement and occasional launch updates by email. I can unsubscribe or ask for my email to be deleted at any time.",
   "waitlist": {
