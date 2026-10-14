@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.core.app.NotificationCompat
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.*
@@ -15,7 +16,11 @@ import sefirah.network.orion.*
 import java.util.UUID
 import java.util.concurrent.ArrayBlockingQueue
 
-/** One pinned Android member; no root creation or phone action dispatch. */
+/**
+ * One pinned Android member; no root creation. Phone actions (texts and calls)
+ * run only for the root computer, only while the owner's "Texts and calls"
+ * switch is on and only with the matching Android permission.
+ */
 class HostedRuntime private constructor(private val context: Context) {
     companion object {
         @Volatile private var instance: HostedRuntime? = null
@@ -29,6 +34,16 @@ class HostedRuntime private constructor(private val context: Context) {
     private var session: HostedSession? = null
     private var transport: HostedHttpTransport? = null
     private val outgoing = ArrayBlockingQueue<JsonObject>(64)
+    // Conversation sync is bulk and lower priority than clipboard, notifications and calls.
+    private val texts = ArrayBlockingQueue<Pair<JsonObject, () -> Unit>>(256)
+    /** Wakes the sync loop for a ringing call or an answer the computer is waiting for. */
+    val wake = Channel<Unit>(Channel.CONFLATED)
+    @Volatile var ringing = false
+        private set
+    private var advertised: List<String>? = null
+    private var advertisedAt = 0L
+    /** Installed by the sync service; runs one validated phone action. */
+    var phone: ((String, HostedPhoneCommand) -> Unit)? = null
     private val cache = ClipboardCache()
     private val receipts = CommandReceipts(context)
     @Volatile var status = "Off"
@@ -42,6 +57,14 @@ class HostedRuntime private constructor(private val context: Context) {
     var clipboard: ((String) -> Unit)? = null
     var dismiss: ((String) -> Unit)? = null
     fun enabled() = prefs.getBoolean("enabled", false)
+    /** The owner's opt-in for texts and calls on the root computer; off by default. */
+    fun textsAndCalls() = prefs.getBoolean("texts_and_calls", false)
+    fun setTextsAndCalls(value: Boolean) {
+        check(prefs.edit().putBoolean("texts_and_calls", value).commit())
+        if (!value) { texts.clear(); ringing = false }
+        advertised = null
+    }
+    fun textBacklog() = texts.isNotEmpty()
     fun hasPackagedDefaults(): Boolean = runCatching {
         context.assets.open("hosted-defaults.json").use { it.read() != -1 }
     }.getOrDefault(false)
@@ -59,7 +82,8 @@ class HostedRuntime private constructor(private val context: Context) {
     }
     @Synchronized fun invalidate() {
         generation++; session?.invalidate(); session = null; transport = null
-        outgoing.clear(); offers = emptyList(); status = if (enabled()) "Sign in again" else "Off"
+        outgoing.clear(); texts.clear(); ringing = false; advertised = null
+        offers = emptyList(); status = if (enabled()) "Sign in again" else "Off"
     }
     fun configure(origin: String, issuer: String, audience: String, client: String, refresh: Boolean) {
         check(!enabled() && !prefs.contains("device_id")) { "Turn off and retire the existing identity before changing deployment." }
@@ -129,11 +153,25 @@ class HostedRuntime private constructor(private val context: Context) {
                 buildJsonObject { put("type", type); put("text", text); put("sha256", ClipboardCache.hash(bytes)) }
             }
             "notification.upsert", "notification.remove" -> if (access.notifications) value else return false
+            // Call state and answers to the computer's own requests go first.
+            "call.state", "contacts.results", "calls.log" -> {
+                if (!HostedPhoneFrames.mayPublish(type, access, textsAndCalls()) || value["type"] != JsonPrimitive(type) || !HostedPhoneFrames.fits(value)) return false
+                if (type == "call.state") ringing = value["state"] == JsonPrimitive("ringing")
+                value
+            }
             else -> return false
         }
         val queued = outgoing.offer(payload)
-        if (queued) UsageAnalytics.count(context, if (type == "clipboard.text") "clipboard_sent" else "notification_shared")
+        if (queued && type in HostedPhoneFrames.DATA_CAPABILITY) wake.trySend(Unit)
+        else if (queued) UsageAnalytics.count(context, if (type == "clipboard.text") "clipboard_sent" else "notification_shared")
         return queued
+    }
+    /** Conversation sync to the root computer; false when off, not permitted or the queue is full. */
+    fun enqueueText(value: JsonObject, delivered: () -> Unit): Boolean {
+        if (!enabled() || status != "Connected" || !HostedAccount.get(context).signedIn()) return false
+        val type = (value["type"] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: return false
+        if (!type.startsWith("sms.") || !HostedPhoneFrames.mayPublish(type, OrionPermissions.read(context), textsAndCalls()) || !HostedPhoneFrames.fits(value)) return false
+        return texts.offer(value to delivered)
     }
     suspend fun step() = mutex.withLock {
         if (!enabled()) { invalidate(); return@withLock }
@@ -147,12 +185,27 @@ class HostedRuntime private constructor(private val context: Context) {
         }
         gate(); status = "Connected"
         runCatching { watchMembers(current) }
+        // Tell the root computer what this phone offers, on change and every two minutes.
+        val offered = HostedPhoneFrames.capabilities(OrionPermissions.read(context), textsAndCalls())
+        if (offered != advertised || System.currentTimeMillis() - advertisedAt > 120_000) {
+            gate(); transport!!.send(current.root.deviceId, HostedPhoneFrames.capabilitiesPayload(offered))
+            advertised = offered; advertisedAt = System.currentTimeMillis()
+        }
         while (true) {
             val payload = outgoing.poll() ?: break
             val type = payload["type"]?.jsonPrimitive?.content
             val access = OrionPermissions.read(context)
             if (type == "clipboard.text" && !access.clipboard || type?.startsWith("notification.") == true && !access.notifications) continue
+            if (type != null && type in HostedPhoneFrames.DATA_CAPABILITY && !HostedPhoneFrames.mayPublish(type, access, textsAndCalls())) continue
             gate(); transport!!.send(current.root.deviceId, payload)
+        }
+        // A bounded share of the conversation sync per pass; the rest follows shortly.
+        repeat(32) {
+            val (payload, delivered) = texts.poll() ?: return@repeat
+            val type = payload.getValue("type").jsonPrimitive.content
+            if (!HostedPhoneFrames.mayPublish(type, OrionPermissions.read(context), textsAndCalls())) return@repeat
+            gate(); transport!!.send(current.root.deviceId, payload)
+            runCatching(delivered)
         }
         gate(); transport!!.pollIntoEncryptedInbox()
         val files = mutableListOf<Pair<String, String>>()
@@ -160,7 +213,8 @@ class HostedRuntime private constructor(private val context: Context) {
             gate()
             val id = envelope.getValue("header").jsonObject.getValue("id").jsonPrimitive.content
             val payload = runCatching { current.authenticate(envelope) }.getOrNull() ?: continue
-            when (payload["type"]?.jsonPrimitive?.content) {
+            val source = envelope.getValue("header").jsonObject["source"]?.jsonPrimitive?.content.orEmpty()
+            when (val type = payload["type"]?.jsonPrimitive?.content.orEmpty()) {
                 "file.encrypted" -> files += id to payload.getValue("name").jsonPrimitive.content.take(255)
                 "clipboard.text" -> {
                     check(payload.keys == setOf("type", "text", "sha256"))
@@ -178,7 +232,14 @@ class HostedRuntime private constructor(private val context: Context) {
                     check(Regex("[A-Za-z0-9._:|/+=@-]{1,256}").matches(key))
                     if (OrionPermissions.read(context).notifications && receipts.claim("hosted:$id")) dismiss?.invoke(key)
                 }
-                // Decryption does not authorize SMS, calls or arbitrary actions.
+                // Decryption proves origin only. Texts and calls need the root as sender,
+                // the owner's switch and the Android permission, checked here at execution.
+                in HostedPhoneFrames.COMMAND_CAPABILITY -> {
+                    val command = HostedPhoneFrames.command(payload)
+                    // Texts and calls run at most once; reads (sync, open, search, history) may repeat.
+                    if (command != null && HostedPhoneFrames.allowed(type, source, current.root.deviceId, OrionPermissions.read(context), textsAndCalls())
+                        && (!HostedPhoneFrames.isEffect(command) || receipts.claim("hosted:$id"))) runCatching { phone?.invoke(id, command) }
+                }
             }
             if (payload["type"] != JsonPrimitive("file.encrypted")) current.completeIncoming(id)
         }
@@ -210,7 +271,8 @@ class HostedRuntime private constructor(private val context: Context) {
         check(!enabled()); HostedAccount.get(context).signOut(); invalidate()
         // Keystore keys and encrypted trust history stay available for explicit
         // recovery. A newly enrolled member gets a fresh unique device ID.
-        prefs.edit().remove("device_id").remove("root").remove("recipient").remove("seen_members").commit()
+        prefs.edit().remove("device_id").remove("root").remove("recipient").remove("seen_members").remove("texts_and_calls").commit()
+        HostedSmsKnown(context).clear()
     }
 
     /**
@@ -235,7 +297,7 @@ class HostedRuntime private constructor(private val context: Context) {
         prefs.edit().putString("security_events", events.take(20).joinToString("\n")).apply()
         if (added > 0) alert(if (added == 1) "A new device was added to your Saiph account" else "$added new devices were added to your Saiph account",
             "If you didn't approve this on your computer, remove the device there now and change your password.")
-        else alert("A device was removed from your Saiph account", "It no longer receives your clipboard, notifications or files.")
+        else alert("A device was removed from your Saiph account", "It no longer receives your clipboard, notifications, files, texts or calls.")
     }
     private fun securityEventRecords() = prefs.getString("security_events", "")!!.split('\n').filter { it.matches(Regex("\\d{1,15}:(added|removed):\\d{1,3}")) }
     /** Recent device-list changes for the Hosted screen, newest first. */

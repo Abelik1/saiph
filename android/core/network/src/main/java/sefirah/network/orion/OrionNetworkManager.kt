@@ -34,7 +34,16 @@ class OrionNetworkManager @Inject constructor(private val context: Context, priv
     override suspend fun approveDeviceConnection(deviceId: String) { throw UnsupportedOperationException("Use Saiph QR pairing") }
     override suspend fun rejectDeviceConnection(deviceId: String) {}
     override fun broadcastMessage(message: SocketMessage) { sendMessage("", message) }
+    /** Texts and call state for the root computer; the runtime rechecks the owner's switch. */
+    private fun sendHostedPhone(message: SocketMessage, payloads: List<kotlinx.serialization.json.JsonObject>): Boolean {
+        if (message is CallInfo) return payloads.all { HostedFeatureBridge.send("call.state", it) }
+        val known = HostedSmsKnown(context)
+        return payloads.withIndex().all { (index, payload) ->
+            HostedFeatureBridge.sendText(payload) { if (index == payloads.lastIndex) known.sent(message) }
+        }
+    }
     override fun sendMessage(deviceId: String, message: SocketMessage): Boolean {
+        if (hostedEnabled()) HostedPhoneFrames.encode(message)?.let { return sendHostedPhone(message, it) }
         if (hostedEnabled()) return when (message) {
             is ClipboardInfo -> if (clipboardEnabled() && message.clipboardType == "text/plain") HostedFeatureBridge.send("clipboard.text", buildJsonObject { put("text", message.content) }) else false
             is NotificationInfo -> if (message.infoType == NotificationInfoType.Removed)

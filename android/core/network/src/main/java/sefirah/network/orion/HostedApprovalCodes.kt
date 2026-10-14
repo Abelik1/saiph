@@ -59,5 +59,8 @@ object HostedApprovalCodes {
 /** Process-local handoff; the default-off gate is checked before invoking this. */
 object HostedFeatureBridge {
     @Volatile var publish: ((String, JsonObject) -> Boolean)? = null
+    /** Bulk text sync; `delivered` runs only after the root computer's relay accepted it. */
+    @Volatile var publishText: ((JsonObject, () -> Unit) -> Boolean)? = null
     fun send(type: String, payload: JsonObject): Boolean = publish?.invoke(type, payload) ?: false
+    fun sendText(payload: JsonObject, delivered: () -> Unit): Boolean = publishText?.invoke(payload, delivered) ?: false
 }
