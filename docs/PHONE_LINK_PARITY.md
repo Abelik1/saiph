@@ -37,7 +37,7 @@ reports as of October 2026. Microsoft changes it often; recheck before release.
 | Sending a picture by MMS from the computer | Not yet built (optional part of A3) | A3 |
 | Calls: answer or decline | Have | — |
 | Calls: dial from the PC, call history | Built, acceptance pending | B1 |
-| Calls: talk through the PC's microphone and speakers | Missing | B2 (research first) |
+| Calls: talk through the PC's microphone and speakers | Missing; [spike done](research/CALL_AUDIO_SPIKE.md), physical tests pending (Linux go, Windows no-go for now) | B2 |
 | Phone media controls (audio player) | Built, acceptance pending | D |
 | Ringer mode (silent / vibrate) | Built, acceptance pending | C |
 | Recent photos view: browse, save, drag | Have (kept as it is) | — |
@@ -116,6 +116,18 @@ state today. Each item below therefore:
   oFono support the hands-free role.
 - Spike (time-boxed): prove audio both ways on one Windows and one Linux PC.
   Decide go or no-go from that; do not promise this feature before then.
+- **Desk research done (14 October 2026):** see
+  [research/CALL_AUDIO_SPIKE.md](research/CALL_AUDIO_SPIKE.md).
+  - **Linux: go (prototype).** PipeWire takes the hands-free role without root.
+    The role is on by default with WirePlumber 0.5 (Ubuntu 26.04); on 0.4
+    (Ubuntu 24.04) one per-user file turns it on. PipeWire 1.4+ adds call control
+    on the session bus.
+  - **Windows: no-go for now.** The API needs package identity and a restricted
+    capability, has been gated since 22H2, and Phone Link holds the registration.
+    A 2-day gate test on the owner's PC decides.
+  - **Ubuntu 22.04 (PulseAudio + oFono): no-go.**
+  - A read-only probe, `src/orion_mini/call_audio_probe.py`, is ready for the
+    owner's physical tests; it is not wired into the app.
 
 ### C. Phone panel and quick toggles — S/M
 
@@ -236,7 +248,7 @@ It is security-sensitive and needs its own design.
 | 7 | H Send to and file-manager actions | M | Single-instance handoff to the running app |
 | 8 | A2 MMS pictures | M | Manufacturer MMS storage differences |
 | 9 | J App windows | M | scrcpy and Android version support |
-| 10 | B2 Call audio spike | Spike | Windows audio routing may be impossible without a driver |
+| 10 | B2 Call audio spike ([findings](research/CALL_AUDIO_SPIKE.md)) | Spike | Windows API gated to Phone Link since 22H2; Linux needs physical proof |
 | 11 | F Phone storage | L | Native Windows helper |
 | 12 | A3 Group replies | M/L | MMS sending reliability |
 
