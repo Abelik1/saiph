@@ -146,6 +146,12 @@ fun Context.card(strong: Boolean = false) = LinearLayout(this).apply {
         .apply { bottomMargin = dp(10) }
 }
 
+/** A hairline between rows inside one card. */
+fun Context.divider() = View(this).apply {
+    setBackgroundColor(Palette.LINE)
+    layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(1)).apply { topMargin = dp(12); bottomMargin = dp(12) }
+}
+
 fun Context.buttonRow(vararg buttons: Button) = LinearLayout(this).apply {
     orientation = LinearLayout.HORIZONTAL; gravity = Gravity.START; setPadding(0, dp(12), 0, 0)
     buttons.forEachIndexed { i, b ->
@@ -157,10 +163,11 @@ fun Context.buttonRow(vararg buttons: Button) = LinearLayout(this).apply {
 /** Switches take Saiph's colours: cyan when on, a quiet track when off. */
 fun Switch.saiph(): Switch = apply {
     val states = arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf())
-    thumbTintList = ColorStateList(states, intArrayOf(Palette.ON_ACCENT, Palette.TEXT))
-    trackTintList = ColorStateList(states, intArrayOf(Palette.ACCENT, Palette.LINE_STRONG))
+    // On reads as a lit cyan knob on a tonal track; off as a quiet knob on a dark track.
+    thumbTintList = ColorStateList(states, intArrayOf(Palette.ACCENT, Palette.MUTED))
+    trackTintList = ColorStateList(states, intArrayOf(Palette.TONAL_LINE, Palette.LINE_STRONG))
     setTextColor(Palette.TEXT); textSize = 15f
-    minHeight = context.dp(52); setPadding(context.dp(4), 0, 0, 0)
+    minHeight = context.dp(48)
 }
 
 /** A setting: label, optional explanation, and its switch on the right. */
