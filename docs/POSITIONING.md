@@ -30,9 +30,10 @@ Do not invent further quotes or attribute other words to the owner or the friend
 - Apple, iPhone, Mac and Continuity are Apple's trademarks. Use them only for a
   factual comparison ("like Apple's Continuity"), never in a product name,
   hashtag-as-brand, logo or imagery suggesting affiliation or endorsement. On
-  pages and long posts add: "Apple and Continuity are trademarks of Apple Inc.
-  Saiph is not affiliated with or endorsed by Apple." See
-  [TRADEMARKS.md](../TRADEMARKS.md).
+  pages and long posts add the note the landing page uses: "Apple and Continuity
+  are trademarks of Apple Inc. Saiph is an independent project, not affiliated
+  with or endorsed by Apple." Other names and marks belong to their respective
+  owners; see [TRADEMARKS.md](../TRADEMARKS.md).
 - Link to `https://usesaiph.com`. Don't link the private repository, beta
   invites or account site in public posts.
 - Check [release status](RELEASE_STATUS.md) and
@@ -95,5 +96,5 @@ Do not invent further quotes or attribute other words to the owner or the friend
 > Saiph is in development and the hosted beta is invite-only. See where it is
 > at usesaiph.com.
 >
-> *Apple and Continuity are trademarks of Apple Inc. Saiph is not affiliated with
-> or endorsed by Apple.*
+> *Apple and Continuity are trademarks of Apple Inc. Saiph is an independent
+> project, not affiliated with or endorsed by Apple.*
