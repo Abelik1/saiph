@@ -5,7 +5,7 @@ window.ORION_SITE = {
   githubUrl: "",
   // Keep source and release links empty until publication and artifacts are approved.
   releasesUrl: "",
-  betaAccountUrl: "", // Authenticated friends-beta portal; independent of public releases.
+  betaAccountUrl: "", // Authenticated beta access portal; independent of public releases.
   release: {}, // Generated from real artifact bytes and GitHub metadata.
   downloads: {
     windows: "", // e.g. ".../releases/download/v0.1.0/Saiph-Link-0.1.0-windows-x86_64.exe"

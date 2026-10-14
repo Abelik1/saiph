@@ -47,15 +47,15 @@
   document.querySelectorAll("[data-android-beta]").forEach((el) => { el.hidden = !betaUrl; });
   document.querySelectorAll('[data-link="android-beta"]').forEach((a) => link(a, betaUrl, "Android beta invitations are not open"));
   const betaAccountUrl = /^https:\/\/[a-z0-9.-]+\/account$/.test(cfg.betaAccountUrl || "") ? cfg.betaAccountUrl : "";
-  document.querySelectorAll("[data-friends-beta]").forEach((el) => { el.hidden = !betaAccountUrl; });
-  document.querySelectorAll('[data-link="beta-account"]').forEach((a) => link(a, betaAccountUrl, "Friends beta invitations are not open"));
+  document.querySelectorAll("[data-beta-access]").forEach((el) => { el.hidden = !betaAccountUrl; });
+  document.querySelectorAll('[data-link="beta-account"]').forEach((a) => link(a, betaAccountUrl, "Beta access invitations are not open"));
   document.querySelectorAll('[data-link="releases"]').forEach((a) => link(a, cfg.releasesUrl, "Releases coming soon"));
   document.querySelectorAll("[data-download]").forEach((a) => {
     const betaDesktop = ["windows", "linux"].includes(a.dataset.download) && betaAccountUrl;
     const url = cfg.downloads && cfg.downloads[a.dataset.download] || betaDesktop;
     link(a, url, "Download coming soon");
     const go = a.querySelector(".go");
-    if (betaDesktop && go) go.textContent = "Get the friends beta";
+    if (betaDesktop && go) go.textContent = "Get beta access";
     if (!url && go) {
       go.textContent = "Coming soon";
       go.classList.add("muted");
@@ -80,13 +80,13 @@
       }
       a.insertAdjacentElement("afterend", notice);
     } else if (betaAccountUrl) {
-      // Until signup or payment opens, early access is the invite-only friends beta.
+      // Until signup or payment opens, early access is invite-only beta access.
       // Its front page explains the invitation before asking anyone to sign in.
       link(a, betaAccountUrl.replace(/\/account$/, "/"));
-      a.textContent = "Join the friends beta";
+      a.textContent = "Get beta access";
       const notice = document.createElement("p");
       notice.className = "muted beta-note";
-      notice.appendChild(document.createTextNode("Invite only for now: you'll need the invitation code a friend sent you."));
+      notice.appendChild(document.createTextNode("Invite only for now: you'll need an invitation code."));
       // In a row of buttons the note goes under the whole row.
       const row = a.parentElement && a.parentElement.classList && a.parentElement.classList.contains("btn-row") ? a.parentElement : a;
       row.insertAdjacentElement("afterend", notice);
@@ -140,7 +140,7 @@
   document.querySelectorAll('[data-link="processor-privacy"]').forEach((a) => link(a, waitlistReady ? waitlist.processorPrivacyUrl : "", "Provider information is not activated yet"));
   const release = cfg.release || {};
   const releaseReady = cfg.sourceVisibility === "public" && Boolean(cfg.releasesUrl) && Boolean(release.sourceCommit);
-  if (betaAccountUrl && !releaseReady) fill("[data-release-status]", "Friends beta installers are available from your Saiph account. Sign in and activate your invitation code. No compilation or personal server is required.");
+  if (betaAccountUrl && !releaseReady) fill("[data-release-status]", "Beta installers are available from your Saiph account. Sign in and activate your invitation code. No compilation or personal server is required.");
   document.querySelectorAll("[data-release-details]").forEach((el) => { el.hidden = !releaseReady; });
   if (releaseReady) fill("[data-release-status]", "Downloads are pinned to " + release.tag + ". Read the release notes and verify your download before installing.");
   fill("[data-release-tag]", release.tag);

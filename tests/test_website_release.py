@@ -316,7 +316,7 @@ def test_android_beta_invite_rejects_other_links(value):
 BETA_ACCOUNT = 'https://account.dev.usesaiph.com/account'
 
 
-def test_friends_beta_account_link_is_optional_and_exact():
+def test_beta_access_account_link_is_optional_and_exact():
     assert site.validate_settings({}, 'preview')['betaAccountUrl'] == ''
     assert site.validate_settings({'betaAccountUrl': BETA_ACCOUNT}, 'preview')['betaAccountUrl'] == BETA_ACCOUNT
 
@@ -324,18 +324,18 @@ def test_friends_beta_account_link_is_optional_and_exact():
 @pytest.mark.parametrize('value', ['http://account.dev.usesaiph.com/account', 'https://account.dev.usesaiph.com/',
     'https://account.dev.usesaiph.com/account?code=x', 'https://account.dev.usesaiph.com/account/../x',
     'https://localhost/account', 'privacy.html#waitlist', 'javascript:alert(1)', 42])
-def test_friends_beta_account_link_rejects_other_links(value):
+def test_beta_access_account_link_rejects_other_links(value):
     with pytest.raises(ValueError):
         site.validate_settings({'betaAccountUrl': value}, 'preview')
 
 
-def test_early_access_opens_the_friends_beta_until_signup_or_payment_opens():
+def test_early_access_opens_beta_access_until_signup_or_payment_opens():
     settings = json.loads((ROOT / 'website/landing-settings.json').read_text())
     settings['betaAccountUrl'] = BETA_ACCOUNT
     result = render_site_script(settings)
     # The beta's front page explains the invitation before asking anyone to sign in.
     assert result['subscribe'] == BETA_ACCOUNT.removesuffix('account')
-    assert result['subscribeText'] == 'Join the friends beta' and result['subscribeDisabled'] == ''
+    assert result['subscribeText'] == 'Get beta access' and result['subscribeDisabled'] == ''
     assert result['hostedStatus'] == 'Invite-only beta'
     del settings['betaAccountUrl']
     # Without the beta link, public source points people to the repository.
@@ -348,7 +348,7 @@ def test_early_access_opens_the_friends_beta_until_signup_or_payment_opens():
     assert result['subscribeText'] == 'Early access coming soon'
 
 
-def test_reviewed_waitlist_still_comes_before_the_friends_beta():
+def test_reviewed_waitlist_still_comes_before_beta_access():
     settings = launch_settings()
     settings['betaAccountUrl'] = BETA_ACCOUNT
     assert render_site_script(settings)['subscribe'] == 'waitlist.html'

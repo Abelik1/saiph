@@ -1,47 +1,116 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import {hostedAccess} from "../../lib/beta";
 import type {BillingView} from "../../lib/billing/view";
+import {CheckoutNotice, SignOut} from "./parts";
 import SubscriptionCard from "./SubscriptionCard";
 import Link from "next/link";
-export default async function BetaAccount({billing, notice}: {billing: BillingView | "unavailable" | null; notice: "returned" | "cancelled" | null}) {
+import {Icon, type IconName} from "../ui";
+
+type Access = {entitled: boolean; until: number | null; kinds: ("admin" | "beta" | "paid")[] | null};
+type Props = {billing: BillingView | "unavailable" | null; notice: "returned" | "cancelled" | null};
+
+export default async function BetaAccount(props: Props) {
   const access = await hostedAccess().catch(() => null);
+  return <BetaAccountView access={access} {...props} />;
+}
+
+const installers: [string, string, string, IconName][] = [
+  ["windows", "Windows", "Installer for Windows 10 and 11", "windows"],
+  ["linux", "Linux", "Desktop app for Linux", "linux"],
+  ["android", "Android", "APK for Android phones", "android"],
+];
+const extras: [string, string][] = [
+  ["desktop_source", "Desktop source"], ["android_source", "Android source"], ["notices", "Licences and notices"],
+  ["qt_sources_windows", "Qt and PySide sources (Windows)"], ["qt_sources_linux", "Qt and PySide sources (Linux)"], ["checksums", "Checksums"],
+];
+const day = (seconds: number) => new Intl.DateTimeFormat("en-IE", {day: "numeric", month: "long", year: "numeric", timeZone: "UTC"})
+  .format(new Date(seconds * 1000));
+
+export function BetaAccountView({access, billing, notice}: Props & {access: Access | null}) {
   const paid = access?.kinds?.includes("paid") ?? false;
-  const source = access?.kinds == null ? "" : paid && access.kinds.length > 1 ? " through your subscription and invitation"
-    : paid ? " through your subscription" : " through your beta invitation";
+  const source = access?.kinds == null ? null : paid && access.kinds.length > 1 ? "Subscription and invitation"
+    : paid ? "Subscription" : "Beta invitation";
+  const firebase = process.env.SAIPH_ANDROID_BETA_URL;
   return <>
-    <p className="eyebrow">Your Saiph account</p>
-    <h1>{access?.entitled ? (paid ? "Welcome to Saiph Hosted." : "Welcome to the beta.") : billing ? "Get Saiph Hosted." : "Join the friends beta."}</h1>
-    <p className="lede">Use the same account on your computer and phone.{billing ? " Subscribe below, or enter a beta invitation code." : " Your beta invitation provides access without a paid subscription."}</p>
-    {access?.entitled ? <section className="card" aria-labelledby="beta-access-title">
-      <h2 id="beta-access-title">Hosted access active</h2>
-      <p>Access is active{source} until {new Date(access.until! * 1000).toISOString().slice(0,10)}.{paid ? "" : " No payment is required."}</p>
-      <p>Install the apps below. Turn on Hosted, sign in on both devices, then approve your phone from your computer.</p>
-      <p><Link className="button" href="/setup">Follow the setup guide</Link></p>
-      <p>Windows installers currently have no trusted publisher signature. These are development beta builds.</p>
-      <div className="beta-form">
-        {[["windows","Download for Windows"],["linux","Download for Linux"],["android","Download Android APK"],
-          ["desktop_source","Desktop source"],["android_source","Android source"],["notices","Licences and notices"],
-          ["qt_sources_windows","Windows Qt and PySide sources"],["qt_sources_linux","Linux Qt and PySide sources"],["checksums","Checksums"]].map(([value,label]) =>
-          <form key={value} method="post" action="/api/beta/download">
-            <input type="hidden" name="artifact" value={value} /><button type="submit">{label}</button>
-          </form>)}
+    <div className="page-head">
+      <div>
+        <p className="eyebrow">Your Saiph account</p>
+        <h1>{access?.entitled ? (paid ? "Welcome to Saiph Hosted." : "Welcome to the beta.") : billing ? "Get Saiph Hosted." : "Activate your beta access."}</h1>
+        <p className="lede">Use this same account on your computer and phone.{access?.entitled ? "" : billing ? " Subscribe, or enter an invitation code." : " Your invitation gives you access without a subscription."}</p>
       </div>
-      {process.env.SAIPH_ANDROID_BETA_URL && /^https:\/\/appdistribution\.firebase\.dev\/i\/[A-Za-z0-9]{8,64}$/.test(process.env.SAIPH_ANDROID_BETA_URL)
-        && <p><a href={process.env.SAIPH_ANDROID_BETA_URL} rel="noreferrer">Join the Android beta in Firebase</a></p>}
-      <p>Signing in does not approve a device or unlock encrypted content.</p>
-    </section> : <section className="card" aria-labelledby="beta-code-title">
-      <h2 id="beta-code-title">Enter your invitation code</h2>
-      <p><Link href="/setup">What you will need and how setup works</Link></p>
-      {access === null && <p role="status">Access status is temporarily unavailable. Try again shortly.</p>}
-      <form className="beta-form" method="post" action="/api/beta/redeem">
-        <label htmlFor="beta-code">Beta code</label>
-        <input id="beta-code" name="code" type="password" required autoComplete="off" spellCheck={false}
-          minLength={38} maxLength={38} pattern="SAIPH-[A-Za-z0-9_\-]{32}" aria-describedby="beta-code-help" />
-        <p id="beta-code-help" className="fine">Your invitation contains a code starting with SAIPH-. Use it with your own account.</p>
-        <button type="submit">Activate beta access</button>
-      </form>
-    </section>}
-    {billing && <SubscriptionCard view={billing} notice={notice} />}
-    <p><a className="button secondary" href="/auth/logout">Sign out</a></p>
+      <SignOut />
+    </div>
+    {billing && <CheckoutNotice notice={notice} />}
+    {access === null && <div className="notice warn" role="status"><Icon name="info" />
+      <div><strong>Access status is temporarily unavailable.</strong><p>Try again shortly.</p></div></div>}
+    {access?.entitled ? <>
+      <div className="split">
+        <section className="card featured string-edge" aria-labelledby="beta-access-title">
+          <div className="card-head">
+            <div><p className="eyebrow">Saiph Hosted</p><h2 id="beta-access-title">Hosted access active</h2></div>
+            <span className="pill good">Active</span>
+          </div>
+          <dl className="facts">
+            <div><dt>Active until</dt><dd>{day(access.until!)}</dd></div>
+            {source && <div><dt>Through</dt><dd>{source}</dd></div>}
+          </dl>
+          {!paid && <p className="fine after">Beta access needs no payment.</p>}
+        </section>
+        <NextSteps />
+      </div>
+      <section className="card after" aria-labelledby="downloads-title">
+        <h2 id="downloads-title">Download Saiph</h2>
+        <p>Install the beta builds from here: they already include the connection settings. These are development builds.</p>
+        <div className="downloads">
+          {installers.map(([value, label, detail, icon]) =>
+            <form key={value} method="post" action="/api/beta/download">
+              <input type="hidden" name="artifact" value={value} />
+              <button className="download" type="submit"><Icon name={icon} />{label}<span>{detail}</span></button>
+            </form>)}
+        </div>
+        {firebase && /^https:\/\/appdistribution\.firebase\.dev\/i\/[A-Za-z0-9]{8,64}$/.test(firebase)
+          && <p className="fine after">Prefer automatic updates on Android? <a href={firebase} rel="noreferrer">Join the Android beta in Firebase</a>.</p>}
+        <div className="card-foot"><Icon name="info" /><span>Windows installers don&rsquo;t have a trusted publisher signature yet. Check the checksum before installing.</span></div>
+        <details className="more">
+          <summary>Source code, licences and checksums</summary>
+          <div className="link-list">
+            {extras.map(([value, label]) => <form key={value} method="post" action="/api/beta/download">
+              <input type="hidden" name="artifact" value={value} /><button className="ghost small" type="submit">{label}</button>
+            </form>)}
+          </div>
+        </details>
+      </section>
+    </> : <div className="split">
+      <section className="card featured" aria-labelledby="beta-code-title">
+        <div className="card-head">
+          <div><p className="eyebrow">Beta access</p><h2 id="beta-code-title">Enter your invitation code</h2></div>
+          <span className="pill">Not active</span>
+        </div>
+        <p>Your invitation contains a code that starts with SAIPH-. It activates Hosted access for this account; no payment is needed.</p>
+        <form className="code-form" method="post" action="/api/beta/redeem">
+          <label htmlFor="beta-code">Invitation code</label>
+          <div className="code-row">
+            <input id="beta-code" name="code" type="password" required autoComplete="off" spellCheck={false} placeholder="SAIPH-…"
+              minLength={38} maxLength={38} pattern="SAIPH-[A-Za-z0-9_\-]{32}" aria-describedby="beta-code-help" />
+            <button type="submit">Activate beta access</button>
+          </div>
+          <p id="beta-code-help" className="fine">Use it with your own account.</p>
+        </form>
+      </section>
+      <NextSteps />
+    </div>}
+    {billing && <div className="after"><SubscriptionCard view={billing} /></div>}
   </>;
+}
+
+function NextSteps() {
+  return <aside className="card" aria-labelledby="next-title">
+    <h2 id="next-title">Setting up</h2>
+    <ul className="aside-list">
+      <li><Icon name="devices" /><span>You need a Windows or Linux computer and an Android phone.</span></li>
+      <li><Icon name="key" /><span>Sign in with this account on both, then approve the phone from your computer.</span></li>
+      <li><Icon name="lock" /><span>Signing in never approves a device or unlocks encrypted content.</span></li>
+    </ul>
+    <div className="actions"><Link className="button secondary block" href="/setup"><Icon name="book" />Open the setup guide</Link></div>
+  </aside>;
 }

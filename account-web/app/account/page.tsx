@@ -6,6 +6,8 @@ import { billingView } from "../../lib/billing/view";
 import {canUseAccount, readBetaConfig} from "../../lib/beta-policy.mjs";
 import BetaAccount from "./BetaAccount";
 import SubscriptionCard from "./SubscriptionCard";
+import {CheckoutNotice, SignOut} from "./parts";
+import {Icon} from "../ui";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Overview" };
 
@@ -16,26 +18,25 @@ export default async function Account({ searchParams }: Props) {
   const auth0 = getAuth0();
   if (!auth0)
     return (
-      <>
+      <section className="state">
         <p className="eyebrow">Your account</p>
         <h1>Setup pending.</h1>
         <p className="lede">
           Account configuration is incomplete. Please return once sign-in is
           ready.
         </p>
-        <a className="button" href="/">
-          Back to account home
-        </a>
-      </>
+        <div className="actions"><a className="button" href="/">Back to account home</a></div>
+      </section>
     );
   const session = await auth0.getSession();
   if (!session) redirect("/auth/login");
   if (!canUseAccount(session.user.sub, process.env.SAIPH_OWNER_SUBJECT, process.env, session.user.mfa))
     return (
-      <>
+      <section className="state">
         <h1>Access denied.</h1>
-        <p>This portal is restricted to its owner.</p>
-      </>
+        <p className="lede">This portal is restricted to its owner.</p>
+        <div className="actions"><SignOut /></div>
+      </section>
     );
   // Billing standing comes only from webhook-stored rows (lib/billing/view.ts).
   const billing = await billingView(session.user.sub);
@@ -45,52 +46,30 @@ export default async function Account({ searchParams }: Props) {
   if (readBetaConfig(process.env)) return <BetaAccount billing={billing} notice={notice} />;
   return (
     <>
-      <div className="page-heading">
+      <div className="page-head">
         <div>
           <p className="eyebrow">Account overview</p>
-          <h1>
-            Your account,
-            <br />
-            <em>at a glance.</em>
-          </h1>
+          <h1>Your account, <span className="gradient-text">at a glance.</span></h1>
           <p className="lede">Welcome to your owner preview.</p>
         </div>
-        <a className="button secondary" href="/auth/logout">
-          Sign out <span aria-hidden="true">↗</span>
-        </a>
+        <SignOut />
       </div>
-      <div className="status-grid" aria-label="Account status">
-        <section className="status-tile">
-          <p className="eyebrow">Account</p>
-          <h2>
-            <span className="status-dot" aria-hidden="true" /> Signed in
-          </h2>
-          <p>Auth0 session active</p>
-        </section>
-        <section className="status-tile">
-          <p className="eyebrow">Devices</p>
-          <h2>Separate approval</h2>
-          <p>Signing in does not pair your devices.</p>
-        </section>
-        <section className="status-tile">
-          <p className="eyebrow">Hosted</p>
-          <h2>Preview</h2>
-          <p>Hosted access is managed by the Hosted service.</p>
-        </section>
+      {billing && <CheckoutNotice notice={notice} />}
+      <dl className="facts overview" aria-label="Account status">
+        <div><dt>Account</dt><dd><span className="pill good">Signed in</span><span className="fine">Auth0 session active</span></dd></div>
+        <div><dt>Devices</dt><dd>Separate approval<span className="fine">Signing in does not pair your devices.</span></dd></div>
+        <div><dt>Hosted</dt><dd>Preview<span className="fine">Hosted access is managed by the Hosted service.</span></dd></div>
+      </dl>
+      <div className="after">
+        {billing ? <SubscriptionCard view={billing} /> : (
+          <section className="card" aria-labelledby="subscription-title">
+            <p className="eyebrow">Saiph Hosted subscription</p>
+            <h2 id="subscription-title">Subscriptions are not available yet.</h2>
+            <p>Subscriptions open when billing configuration and storage are ready.</p>
+          </section>
+        )}
       </div>
-      {billing ? <SubscriptionCard view={billing} notice={notice} /> : (
-        <section className="card billing-card" aria-labelledby="subscription-title">
-          <h2 id="subscription-title">Subscriptions are not available yet.</h2>
-          <p>Subscriptions open when billing configuration and storage are ready.</p>
-        </section>
-      )}
-      <section className="account-note">
-        <h2>Your devices stay in your hands.</h2>
-        <p>
-          Your account session and device approval are separate. Signing in does
-          not unlock message content.
-        </p>
-      </section>
+      <p className="fine after with-icon"><Icon name="lock" />Your account session and device approval are separate. Signing in does not unlock message content.</p>
     </>
   );
 }

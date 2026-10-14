@@ -111,7 +111,7 @@ def validate_settings(settings, mode):
             config['androidBetaUrl'] and not FIREBASE_INVITE.fullmatch(config['androidBetaUrl'])):
         raise ValueError('Android beta link must be a Firebase App Distribution invite link')
     if config['betaAccountUrl'] and not BETA_ACCOUNT.fullmatch(config['betaAccountUrl']):
-        raise ValueError('Friends beta link must be the HTTPS account /account page')
+        raise ValueError('Beta access link must be the HTTPS account /account page')
     if not isinstance(config['waitlistNotice'], str) or not isinstance(config['hostedPeriod'], str):
         raise ValueError('Notice and period must be text')
     if config['sourceVisibility'] not in ('private', 'public'):
