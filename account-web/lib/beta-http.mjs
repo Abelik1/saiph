@@ -11,6 +11,19 @@ export function checkedAccess(value) {
   return /** @type {BetaAccess} */ (value);
 }
 
+/** @typedef {BetaAccess & {kinds: ("admin"|"beta"|"paid")[]}} HostedAccess */
+/** /v1/billing/access: the same consistency rules plus which grant kinds apply.
+ * @param {unknown} value @returns {HostedAccess} */
+export function checkedHostedAccess(value) {
+  if (!value || typeof value !== "object" || !("kinds" in value) || !Array.isArray(value.kinds)
+    || Object.keys(value).sort().join(",") !== "entitled,kinds,until"
+    || value.kinds.some((kind) => !["admin", "beta", "paid"].includes(kind))
+    || new Set(value.kinds).size !== value.kinds.length
+    || (value.kinds.length > 0) !== ("entitled" in value && value.entitled === true)) throw new Error("Access response rejected");
+  const {kinds, ...access} = /** @type {{kinds: ("admin"|"beta"|"paid")[], entitled: unknown, until: unknown}} */ (value);
+  return {...checkedAccess(access), kinds};
+}
+
 /** Browser input supplies only a code. Identity comes from the SDK session/token.
  * @param {Request} request
  * @param {{env:Record<string,string|undefined>,getSession:()=>Promise<{user:{sub?:string}}|null>,

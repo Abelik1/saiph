@@ -2,6 +2,16 @@
 const labels = {
   incomplete: "Checkout incomplete",
   incomplete_expired: "Checkout expired",
+  trialing: "Trial",
+  active: "Subscription active",
+  past_due: "Payment overdue",
+  canceled: "Subscription canceled",
+  unpaid: "Payment unpaid",
+  paused: "Subscription paused",
+};
+const testLabels = {
+  incomplete: "Checkout incomplete",
+  incomplete_expired: "Checkout expired",
   trialing: "Test trial",
   active: "Test subscription active",
   past_due: "Test payment overdue",
@@ -12,11 +22,14 @@ const labels = {
 
 /** Only fixed labels and validated dates leave the server-side billing display.
  * @param {{status: string, currentPeriodEnd: number | null, cancelAtPeriodEnd: boolean}} snapshot
+ * @param {{test?: boolean, plan?: "monthly" | "yearly" | null}} [options] sandbox labels by default
  */
-export function subscriptionSummary(snapshot) {
-  const label = Object.hasOwn(labels, snapshot.status)
-    ? labels[/** @type {keyof typeof labels} */ (snapshot.status)]
+export function subscriptionSummary(snapshot, { test = true, plan = null } = {}) {
+  const table = test ? testLabels : labels;
+  const base = Object.hasOwn(table, snapshot.status)
+    ? table[/** @type {keyof typeof table} */ (snapshot.status)]
     : "Status unavailable";
+  const label = plan === "monthly" ? base + " (monthly)" : plan === "yearly" ? base + " (yearly)" : base;
   const terminal =
     snapshot.status === "canceled" || snapshot.status === "incomplete_expired";
   const seconds = snapshot.currentPeriodEnd;
@@ -34,7 +47,7 @@ export function subscriptionSummary(snapshot) {
       year: "numeric",
       timeZone: "UTC",
     }).format(new Date(seconds * 1000));
-    period = `${snapshot.cancelAtPeriodEnd ? "Scheduled to end" : "Current test period ends"} ${date} (UTC)`;
+    period = `${snapshot.cancelAtPeriodEnd ? "Scheduled to end" : test ? "Current test period ends" : "Renews"} ${date} (UTC)`;
   }
   return { label, period };
 }

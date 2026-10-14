@@ -13,6 +13,24 @@ secret scanning and Actions with fork-PR approval right after the switch
 (private free repositories cannot use them). Paid Hosted remains disabled; its
 gates are tracked separately.
 
+2026-10-14 paid Hosted entitlement: branch `feat/paid-hosted` connects verified
+Stripe subscriptions to Hosted access ([design](PAID_HOSTED.md), agreed with the
+owner). After a signed webhook, the account website pushes an Ed25519-signed
+grant to a new `POST /v1/billing/grant` on the Hosted service, stored as a
+`paid` grant beside beta codes; pushes are ordered by sequence, capped at 45
+days by the service and rolled forward 35 days at a time by a daily cron. Plans
+€3.99/month and €36/year; 3-day grace after a failed payment; open chargebacks
+end access; sandbox checkout stays owner-only. Account page shows access source,
+subscribe and Manage billing. Migration 0003 is additive. Actual local results
+on Windows (Node 24.18.0, Python 3.12, Docker `postgres:16-alpine`): account
+`npm test` 69/69 (DB suites skipped there), `npm run test:billing-db` 41/41,
+typecheck, production build, HTTP smoke (30 checks) and beta HTTP smoke passed;
+Hub full suite 572 passed, 6 skipped (29 new). Nothing is deployed: migration 0003 is
+not applied to the development Neon database, no webhook endpoint or sandbox
+prices exist for it, and no real Stripe sandbox run has reached the Hosted
+service. Live payments stay off; owner-only activation steps, service readiness
+and an independent review of the push endpoint remain.
+
 2026-10-14 Hosted texts and calls: branch `feat/hosted-texts-calls` adds SMS
 threads, replies, new texts, call alerts, answer/decline, dialing, contact
 search and recent calls to Saiph Hosted inside the existing sealed envelopes,

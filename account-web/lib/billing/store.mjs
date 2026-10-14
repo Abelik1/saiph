@@ -1,4 +1,5 @@
 import { transaction } from "./transaction.mjs";
+import { disputeBlocks } from "./grant.mjs";
 
 const EVENT_TYPES = new Set([
   "checkout.session.completed", "checkout.session.async_payment_succeeded",
@@ -6,15 +7,21 @@ const EVENT_TYPES = new Set([
   "customer.subscription.updated", "customer.subscription.deleted",
   "invoice.paid", "invoice.payment_failed",
 ]);
+const DISPUTE_EVENT_TYPES = new Set(["charge.dispute.created", "charge.dispute.updated", "charge.dispute.closed"]);
 const STATUSES = new Set([
   "incomplete", "incomplete_expired", "trialing", "active",
   "past_due", "canceled", "unpaid", "paused",
 ]);
 const TERMINAL = new Set(["canceled", "incomplete_expired"]);
+const DISPUTE_ID = /^(dp|du)_[A-Za-z0-9]{1,250}$/;
 
 /** @typedef {{subject: string, customerId: string}} CustomerMapping */
-/** @typedef {{eventId: string, type: string, created: number, customerId: string, livemode: false}} BillingEvent */
-/** @typedef {{subscriptionId: string, customerId: string, priceId: string, status: string, currentPeriodEnd: number | null, cancelAtPeriodEnd: boolean, cancelAt?: number | null, canceledAt: number | null, endedAt: number | null, livemode: false}} SubscriptionSnapshot */
+/** @typedef {{eventId: string, type: string, created: number, customerId: string, livemode: boolean}} BillingEvent */
+/** @typedef {{subscriptionId: string, customerId: string, priceId: string, status: string, currentPeriodEnd: number | null, cancelAtPeriodEnd: boolean, cancelAt?: number | null, canceledAt: number | null, endedAt: number | null, livemode: boolean}} SubscriptionSnapshot */
+/** @typedef {{disputeId: string, customerId: string, status: string, livemode: boolean}} DisputeSnapshot */
+/** @typedef {{subscriptionId: string, customerId: string, subject: string, status: string, currentPeriodEnd: number | null,
+ *   cancelAtPeriodEnd: boolean, cancelAt: number | null, canceledAt: number | null, endedAt: number | null,
+ *   paymentFailedAt: number | null, disputed: boolean, dirty: boolean, pushedUntil: number | null}} GrantRow */
 
 /** Deliberately generic: never put provider payloads, identifiers or database details into errors. */
 export class BillingStoreError extends Error {
@@ -49,9 +56,9 @@ function timestamp(value, nullable = false) {
     throw new BillingStoreError("INVALID_TIMESTAMP");
   }
 }
-/** @param {SubscriptionSnapshot} snapshot @param {string} customerId */
-function validateSnapshot(snapshot, customerId) {
-  if (!snapshot || snapshot.livemode !== false || snapshot.customerId !== customerId) {
+/** @param {SubscriptionSnapshot} snapshot @param {string} customerId @param {boolean} livemode */
+function validateSnapshot(snapshot, customerId, livemode) {
+  if (!snapshot || snapshot.livemode !== livemode || snapshot.customerId !== customerId) {
     throw new BillingStoreError("SNAPSHOT_SCOPE_MISMATCH");
   }
   identifier(snapshot.subscriptionId, "sub");
@@ -64,15 +71,59 @@ function validateSnapshot(snapshot, customerId) {
   timestamp(snapshot.canceledAt, true);
   timestamp(snapshot.endedAt, true);
 }
+/** @param {BillingEvent} event @param {Set<string>} types @param {boolean} livemode */
+function validateEvent(event, types, livemode) {
+  if (!event || event.livemode !== livemode || !types.has(event.type)) {
+    throw new BillingStoreError("INVALID_EVENT");
+  }
+  identifier(event.eventId, "evt");
+  identifier(event.customerId, "cus");
+  timestamp(event.created);
+}
+/** @param {Record<string, any>} row @returns {GrantRow} */
+function grantRow(row) {
+  const number = (/** @type {unknown} */ value) => value === null ? null : Number(value);
+  return {
+    subscriptionId: String(row.stripe_subscription_id), customerId: String(row.stripe_customer_id),
+    subject: String(row.auth_subject), status: String(row.status),
+    currentPeriodEnd: number(row.current_period_end), cancelAtPeriodEnd: Boolean(row.cancel_at_period_end),
+    cancelAt: number(row.cancel_at), canceledAt: number(row.canceled_at), endedAt: number(row.ended_at),
+    paymentFailedAt: number(row.payment_failed_at),
+    disputed: (row.dispute_statuses ?? []).some((/** @type {string} */ status) => disputeBlocks(status)),
+    dirty: Boolean(row.dirty), pushedUntil: number(row.pushed_until),
+  };
+}
+const GRANT_SELECT = `
+  SELECT s.stripe_subscription_id, s.stripe_customer_id, c.auth_subject, s.status, s.current_period_end,
+         s.cancel_at_period_end, s.cancel_at, s.canceled_at, s.ended_at, s.payment_failed_at,
+         g.dirty, g.pushed_until,
+         ARRAY(SELECT d.status FROM saiph_billing.disputes d
+               WHERE d.stripe_account_id=s.stripe_account_id AND d.stripe_customer_id=s.stripe_customer_id) AS dispute_statuses
+  FROM saiph_billing.subscriptions s
+  JOIN saiph_billing.customers c USING (stripe_account_id, stripe_customer_id)
+  JOIN saiph_billing.grant_state g USING (stripe_account_id, stripe_subscription_id)`;
 
 /**
  * Server-side billing observations. The caller must verify the webhook signature
- * and Stripe account before calling applyEvent. No method grants Hosted access.
+ * and Stripe account before calling applyEvent. Hosted access follows these rows
+ * only through withGrant(), which serializes the signed push per customer.
  * @param {import("./transaction.mjs").SqlPool} pool
- * @param {{stripeAccountId: string}} options
+ * @param {{stripeAccountId: string, livemode?: boolean}} options
  */
-export function createBillingStore(pool, { stripeAccountId }) {
+export function createBillingStore(pool, { stripeAccountId, livemode = false }) {
   identifier(stripeAccountId, "acct");
+  if (typeof livemode !== "boolean") throw new BillingStoreError("INVALID_MODE");
+
+  /** Every transaction first checks this database serves the configured Stripe mode.
+   * @template T @param {(client: import("./transaction.mjs").SqlClient) => Promise<T>} callback */
+  function tx(callback) {
+    return transaction(pool, async (client) => {
+      await client.query("INSERT INTO saiph_billing.settings (id, livemode) VALUES (1, $1) ON CONFLICT (id) DO NOTHING", [livemode]);
+      const { rows } = await client.query("SELECT livemode FROM saiph_billing.settings WHERE id=1");
+      if (rows[0]?.livemode !== livemode) throw new BillingStoreError("MODE_MISMATCH");
+      return callback(client);
+    });
+  }
 
   /** @param {import("./transaction.mjs").SqlClient} client @param {string} subject */
   async function lockSubject(client, subject) {
@@ -91,13 +142,39 @@ export function createBillingStore(pool, { stripeAccountId }) {
     return rows[0] ? { subject: String(rows[0].auth_subject), customerId: String(rows[0].stripe_customer_id) } : null;
   }
 
+  /** Lock the customer row by Stripe customer ID (webhook paths).
+   * @param {import("./transaction.mjs").SqlClient} client @param {string} customerId */
+  async function lockCustomer(client, customerId) {
+    const { rows } = await client.query(
+      "SELECT auth_subject, stripe_customer_id FROM saiph_billing.customers WHERE stripe_account_id=$1 AND stripe_customer_id=$2 FOR UPDATE",
+      [stripeAccountId, customerId],
+    );
+    if (!rows[0]) throw new BillingStoreError("UNKNOWN_CUSTOMER");
+    return { subject: String(rows[0].auth_subject), customerId };
+  }
+
+  /** @param {import("./transaction.mjs").SqlClient} client @param {BillingEvent} event @param {string} target */
+  async function priorReceipt(client, event, target) {
+    const processed = await client.query(
+      "SELECT stripe_customer_id, coalesce(stripe_subscription_id, stripe_dispute_id) AS target, event_type, event_created FROM saiph_billing.processed_events WHERE stripe_account_id=$1 AND stripe_event_id=$2",
+      [stripeAccountId, event.eventId],
+    );
+    const prior = processed.rows[0];
+    if (!prior) return null;
+    if (prior.stripe_customer_id !== event.customerId || prior.event_type !== event.type ||
+        Number(prior.event_created) !== event.created || (target && prior.target !== target)) {
+      throw new BillingStoreError("EVENT_ID_COLLISION");
+    }
+    return String(prior.target);
+  }
+
   /** @param {string} subject @param {() => Promise<string>} createCustomer */
   async function getOrCreateCustomer(subject, createCustomer) {
     subjectValue(subject);
     // Commit the intent BEFORE calling Stripe. It survives an ambiguous remote
     // success + database rollback, so a retry outside Stripe's retention window
     // cannot silently create a second customer.
-    const bound = await transaction(pool, async (client) => {
+    const bound = await tx(async (client) => {
       await lockSubject(client, subject);
       const existing = await selectCustomer(client, subject);
       if (existing) return existing;
@@ -108,7 +185,7 @@ export function createBillingStore(pool, { stripeAccountId }) {
       return null;
     });
     if (bound) return bound;
-    return transaction(pool, async (client) => {
+    return tx(async (client) => {
       await lockSubject(client, subject);
       const existing = await selectCustomer(client, subject);
       if (existing) return existing;
@@ -136,7 +213,7 @@ export function createBillingStore(pool, { stripeAccountId }) {
     async bindCustomer({ subject, customerId }) {
       subjectValue(subject);
       identifier(customerId, 'cus');
-      return transaction(pool, async (client) => {
+      return tx(async (client) => {
         await lockSubject(client, subject);
         const mapped = await selectCustomer(client, subject);
         if (mapped) {
@@ -153,7 +230,7 @@ export function createBillingStore(pool, { stripeAccountId }) {
     /** @param {string} subject @returns {Promise<CustomerMapping | null>} */
     async findCustomer(subject) {
       subjectValue(subject);
-      return transaction(pool, (client) => selectCustomer(client, subject));
+      return tx((client) => selectCustomer(client, subject));
     },
 
     /**
@@ -166,7 +243,7 @@ export function createBillingStore(pool, { stripeAccountId }) {
      */
     async withCustomer(subject, callback) {
       subjectValue(subject);
-      return transaction(pool, async (client) => {
+      return tx(async (client) => {
         await lockSubject(client, subject);
         const mapping = await selectCustomer(client, subject);
         if (!mapping) throw new BillingStoreError("UNKNOWN_CUSTOMER");
@@ -181,33 +258,14 @@ export function createBillingStore(pool, { stripeAccountId }) {
      * @param {(mapping: CustomerMapping) => Promise<SubscriptionSnapshot>} loadSnapshot
      */
     async applyEvent(event, loadSnapshot) {
-      if (!event || event.livemode !== false || !EVENT_TYPES.has(event.type)) {
-        throw new BillingStoreError("INVALID_EVENT");
-      }
-      identifier(event.eventId, "evt");
-      identifier(event.customerId, "cus");
-      timestamp(event.created);
-      return transaction(pool, async (client) => {
-        const customer = await client.query(
-          "SELECT auth_subject, stripe_customer_id FROM saiph_billing.customers WHERE stripe_account_id=$1 AND stripe_customer_id=$2 FOR UPDATE",
-          [stripeAccountId, event.customerId],
-        );
-        if (!customer.rows[0]) throw new BillingStoreError("UNKNOWN_CUSTOMER");
-        const processed = await client.query(
-          "SELECT stripe_customer_id, stripe_subscription_id, event_type, event_created FROM saiph_billing.processed_events WHERE stripe_account_id=$1 AND stripe_event_id=$2",
-          [stripeAccountId, event.eventId],
-        );
-        if (processed.rows[0]) {
-          const prior = processed.rows[0];
-          if (prior.stripe_customer_id !== event.customerId || prior.event_type !== event.type ||
-              Number(prior.event_created) !== event.created) {
-            throw new BillingStoreError("EVENT_ID_COLLISION");
-          }
-          return { outcome: "duplicate", subscriptionId: String(prior.stripe_subscription_id) };
-        }
+      validateEvent(event, EVENT_TYPES, livemode);
+      return tx(async (client) => {
+        const mapping = await lockCustomer(client, event.customerId);
+        const duplicate = await priorReceipt(client, event, "");
+        if (duplicate !== null) return { outcome: "duplicate", subscriptionId: duplicate };
 
-        const snapshot = await loadSnapshot({ subject: String(customer.rows[0].auth_subject), customerId: event.customerId });
-        validateSnapshot(snapshot, event.customerId);
+        const snapshot = await loadSnapshot(mapping);
+        validateSnapshot(snapshot, event.customerId, livemode);
         const current = await client.query(
           "SELECT stripe_customer_id, status, last_event_created FROM saiph_billing.subscriptions WHERE stripe_account_id=$1 AND stripe_subscription_id=$2",
           [stripeAccountId, snapshot.subscriptionId],
@@ -225,25 +283,34 @@ export function createBillingStore(pool, { stripeAccountId }) {
         } else {
           // Terminal observations are accepted even for a delayed event. An old
           // renewal cannot undo them; a new purchase needs a new subscription ID.
+          // payment_failed_at keeps the FIRST observed failure while past_due.
           await client.query(
             `INSERT INTO saiph_billing.subscriptions
               (stripe_account_id,stripe_subscription_id,stripe_customer_id,stripe_price_id,
                status,current_period_end,cancel_at_period_end,canceled_at,ended_at,
-               last_event_created,last_event_id,cancel_at)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+               last_event_created,last_event_id,cancel_at,payment_failed_at)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
              ON CONFLICT (stripe_account_id,stripe_subscription_id) DO UPDATE SET
                stripe_price_id=EXCLUDED.stripe_price_id,status=EXCLUDED.status,
                current_period_end=EXCLUDED.current_period_end,
                cancel_at_period_end=EXCLUDED.cancel_at_period_end,
                cancel_at=EXCLUDED.cancel_at,canceled_at=EXCLUDED.canceled_at,ended_at=EXCLUDED.ended_at,
                last_event_created=GREATEST(saiph_billing.subscriptions.last_event_created,EXCLUDED.last_event_created),
-               last_event_id=EXCLUDED.last_event_id,observed_at=clock_timestamp()`,
+               last_event_id=EXCLUDED.last_event_id,observed_at=clock_timestamp(),
+               payment_failed_at=CASE WHEN EXCLUDED.status='past_due'
+                 THEN coalesce(saiph_billing.subscriptions.payment_failed_at,EXCLUDED.payment_failed_at) END`,
             [stripeAccountId, snapshot.subscriptionId, event.customerId, snapshot.priceId,
               snapshot.status, snapshot.currentPeriodEnd, snapshot.cancelAtPeriodEnd,
               snapshot.canceledAt, snapshot.endedAt, event.created, event.eventId,
-              snapshot.cancelAt ?? null],
+              snapshot.cancelAt ?? null, snapshot.status === "past_due" ? event.created : null],
           );
         }
+        // Any observation may change the grant; the push happens after commit.
+        await client.query(
+          `INSERT INTO saiph_billing.grant_state (stripe_account_id,stripe_subscription_id) VALUES ($1,$2)
+           ON CONFLICT (stripe_account_id,stripe_subscription_id) DO UPDATE SET dirty=true`,
+          [stripeAccountId, snapshot.subscriptionId],
+        );
         await client.query(
           `INSERT INTO saiph_billing.processed_events
              (stripe_account_id,stripe_event_id,stripe_customer_id,stripe_subscription_id,event_type,event_created,outcome)
@@ -255,18 +322,69 @@ export function createBillingStore(pool, { stripeAccountId }) {
       });
     },
 
-    /** Billing display observations; deliberately no entitlement boolean.
+    /**
+     * Record a chargeback's CURRENT status (fetched in loadDispute under the
+     * customer lock) and mark every subscription of that customer for a push.
+     * @param {BillingEvent} event
+     * @param {(mapping: CustomerMapping) => Promise<DisputeSnapshot>} loadDispute
+     */
+    async applyDisputeEvent(event, loadDispute) {
+      validateEvent(event, DISPUTE_EVENT_TYPES, livemode);
+      return tx(async (client) => {
+        const mapping = await lockCustomer(client, event.customerId);
+        const duplicate = await priorReceipt(client, event, "");
+        if (duplicate !== null) return { outcome: "duplicate", disputeId: duplicate };
+        const dispute = await loadDispute(mapping);
+        if (!dispute || dispute.livemode !== livemode || dispute.customerId !== event.customerId ||
+            typeof dispute.disputeId !== "string" || !DISPUTE_ID.test(dispute.disputeId) ||
+            typeof dispute.status !== "string" || !/^[a-z_]{1,40}$/.test(dispute.status)) {
+          throw new BillingStoreError("INVALID_DISPUTE");
+        }
+        const current = await client.query(
+          "SELECT stripe_customer_id, last_event_created FROM saiph_billing.disputes WHERE stripe_account_id=$1 AND stripe_dispute_id=$2",
+          [stripeAccountId, dispute.disputeId],
+        );
+        const prior = current.rows[0];
+        if (prior && prior.stripe_customer_id !== event.customerId) throw new BillingStoreError("DISPUTE_ALREADY_BOUND");
+        const outcome = prior && event.created < Number(prior.last_event_created) ? "stale" : "applied";
+        if (outcome === "applied") {
+          await client.query(
+            `INSERT INTO saiph_billing.disputes (stripe_account_id,stripe_dispute_id,stripe_customer_id,status,last_event_created)
+             VALUES ($1,$2,$3,$4,$5)
+             ON CONFLICT (stripe_account_id,stripe_dispute_id) DO UPDATE SET status=EXCLUDED.status,
+               last_event_created=GREATEST(saiph_billing.disputes.last_event_created,EXCLUDED.last_event_created),
+               observed_at=clock_timestamp()`,
+            [stripeAccountId, dispute.disputeId, event.customerId, dispute.status, event.created],
+          );
+          await client.query(
+            `UPDATE saiph_billing.grant_state g SET dirty=true FROM saiph_billing.subscriptions s
+             WHERE s.stripe_account_id=$1 AND s.stripe_customer_id=$2
+               AND g.stripe_account_id=s.stripe_account_id AND g.stripe_subscription_id=s.stripe_subscription_id`,
+            [stripeAccountId, event.customerId],
+          );
+        }
+        await client.query(
+          `INSERT INTO saiph_billing.processed_events
+             (stripe_account_id,stripe_event_id,stripe_customer_id,stripe_dispute_id,event_type,event_created,outcome)
+           VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+          [stripeAccountId, event.eventId, event.customerId, dispute.disputeId, event.type, event.created, outcome],
+        );
+        return { outcome, disputeId: dispute.disputeId };
+      });
+    },
+
+    /** Billing display observations; deliberately no entitlement Boolean.
      * @param {string} subject
      */
     async listSubscriptions(subject) {
       subjectValue(subject);
-      return transaction(pool, async (client) => {
+      return tx(async (client) => {
         const { rows } = await client.query(
           `SELECT s.stripe_subscription_id AS "subscriptionId", s.stripe_price_id AS "priceId",
                   s.status, s.current_period_end AS "currentPeriodEnd",
                   s.cancel_at_period_end AS "cancelAtPeriodEnd", s.cancel_at AS "cancelAt",
                   s.canceled_at AS "canceledAt",
-                  s.ended_at AS "endedAt"
+                  s.ended_at AS "endedAt", s.payment_failed_at AS "paymentFailedAt"
            FROM saiph_billing.subscriptions s
            JOIN saiph_billing.customers c USING (stripe_account_id,stripe_customer_id)
            WHERE c.stripe_account_id=$1 AND c.auth_subject=$2
@@ -280,7 +398,73 @@ export function createBillingStore(pool, { stripeAccountId }) {
           cancelAt: row.cancelAt === null ? null : Number(row.cancelAt),
           canceledAt: row.canceledAt === null ? null : Number(row.canceledAt),
           endedAt: row.endedAt === null ? null : Number(row.endedAt),
+          paymentFailedAt: row.paymentFailedAt === null ? null : Number(row.paymentFailedAt),
         }));
+      });
+    },
+
+    /** Whether an open or lost chargeback currently blocks paid access.
+     * @param {string} subject */
+    async hasBlockingDispute(subject) {
+      subjectValue(subject);
+      return tx(async (client) => {
+        const { rows } = await client.query(
+          `SELECT d.status FROM saiph_billing.disputes d
+           JOIN saiph_billing.customers c USING (stripe_account_id,stripe_customer_id)
+           WHERE c.stripe_account_id=$1 AND c.auth_subject=$2`,
+          [stripeAccountId, subject],
+        );
+        return rows.some((row) => disputeBlocks(String(row.status)));
+      });
+    },
+
+    /** Subscriptions whose grant may need a push: undelivered, nonterminal, or
+     * still running at the service. Optionally limited to one customer.
+     * @param {{customerId?: string}} [filter] @returns {Promise<GrantRow[]>} */
+    async grantCandidates({ customerId } = {}) {
+      if (customerId !== undefined) identifier(customerId, "cus");
+      return tx(async (client) => {
+        const { rows } = await client.query(
+          GRANT_SELECT + `
+           WHERE s.stripe_account_id=$1 AND ($2::text IS NULL OR s.stripe_customer_id=$2)
+             AND (g.dirty OR g.pushed_until IS NULL OR s.status NOT IN ('canceled','incomplete_expired')
+                  OR g.pushed_until > extract(epoch FROM clock_timestamp()))
+           ORDER BY s.stripe_customer_id, s.stripe_subscription_id`,
+          [stripeAccountId, customerId ?? null],
+        );
+        return rows.map(grantRow);
+      });
+    },
+
+    /**
+     * Push one subscription's grant under its customer row lock, so a webhook
+     * cannot change it between computing and recording. The callback receives a
+     * fresh row and a new sequence number and must resolve with the expiry it
+     * delivered; a throw leaves the grant marked for another attempt.
+     * @param {string} subscriptionId
+     * @param {(row: GrantRow, sequence: number) => Promise<number>} push
+     */
+    async withGrant(subscriptionId, push) {
+      identifier(subscriptionId, "sub");
+      return tx(async (client) => {
+        const owner = await client.query(
+          `SELECT c.stripe_customer_id FROM saiph_billing.customers c
+           JOIN saiph_billing.subscriptions s USING (stripe_account_id,stripe_customer_id)
+           WHERE s.stripe_account_id=$1 AND s.stripe_subscription_id=$2 FOR UPDATE OF c`,
+          [stripeAccountId, subscriptionId],
+        );
+        if (!owner.rows[0]) throw new BillingStoreError("UNKNOWN_SUBSCRIPTION");
+        const { rows } = await client.query(GRANT_SELECT + " WHERE s.stripe_account_id=$1 AND s.stripe_subscription_id=$2",
+          [stripeAccountId, subscriptionId]);
+        const sequence = Number((await client.query("SELECT nextval('saiph_billing.grant_sequence') AS value")).rows[0].value);
+        const until = await push(grantRow(rows[0]), sequence);
+        timestamp(until);
+        await client.query(
+          `UPDATE saiph_billing.grant_state SET dirty=false, pushed_sequence=$3, pushed_until=$4, pushed_at=clock_timestamp()
+           WHERE stripe_account_id=$1 AND stripe_subscription_id=$2`,
+          [stripeAccountId, subscriptionId, sequence, until],
+        );
+        return { sequence, until };
       });
     },
   };

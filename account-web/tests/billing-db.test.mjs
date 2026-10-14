@@ -55,7 +55,7 @@ describe("isolated PostgreSQL billing transactions", { skip: !databaseUrl ? "Run
     await runMigrations(pool, migrations);
   });
   beforeEach(async () => {
-    await pool.query("TRUNCATE saiph_billing.customer_creation_intents, saiph_billing.processed_events, saiph_billing.subscriptions, saiph_billing.customers");
+    await pool.query("TRUNCATE saiph_billing.grant_state, saiph_billing.disputes, saiph_billing.customer_creation_intents, saiph_billing.processed_events, saiph_billing.subscriptions, saiph_billing.customers");
   });
   after(async () => { await pool?.end(); });
 
@@ -379,4 +379,59 @@ describe("isolated PostgreSQL billing transactions", { skip: !databaseUrl ? "Run
     await assert.rejects(store().applyEvent(event("evt_bad", 120), async () => snapshot("active", { cancelAt: -1 })), { code: "INVALID_TIMESTAMP" });
   });
 
+  test("0003 upgrades a 0002 database with rows: grants marked for delivery, receipts kept", async () => {
+    await pool.query("DROP SCHEMA saiph_billing CASCADE");
+    assert.deepEqual(await runMigrations(pool, migrations.slice(0, 2)), [1, 2]);
+    await pool.query("INSERT INTO saiph_billing.customers (stripe_account_id,auth_subject,stripe_customer_id) VALUES ($1,$2,$3)", [accountId, owner, customerId]);
+    await pool.query(`INSERT INTO saiph_billing.subscriptions (stripe_account_id,stripe_subscription_id,stripe_customer_id,stripe_price_id,status,
+      current_period_end,cancel_at_period_end,canceled_at,ended_at,last_event_created,last_event_id)
+      VALUES ($1,'sub_synthetic',$2,'price_synthetic','active',1000,false,null,null,100,'evt_first')`, [accountId, customerId]);
+    await pool.query(`INSERT INTO saiph_billing.processed_events (stripe_account_id,stripe_event_id,stripe_customer_id,stripe_subscription_id,event_type,event_created,outcome)
+      VALUES ($1,'evt_first',$2,'sub_synthetic','customer.subscription.created',100,'applied')`, [accountId, customerId]);
+    assert.deepEqual(await runMigrations(pool, migrations), [3]);
+    assert.deepEqual(await runMigrations(pool, migrations), []);
+    const [candidate] = await store().grantCandidates();
+    assert.equal(candidate.subscriptionId, "sub_synthetic");
+    assert.equal(candidate.dirty, true, "existing subscriptions are delivered after the upgrade");
+    assert.equal(candidate.paymentFailedAt, null);
+    // Receipts still append-only, and every receipt targets exactly one subscription or dispute.
+    await assert.rejects(pool.query("DELETE FROM saiph_billing.processed_events"), { code: "23514" });
+    await assert.rejects(pool.query(`INSERT INTO saiph_billing.processed_events (stripe_account_id,stripe_event_id,stripe_customer_id,event_type,event_created,outcome)
+      VALUES ($1,'evt_none',$2,'charge.dispute.created',1,'applied')`, [accountId, customerId]), { code: "23514" });
+    await assert.rejects(pool.query(`INSERT INTO saiph_billing.processed_events (stripe_account_id,stripe_event_id,stripe_customer_id,stripe_subscription_id,event_type,event_created,outcome)
+      VALUES ($1,'evt_kind',$2,'sub_synthetic','charge.refunded',1,'applied')`, [accountId, customerId]), { code: "23514" });
+  });
+
+  test("payment failure time keeps the first failure and clears on recovery", async () => {
+    await bind();
+    await store().applyEvent(event("evt_fail1", 100), async () => snapshot("past_due"));
+    await store().applyEvent(event("evt_fail2", 200), async () => snapshot("past_due"));
+    assert.equal((await observed()).paymentFailedAt, 100);
+    await store().applyEvent(event("evt_paid", 300), async () => snapshot("active"));
+    assert.equal((await observed()).paymentFailedAt, null);
+    await store().applyEvent(event("evt_fail3", 400), async () => snapshot("past_due"));
+    assert.equal((await observed()).paymentFailedAt, 400);
+  });
+
+  test("grant delivery takes the customer lock, a fresh sequence, and records only on success", async () => {
+    await bind();
+    await store().applyEvent(event(), async () => snapshot());
+    await assert.rejects(store().withGrant("sub_synthetic", async () => { throw new Error("service down"); }));
+    assert.equal((await store().grantCandidates())[0].dirty, true);
+    const first = await store().withGrant("sub_synthetic", async (row, sequence) => { assert.equal(row.subject, owner); return 1234; });
+    const second = await store().withGrant("sub_synthetic", async () => 1234);
+    assert.ok(second.sequence > first.sequence, "sequences only increase, even after a failed attempt");
+    const [state] = await store().grantCandidates();
+    assert.deepEqual([state.dirty, state.pushedUntil], [false, 1234]);
+    // A webhook waiting on the same customer runs after the push commits, then re-marks it.
+    const gate = deferred(), entered = deferred();
+    const pushing = store().withGrant("sub_synthetic", async () => { entered.resolve(); await gate.promise; return 1234; });
+    await entered.promise;
+    const webhookDone = store().applyEvent(event("evt_second", 200), async () => snapshot("past_due"));
+    await waitForDatabaseLock();
+    gate.resolve();
+    await pushing; await webhookDone;
+    assert.equal((await store().grantCandidates())[0].dirty, true);
+    await assert.rejects(store().withGrant("sub_missing", async () => 1), { code: "UNKNOWN_SUBSCRIPTION" });
+  });
 });

@@ -23,7 +23,7 @@ def main():
     migrate.add_argument('--snapshot', type=Path, required=True)
     migrate.add_argument('--until', type=int, required=True)
     commands.add_parser('usage-report').add_argument('--days', type=int, default=30)
-    for action in ('suspend', 'reactivate', 'reset-workspace'):
+    for action in ('suspend', 'reactivate', 'reset-workspace', 'grants'):
         commands.add_parser(action).add_argument('--account', required=True)
     args = parser.parse_args()
     try:
@@ -48,6 +48,9 @@ def main():
             # Daily totals only: the store never holds per-install or per-account rows.
             from .hosted_usage import UsageStore
             print(json.dumps(UsageStore(directory).report(args.days), indent=2))
+            return
+        elif args.action == 'grants':
+            print(json.dumps(registry.grants(args.account), indent=2))
             return
         elif args.action == 'reset-workspace':
             print(json.dumps({**registry.reset_workspace(args.account), 'action': args.action}))

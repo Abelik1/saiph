@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { deriveEntitlement, RENEWAL_GRACE_SECONDS } from "../lib/billing/entitlement.mjs";
+import { deriveEntitlement, PAYMENT_GRACE_SECONDS, RENEWAL_GRACE_SECONDS } from "../lib/billing/entitlement.mjs";
 
 const now = 1_800_000_000;
 const row = (status, overrides = {}) => ({ subscriptionId: "sub_synthetic", status, currentPeriodEnd: now + 1000,
@@ -31,6 +31,19 @@ test("failed renewal, incomplete, paused and terminal states are not entitled", 
   }
 });
 
+test("a failed renewal stays entitled for the payment grace from the first observed failure", () => {
+  const failed = row("past_due", { paymentFailedAt: now - 10 });
+  assert.deepEqual(deriveEntitlement([failed], now),
+    { entitled: true, state: "payment_failed", subscriptionId: "sub_synthetic", until: now - 10 + PAYMENT_GRACE_SECONDS });
+  assert.equal(deriveEntitlement([failed], now - 10 + PAYMENT_GRACE_SECONDS).entitled, false);
+});
+
+test("an open dispute suspends an otherwise entitled subscription", () => {
+  assert.deepEqual(deriveEntitlement([row("active")], now, { disputed: true }),
+    { entitled: false, state: "disputed", subscriptionId: "sub_synthetic", until: null });
+  assert.equal(deriveEntitlement([row("canceled")], now, { disputed: true }).state, "ended");
+});
+
 test("scheduled cancellation stays entitled only until the earliest scheduled end", () => {
   assert.deepEqual(deriveEntitlement([row("active", { cancelAtPeriodEnd: true })], now),
     { entitled: true, state: "ending", subscriptionId: "sub_synthetic", until: now + 1000 });
@@ -52,11 +65,13 @@ test("an entitled subscription wins over older ended ones", () => {
   assert.equal(result.entitled, true);
 });
 
-test("checkout feedback is separate from the account page stored billing derivation", async () => {
-  const source = await readFile(new URL("../app/account/page.tsx", import.meta.url), "utf8");
-  const billingBlock = source.slice(source.indexOf("const billing ="), source.indexOf("const { checkout }"));
-  assert.ok(billingBlock.length > 0);
-  assert.doesNotMatch(billingBlock, /\bcheckout\b|\bsearchParams\b/);
-  assert.match(source, /listSubscriptions/);
-  assert.match(source, /deriveEntitlement/);
+test("checkout feedback is separate from the stored billing derivation", async () => {
+  const view = await readFile(new URL("../lib/billing/view.ts", import.meta.url), "utf8");
+  const page = await readFile(new URL("../app/account/page.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(view, /checkout|searchParams/);
+  assert.match(view, /listSubscriptions/);
+  assert.match(view, /deriveEntitlement/);
+  // The page reads the return parameter only to choose a notice after loading billing.
+  assert.ok(page.indexOf("billingView(") < page.indexOf("searchParams;"));
+  assert.match(page, /const notice = checkout === "returned" \? "returned" : checkout === "cancelled" \? "cancelled" : null;/);
 });
