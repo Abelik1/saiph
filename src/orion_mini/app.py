@@ -138,6 +138,7 @@ class MainWindow(QMainWindow):
     restart_requested = Signal()
     automation_requested = Signal(object)
     security_alert = Signal(str)
+    phone_alert = Signal(str, str)
     send_files_requested = Signal(object)
     open_phone_app_requested = Signal(str)
     ring_requested = Signal(str)
@@ -209,6 +210,9 @@ class MainWindow(QMainWindow):
         # signal delivers them to the tray on the GUI thread.
         self.security_alert.connect(lambda message: self.tray.showMessage('Saiph security', message, QSystemTrayIcon.Warning, 15000))
         self.workspace.security_alert = self.security_alert.emit
+        # Hosted incoming and missed calls, from the hosted worker thread.
+        self.phone_alert.connect(lambda title, text: self.tray.showMessage(title, text, QSystemTrayIcon.Information, 15000))
+        self.workspace.phone_alert = self.phone_alert.emit
         if not os.environ.get('ORION_MINI_TEST'):
             # Adding devices requires Windows Hello where it is set up. The handle
             # is read here, on the GUI thread; prompts run on worker threads.
@@ -292,6 +296,7 @@ class MainWindow(QMainWindow):
         # One echo/repeat cache for Link and hosted clipboard deliveries.
         controller.clipboard_cache = self.phone_runtime.clipboard_cache
         controller.clipboard_sink = self.clipboard_received.emit
+        controller.call_state = self.phone_runtime.call_pause.call  # Same media pause as Link calls.
         controller.changed = self.bridge.changed.emit
         controller.start()
 

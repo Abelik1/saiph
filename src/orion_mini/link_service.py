@@ -96,7 +96,7 @@ class LinkWorkspace(LinkOperations):
         invitation = self.invitations.status()
         return {'platform': platform.system().lower(), 'modules': module_state(False), 'settings': self.settings, 'update_status': update_status(self.root), 'cloud_status': self.cloud_status(),
                 'enrollment': {**invitation, 'approved': invitation['id'] is not None and self.enrollment_approved == invitation['id']},
-                'components': self.components.snapshot(), 'phone': self.phone.snapshot(),
+                'components': self.components.snapshot(), 'phone': self.phone_snapshot(),
                 'phone_features': self.phone_features.snapshot(), 'handoffs': self.store.all('handoff')[:100],
                 'deskflow': {**self.deskflow.status(), 'setup': self.deskflow.setup()}, 'dnd': self.dnd_status(), 'hotspot': self.hotspot.status(), 'remote': self.remote.status(), 'bt_lock': self.bt_lock.status(), 'setup': self.setup_state(), 'camera': self.camera.status(), 'microphone': self.microphone.status(),
                 'api': self.api_info, 'hub_inbox': self.hub_inbox(), 'hosted': self.hosted_state(), 'user_verification': user_verification(self), 'usage': self.usage_counter.snapshot(), 'insights': {'enabled': self.insights.enabled()},

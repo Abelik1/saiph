@@ -57,6 +57,34 @@ class LinkOperations:
             return dict(_HOSTED_OFF)
         return {'available': True, **self.hosted_controller().snapshot()}
 
+    def _active_hosted(self):
+        """The running hosted controller when Hosted is on; never creates one."""
+        controller = getattr(self, '_hosted', None)
+        return controller if controller is not None and controller.enabled() else None
+
+    def hosted_phones(self) -> list:
+        """Hosted phones that share texts or calls, shown on the shared Phone page."""
+        controller = self._active_hosted()
+        return controller.phones() if controller is not None else []
+
+    def hosted_phone_command(self, device, kind, payload):
+        """Route a Phone page action to a hosted phone; None for Link devices."""
+        controller = self._active_hosted()
+        if controller is None or not controller.is_phone(device):
+            return None
+        return controller.phone_command(device, kind, payload)
+
+    def hosted_phone_file(self, device, path):
+        controller = self._active_hosted()
+        if controller is None or not controller.is_phone(device):
+            return None
+        return controller.send_file(path, device)
+
+    def phone_snapshot(self) -> dict:
+        snapshot = self.phone.snapshot()
+        hosted = self.hosted_phones()
+        return {**snapshot, 'devices': snapshot['devices'] + hosted} if hosted else snapshot
+
     def _refuse_if_hosted(self):
         if self.hosted_blocks_self_hosted():
             raise ValueError('This computer uses Saiph Hosted. A device uses either Saiph Hosted or a self-hosted Hub, '
