@@ -18,12 +18,12 @@ function Disclosure({
   return (
     <details
       data-slot="disclosure"
-      className={cn("group/disclosure rounded-[12px] border border-border bg-field/60 px-4 open:pb-4", className)}
+      className={cn("rounded-[12px] border border-border bg-field/60 px-4 open:pb-4", className)}
       {...props}
     >
       <summary
         data-slot="disclosure-summary"
-        className="flex min-h-12 cursor-pointer list-none items-center gap-2.5 py-3 text-[13.5px] font-medium text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:text-foreground group-open/disclosure:mb-3 group-open/disclosure:border-b group-open/disclosure:border-border group-open/disclosure:text-foreground [&_svg]:size-4 [&_svg]:shrink-0"
+        className="flex min-h-12 cursor-pointer list-none items-center gap-2.5 py-3 text-[13.5px] font-medium text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:text-foreground [[open]>&]:mb-3 [[open]>&]:border-b [[open]>&]:border-border [[open]>&]:text-foreground [&_svg]:size-4 [&_svg]:shrink-0"
       >
         {icon}
         <span className="min-w-0 flex-1">{summary}</span>
