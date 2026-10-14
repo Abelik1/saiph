@@ -253,12 +253,6 @@ footer a:hover { color: var(--text); }
 }
 .stage-caption p { margin: 0; color: var(--text); font-size: 1.05rem; text-align: center; transition: opacity .3s; max-width: 60ch; }
 .stage-caption p.fade { opacity: 0; }
-.stage-pause {
-  flex: none; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface);
-  color: var(--muted); cursor: pointer; display: grid; place-items: center;
-}
-.stage-pause:hover { color: var(--text); }
-.stage-pause svg { width: 14px; height: 14px; }
 
 .dev { position: absolute; }
 .dev .screen {
