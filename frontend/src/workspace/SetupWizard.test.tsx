@@ -63,12 +63,32 @@ describe("Setup guide", () => {
     await waitFor(() => expect(call).toHaveBeenCalledWith("hosted.setup_root"));
     rerender(<SetupWizard state={{ ...signedIn, hosted: { ...signedIn.hosted!, identity: true, roster: { expires_at: 1, version: 1, clock_warning: false, members: [] } } } as State} client={{ call } as unknown as Client} close={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    expect(screen.getByLabelText("Phone request code")).toBeVisible();
+    expect(screen.getByLabelText("Device request code")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Skip for now" }));
     expect(screen.getByLabelText(/Share the clipboard/)).toBeChecked();
     expect(screen.queryByLabelText(/Phone remote/)).toBeNull();
   });
 
+  it("lets a second computer join as another computer and waits for its main computer", async () => {
+    const call = vi.fn().mockResolvedValue({});
+    const account = { status: "signed_in", error: "", refresh_tokens: false };
+    const fresh = { ...hubState(false), hosted: { available: true, enabled: true, status: "setup", identity: false, configured: true, account } } as unknown as State;
+    const { rerender } = render(<SetupWizard state={fresh} client={{ call } as unknown as Client} close={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    expect(await screen.findByText("Already use Saiph Hosted on another computer?")).toBeInTheDocument();
+    expect(screen.getByLabelText("Main computer's code")).toBeInTheDocument();
+    const waiting = { ...fresh, hosted: { ...fresh.hosted!, identity: true, role: "member", status: "awaiting_approval" } } as State;
+    rerender(<SetupWizard state={waiting} client={{ call } as unknown as Client} close={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "Show request code" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
+    const approved = { ...waiting, hosted: { ...waiting.hosted!, status: "active", roster: { expires_at: 1, version: 2, clock_warning: false, members: [
+      { id: "dev_main", label: "Main computer", root: true, self: false, fingerprint: "A" }, { id: "dev_self", label: "This computer", root: false, self: true, fingerprint: "B" }] } } } as State;
+    rerender(<SetupWizard state={approved} client={{ call } as unknown as Client} close={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    expect(screen.getByText(/Phones are added on your main computer/)).toBeVisible();
+    expect(screen.queryByLabelText("Device request code")).toBeNull();
+    expect(screen.getByRole("button", { name: "Skip for now" })).toBeVisible();
+  });
   it("appears on first run, not for computers that are already connected, and can be skipped", async () => {
     const call = vi.fn(async (method: string) => method === "state" ? hubState(false) : {});
     render(<App providedClient={{ call, subscribe: () => () => {} } as unknown as Client} />);

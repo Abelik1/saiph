@@ -11,15 +11,15 @@ describe("Hosted preview settings", () => {
   it("requires deployment config and respects self-hosted pairing", () => { setup({...off, configured: false, self_hosted_paired: true}); expect(screen.queryByRole("button", {name: "Turn on Hosted"})).toBeNull(); expect(screen.getByText(/paired with a self-hosted Hub/)).toBeVisible(); });
   it("requires explicit full-fingerprint confirmation before approval", async () => {
     const call = setup(active, vi.fn().mockResolvedValue({device_id: "phone", fingerprint: "FULL FINGERPRINT", expires_at: 1900000000}));
-    fireEvent.change(screen.getByLabelText("Phone request code"), {target: {value: "orion-approve-v1:synthetic"}}); fireEvent.click(screen.getByRole("button", {name: "Check request"}));
+    fireEvent.change(screen.getByLabelText("Device request code"), {target: {value: "orion-approve-v1:synthetic"}}); fireEvent.click(screen.getByRole("button", {name: "Check request"}));
     await screen.findByText("FULL FINGERPRINT"); expect(screen.getByRole("button", {name: "Approve device"})).toBeDisabled();
-    fireEvent.change(screen.getByLabelText("Device name"), {target: {value: "My phone"}}); fireEvent.click(screen.getByLabelText("The full fingerprint matches my phone")); fireEvent.click(screen.getByRole("button", {name: "Approve device"}));
+    fireEvent.change(screen.getByLabelText("Device name"), {target: {value: "My phone"}}); fireEvent.click(screen.getByLabelText("The full fingerprint matches the device")); fireEvent.click(screen.getByRole("button", {name: "Approve device"}));
     await waitFor(() => expect(call).toHaveBeenCalledWith("hosted.approve", {code: "orion-approve-v1:synthetic", label: "My phone", confirmed: true}));
   });
   it("invalidates confirmation whenever request code changes", async () => {
     setup(active, vi.fn().mockResolvedValue({device_id: "phone", fingerprint: "fingerprint", expires_at: 1900000000}));
-    fireEvent.change(screen.getByLabelText("Phone request code"), {target: {value: "first"}}); fireEvent.click(screen.getByRole("button", {name: "Check request"})); await screen.findByText("Compare this full device fingerprint with the phone:");
-    fireEvent.click(screen.getByLabelText("The full fingerprint matches my phone")); fireEvent.change(screen.getByLabelText("Phone request code"), {target: {value: "different"}}); expect(screen.queryByRole("button", {name: "Approve device"})).toBeNull();
+    fireEvent.change(screen.getByLabelText("Device request code"), {target: {value: "first"}}); fireEvent.click(screen.getByRole("button", {name: "Check request"})); await screen.findByText("Compare this full fingerprint with the device you are adding:");
+    fireEvent.click(screen.getByLabelText("The full fingerprint matches the device")); fireEvent.change(screen.getByLabelText("Device request code"), {target: {value: "different"}}); expect(screen.queryByRole("button", {name: "Approve device"})).toBeNull();
   });
   it("says whether Windows Hello protects device changes and lists recent changes", () => {
     setup({...active, user_verification: "windows_hello", security_events: [{id: "e1", kind: "added", device_id: "phone", label: "Phone", at: 1900000000}]});

@@ -56,7 +56,7 @@ describe("Hosted settings on a joined computer", () => {
   };
   it("hides approving and removing devices, and can still send to the main computer", () => {
     render(<HostedSettings hosted={member} client={client(vi.fn())} />);
-    expect(screen.queryByLabelText("Phone request code")).toBeNull();
+    expect(screen.queryByLabelText("Device request code")).toBeNull();
     expect(screen.queryByRole("button", { name: /Revoke/ })).toBeNull();
     expect(screen.queryByRole("button", { name: "Show root approval code" })).toBeNull();
     expect(screen.getByText(/joined your account as another computer/)).toBeVisible();

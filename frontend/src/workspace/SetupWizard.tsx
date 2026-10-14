@@ -5,6 +5,7 @@ import type { Client, State } from "./types";
 import { Action, Card, Form } from "./ui";
 import { Enrollment } from "./Enrollment";
 import { HostedApproveDevice, HostedRootCode } from "./HostedSettings";
+import { HostedJoin } from "./HostedJoin";
 import { PairingQr, validQr, type PairingQrCode } from "./PairingQr";
 import { UsageChoice, UsageExplanation } from "./UsageSharing";
 import { SaiphMark, WaveLoader, WaveProgress } from "./waves";
@@ -55,9 +56,11 @@ export function SetupWizard({ state, client, close }: { state: State; client: Cl
   const [qr, setQr] = useState<{ qr: PairingQrCode; shownAt: number } | null>(null);
   const hosted = state.hosted;
   const signedIn = hosted?.account?.status === "signed_in";
-  const connected = mode === "hub" ? Boolean(state.settings?.hub?.paired) : Boolean(hosted?.identity && signedIn);
+  // A computer that joined as another computer is connected once its main computer approves it.
+  const joining = hosted?.role === "member" && hosted.status === "awaiting_approval";
+  const connected = mode === "hub" ? Boolean(state.settings?.hub?.paired) : Boolean(hosted?.identity && signedIn && !joining);
   const phone = phoneOf(state);
-  const hostedPhones = hosted?.roster?.members.filter((m) => !m.root) || [];
+  const hostedPhones = hosted?.roster?.members.filter((m) => !m.root && !m.self) || [];
   const phoneReady = mode === "hub" ? Boolean(phone) : hostedPhones.length > 0;
   const shown = features.filter((f) => mode !== "hosted" || f.hosted);
   const finish = async () => { await client.call("settings.save", { setup: { completed: true } }); close(); };
@@ -108,7 +111,9 @@ export function SetupWizard({ state, client, close }: { state: State; client: Cl
             {hosted.enabled && !signedIn && <><p>{hosted.account?.status === "signing_in" ? "Finish signing in in your browser." : "Activate your beta code on the Saiph website first, then sign in here."}</p>
               <Action disabled={hosted.account?.status === "signing_in"} run={() => client.call("hosted.sign_in")}>Sign in with your browser</Action></>}
             {signedIn && !hosted.identity && <><p>This computer becomes the device that approves your others. Keep it online now and then so approvals stay current.</p>
-              <Action run={() => client.call("hosted.setup_root")}>Set up this computer</Action></>}
+              <Action run={() => client.call("hosted.setup_root")}>Set up this computer</Action>
+              <details><summary>Already use Saiph Hosted on another computer?</summary><HostedJoin client={client} waiting={false} /></details></>}
+            {signedIn && joining && <HostedJoin client={client} waiting />}
             {connected && <p role="status" className="setup-ok"><Check size={16} />Signed in and set up.</p>}
             {hosted.account?.error && <p role="alert">{hosted.account.error}</p>}
           </>}
@@ -139,10 +144,12 @@ export function SetupWizard({ state, client, close }: { state: State; client: Cl
       </>}
       {mode === "hosted" && hosted && <>
         {phoneReady && <p role="status" className="setup-ok"><Check size={16} />{hostedPhones.map((m) => m.label).join(", ")} approved.</p>}
-        <p>1. On your phone, sign in with the same Saiph account and scan this computer's code.</p>
-        <HostedRootCode hosted={hosted} client={client} />
-        <p>2. Paste the request your phone shows, compare the fingerprint and approve it.</p>
-        <HostedApproveDevice hosted={hosted} client={client} />
+        {hosted.role === "member" ? <p>Phones are added on your main computer: open Settings → Saiph Hosted there, show its code to your phone and approve the phone's request.</p> : <>
+          <p>1. On your phone, sign in with the same Saiph account and scan this computer's code.</p>
+          <HostedRootCode hosted={hosted} client={client} />
+          <p>2. Paste the request your phone shows, compare the fingerprint and approve it.</p>
+          <HostedApproveDevice hosted={hosted} client={client} />
+        </>}
       </>}
       <Action className="text-button" run={() => client.call("setup.open", { link: "android" })}>Where do I get the Android app?</Action>
       <div className="actions"><button type="button" className="text-button" onClick={next("connect")}>Back</button>

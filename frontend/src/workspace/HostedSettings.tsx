@@ -44,12 +44,12 @@ export function HostedApproveDevice({hosted, client}: {hosted: HostedState; clie
   const [label, setLabel] = useState("");
   return <>
     <Form submit={async () => {const inspected = await client.call<Request>("hosted.request.inspect", {code}); setRequest(inspected); setConfirmed(false);}}>
-      <label>Phone request code<textarea value={code} required onChange={event => {setCode(event.target.value); setRequest(null); setConfirmed(false);}} /></label><button>Check request</button>
+      <label>Device request code<textarea value={code} required onChange={event => {setCode(event.target.value); setRequest(null); setConfirmed(false);}} /></label><button>Check request</button>
     </Form>
     {request && <Form submit={async () => {await client.call("hosted.approve", {code, label, confirmed}); setRequest(null); setCode(""); setConfirmed(false);}}>
-      <p>Compare this full device fingerprint with the phone:</p><code>{request.fingerprint}</code>
+      <p>Compare this full fingerprint with the device you are adding:</p><code>{request.fingerprint}</code>
       <label>Device name<input value={label} maxLength={40} required onChange={event => setLabel(event.target.value)} /></label>
-      <label><input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} /> The full fingerprint matches my phone</label><button disabled={!confirmed}>Approve device</button>
+      <label><input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} /> The full fingerprint matches the device</label><button disabled={!confirmed}>Approve device</button>
     </Form>}
     <VerificationNote value={hosted.user_verification} />
   </>;
