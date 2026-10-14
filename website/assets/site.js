@@ -79,11 +79,26 @@
         notice.appendChild(privacy);
       }
       a.insertAdjacentElement("afterend", notice);
+    } else if (betaAccountUrl) {
+      // Until signup or payment opens, early access is the invite-only friends beta.
+      // Its front page explains the invitation before asking anyone to sign in.
+      link(a, betaAccountUrl.replace(/\/account$/, "/"));
+      a.textContent = "Join the friends beta";
+      const notice = document.createElement("p");
+      notice.className = "muted beta-note";
+      notice.appendChild(document.createTextNode("Invite only for now: you'll need the invitation code a friend sent you."));
+      // In a row of buttons the note goes under the whole row.
+      const row = a.parentElement && a.parentElement.classList && a.parentElement.classList.contains("btn-row") ? a.parentElement : a;
+      row.insertAdjacentElement("afterend", notice);
     } else {
       const publicSource = cfg.githubUrl && cfg.sourceVisibility === "public";
       link(a, publicSource ? cfg.githubUrl : "", "Hosted early access is not open yet");
       a.textContent = publicSource ? "Follow progress on GitHub" : "Early access coming soon";
     }
+  });
+  // The Hosted plan's label says what is open now.
+  document.querySelectorAll("[data-hosted-status]").forEach((el) => {
+    if (!cfg.subscribeUrl && !waitlistReady && betaAccountUrl) el.textContent = el.dataset.betaText || "Invite-only beta";
   });
 
   document.querySelectorAll("[data-price]").forEach((el) => {

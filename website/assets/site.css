@@ -587,3 +587,6 @@ footer a:hover { color: var(--text); }
   width: 10px; height: 10px; top: 0.5em; border: 1.5px solid var(--faint); border-radius: 50%; transform: none;
 }
 .nav-links a { white-space: nowrap; }
+
+/* The invite-only note under an early-access button. */
+.beta-note { font-size: .86rem; margin: 10px 0 0; text-align: center; }

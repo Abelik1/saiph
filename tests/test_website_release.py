@@ -236,19 +236,20 @@ function element() {
     appendChild() {}, insertAdjacentElement() {} };
 }
 const form = element(), details = element(), inactive = element(), contact = element(), subscribe = element();
-const beta = element(), betaBox = element();
+const beta = element(), betaBox = element(), status = element();
 const elements = {
   '[data-link="android-beta"]': [beta], '[data-android-beta]': [betaBox],
   '[data-link="waitlist"]': [form], '[data-waitlist-details]': [details],
   '[data-waitlist-inactive]': [inactive], '[data-privacy-contact]': [contact],
-  '[data-link="subscribe"]': [subscribe]
+  '[data-link="subscribe"]': [subscribe], '[data-hosted-status]': [status]
 };
 const document = { querySelectorAll: selector => elements[selector] || [],
   querySelector: () => null, createElement: element, createTextNode: text => ({textContent: text}) };
 vm.runInNewContext(fs.readFileSync(process.argv[1], 'utf8'), {window: {ORION_SITE: cfg}, document, Date});
 console.log(JSON.stringify({form: form.href || '', disabled: form.attributes['aria-disabled'],
   hidden: details.hidden, inactiveHidden: inactive.hidden, contact: contact.href || '',
-  subscribe: subscribe.href || '', beta: beta.href || '', betaHidden: betaBox.hidden}));
+  subscribe: subscribe.href || '', subscribeText: subscribe.textContent, subscribeDisabled: subscribe.attributes['aria-disabled'] || '',
+  hostedStatus: status.textContent, beta: beta.href || '', betaHidden: betaBox.hidden}));
 """
     result = subprocess.run([node, '-e', script, str(ROOT / 'website/assets/site.js')],
                             input=json.dumps(settings), text=True, capture_output=True, check=True)
@@ -324,3 +325,23 @@ def test_friends_beta_account_link_is_optional_and_exact():
 def test_friends_beta_account_link_rejects_other_links(value):
     with pytest.raises(ValueError):
         site.validate_settings({'betaAccountUrl': value}, 'preview')
+
+
+def test_early_access_opens_the_friends_beta_until_signup_or_payment_opens():
+    settings = json.loads((ROOT / 'website/landing-settings.json').read_text())
+    settings['betaAccountUrl'] = BETA_ACCOUNT
+    result = render_site_script(settings)
+    # The beta's front page explains the invitation before asking anyone to sign in.
+    assert result['subscribe'] == BETA_ACCOUNT.removesuffix('account')
+    assert result['subscribeText'] == 'Join the friends beta' and result['subscribeDisabled'] == ''
+    assert result['hostedStatus'] == 'Invite-only beta'
+    del settings['betaAccountUrl']
+    result = render_site_script(settings)
+    assert result['subscribe'] == '' and result['subscribeDisabled'] == 'true'
+    assert result['subscribeText'] == 'Early access coming soon'
+
+
+def test_reviewed_waitlist_still_comes_before_the_friends_beta():
+    settings = launch_settings()
+    settings['betaAccountUrl'] = BETA_ACCOUNT
+    assert render_site_script(settings)['subscribe'] == 'waitlist.html'
