@@ -1,2 +1,90 @@
 /* SPDX-License-Identifier: AGPL-3.0-or-later */
-@import "tailwindcss"; @theme { --color-background: #0b1020; --color-card: #131b32; --color-primary: #8b5cf6; --color-foreground: #f8fafc; --color-muted: #94a3b8; } * { box-sizing: border-box; } body { margin: 0; min-width: 320px; min-height: 100vh; background: #0b1020; color: #f8fafc; font-family: Inter, ui-sans-serif, system-ui; }
+/*
+ * Cascade order. The older page stylesheets sit in "legacy", below Tailwind's
+ * components and utilities, so a design-system component always wins over them.
+ * Unlayered CSS would beat every layer, so none is written outside one.
+ */
+@layer theme, base, legacy, components, utilities;
+
+@import "tailwindcss";
+@import "./design-system/families.css";
+@import "./design-system/tokens.css";
+@import "./design-system/motifs.css";
+
+@import "./workspace/workspace.css" layer(legacy);
+@import "./workspace/link.css" layer(legacy);
+@import "./workspace/waves.css" layer(legacy);
+@import "./workspace/PhoneTabs.css" layer(legacy);
+@import "./workspace/PhotoGallery.css" layer(legacy);
+@import "./workspace/SettingsLayout.css" layer(legacy);
+
+/* The roles, as Tailwind colours, radii and fonts: bg-card, text-muted-foreground, rounded-field. */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-chrome: var(--chrome);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-hover: var(--secondary-hover);
+  --color-secondary-border: var(--secondary-border);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent-strong: var(--accent-strong);
+  --color-violet: var(--violet);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-field: var(--field);
+  --color-ring: var(--ring);
+  --color-attention: var(--attention);
+  --color-attention-surface: var(--attention-surface);
+  --color-attention-foreground: var(--attention-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-status-on: var(--status-on);
+  --color-status-on-surface: var(--status-on-surface);
+  --color-status-warn: var(--status-warn);
+  --color-status-warn-surface: var(--status-warn-surface);
+  --color-status-off: var(--status-off);
+  --color-status-off-surface: var(--status-off-surface);
+  --color-wave-1: var(--wave-1);
+  --color-wave-2: var(--wave-2);
+  --color-wave-3: var(--wave-3);
+  --radius-card: var(--radius);
+  --radius-field: var(--radius-field);
+  --radius-button: var(--radius-button);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --ease-saiph: var(--ease);
+  --shadow-glow: var(--glow);
+}
+
+@layer base {
+  html, body, #root { height: 100%; min-height: 0; overflow: hidden; }
+  body {
+    margin: 0;
+    min-width: 760px;
+    font-family: var(--font-sans);
+    font-synthesis: none;
+    color: var(--foreground);
+    /* Light from the top left and bottom right, behind the strings. */
+    background:
+      radial-gradient(1200px 700px at 15% -10%, color-mix(in srgb, var(--wave-1) 13%, transparent), transparent 60%),
+      radial-gradient(900px 700px at 105% 110%, color-mix(in srgb, var(--wave-3) 12%, transparent), transparent 60%),
+      linear-gradient(180deg, var(--background-raised), var(--background) 75%);
+  }
+  :focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
+  ::selection { background: color-mix(in srgb, var(--primary) 35%, transparent); }
+}
+
+@layer utilities {
+  .tabular { font-variant-numeric: tabular-nums; }
+}

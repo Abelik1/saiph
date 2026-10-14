@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useState } from "react";
-import { Card } from "./ui";
+import { X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 /** QR modules from the desktop. The grid is itself a private invitation credential. */
 export type PairingQrCode = { modules: string[]; expires_at: string; expires_in: number };
@@ -32,12 +34,21 @@ export function PairingQr({ qr, shownAt, onExpire, onClose }: { qr: PairingQrCod
   useEffect(() => { if (seconds <= 0) onExpire(); }, [seconds, onExpire]);
   const size = qr.modules.length;
   const path = qr.modules.map((row, y) => [...row].map((cell, x) => cell === "1" ? `M${x} ${y}h1v1h-1z` : "").join("")).join("");
-  return <Card title="Pair a phone" subtitle="In the Saiph app on your phone, tap Scan pairing QR." actions={<button type="button" className="text-button" onClick={onClose}>Close</button>}>
-    {/* Fixed black on white in every theme so phone cameras can read it. */}
-    <svg className="pairing-qr" role="img" aria-label="Pairing QR code" viewBox={`0 0 ${size} ${size}`} width={264} height={264} shapeRendering="crispEdges">
-      <rect width={size} height={size} fill="#fff" /><path d={path} fill="#000" />
-    </svg>
-    <p role="timer" aria-live="off">Expires in {remaining(seconds)}. Works once.</p>
-    <p className="muted">This QR is a private invitation. Show it only to your own phone, and don't photograph, share or screen-share it. Close it if someone else can see your screen.</p>
+  return <Card className="string-edge">
+    <CardHeader>
+      <CardTitle>Pair a phone</CardTitle>
+      <CardDescription>In the Saiph app on your phone, tap Scan pairing QR.</CardDescription>
+      <CardAction><Button variant="ghost" size="sm" onClick={onClose}><X />Close</Button></CardAction>
+    </CardHeader>
+    <CardContent className="flex flex-wrap items-center gap-6">
+      {/* Fixed black on white in every theme so phone cameras can read it. */}
+      <svg className="block h-auto max-w-full rounded-[10px] bg-white p-3" role="img" aria-label="Pairing QR code" viewBox={`0 0 ${size} ${size}`} width={264} height={264} shapeRendering="crispEdges">
+        <rect width={size} height={size} fill="#fff" /><path d={path} fill="#000" />
+      </svg>
+      <div className="grid max-w-[38ch] gap-2">
+        <p className="m-0 text-[15px] font-semibold tabular" role="timer" aria-live="off">Expires in {remaining(seconds)}. Works once.</p>
+        <p className="m-0 text-[12.5px] leading-relaxed text-muted-foreground">This QR is a private invitation. Show it only to your own phone, and don't photograph, share or screen-share it. Close it if someone else can see your screen.</p>
+      </div>
+    </CardContent>
   </Card>;
 }

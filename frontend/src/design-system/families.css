@@ -1,0 +1,37 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/*
+ * Saiph colour families and type stacks. See docs/DESKTOP_DESIGN_SYSTEM.md.
+ *
+ * A family is a hue and a saturation multiplier. Every role colour is written as
+ *   hsl(var(--hue-FAMILY) calc(var(--sat-FAMILY) * S%) L%)
+ * so each role keeps the saturation and lightness it was designed with while its
+ * hue comes from here. Turning a knob moves every role built on that family.
+ *
+ * Nothing here is a role. Components never read a family directly; they read the
+ * roles in tokens.css.
+ */
+:root {
+  /* Deep night blue: grounds, cards, rules and hairlines. */
+  --hue-night: 222;
+  --sat-night: 1;
+
+  /* Cyan: the main action, focus and the bright end of every string. */
+  --hue-cyan: 188;
+  --sat-cyan: 1;
+
+  /* Sky blue: the middle of the main action's gradient. */
+  --hue-sky: 213;
+  --sat-sky: 1;
+
+  /* Violet: the far end of every string and the brand mark's third star. */
+  --hue-violet: 255;
+  --sat-violet: 1;
+
+  /* Amber: "this needs you". */
+  --hue-amber: 38;
+  --sat-amber: 1;
+
+  /* Type. Inter carries everything; the mono carries codes and figures. */
+  --type-sans: Inter, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  --type-mono: "JetBrains Mono", "Cascadia Mono", ui-monospace, Consolas, monospace;
+}

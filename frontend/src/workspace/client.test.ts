@@ -33,6 +33,22 @@ describe('native request deadlines', () => {
     const assertion=expect(client.call('cloud.client.install')).rejects.toThrow('desktop did not respond');
     await vi.advanceTimersByTimeAsync(11*60*1000);await assertion;
   });
+  it('answers an unchanged state with the same object, and a changed one with a new object', async () => {
+    const {desktopClient}=await import('./client');const client=await desktopClient();
+    // The desktop writes packets with Python's json.dumps spacing.
+    const packet=(id:string,result:unknown)=>`{"id": "${id}", "ok": true, "result": ${JSON.stringify(result)}}`;
+    const first=client.call('state');response(packet(requests[0][0],{phone:{status:'Online'}}));
+    const second=client.call('state');response(packet(requests[1][0],{phone:{status:'Online'}}));
+    const third=client.call('state');response(packet(requests[2][0],{phone:{status:'Offline'}}));
+    const [a,b,c]=await Promise.all([first,second,third]);
+    expect(b).toBe(a);
+    expect(c).not.toBe(a);
+    expect(c).toEqual({phone:{status:'Offline'}});
+    // Other methods never reuse a state answer.
+    const other=client.call('phone.ring');response(packet(requests[3][0],{phone:{status:'Offline'}}));
+    expect(await other).not.toBe(c);
+    expect(vi.getTimerCount()).toBe(0);
+  });
   it('retains the ordinary request deadline', async () => {
     const {desktopClient}=await import('./client');const client=await desktopClient();
     const assertion=expect(client.call('state')).rejects.toThrow('desktop did not respond');

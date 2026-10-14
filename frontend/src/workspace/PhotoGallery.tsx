@@ -18,7 +18,6 @@ import {
 import type { Client } from "./types";
 import type { PhoneFeatureState, PhonePhoto, PhotoSave } from "./PhoneTabs";
 import { Action, Empty } from "./ui";
-import "./PhotoGallery.css";
 
 type PhoneDevice = { id: string; online: boolean; capabilities: string[] };
 type Original = { url: string; width: number; height: number; size: number };
@@ -80,7 +79,7 @@ function SavePhoto({
         {shown.file_id && (
           <Action
             role={menuItem ? "menuitem" : undefined}
-            className="text-button"
+            className={menuItem ? "photo-menu-item" : "text-button"}
             run={() => client.call("phone.file.open", { id: shown.file_id })}
           >
             Show in folder
@@ -94,7 +93,7 @@ function SavePhoto({
       <button
         type="button"
         role={menuItem ? "menuitem" : undefined}
-        className="text-button"
+        className={menuItem ? "photo-menu-item" : "text-button"}
         disabled={saving}
         onClick={() => void save()}
       >
@@ -129,6 +128,8 @@ function CopyPhoto({
   return (
     <Action
       role={menuItem ? "menuitem" : undefined}
+      // In the menu every item shares the menu's look; in the viewer it is a quiet pill.
+      className={menuItem ? "photo-menu-item" : "text-button"}
       run={async () => {
         setCopied(false);
         await client.call("phone.photo.copy", {
@@ -139,7 +140,7 @@ function CopyPhoto({
       }}
     >
       <Copy size={16} />
-      {copied ? "Copied original" : "Copy image"}
+      {copied ? "Copied original" : "Copy photo"}
     </Action>
   );
 }
@@ -406,9 +407,9 @@ function PhotoMenu({
         <strong>{photo.name}</strong>
         <small>{new Date(photo.timestamp).toLocaleDateString()}</small>
       </div>
-      <button role="menuitem" onClick={onOpen}>
+      <button role="menuitem" className="photo-menu-item" onClick={onOpen}>
         <Maximize2 size={16} />
-        Open image
+        Open photo
       </button>
       <div role="group">
         <CopyPhoto photo={photo} client={client} menuItem />

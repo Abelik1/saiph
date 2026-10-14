@@ -38,17 +38,32 @@ export function desktopClient(): Promise<Client> {
       const pending = new Map<
         string,
         {
+          method: string;
           resolve: (value: unknown) => void;
           reject: (error: Error) => void;
           timer: number;
         }
       >();
+      // The page asks for the whole state every second and it is usually the same
+      // megabytes as last time. An identical answer resolves to the same object
+      // without parsing, so the page can tell nothing changed by reference.
+      let lastState: { body: string; value: unknown } | undefined;
       bridge.response.connect((raw) => {
+        const head = /^\{"id": ?"([^"]+)", ?/.exec(raw);
+        const early = head ? pending.get(head[1]) : undefined;
+        const body = head && early?.method === "state" ? raw.slice(head[0].length) : "";
+        if (body && body === lastState?.body) {
+          clearTimeout(early!.timer);
+          pending.delete(head![1]);
+          early!.resolve(lastState.value);
+          return;
+        }
         const response = JSON.parse(raw);
         const item = pending.get(response.id);
         if (!item) return;
         clearTimeout(item.timer);
         pending.delete(response.id);
+        if (response.ok && body) lastState = { body, value: response.result };
         if (response.ok) item.resolve(response.result);
         else item.reject(new Error(response.error || "The operation failed."));
       });
@@ -65,6 +80,7 @@ export function desktopClient(): Promise<Client> {
               );
             }, method === "app.update.install" ? 30 * 60 * 1000 : method === "cloud.client.install" ? 11 * 60 * 1000 : method === "components.install" ? 10 * 60 * 1000 : 150000);
             pending.set(id, {
+              method,
               resolve: (value) => resolve(value as T),
               reject,
               timer,

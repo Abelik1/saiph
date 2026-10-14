@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { PhoneCamera } from "./PhoneCamera";
 import { CameraSettings } from "./CameraSettings";
 import type { CameraStatus, Client, Settings } from "./types";
+import { chooseOption } from "../test-helpers";
 
 const ready: CameraStatus = {
   available: true,
@@ -61,16 +62,10 @@ describe("Phone camera", () => {
         client={{ call } as unknown as Client}
       />,
     );
-    fireEvent.click(screen.getByText("Camera options"));
-    fireEvent.change(screen.getByLabelText("Phone camera"), {
-      target: { value: "back" },
-    });
-    fireEvent.change(screen.getByLabelText("Video quality"), {
-      target: { value: "1080p" },
-    });
-    fireEvent.change(screen.getByLabelText("Picture rotation"), {
-      target: { value: "90" },
-    });
+    fireEvent.click(screen.getByRole("button", { name: "Camera options" }));
+    chooseOption("Phone camera", "Rear camera");
+    chooseOption("Video quality", "1080p · 30 fps");
+    chooseOption("Picture rotation", "90°");
     expect(call).not.toHaveBeenCalled();
     fireEvent.click(
       screen.getByRole("button", { name: "Use phone as webcam" }),

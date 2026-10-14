@@ -3,6 +3,7 @@ import { act, render, screen, fireEvent, waitFor } from "@testing-library/react"
 import { describe, it, expect, vi } from "vitest";
 import { Phone } from "./Phone";
 import type { Client, State } from "./types";
+import { chooseMenuItem } from "../test-helpers";
 
 function state(online = true): State {
   return {
@@ -38,6 +39,14 @@ function state(online = true): State {
   } as unknown as State;
 }
 describe("Phone page", () => {
+  it("shows server invitations only to people who chose to self-host", () => {
+    const unpaired = { ...state(), settings: { hub: { paired: false } }, enrollment: { ready: false, id: null, expires_at: null, custom_mesh: false } };
+    const client = { call: vi.fn() } as unknown as Client;
+    const view = render(<Phone state={{ ...unpaired, setup: { mode: "hosted" } } as unknown as State} client={client} />);
+    expect(screen.queryByRole("button", { name: "Open server invitation" })).toBeNull();
+    view.rerender(<Phone state={{ ...unpaired, setup: { mode: "hub" } } as unknown as State} client={client} />);
+    expect(screen.getByRole("button", { name: "Open server invitation" })).toBeVisible();
+  });
   it("explains when a connected phone is not sharing its clipboard", () => {
     const client = { call: vi.fn(), subscribe: () => () => {} } as unknown as Client;
     const notice = /Clipboard isn't shared with Galaxy A55 yet/;
@@ -58,7 +67,7 @@ describe("Phone page", () => {
     const fixture = state();
     fixture.phone!.devices[0].capabilities.push("ring");
     render(<Phone state={fixture} client={{ call, subscribe: () => () => {} } as Client} />);
-    fireEvent.click(screen.getByRole("button", { name: "Ring Galaxy A55" }));
+    fireEvent.click(screen.getByRole("button", { name: "Find phone" }));
     await waitFor(() => expect(call).toHaveBeenCalledWith("phone.ring", { device_id: "phone" }));
   });
   it("copies a verification code from a phone notification, even offline", async () => {
@@ -75,7 +84,9 @@ describe("Phone page", () => {
       dnd: { enabled: true, active: true, source: "phone", changed_at: 1, quiet: true } } as unknown as State;
     render(<Phone state={fixture} client={{ call, subscribe: () => () => {} } as Client} />);
     expect(screen.getByText("On · from Galaxy A55")).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "Turn off Do Not Disturb on all devices" }));
+    const toggle = screen.getByRole("switch", { name: "Do Not Disturb on all devices" });
+    expect(toggle).toBeChecked();
+    fireEvent.click(toggle);
     await waitFor(() => expect(call).toHaveBeenCalledWith("continuity.dnd", { active: false }));
   });
   it("hides Do Not Disturb when sync is switched off", () => {
@@ -88,7 +99,7 @@ describe("Phone page", () => {
     const fixture={...state(),settings:{link:{camera:{enabled:false},microphone:{enabled:false}}},microphone:{available:true,running:true,muted:false,verified:false,mode:'linux-pulse',device_id:'phone',message:'Capturing'}} as State;
     fixture.phone!.devices.push({...fixture.phone!.devices[0],id:'second-phone',name:'Second phone'});
     render(<Phone state={fixture} client={{call:vi.fn(),subscribe:()=>()=>{}} as Client}/>);
-    fireEvent.change(screen.getByLabelText('Phone'),{target:{value:'second-phone'}});
+    chooseMenuItem(/^Device:/, /Second phone/);
     expect(screen.getByText('Galaxy A55 microphone · Capturing audio')).toBeVisible();
     expect(screen.getByRole('button',{name:'Stop phone microphone'})).toBeEnabled();
   });
@@ -112,6 +123,8 @@ describe("Phone page", () => {
         client={{ call: vi.fn(), subscribe: () => () => {} } as Client}
       />,
     );
+    // An idle webcam waits in the device bar; its panel opens beside the button.
+    fireEvent.click(screen.getByRole("button", { name: "Webcam" }));
     expect(
       screen.getByRole("button", { name: "Use phone as webcam" }),
     ).toBeEnabled();
@@ -136,6 +149,7 @@ describe("Phone page", () => {
         index: 2,
       }),
     );
+    fireEvent.click(screen.getByRole("button", { name: "Reply" }));
     fireEvent.change(screen.getByLabelText("Reply to Synthetic message"), {
       target: { value: "Synthetic reply" },
     });
@@ -159,7 +173,7 @@ describe("Phone page", () => {
     );
     expect(screen.getByText("Offline")).toBeVisible();
     expect(screen.getByRole("button", { name: "Archive" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Send reply" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Reply" })).toBeDisabled();
     expect(screen.getByText("Synthetic body")).toBeVisible();
   });
   it("distinguishes a disconnected feed from missing notification permission", () => {
@@ -211,6 +225,14 @@ describe("Phone pairing invitations", () => {
   function clientFor(call = vi.fn().mockResolvedValue(qr)): Client {
     return { call, subscribe: () => () => {} } as Client;
   }
+  // Pairing lives in the "Add a device" dialog; open it when it is not already open.
+  function addDevice() {
+    if (!screen.queryByRole("dialog")) fireEvent.click(screen.getByRole("button", { name: "Add a device" }));
+  }
+  function showQr() {
+    addDevice();
+    return screen.getByRole("button", { name: "Show pairing QR" });
+  }
 
   it("offers pairing only on a paired computer and keeps the invitation file option", async () => {
     const call = vi.fn().mockResolvedValue({});
@@ -218,6 +240,7 @@ describe("Phone pairing invitations", () => {
     const { rerender } = render(<Phone state={state()} client={client} />);
     expect(screen.queryByRole("group", { name: "Add a device" })).toBeNull();
     rerender(<Phone state={pairedState()} client={client} />);
+    addDevice();
     fireEvent.click(screen.getByRole("button", { name: "Save invitation file" }));
     await waitFor(() => expect(call).toHaveBeenCalledWith("enrollment.export"));
     expect(screen.queryByRole("img", { name: "Pairing QR code" })).toBeNull();
@@ -226,21 +249,21 @@ describe("Phone pairing invitations", () => {
   it("shows a QR on request, prevents another while visible, and allows closing it", async () => {
     const call = vi.fn().mockResolvedValue(qr);
     render(<Phone state={pairedState()} client={clientFor(call)} />);
-    fireEvent.click(screen.getByRole("button", { name: "Show pairing QR" }));
+    fireEvent.click(showQr());
     expect(await screen.findByRole("img", { name: "Pairing QR code" })).toBeVisible();
     expect(call).toHaveBeenCalledExactlyOnceWith("enrollment.qr");
-    expect(screen.getByRole("button", { name: "Show pairing QR" })).toBeDisabled();
+    expect(showQr()).toBeDisabled();
     expect(screen.getByRole("timer")).toHaveTextContent("Expires in 10:00");
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(screen.queryByRole("img", { name: "Pairing QR code" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Show pairing QR" })).toBeEnabled();
+    expect(showQr()).toBeEnabled();
   });
 
   it("closes on admission of a new device without closing on ordinary status updates", async () => {
     const client = clientFor();
     const initial = pairedState();
     const { rerender } = render(<Phone state={initial} client={client} />);
-    fireEvent.click(screen.getByRole("button", { name: "Show pairing QR" }));
+    fireEvent.click(showQr());
     await screen.findByRole("img", { name: "Pairing QR code" });
     rerender(<Phone state={{ ...initial, phone: { ...initial.phone!, status: "Updated" } }} client={client} />);
     expect(screen.getByRole("img", { name: "Pairing QR code" })).toBeVisible();
@@ -252,22 +275,23 @@ describe("Phone pairing invitations", () => {
   });
 
   it("removes an expired QR and allows a fresh request", async () => {
+    const client = clientFor(vi.fn().mockResolvedValue({ ...qr, expires_in: 1 }));
+    render(<Phone state={pairedState()} client={client} />);
+    addDevice(); // The dialog opens before the clock is faked; the QR's lifetime is what this checks.
     vi.useFakeTimers();
     try {
-      const client = clientFor(vi.fn().mockResolvedValue({ ...qr, expires_in: 1 }));
-      render(<Phone state={pairedState()} client={client} />);
-      await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Show pairing QR" })); });
+      await act(async () => { fireEvent.click(showQr()); });
       expect(screen.getByRole("img", { name: "Pairing QR code" })).toBeVisible();
       act(() => vi.advanceTimersByTime(1000));
       expect(screen.queryByRole("img", { name: "Pairing QR code" })).toBeNull();
     } finally { vi.useRealTimers(); }
     expect(screen.getByRole("status")).toHaveTextContent("pairing QR expired");
-    expect(screen.getByRole("button", { name: "Show pairing QR" })).toBeEnabled();
+    expect(showQr()).toBeEnabled();
   });
 
   it("rejects a malformed response and leaves the file alternative available", async () => {
     render(<Phone state={pairedState()} client={clientFor(vi.fn().mockResolvedValue({ ...qr, modules: ["invalid"] }))} />);
-    fireEvent.click(screen.getByRole("button", { name: "Show pairing QR" }));
+    fireEvent.click(showQr());
     expect(await screen.findByRole("alert")).toHaveTextContent("Save an invitation file instead");
     expect(screen.queryByRole("img", { name: "Pairing QR code" })).toBeNull();
     expect(screen.getByRole("button", { name: "Save invitation file" })).toBeEnabled();
@@ -276,18 +300,18 @@ describe("Phone pairing invitations", () => {
   it("discards the QR when leaving the Phone page", async () => {
     const client = clientFor();
     const { unmount } = render(<Phone state={pairedState()} client={client} />);
-    fireEvent.click(screen.getByRole("button", { name: "Show pairing QR" }));
+    fireEvent.click(showQr());
     await screen.findByRole("img", { name: "Pairing QR code" });
     unmount();
     render(<Phone state={pairedState()} client={client} />);
     expect(screen.queryByRole("img", { name: "Pairing QR code" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Show pairing QR" })).toBeEnabled();
+    expect(showQr()).toBeEnabled();
   });
   it("clears the QR when initially unavailable device state arrives", async () => {
     const client = clientFor();
     const initial = { ...pairedState(), phone: undefined };
     const { rerender } = render(<Phone state={initial} client={client} />);
-    fireEvent.click(screen.getByRole("button", { name: "Show pairing QR" }));
+    fireEvent.click(showQr());
     await screen.findByRole("img", { name: "Pairing QR code" });
     rerender(<Phone state={pairedState()} client={client} />);
     expect(screen.queryByRole("img", { name: "Pairing QR code" })).toBeNull();
@@ -298,7 +322,7 @@ describe("Phone pairing invitations", () => {
     const client = clientFor();
     const initial = pairedState();
     const { rerender } = render(<Phone state={initial} client={client} />);
-    fireEvent.click(screen.getByRole("button", { name: "Show pairing QR" }));
+    fireEvent.click(showQr());
     await screen.findByRole("img", { name: "Pairing QR code" });
     const changed = { ...initial, settings: { ...initial.settings!, hub: {
       ...initial.settings!.hub, paired: change !== "unpair", base_url: "http://100.64.0.2:8765",
@@ -313,8 +337,8 @@ describe("Phone pairing invitations", () => {
     const client = clientFor(call);
     const initial = pairedState();
     const { rerender, unmount } = render(<Phone state={initial} client={client} />);
-    fireEvent.click(screen.getByRole("button", { name: "Show pairing QR" }));
-    expect(screen.getByRole("button", { name: "Show pairing QR" })).toBeDisabled();
+    fireEvent.click(showQr());
+    expect(showQr()).toBeDisabled();
     if (change === "unmount") unmount();
     else rerender(<Phone state={{ ...initial, settings: { ...initial.settings!, hub: {
       ...initial.settings!.hub, base_url: "http://100.64.0.2:8765",
@@ -330,7 +354,7 @@ describe("Phone pairing invitations", () => {
       let resolve!: (value: typeof qr) => void;
       const client = clientFor(vi.fn().mockReturnValue(new Promise<typeof qr>((done) => { resolve = done; })));
       render(<Phone state={pairedState()} client={client} />);
-      fireEvent.click(screen.getByRole("button", { name: "Show pairing QR" }));
+      fireEvent.click(showQr());
       vi.setSystemTime(new Date("2026-01-01T12:00:10Z"));
       await act(async () => { resolve(qr); });
       expect(screen.getByRole("timer")).toHaveTextContent("Expires in 9:50");

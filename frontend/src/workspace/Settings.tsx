@@ -15,6 +15,7 @@ import { SettingsLayout } from "./SettingsLayout";
 import { RetainedView } from "./Navigation";
 import { useSettingsSection } from "./settingsNavigation";
 import { UsageSettings, YourWeekSettings } from "./UsageSharing";
+import { YourWeek } from "./YourWeek";
 
 export function WorkspaceModule({
   installed = false,
@@ -130,6 +131,7 @@ export function Settings({ state, client, openSetup }: { state: State; client: C
                 </Card>
               )}
               <YourWeekSettings enabled={state.insights?.enabled} client={client} />
+              <YourWeek enabled={state.insights?.enabled} client={client} />
               <UsageSettings usage={state.usage} client={client} />
             </div>
           </div>

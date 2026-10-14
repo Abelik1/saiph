@@ -43,7 +43,7 @@
   padding: 4px;
   border: 0;
   background: transparent;
-  color: var(--muted);
+  color: var(--muted-foreground);
 }
 .photo-context-menu {
   position: fixed;
@@ -72,7 +72,7 @@
 }
 .photo-menu-heading small {
   font-size: 11px;
-  color: var(--muted);
+  color: var(--muted-foreground);
 }
 .photo-context-menu button {
   width: 100%;
@@ -85,8 +85,10 @@
 }
 .photo-context-menu button:hover,
 .photo-context-menu button:focus-visible {
-  background: #384455;
+  background: var(--secondary);
 }
+/* Menu items keep the menu's look, whatever kind of button renders them. */
+.photo-context-menu .photo-menu-item { min-height: 0; color: var(--foreground); gap: 10px; }
 .photo-context-menu .phone-photo-save {
   width: 100%;
 }
@@ -138,7 +140,7 @@
 }
 .photo-viewer-title small {
   font-size: 11px;
-  color: var(--muted);
+  color: var(--muted-foreground);
 }
 .photo-viewer-actions {
   display: flex;
@@ -236,7 +238,7 @@
 }
 .photo-details dt {
   font-size: 11px;
-  color: var(--muted);
+  color: var(--muted-foreground);
   margin-top: 16px;
 }
 .photo-details dd {
