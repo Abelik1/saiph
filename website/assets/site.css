@@ -113,6 +113,12 @@ p { margin: 0 0 1em; }
 }
 .pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 10px var(--green); }
 
+/* Why Saiph */
+.origin { margin: 8px auto 22px; max-width: 44ch; }
+.origin p { font-size: clamp(1.2rem, 2.4vw, 1.55rem); line-height: 1.35; color: var(--text); margin: 0 0 10px; }
+.origin cite { font-style: normal; color: var(--muted); font-size: 0.92rem; }
+.trademark-note { font-size: 0.8rem; margin-top: 18px; }
+
 /* Cards / grids */
 .grid { display: grid; gap: 16px; }
 @media (min-width: 640px) { .grid.c2 { grid-template-columns: repeat(2, 1fr); } .grid.c3 { grid-template-columns: repeat(2, 1fr); } }
