@@ -36,7 +36,9 @@ Steps 10 and onwards in [the Hosted beta test sequence](HOSTED_FRIENDS_BETA.md#t
       decline work on Android 12–16; missed-call alert; media pauses.
 - [ ] Two approved computers, first come first served: both ring, the first
       answer or decline wins, the other stops ringing and says where it was
-      handled; two dials at once are refused with a reason.
+      handled; two dials at once are refused with a reason. **Blocked:** the
+      desktop app cannot yet join an account as a second, non-root computer
+      (setup refuses when a root exists). Build that join flow first.
 - [ ] Texts: conversation list, reply in a one-to-one thread, new text to a
       number and to a contact found by search, long and emoji messages.
 - [ ] Dial from the computer, recent calls list, dual SIM.
