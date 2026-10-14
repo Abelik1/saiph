@@ -17,4 +17,12 @@ class SaiphControlsTest {
         assertEquals("Connected", SaiphControls.short(SaiphControls.State.HOSTED))
         assertEquals("Reconnecting", SaiphControls.short(SaiphControls.State.RECONNECTING))
     }
+
+    @Test
+    fun computerNamesFitTheRingButton() {
+        assertEquals("Orion desktop", SaiphControls.shortName("Orion desktop (AlexMainDesktop)"))
+        assertEquals("Laptop", SaiphControls.shortName("Laptop"))
+        assertEquals("A very long com…", SaiphControls.shortName("A very long computer name"))
+        assertEquals("(Odd)", SaiphControls.shortName("(Odd)"))
+    }
 }

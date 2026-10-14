@@ -53,6 +53,12 @@ object SaiphControls {
         State.RECONNECTING -> "On · reconnecting"
     }
 
+    /** A computer name short enough for a half-width button: "Orion desktop (AlexMainDesktop)" -> "Orion desktop". */
+    fun shortName(name: String): String {
+        val plain = name.substringBefore(" (").trim().ifEmpty { name.trim() }
+        return if (plain.length <= 16) plain else plain.take(15).trimEnd() + "…"
+    }
+
     /** One or two words for the small widget and the tile's subtitle. */
     fun short(state: State) = when (state) {
         State.PAUSED -> "Paused"
@@ -166,7 +172,8 @@ class SaiphActionsWidget : AppWidgetProvider() {
                 setTextViewText(R.id.saiph_actions_toggle, if (state == SaiphControls.State.PAUSED) "Resume" else "Pause")
                 setOnClickPendingIntent(R.id.saiph_actions_toggle, SaiphControls.togglePending(context))
                 setOnClickPendingIntent(R.id.saiph_actions_header, SaiphControls.activityPending(context, 0, OrionActivity::class.java))
-                setTextViewText(R.id.saiph_actions_ring, if (ringable != null) "Ring ${ringable.name}" else "Ring computer")
+                setTextViewText(R.id.saiph_actions_ring, if (ringable != null) "Ring " + SaiphControls.shortName(ringable.name) else "Ring computer")
+                if (ringable != null) setContentDescription(R.id.saiph_actions_ring, "Ring " + ringable.name)
                 setBoolean(R.id.saiph_actions_ring, "setEnabled", connected && ringable != null)
                 if (ringable != null) setOnClickPendingIntent(R.id.saiph_actions_ring, SaiphControls.ringPending(context, ringable.id))
                 setBoolean(R.id.saiph_actions_photo, "setEnabled", connected)
