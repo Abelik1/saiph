@@ -1,10 +1,15 @@
 # Using Saiph Link
 
-Saiph Link contains **Phone**, **Cloud** and **Settings**. Start with the
-[self-hosted server guide](ORION_SELF_HOSTED_SERVER.md). You need a reachable Hub,
-a Windows or Linux desktop, and the separately maintained Android app. Hosted is
-planned; these instructions do not create a hosted account.
-Beta testers can follow the step-by-step [beta tester setup guide](BETA_TESTER_GUIDE.md).
+Saiph Link contains **Phone**, **Cloud** and **Settings**. By default Saiph
+connects through a **Saiph account**: Saiph runs the connection, so you need only
+the desktop and Android apps, with no server and no Tailscale or other network
+software on your phone or computer. Saiph accounts are in a friends beta; these
+instructions do not create one.
+
+Self-hosting is optional and only for people who choose it during setup. It
+needs a reachable Hub on your own private network; see the
+[self-hosted server guide](ORION_SELF_HOSTED_SERVER.md) and the step-by-step
+[self-hosting beta guide](SELF_HOSTING_BETA_GUIDE.md).
 
 ## Install and first-run setup
 
@@ -16,7 +21,8 @@ installed now; unticking one removes only what Saiph added.
 
 When Saiph opens for the first time, a setup guide walks you through:
 
-1. **How to connect:** a Saiph account, or your own Hub.
+1. **How to connect:** a Saiph account is preselected. Choose
+   **I self-host my own Hub** only if you run your own server.
 2. **Connect this computer:** account sign-in and setting it up as the device that
    approves your others, or your Hub invitation and the secure connection.
 3. **Add your phone:** the QR code, approval and confirmation that it connected.
@@ -28,9 +34,10 @@ When Saiph opens for the first time, a setup guide walks you through:
 "Set up later" closes it. Run it again from Settings → General → Setup guide.
 Computers that are already connected never see it automatically.
 
-## Pair your devices
+## Self-hosting: pair your devices
 
-Install and configure your private Tailscale or Headscale network using its own
+This section applies only if you chose **I self-host my own Hub**. Saiph account
+users skip it. Install and configure your private Tailscale or Headscale network using its own
 official tools. Keep the Hub reachable only within that network. Use the Hub's
 enrollment flow to add your desktop and phone; open the resulting
 `.orion-enrollment` invitation with Saiph. Invitations are private credentials:

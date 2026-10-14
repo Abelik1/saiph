@@ -23,6 +23,8 @@ LINUX_HELPERS = {
     "bluetoothctl": ("bluez", "Lock when your phone leaves"),
     "nmcli": ("network-manager", "Phone hotspot connection"),
 }
+# A Saiph account is the default; "hub" is chosen only by people who self-host.
+MODES = ("hosted", "hub")
 
 
 def tools():
@@ -47,13 +49,18 @@ def status(workspace):
     hosted = (settings.get("hosted") or {}) if isinstance(settings.get("hosted"), dict) else {}
     hosted_identity = (workspace.root / "hosted" / "identity").exists()
     connected = hub_paired or hosted_identity
-    completed = (settings.get("setup") or {}).get("completed") is True
-    return {"completed": completed, "connected": connected, "mode": "hub" if hub_paired else "hosted" if hosted_identity or hosted.get("enabled") else None,
+    setup = settings.get("setup") or {}
+    completed = setup.get("completed") is True
+    # A connection decides the mode; until then, the choice made in the guide does.
+    chosen = setup.get("mode") if setup.get("mode") in MODES else None
+    return {"completed": completed, "connected": connected, "mode": "hub" if hub_paired else "hosted" if hosted_identity or hosted.get("enabled") else chosen,
             # Existing users who are already connected are never interrupted by the guide.
             "show": not completed and not connected}
 
 
 def validate_options(options):
-    if not isinstance(options, dict) or set(options) - {"completed"} or ("completed" in options and type(options["completed"]) is not bool):
+    if (not isinstance(options, dict) or set(options) - {"completed", "mode"}
+            or ("completed" in options and type(options["completed"]) is not bool)
+            or ("mode" in options and options["mode"] not in MODES)):
         raise ValueError("Unknown setup preference.")
     return dict(options)

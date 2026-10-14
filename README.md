@@ -1,7 +1,7 @@
 # Saiph
 
-Connect your Android phone and Windows or Linux computers through a Hub you run
-yourself. Saiph brings phone notifications, clipboard sharing, files and device
+Connect your Android phone and Windows or Linux computers with a Saiph account,
+or, if you choose to self-host, through a Hub you run yourself. Saiph brings phone notifications, clipboard sharing, files and device
 continuity into one desktop app. Internal packages and compatibility identifiers
 still use the Orion name.
 
@@ -21,6 +21,11 @@ Actual Windows Link build with an isolated test profile and synthetic invitation
 no phone is paired in this screenshot.
 
 ## Get started
+
+The apps start on Saiph account sign-in. With a Saiph account you install only the
+desktop and Android apps: no server, and no Tailscale or other network software
+on your phone or computer. The steps below are for self-hosting, which you choose
+explicitly during setup with **I self-host my own Hub**.
 
 1. Read the [self-hosting guide](docs/ORION_SELF_HOSTED_SERVER.md) and run the Hub on a
    Linux server or Raspberry Pi reachable over your private Tailscale or Headscale

@@ -23,10 +23,12 @@ describe("Setup guide", () => {
     const call = vi.fn().mockResolvedValue({});
     const close = vi.fn();
     const { rerender } = render(<SetupWizard state={hubState(false)} client={{ call } as unknown as Client} close={close} />);
-    expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: /My own Hub/ }));
+    // A Saiph account is preselected; self-hosting is an explicit choice.
+    expect(screen.getByRole("button", { name: /Saiph account/ })).toHaveClass("selected");
+    fireEvent.click(screen.getByRole("button", { name: /self-host my own Hub/ }));
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    expect(screen.getByRole("button", { name: "Open server invitation" })).toBeVisible();
+    expect(await screen.findByRole("button", { name: "Open server invitation" })).toBeVisible();
+    expect(call).toHaveBeenCalledWith("settings.save", { setup: { mode: "hub" } });
     expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
     rerender(<SetupWizard state={hubState(true, true)} client={{ call } as unknown as Client} close={close} />);
     expect(screen.getByText("This computer is paired with your Hub.")).toBeVisible();
@@ -51,9 +53,9 @@ describe("Setup guide", () => {
     const call = vi.fn().mockResolvedValue({});
     const state = { ...hubState(false), hosted: { available: true, enabled: true, status: "setup", identity: false, configured: true, account: { status: "signed_out", error: "", refresh_tokens: false } } } as unknown as State;
     const { rerender } = render(<SetupWizard state={state} client={{ call } as unknown as Client} close={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: /Saiph account/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    fireEvent.click(screen.getByRole("button", { name: "Sign in with your browser" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));  // Saiph account is the default.
+    fireEvent.click(await screen.findByRole("button", { name: "Sign in with your browser" }));
+    expect(call).toHaveBeenCalledWith("settings.save", { setup: { mode: "hosted" } });
     await waitFor(() => expect(call).toHaveBeenCalledWith("hosted.sign_in"));
     const signedIn = { ...state, hosted: { ...state.hosted!, account: { status: "signed_in", error: "", refresh_tokens: false } } } as State;
     rerender(<SetupWizard state={signedIn} client={{ call } as unknown as Client} close={vi.fn()} />);
