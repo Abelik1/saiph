@@ -18,7 +18,9 @@ def test_portable_discovery_requires_upstream_marker_and_prefers_latest(tmp_path
         (folder / 'adb.exe').write_bytes(b'fixture executable')
         if version != '99.0.0':
             (folder / 'orion-upstream.json').write_text('{}')
+    # Hosted runners set both SDK variables; either would win over the portable copy.
     monkeypatch.delenv('ANDROID_HOME', raising=False)
+    monkeypatch.delenv('ANDROID_SDK_ROOT', raising=False)
     assert Path(tool_path('adb')).parent.name == '5.0.1'
     assert tool_path('adb', tmp_path / 'missing.exe') is None
     with pytest.raises(ValueError):
