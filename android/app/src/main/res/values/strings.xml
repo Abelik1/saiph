@@ -1,2 +1,4 @@
 <resources>
+    <string name="saiph_widget_toggle_description">One tap pauses or resumes Saiph</string>
+    <string name="saiph_widget_actions_description">Pause, ring your computer, and send a photo or sketch</string>
 </resources>

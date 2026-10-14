@@ -54,7 +54,7 @@ class OrionRemoteActivity : ComponentActivity() {
             }.getOrNull() }
             when {
                 found == null -> status.text = "Saiph is reconnecting. Try again shortly."
-                found.isEmpty() -> status.text = "No computer is offering remote control. On your computer open Saiph Settings → Advanced → Phone remote, turn it on and allow this phone."
+                found.isEmpty() -> status.text = "No computer is offering remote control. On your computer open Saiph Settings → Devices → Phone remote, turn it on and allow this phone."
                 found.size == 1 -> { catalog(found.single()); return@launch }
                 else -> { status.text = "Choose a computer"; found.forEach { device -> root.addView(button(device.second) { catalog(device) }) } }
             }
