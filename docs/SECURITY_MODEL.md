@@ -145,7 +145,7 @@ An off-by-default development preview now connects native sign-in, approval
 screens and encrypted clipboard text, notifications, explicit file/photo
 sharing and (opt-in on the phone) texts and calls on desktop and Android. See
 [preview scope and acceptance](HOSTED_PREVIEW.md) and the
-[friends beta scope](HOSTED_FRIENDS_BETA.md#scope-and-remaining-gates); texts
+[beta scope](HOSTED_FRIENDS_BETA.md#scope-and-remaining-gates); texts
 and calls have unit tests only.
 Physical-device acceptance, deployed Auth0/relay acceptance and independent
 security review remain unfinished. Do not describe existing installed apps, ordinary Hub,

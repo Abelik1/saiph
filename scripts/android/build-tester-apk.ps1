@@ -368,7 +368,7 @@ try {
         $generated = Join-Path $output 'release-notes.txt'
         @(
             "Saiph $VersionName (build $VersionCode) beta tester build."
-            $(if ($placedHosted) { 'Hosted friends beta: activate your invitation in your Saiph account, sign in on both devices and approve your phone from your computer. No Tailscale is required.' } else { 'Independent build: pair it with an invitation from your own Saiph Hub. It contains no default Hub.' })
+            $(if ($placedHosted) { 'Hosted beta access: activate your invitation in your Saiph account, sign in on both devices and approve your phone from your computer. No Tailscale is required.' } else { 'Independent build: pair it with an invitation from your own Saiph Hub. It contains no default Hub.' })
             "Source commit $revision. Licence: GPL-3.0-only. Ask the publisher for the matching source archive."
         ) -join "`n" | Set-Content -LiteralPath $generated -Encoding utf8
         $generated

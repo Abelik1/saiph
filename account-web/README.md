@@ -2,7 +2,7 @@
 
 Owner-only development application. Product code belongs here; private environment values, Vercel/DNS identifiers and deployment receipts belong in saiph-cloud or protected storage.
 
-An explicitly enabled friends-beta mode adds code-based Hosted access to the same
+An explicitly enabled beta access mode (`friends-beta`) adds code-based Hosted access to the same
 account application. Keep the existing Auth0 settings; add server-only
 `SAIPH_ACCOUNT_MODE=friends-beta`, `SAIPH_HOSTED_API_URL` (canonical HTTPS origin)
 and `SAIPH_HOSTED_API_AUDIENCE`. Keep `SAIPH_BILLING_MODE=disabled` for this beta.
@@ -16,7 +16,7 @@ friends-beta mode is absent.
 SDK-encrypted synthetic sessions with a test-only backend transport. Run it after
 the production build alongside default owner checks. It does not establish real
 Auth0 login, live redemption or device acceptance. See
-[the hosted friends guide](../docs/HOSTED_FRIENDS_BETA.md) and private operations
+[the hosted beta guide](../docs/HOSTED_FRIENDS_BETA.md) and private operations
 for deployment protection and existing-address cutover.
 
 Node 24: `npm ci`, `npm test`, `npm run build`, `npm run test:integration`, `npm start`. Auth0 SDK 4 mounts the login/logout/callback routes through Next 16 `proxy.ts`. Missing configuration fails closed with HTTP 503 on account/auth routes; the home page explains setup is pending. No browser token/profile endpoint, refresh scope, API audience, native-client reuse or public registration is enabled. Callback redirects are fixed and non-owner callback session cookies are expired, including chunks. The account page also checks the session subject independently.

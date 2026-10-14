@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { Metadata } from "next";
 import Link from "next/link";
+import { readBetaConfig } from "../lib/beta-policy.mjs";
+import { Mark } from "./ui";
 import "./site.css";
 // Per-request CSP nonces also cover the privacy and not-found pages.
 export const dynamic = "force-dynamic";
@@ -10,13 +12,14 @@ export const metadata: Metadata = {
     default: "Saiph account · Development",
     template: "%s · Saiph account",
   },
-  description: "Your Saiph account and development beta access.",
+  description: "Your Saiph account, beta access and Hosted subscription.",
   robots: { index: false, follow: false },
 };
 
 export default function Layout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  const beta = readBetaConfig(process.env) !== null;
   return (
     <html lang="en">
       <body>
@@ -24,38 +27,32 @@ export default function Layout({
           Skip to content
         </a>
         <header className="site-header">
-          <Link className="brand" href="/" aria-label="Saiph account home">
-            <svg viewBox="0 0 32 32" aria-hidden="true">
-              <path
-                d="M16 2 20 12 30 16 20 20 16 30 12 20 2 16 12 12Z"
-                fill="currentColor"
-              />
-              <circle cx="16" cy="16" r="3" fill="#0a0e13" />
-            </svg>
-            Saiph<span className="brand-divider">/</span>
-            <span className="brand-section">Account</span>
-          </Link>
-          <nav aria-label="Main navigation">
-            <Link href="/account">Overview</Link>
-            <Link href="/privacy">Privacy</Link>
-            <span className="badge">Development</span>
-          </nav>
+          <div>
+            <Link className="brand" href="/" aria-label="Saiph account home">
+              <Mark id="brand" />
+              Saiph <span className="brand-section">Account</span>
+            </Link>
+            <nav className="site-nav" aria-label="Main navigation">
+              <Link href="/account">Account</Link>
+              {beta && <Link href="/setup">Setup<span className="hide-sm">&nbsp;guide</span></Link>}
+              <Link className="hide-sm" href="/privacy">Privacy</Link>
+              <span className="pill warn" title="Development site: no real payments"><span>Dev<span className="hide-sm">elopment</span></span></span>
+            </nav>
+          </div>
         </header>
         <main id="main" tabIndex={-1}>
           {children}
         </main>
         <footer className="site-footer">
-          <span>
-            Saiph <span aria-hidden="true">·</span> Your devices. Your control.
-          </span>
           <div>
-            <a href="https://usesaiph.com">
-              About Saiph <span aria-hidden="true">↗</span>
-            </a>
-            <Link href="/privacy">Privacy information</Link>
-            <a href="https://usesaiph.com/terms.html">Hosted terms (draft)</a>
-            <a href="https://usesaiph.com/refunds.html">Refunds and cancellation (draft)</a>
-            <a href="https://usesaiph.com/contact.html">Contact status</a>
+            <span>Saiph · Your devices. Your control.</span>
+            <nav aria-label="Footer">
+              <a href="https://usesaiph.com">usesaiph.com</a>
+              <Link href="/privacy">Privacy</Link>
+              <a href="https://usesaiph.com/terms.html">Hosted terms (draft)</a>
+              <a href="https://usesaiph.com/refunds.html">Refunds (draft)</a>
+              <a href="https://usesaiph.com/contact.html">Contact</a>
+            </nav>
           </div>
         </footer>
       </body>

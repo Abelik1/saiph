@@ -75,7 +75,7 @@ computer joins an account as a member (branch `feat/hosted-second-computer`):
 it pins the main computer's code after a full fingerprint comparison and is
 approved there; it never signs or renews rosters. Covered by
 desktop, frontend and Android JVM unit tests only; physical-device acceptance
-([friends beta steps 10-12](HOSTED_FRIENDS_BETA.md#test-sequence)),
+([beta steps 10-12](HOSTED_FRIENDS_BETA.md#test-sequence)),
 a release and independent review are pending. Not deployed or released.
 
 2026-10-14 phone webcam without a Hub: branch `feat/hosted-webcam` lets the

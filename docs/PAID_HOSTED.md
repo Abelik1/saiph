@@ -178,7 +178,7 @@ Auth0 and `DATABASE_URL` values:
 | `STRIPE_WEBHOOK_SECRET` | the endpoint's `whsec_…` |
 | `STRIPE_EXPECTED_ACCOUNT_ID`, `STRIPE_PRODUCT_ID`, `STRIPE_PORTAL_CONFIGURATION_ID` | as before |
 | `STRIPE_PRICE_ID` / `STRIPE_YEARLY_PRICE_ID` | the €3.99 monthly and €36 yearly prices |
-| `SAIPH_HOSTED_API_URL` | Hosted service origin (already set for friends beta) |
+| `SAIPH_HOSTED_API_URL` | Hosted service origin (already set for beta access) |
 | `SAIPH_BILLING_GRANT_KEY` / `SAIPH_BILLING_GRANT_KEY_ID` | from `npm run billing:keygen <id> <new file>` |
 | `CRON_SECRET` | 32+ random URL-safe characters for the daily refresh |
 

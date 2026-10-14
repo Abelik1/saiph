@@ -92,8 +92,8 @@ def prepare(directory, mapping, commit, base_url, output, android_invite='', sup
     page = f'''<!doctype html><html lang="en"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">
-<title>Saiph friends beta downloads</title><link rel="stylesheet" href="style.css">
-<main><h1>Saiph friends beta</h1><p>Download the installer for your device. No compilation is needed.</p>
+<title>Saiph beta downloads</title><link rel="stylesheet" href="style.css">
+<main><h1>Saiph beta access</h1><p>Download the installer for your device. No compilation is needed.</p>
 <p>Use the hosted setup details supplied with your invitation. No Tailscale or personal server is required for Hosted.</p>
 <p>Development preview: installation and hosted acceptance checks are still in progress.</p>
 {invite}<ul>{cards}</ul><p><a href="{html.escape(base_url + 'SHA256SUMS', quote=True)}">Checksums</a> ·

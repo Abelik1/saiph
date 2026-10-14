@@ -11,8 +11,8 @@ integration across shipping features still need acceptance on physical devices;
 there has been no independent security review. Availability and permissions vary
 by Android version and phone manufacturer.
 
-Shared hosted friends-beta preparation and clean-install acceptance are described
-in [the hosted friends guide](docs/HOSTED_FRIENDS_BETA.md). It uses account-bound
+Shared hosted beta preparation and clean-install acceptance are described
+in [the hosted beta guide](docs/HOSTED_FRIENDS_BETA.md). It uses account-bound
 invitation codes; deployment and installer distribution are still pending.
 
 ![Saiph Link displaying a synthetic invitation that requires explicit approval](docs/images/link-setup.png)
@@ -76,7 +76,7 @@ their inclusion is not a delivery-date commitment.
 - [ ] **Hosted beta — acceptance:** complete clean-install sign-in, device
   approval/revocation, encrypted sharing and recovery after the root goes offline.
   See [Hosted preview scope](docs/HOSTED_PREVIEW.md) and
-  [friends-beta acceptance](docs/HOSTED_FRIENDS_BETA.md).
+  [beta acceptance](docs/HOSTED_FRIENDS_BETA.md).
 - [ ] **Security release — deployment:** roll out the October 2026 hosted fixes
   to the hosted service and desktop 0.1.0-beta.4, restrict account sign-up, and
   complete an independent review of friends-beta mode before publishing this
