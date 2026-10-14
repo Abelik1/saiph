@@ -20,6 +20,13 @@ def test_guide_shows_only_until_connected_or_completed(tmp_path):
     assert hosted["show"] is False and hosted["mode"] == "hosted"
 
 
+def test_self_hosting_is_remembered_only_when_chosen(tmp_path):
+    assert setup_guide.status(workspace(tmp_path))["mode"] is None
+    chosen = setup_guide.status(workspace(tmp_path, setup={"mode": "hub"}))
+    assert chosen["mode"] == "hub" and chosen["show"] is True  # A choice is not a connection.
+    assert setup_guide.status(workspace(tmp_path, setup={"mode": "other"}))["mode"] is None
+
+
 def test_linux_helpers_report_the_package_to_install(monkeypatch):
     monkeypatch.setattr(setup_guide.sys, "platform", "linux")
     monkeypatch.setattr(setup_guide.shutil, "which", lambda name: "/usr/bin/xdotool" if name == "xdotool" else None)
@@ -33,7 +40,8 @@ def test_linux_helpers_report_the_package_to_install(monkeypatch):
 def test_links_are_official_release_pages_only():
     assert all(url.startswith("https://") for url in setup_guide.LINKS.values())
     assert setup_guide.validate_options({"completed": True}) == {"completed": True}
-    for options in ({"completed": "yes"}, {"step": 3}):
+    assert setup_guide.validate_options({"mode": "hub"}) == {"mode": "hub"}
+    for options in ({"completed": "yes"}, {"step": 3}, {"mode": "tailscale"}, {"mode": None}):
         with pytest.raises(ValueError):
             setup_guide.validate_options(options)
 
@@ -42,7 +50,9 @@ def test_settings_save_records_completion(tmp_path):
     from orion_mini.link_service import LinkWorkspace
     service = LinkWorkspace(tmp_path)
     assert service.state()["setup"]["show"] is True
+    service.dispatch("settings.save", {"setup": {"mode": "hub"}})
+    assert service.state()["setup"]["mode"] == "hub"
     service.dispatch("settings.save", {"setup": {"completed": True}})
-    assert service.state()["setup"]["show"] is False
+    assert service.state()["setup"]["show"] is False and service.state()["setup"]["mode"] == "hub"
     with pytest.raises(ValueError):
         service.dispatch("settings.save", {"setup": {"completed": 1}})

@@ -1,12 +1,17 @@
-# Saiph beta tester setup guide
+# Saiph self-hosting beta guide
 
-This guide walks you through setting up Saiph from scratch, step by step. It assumes
-you can follow instructions carefully but have rarely used a terminal. Every command
-is shown in full; copy it exactly.
+**Most testers do not need this guide.** With a Saiph account, Saiph runs the
+connection for you: follow the setup page on the account website and choose
+**Saiph account** when the apps ask. You install nothing else: no server and no
+Tailscale on your phone or computer. Use this guide only if you chose
+**I self-host my own Hub** and want to run your own server.
+
+This guide walks you through self-hosting Saiph from scratch, step by step. It
+assumes you can follow instructions carefully but have rarely used a terminal.
+Every command is shown in full; copy it exactly.
 
 Saiph is beta software. Things will go wrong, and finding them is the point of the
-beta. Use test data (harmless text, test files) until the basics work. Hosted Saiph
-(where we run the server for you) is planned; this guide sets up your own server.
+beta. Use test data (harmless text, test files) until the basics work.
 
 Items marked **TO CONFIRM** have not been checked against a real beta release yet.
 If what you see differs, follow what you see and tell Alexander.
@@ -33,8 +38,9 @@ Saiph has three parts:
 - **Saiph Link**: the desktop app for Windows or Linux.
 - **The Saiph Android app** on your phone.
 
-All three join a private network made with **Tailscale**, a free service that links
-your own devices securely. The Hub listens only on that private network, never on
+When you self-host, all three join a private network made with **Tailscale**, a
+free service that links your own devices securely. Saiph accounts do not use it.
+The Hub listens only on that private network, never on
 the open internet.
 
 Some internal names still say **Orion** (Saiph's old codename): file names such as
@@ -371,9 +377,11 @@ your user folder (`C:\Users\YourName`) unless you changed folders with `cd`.
 
 ### 6.2 Open it in Saiph
 
-1. Double-click the `.orion-enrollment` file. Or, in Saiph, go to **Phone**, find
-   the **Welcome to Saiph** card, click **Open server invitation** and choose the
-   file.
+1. Double-click the `.orion-enrollment` file. Or, in Saiph's setup guide (it opens
+   on first run, or from **Settings → General → Setup guide**), choose
+   **I self-host my own Hub**, click **Continue**, then **Open server invitation**
+   and choose the file. Saiph preselects **Saiph account**; self-hosting is
+   always your explicit choice.
 2. Saiph shows *"Your invitation is ready. Approve it to pair this computer."*
    Click **Use invitation** only if this is your own server's invitation.
 3. If Tailscale isn't running on this computer yet, click
@@ -399,8 +407,9 @@ start: the phone retries pairing for only about 10 minutes after scanning.
 
 1. On the computer, open Saiph's **Phone** page. Under **Add a device** beneath
    the phone name (or **Your phone**), click **Show pairing QR**.
-2. On the phone, open Saiph. Under **Pair once**, tap **Scan pairing QR** and scan
-   the code on your computer screen.
+2. On the phone, open Saiph and tap **I self-host my own Hub** (the app starts
+   on Saiph account sign-in). Under **Pair with your own Hub**, tap
+   **Scan pairing QR** and scan the code on your computer screen.
 3. Tap **Use invitation** in the *"Use this Saiph invitation?"* dialog.
 4. Saiph shows *"Your invitation is ready"* and waits for Tailscale. When pairing
    succeeds it moves on to **Make Saiph automatic** (section 7).
@@ -419,8 +428,8 @@ share or screen-share it.
    **Save invitation file**. Save the `.orion-enrollment` file. It works once and
    expires after **10 minutes**.
 2. Copy the file to the phone privately, for example by USB cable.
-3. In the phone's Saiph app, tap **Open invitation**, choose the file and tap
-   **Use invitation**.
+3. In the phone's Saiph app, tap **I self-host my own Hub**, then
+   **Open invitation**, choose the file and tap **Use invitation**.
 4. Delete your copies of the invitation file after pairing.
 
 Don't send invitations through email, messaging apps or shared cloud folders.

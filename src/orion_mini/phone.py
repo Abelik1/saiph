@@ -412,7 +412,10 @@ class PhoneRuntime:
             if watch and watch.changed() and self.client:
                 self.client.reconnect_now()
             components = getattr(self.workspace, 'components', None)
-            if components and not os.environ.get('ORION_MINI_TEST'):
+            invitations = getattr(self.workspace, 'invitations', None)
+            # The mesh client matters only while a self-hosted invitation is being
+            # used; Hosted users are never checked for it.
+            if components and invitations and invitations.status()['ready'] and not os.environ.get('ORION_MINI_TEST'):
                 if component_poll is None or component_poll.done():
                     if component_poll:
                         await asyncio.gather(component_poll, return_exceptions=True)

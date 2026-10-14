@@ -43,7 +43,8 @@ function phoneOf(state: State) {
 /** First-run setup: connect, add a phone, choose features and optional tools. */
 export function SetupWizard({ state, client, close }: { state: State; client: Client; close: () => void }) {
   const [step, setStep] = useState<Step>("welcome");
-  const [mode, setMode] = useState<Mode | null>(state.setup?.mode || null);
+  // A Saiph account is the default; your own Hub is only for people who self-host.
+  const [mode, setMode] = useState<Mode | null>(state.setup?.mode || (state.hosted?.available === false ? null : "hosted"));
   const link = state.settings?.link as Record<string, unknown> | undefined;
   const [choices, setChoices] = useState<Record<string, boolean>>(() => Object.fromEntries(features.map((f) =>
     [f.key, f.key === "remote" ? (link?.remote as { enabled?: boolean } | undefined)?.enabled === true
@@ -62,6 +63,7 @@ export function SetupWizard({ state, client, close }: { state: State; client: Cl
   const finish = async () => { await client.call("settings.save", { setup: { completed: true } }); close(); };
   const expire = useCallback(() => setQr(null), []);
   const next = (to: Step) => () => setStep(to);
+  const chooseMode = async () => { await client.call("settings.save", { setup: { mode } }); setStep("connect"); };
 
   async function saveFeatures() {
     const update: Record<string, unknown> = {};
@@ -92,15 +94,15 @@ export function SetupWizard({ state, client, close }: { state: State; client: Cl
           <Cloud size={28} /><b>Saiph account</b><span>Sign in with your Saiph account. No server or network setup is needed.</span>
           {hosted?.available === false && <small>This build does not include Saiph accounts.</small>}</button>
         <button type="button" className={"setup-choice" + (mode === "hub" ? " selected" : "")} onClick={() => setMode("hub")}>
-          <Server size={28} /><b>My own Hub</b><span>Use a Saiph Hub you run on your private network, with an invitation from it.</span></button>
+          <Server size={28} /><b>I self-host my own Hub</b><span>Only if you run a Saiph Hub on your own private network. You'll need an invitation from it.</span></button>
       </div>
-      <div className="actions"><button type="button" disabled={!mode} onClick={next("connect")}>Continue</button></div>
+      <div className="actions"><Action disabled={!mode} run={chooseMode}>Continue</Action></div>
     </Card>}
 
     {step === "connect" && <Card title={mode === "hosted" ? "Sign in with your Saiph account" : "Pair with your Hub"}>
       {mode === "hosted" && hosted && <>
         {hosted.self_hosted_paired ? <p>This computer is already paired with your own Hub. A device uses one or the other.</p>
-          : !hosted.configured && !hosted.enabled ? <p>This build has no Saiph account settings. Enter them under Settings → Connections → Saiph Hosted, or choose My own Hub.</p>
+          : !hosted.configured && !hosted.enabled ? <p>This build has no Saiph account settings. Enter them under Settings → Connections → Saiph Hosted, or go back if you self-host your own Hub.</p>
           : <>
             {!hosted.enabled && <Action run={() => client.call("hosted.enable", { enabled: true })}>Turn on Saiph account</Action>}
             {hosted.enabled && !signedIn && <><p>{hosted.account?.status === "signing_in" ? "Finish signing in in your browser." : "Activate your beta code on the Saiph website first, then sign in here."}</p>

@@ -47,9 +47,9 @@ describe("Anonymous usage agreement", () => {
   it("is a setup step that records the choice and moves on", async () => {
     const call = vi.fn().mockResolvedValue({});
     render(<SetupWizard state={state(ask, true)} client={{ call } as unknown as Client} close={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: /My own Hub/ }));
+    fireEvent.click(screen.getByRole("button", { name: /self-host my own Hub/ }));
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    expect(screen.getByRole("list", { name: "Setup steps" })).toHaveTextContent("Usage statistics");
+    expect(await screen.findByRole("list", { name: "Setup steps" })).toHaveTextContent("Usage statistics");
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     fireEvent.click(screen.getByRole("button", { name: "Skip for now" }));
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
@@ -60,11 +60,11 @@ describe("Anonymous usage agreement", () => {
     expect(await screen.findByText("Saiph is ready")).toBeVisible();
   });
 
-  it("skips the setup step in builds that cannot send", () => {
-    render(<SetupWizard state={state({ ...ask, available: false }, true)} client={{ call: vi.fn() } as unknown as Client} close={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: /My own Hub/ }));
+  it("skips the setup step in builds that cannot send", async () => {
+    render(<SetupWizard state={state({ ...ask, available: false }, true)} client={{ call: vi.fn().mockResolvedValue({}) } as unknown as Client} close={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /self-host my own Hub/ }));
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    expect(screen.getByRole("list", { name: "Setup steps" })).not.toHaveTextContent("Usage statistics");
+    expect(await screen.findByRole("list", { name: "Setup steps" })).not.toHaveTextContent("Usage statistics");
   });
 
   it("shows exactly what will be and was sent, and turning it off deletes counts", async () => {

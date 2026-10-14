@@ -212,11 +212,26 @@ def test_phone_supervisor_runs_without_personal_services_on_existing_profile(tmp
         calls.append('components')
         runtime.stop_requested.set()
     monkeypatch.setattr(workspace.components, 'poll', poll)
+    # A self-hosted invitation is waiting, so the mesh client is checked.
+    monkeypatch.setattr(workspace.invitations, 'status', lambda: {'ready': True, 'id': 'invite', 'expires_at': None, 'custom_mesh': False})
     asyncio.run(asyncio.wait_for(runtime.run(), timeout=5))
     assert 'components' in calls and workspace.deskflow.process is None
     assert workspace.store.get('job', retained['id']) == retained
     assert not workspace.store.all('focus_plan')
     assert not workspace.phone.connected
+
+def test_mesh_client_is_not_checked_without_a_self_hosted_invitation(tmp_path, monkeypatch):
+    workspace = LinkWorkspace(tmp_path)
+    runtime = phone.PhoneRuntime(workspace, notifier_factory=lambda _: None, worker_factory=lambda: None)
+    calls = []
+    monkeypatch.delenv('ORION_MINI_TEST', raising=False)
+    monkeypatch.setattr(workspace.components, 'poll', lambda: calls.append('components'))
+
+    async def briefly():
+        asyncio.get_running_loop().call_later(0.5, runtime.stop_requested.set)
+        await runtime.run()
+    asyncio.run(asyncio.wait_for(briefly(), timeout=10))
+    assert calls == []  # Saiph account users are never checked for Tailscale.
 
 def test_link_does_not_issue_personal_agent_grants(tmp_path, monkeypatch):
     workspace = LinkWorkspace(tmp_path)

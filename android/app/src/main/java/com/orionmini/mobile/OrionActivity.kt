@@ -41,6 +41,7 @@ class OrionActivity : ComponentActivity() {
     private var screen = "home"
     private var lastRender = ""
     private var pairingInProgress = false
+    private var hostedOpened = false  // Open a running Saiph account once per launch, so Back still works.
     private var devices: List<LinkDevice> = emptyList()
     private val prefs by lazy { getSharedPreferences("orion", MODE_PRIVATE) }
     private val lock = AppLock(this)
@@ -164,11 +165,25 @@ class OrionActivity : ComponentActivity() {
         if (!prefs.getBoolean("setup_done", false)) prefs.edit().putBoolean("setup_deferred", true).apply()
         intent.removeExtra("setup"); intent.removeExtra("settings"); homeLoop()
     }
+    private fun openHosted() = startActivity(Intent(this, HostedActivity::class.java))
     private fun pairing() {
         screen = "pair"; poll?.cancel(); title("Saiph")
-        root.addView(button("Saiph Hosted preview") { startActivity(Intent(this, HostedActivity::class.java)) })
-        root.addView(text("One system, wherever you are.", 15f, Palette.MUTED)); root.addView(section("Pair once"))
         val invite = pendingEnrollment()
+        // A Saiph account is the default. Server invitations and Tailscale appear only
+        // after the owner says they self-host, or opens an invitation from their server.
+        if (invite == null && !prefs.getBoolean("self_host", false)) {
+            val hostedOn = HostedRuntime.get(this).enabled()
+            if (hostedOn && !hostedOpened) { hostedOpened = true; openHosted() }
+            root.addView(text("One system, wherever you are.", 15f, Palette.MUTED))
+            root.addView(card().apply {
+                addView(text("Connect with your Saiph account", 16f, bold = true))
+                addView(text("Sign in with the same account you use on your computer. No server or network setup is needed.", 15f))
+                addView(buttonRow(button(if (hostedOn) "Open Saiph" else "Sign in with Saiph account", true) { openHosted() }))
+            })
+            root.addView(buttonRow(button("I self-host my own Hub") { prefs.edit().putBoolean("self_host", true).apply(); pairing() }))
+            return
+        }
+        root.addView(text("One system, wherever you are.", 15f, Palette.MUTED)); root.addView(section("Pair with your own Hub"))
         if (invite != null) {
             root.addView(card().apply {
                 addView(text("Your invitation is ready", 16f, bold = true))
@@ -206,6 +221,7 @@ class OrionActivity : ComponentActivity() {
             addView(buttonRow(button("Scan pairing QR", true) { startActivity(Intent(this@OrionActivity, OrionQrActivity::class.java)) }))
             addView(buttonRow(button("Open invitation") { enrollmentFile.launch(arrayOf("*/*")) }))
         })
+        root.addView(buttonRow(button("Use a Saiph account instead") { prefs.edit().remove("self_host").apply(); pairing() }))
     }
     private fun offerInvitation(invite: Enrollment) {
         if (prefs.contains("device_id") || pairingInProgress) return
@@ -220,7 +236,8 @@ class OrionActivity : ComponentActivity() {
     }
     private fun remember(invite: Enrollment) {
         if (prefs.contains("device_id") || pairingInProgress) return
-        prefs.edit().putString("pending_enrollment", invite.pending(Instant.now()).privateJson()).apply()
+        // Using a server invitation is the self-hosting choice.
+        prefs.edit().putString("pending_enrollment", invite.pending(Instant.now()).privateJson()).putBoolean("self_host", true).apply()
         UsageAnalytics.count(this, "pairing_started")
         pairing()
     }
