@@ -1,0 +1,71 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/*
+ * Saiph's motifs that Tailwind classes cannot spell out: the string squiggle and the
+ * disclosure chevron as masks (so their colour is always a token), and the motion
+ * they use. Every animation here moves with transform or opacity only, so the
+ * compositor runs it without repainting the page.
+ */
+@layer components {
+  /* A short ringing string under the selected tab or nav item. Both ends fade out,
+     so it reads as a string fading into the dark rather than a clipped strip. */
+  .wave-underline {
+    position: absolute;
+    left: 50%;
+    bottom: 5px;
+    width: 40px;
+    height: 8px;
+    margin-left: -20px;
+    overflow: hidden;
+    pointer-events: none;
+    -webkit-mask: linear-gradient(90deg, transparent, currentColor 35%, currentColor 65%, transparent);
+    mask: linear-gradient(90deg, transparent, currentColor 35%, currentColor 65%, transparent);
+  }
+  .wave-underline::before {
+    content: "";
+    position: absolute;
+    inset: 0 -12px 0 0;
+    background: var(--wave-2);
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='6' viewBox='0 0 12 6'%3E%3Cpath d='M0 3 Q3 0 6 3 T12 3' fill='none' stroke='black' stroke-width='1.6'/%3E%3C/svg%3E") repeat-x 0 50% / 12px 6px;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='6' viewBox='0 0 12 6'%3E%3Cpath d='M0 3 Q3 0 6 3 T12 3' fill='none' stroke='black' stroke-width='1.6'/%3E%3C/svg%3E") repeat-x 0 50% / 12px 6px;
+    animation: saiph-wave-slide 1.2s linear infinite;
+    will-change: transform;
+  }
+
+  /* Disclosure rows: a chevron instead of the browser triangle. */
+  .disclosure-chevron {
+    flex: none;
+    width: 16px;
+    height: 16px;
+    margin-left: auto;
+    background: currentColor;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") center / contain no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") center / contain no-repeat;
+    transition: transform .2s var(--ease);
+  }
+  details[open] > summary .disclosure-chevron { transform: rotate(180deg); }
+  [data-slot="disclosure"] > summary::-webkit-details-marker { display: none; }
+  [data-slot="disclosure"] > summary::marker { content: ""; }
+
+  /* A thin bright string runs along the top edge of a highlighted card. */
+  .string-edge { position: relative; overflow: hidden; }
+  .string-edge::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 200%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--wave-2) 80%, transparent), color-mix(in srgb, var(--wave-3) 70%, transparent), transparent 50%, color-mix(in srgb, var(--wave-2) 80%, transparent), color-mix(in srgb, var(--wave-3) 70%, transparent), transparent);
+    animation: saiph-sweep 6s linear infinite;
+    will-change: transform;
+  }
+
+  @keyframes saiph-wave-slide { to { transform: translateX(-12px); } }
+  @keyframes saiph-sweep { to { transform: translateX(-50%); } }
+  @keyframes saiph-rise { from { opacity: 0; transform: translateY(8px); } }
+
+  @media (prefers-reduced-motion: reduce) {
+    .wave-underline::before, .string-edge::before { animation: none; }
+    .disclosure-chevron { transition: none; }
+  }
+}

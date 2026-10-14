@@ -12,7 +12,6 @@ import {
   Sparkles,
   Download,
 } from "lucide-react";
-import "./SettingsLayout.css";
 
 const icons = {
   General: Monitor,

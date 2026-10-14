@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import platform
 import threading
+import time
 from pathlib import Path
 
 from .components import Components
@@ -106,8 +107,13 @@ class LinkWorkspace(LinkOperations):
                 'agenda': {'items': []}, 'backup_status': {'configured': False}}
 
     def setup_state(self):
+        """State is read every second; scanning PATH for the optional tools takes a
+        large part of that second on Windows, so the scan is reused for 10 seconds."""
         from .setup_guide import status, tools
-        return {**status(self), **tools()}
+        cached = getattr(self, '_tools', None)
+        if cached is None or time.monotonic() - cached[0] >= 10:
+            self._tools = cached = (time.monotonic(), tools())
+        return {**status(self), **cached[1]}
 
     def _remote_publish(self, event):
         if not self.phone_runtime:

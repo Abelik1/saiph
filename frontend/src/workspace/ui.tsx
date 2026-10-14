@@ -11,6 +11,8 @@ import ReactMarkdown from "react-markdown";
 import { LoaderCircle, X } from "lucide-react";
 import type { Features, Job, Reminder } from "./types";
 import { useGather } from "./waves";
+import { Button, type ButtonProps } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 export function Markdown({ text }: { text: string }) {
   return (
@@ -35,9 +37,9 @@ export function Empty({
   children?: ReactNode;
 }) {
   return (
-    <div className="empty-state">
-      <h3>{title}</h3>
-      {children && <p>{children}</p>}
+    <div data-slot="empty" className="grid justify-items-center gap-2 px-5 py-12 text-center [&_svg]:mb-1 [&_svg]:text-muted-foreground">
+      <h3 className="m-0 text-[15px] font-semibold text-foreground">{title}</h3>
+      {children && <p className="m-0 grid max-w-[46ch] justify-items-center gap-2 text-[13px] leading-relaxed text-muted-foreground">{children}</p>}
     </div>
   );
 }
@@ -67,10 +69,28 @@ export function Card({
     </section>
   );
 }
+// Older call sites name a look with a class; each maps onto a Button variant.
+const legacyVariants: Record<string, Pick<ButtonProps, "variant" | "size">> = {
+  primary: { variant: "default" },
+  "text-button": { variant: "tonal", size: "sm" },
+  "icon-button": { variant: "ghost", size: "icon-sm" },
+  danger: { variant: "destructive" },
+};
+function variantFor(className: string): Pick<ButtonProps, "variant" | "size"> | null {
+  const names = className.split(/\s+/).filter(Boolean);
+  const looks = names.filter((name) => name in legacyVariants);
+  // A class the design system does not know styles the button itself; leave it to that CSS.
+  if (names.some((name) => !(name in legacyVariants) && name !== "selected")) return null;
+  return looks.length ? legacyVariants[looks[0]] : { variant: "secondary" };
+}
+
+/** A button that runs an async action, shows that it is working and reports a failure next to itself. */
 export function Action({
   run,
   children,
   className = "",
+  variant,
+  size,
   disabled = false,
   title,
   ariaLabel,
@@ -80,6 +100,8 @@ export function Action({
   run: () => Promise<unknown>;
   children: ReactNode;
   className?: string;
+  variant?: ButtonProps["variant"];
+  size?: ButtonProps["size"];
   disabled?: boolean;
   title?: string;
   ariaLabel?: string;
@@ -91,34 +113,37 @@ export function Action({
   const button = useRef<HTMLButtonElement>(null);
   // While it works, the background strings knot around the button.
   useGather(button, pending);
+  // A switch drawn by its own stylesheet keeps that look rather than a button's.
+  const look = variant ? { variant, size } : role === "switch" ? null : variantFor(className);
+  const props = {
+    ref: button,
+    type: "button" as const,
+    title,
+    "aria-label": ariaLabel,
+    role,
+    "aria-checked": ariaChecked,
+    disabled: disabled || pending,
+    onClick: async () => {
+      setPending(true);
+      setError("");
+      try {
+        await run();
+      } catch (error) {
+        setError(String(error instanceof Error ? error.message : error));
+      } finally {
+        setPending(false);
+      }
+    },
+  };
+  const content = <>{pending && <LoaderCircle size={15} className="spin" />}{children}</>;
   return (
     <>
-      <button
-        ref={button}
-        type="button"
-        className={className}
-        title={title}
-        aria-label={ariaLabel}
-        role={role}
-        aria-checked={ariaChecked}
-        disabled={disabled || pending}
-        onClick={async () => {
-          setPending(true);
-          setError("");
-          try {
-            await run();
-          } catch (error) {
-            setError(String(error instanceof Error ? error.message : error));
-          } finally {
-            setPending(false);
-          }
-        }}
-      >
-        {pending && <LoaderCircle size={15} className="spin" />}
-        {children}
-      </button>
+      {look
+        ? <Button {...props} variant={look.variant} size={look.size} className={variant ? className : cn(/\bselected\b/.test(className) && "selected")}>{content}</Button>
+        : <button {...props} className={className}>{content}</button>}
+      {/* In a row of buttons the error takes its own line after the row, never between buttons. */}
       {error && (
-        <span className="inline-error" role="alert">
+        <span className="inline-error order-last block w-full basis-full text-[12.5px]" role="alert">
           {error}
         </span>
       )}

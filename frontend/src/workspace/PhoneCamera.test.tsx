@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { PhoneCamera } from "./PhoneCamera";
 import { CameraSettings } from "./CameraSettings";
 import type { CameraStatus, Client, Settings } from "./types";
+import { chooseOption } from "../test-helpers";
 
 const ready: CameraStatus = {
   available: true,
@@ -61,16 +62,10 @@ describe("Phone camera", () => {
         client={{ call } as unknown as Client}
       />,
     );
-    fireEvent.click(screen.getByText("Camera options"));
-    fireEvent.change(screen.getByLabelText("Phone camera"), {
-      target: { value: "back" },
-    });
-    fireEvent.change(screen.getByLabelText("Video quality"), {
-      target: { value: "1080p" },
-    });
-    fireEvent.change(screen.getByLabelText("Picture rotation"), {
-      target: { value: "90" },
-    });
+    fireEvent.click(screen.getByRole("button", { name: "Camera options" }));
+    chooseOption("Phone camera", "Rear camera");
+    chooseOption("Video quality", "1080p · 30 fps");
+    chooseOption("Picture rotation", "90°");
     expect(call).not.toHaveBeenCalled();
     fireEvent.click(
       screen.getByRole("button", { name: "Use phone as webcam" }),
@@ -148,9 +143,7 @@ describe("Phone camera without a self-hosted Hub", () => {
         "Unlock Locked Phone and tap Allow on the debugging prompt, then choose Find again.",
       ),
     ).toBeVisible();
-    fireEvent.change(screen.getByLabelText("Phone for the camera"), {
-      target: { value: "192.168.50.20:41234" },
-    });
+    chooseOption("Phone for the camera", "Wifi Phone · Wi‑Fi");
     fireEvent.click(screen.getByRole("button", { name: "Use phone as webcam" }));
     await waitFor(() =>
       expect(call).toHaveBeenCalledWith("camera.start", { serial: "192.168.50.20:41234" }),
@@ -177,7 +170,7 @@ describe("Phone camera without a self-hosted Hub", () => {
       method === "camera.devices" ? { adb: true, devices: phones.slice(1, 2) } : {},
     );
     render(<PhoneCamera camera={ready} client={{ call } as unknown as Client} />);
-    fireEvent.click(screen.getByText("Connect over Wi‑Fi", { selector: "summary" }));
+    fireEvent.click(screen.getByText("Connect over Wi‑Fi", { selector: "summary span" }));
     fireEvent.change(screen.getByLabelText("Pairing IP address and port"), {
       target: { value: " 192.168.50.20:37000 " },
     });

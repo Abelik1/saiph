@@ -61,7 +61,7 @@ describe("Original photo interactions", () => {
     expect(within(viewer).getByRole("status")).toHaveTextContent(
       "Original quality",
     );
-    fireEvent.click(within(viewer).getByRole("button", { name: "Copy image" }));
+    fireEvent.click(within(viewer).getByRole("button", { name: "Copy photo" }));
     await waitFor(() =>
       expect(call).toHaveBeenCalledWith("phone.photo.copy", {
         device_id: "phone",
@@ -98,13 +98,13 @@ describe("Original photo interactions", () => {
     expect(event.defaultPrevented).toBe(true);
     const menu = screen.getByRole("menu", { name: "Photo actions" });
     expect(
-      within(menu).getByRole("menuitem", { name: "Open image" }),
+      within(menu).getByRole("menuitem", { name: "Open photo" }),
     ).toHaveFocus();
     fireEvent.keyDown(menu, { key: "ArrowDown" });
     expect(
-      within(menu).getByRole("menuitem", { name: "Copy image" }),
+      within(menu).getByRole("menuitem", { name: "Copy photo" }),
     ).toHaveFocus();
-    fireEvent.click(within(menu).getByRole("menuitem", { name: "Copy image" }));
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "Copy photo" }));
     await waitFor(() =>
       expect(call).toHaveBeenCalledWith("phone.photo.copy", {
         device_id: "phone",

@@ -1,186 +1,85 @@
 /* SPDX-License-Identifier: AGPL-3.0-or-later */
 /* Orion's personal workspace: charcoal surfaces, blue accents, clear hierarchy. */
-.workspace-navigation summary { display: flex; align-items: center; gap: 14px; padding: 12px 14px; cursor: pointer; color: var(--muted); font-size: 13px; }
+.workspace-navigation summary { display: flex; align-items: center; gap: 14px; padding: 12px 14px; cursor: pointer; color: var(--muted-foreground); font-size: 13px; }
 .workspace-navigation summary:hover { color: #e4e6e9; }
 .phone-layout { display: grid; grid-template-columns: minmax(280px, 340px) minmax(0, 1fr); gap: 32px; min-height: 650px; }
-.phone-rail { border-right: 1px solid var(--line); padding-right: 24px; }
+.phone-rail { border-right: 1px solid var(--border); padding-right: 24px; }
 .phone-device { display: flex; align-items: center; gap: 20px; margin-bottom: 38px; }
-.phone-silhouette { width: 65px; height: 105px; display: grid; place-items: center; border: 1px solid #3b4148; border-radius: 12px; background: #21252a; color: var(--accent); }
+.phone-silhouette { width: 65px; height: 105px; display: grid; place-items: center; border: 1px solid #3b4148; border-radius: 12px; background: #21252a; color: var(--primary); }
 .phone-device h2 { margin-bottom: 8px; }
 .phone-device p { margin-bottom: 8px; }
-.phone-online { color: var(--accent); }
+.phone-online { color: var(--primary); }
 .add-device { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 16px; }
 .pairing-qr { display: block; width: 264px; max-width: 100%; height: auto; background: #fff; margin: 20px 0; }
 .pairing-notice { margin-bottom: 20px; }
 .phone-battery { display: flex; align-items: center; gap: 8px; }
-.phone-notification { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); padding: 18px; margin-bottom: 14px; }
+.phone-notification { border: 1px solid var(--border); border-radius: 12px; background: var(--card); padding: 18px; margin-bottom: 14px; }
 .phone-notification h3 { margin: 14px 0 8px; overflow-wrap: anywhere; }
 .phone-notification p { white-space: pre-wrap; overflow-wrap: anywhere; }
 .phone-notification-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .phone-notification form { margin-top: 12px; }
 .phone-detail { min-width: 0; }
-.phone-welcome { max-width: 540px; margin: 80px auto; text-align: center; color: var(--muted); padding: 36px; }
+.phone-welcome { max-width: 540px; margin: 80px auto; text-align: center; color: var(--muted-foreground); padding: 36px; }
 .phone-welcome h2 { color: #e4e6e9; margin-top: 22px; font-size: 25px; line-height: 1.4; }
 @media (max-width: 1080px) { .phone-layout { grid-template-columns: minmax(260px, 1fr) minmax(260px, 1fr); gap: 20px; } .phone-rail { padding-right: 18px; } .phone-welcome { padding: 12px; } }
-:root {
-  font-family: Inter, "Segoe UI", system-ui, sans-serif;
-  color: #e4e6e9;
-  background: #111315;
-  font-synthesis: none;
-  --muted: #8c939c;
-  --line: #2b3036;
-  --accent: #b6c3d2;
-  --panel: #1a1e22;
-}
-* {
-  box-sizing: border-box;
-}
-body {
-  margin: 0;
-  min-width: 820px;
-  background: #111315;
-}
-button,
-input,
-select,
-textarea {
-  font: inherit;
-}
-button {
+/* Global element defaults for pages not yet built from src/components/ui. They read
+   the design tokens and skip design-system components (which carry data-slot), so
+   the two never fight over a property. Each exclusion sits in :where() so these
+   rules keep the low specificity of the plain element rules they replaced. */
+* { box-sizing: border-box; }
+:where(button, input, select, textarea) { font: inherit; }
+button:where(:not([data-slot])) {
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  border: 1px solid #3b4148;
-  border-radius: 9px;
-  background: #252a30;
-  color: #e0e4e8;
-  padding: 10px 14px;
-  font-size: 12px;
-  font-weight: 600;
-  transition:
-    background 0.15s,
-    transform 0.15s;
-}
-button:hover {
-  background: #343b43;
-}
-button:active {
-  transform: translateY(1px);
-}
-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-button.primary {
-  background: #c3cdda;
-  color: #24292f;
-  border-color: #c3cdda;
-}
-button.primary:hover {
-  background: #dbe1e9;
-}
-button.danger {
-  color: #e3a5a5;
-  background: transparent;
-  border-color: #58413f;
-}
-.icon-button {
-  padding: 8px;
-  background: transparent;
-  border: 0;
-}
-.text-button {
-  background: none;
-  border: 0;
-  color: #bcc7d5;
-  padding: 5px;
-}
-.grow {
-  flex: 1;
-  min-width: 0;
-}
-[hidden] {
-  display: none !important;
-}
-h1,
-h2,
-h3,
-p {
-  margin-top: 0;
-}
-h2 {
-  font-size: 17px;
-  font-weight: 600;
-  letter-spacing: -0.35px;
-  margin-bottom: 8px;
-}
-h3 {
-  font-size: 15px;
-}
-p {
+  min-height: 36px;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-button);
+  background: var(--card);
+  color: var(--foreground);
+  padding: 8px 16px;
   font-size: 13px;
-  line-height: 1.65;
+  font-weight: 500;
+  transition: background .15s, border-color .15s, color .15s;
 }
-small {
-  font-size: 11px;
-  color: var(--muted);
-}
-label {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  font-size: 12px;
-  color: #aeb4bb;
-  margin-bottom: 14px;
-}
-input,
-select,
-textarea {
-  background: #16191c;
-  border: 1px solid #3b4047;
-  border-radius: 8px;
-  padding: 10px 12px;
-  color: #e0e4e9;
+button:where(:not([data-slot])):hover { background: var(--secondary); border-color: var(--secondary-border); }
+button:where(:not([data-slot])):disabled { opacity: .5; cursor: not-allowed; }
+button.primary:where(:not([data-slot])) { background: var(--primary-gradient); border-color: transparent; color: var(--primary-foreground); }
+button.primary:where(:not([data-slot])):hover { background: var(--primary-gradient); filter: brightness(1.08); }
+button.danger:where(:not([data-slot])) { color: var(--destructive); background: transparent; border-color: color-mix(in srgb, var(--destructive) 45%, transparent); }
+button.danger:where(:not([data-slot])):hover { background: var(--status-off-surface); }
+/* Quiet text buttons are soft tonal pills with a border, never bare text. */
+.text-button:where(:not([data-slot])) { min-height: 0; background: var(--secondary); border-color: var(--secondary-border); color: var(--secondary-foreground); padding: 6px 13px; }
+.text-button:where(:not([data-slot])):hover { background: var(--secondary-hover); }
+.icon-button:where(:not([data-slot])) { min-height: 0; padding: 8px; background: transparent; border-color: transparent; border-radius: var(--radius-field); }
+.grow { flex: 1; min-width: 0; }
+[hidden] { display: none !important; }
+h1, h2, h3, p { margin-top: 0; }
+h2 { font-size: 17px; font-weight: 600; letter-spacing: -0.35px; margin-bottom: 8px; }
+h3 { font-size: 15px; }
+p { font-size: 13px; line-height: 1.65; }
+small { font-size: 12px; color: var(--muted-foreground); }
+label:where(:not([data-slot])) { display: flex; flex-direction: column; gap: 8px; font-size: 12px; color: var(--muted-foreground); margin-bottom: 14px; }
+:where(input, select, textarea):where(:not([data-slot])) {
+  background: var(--field);
+  border: 1px solid var(--input);
+  border-radius: var(--radius-field);
+  padding: 9px 12px;
+  color: var(--foreground);
   width: 100%;
   min-width: 0;
   font-size: 13px;
   outline: none;
 }
-input:focus,
-textarea:focus,
-select:focus {
-  border-color: #a5b4c6;
-  box-shadow: 0 0 0 2px #a5b4c61a;
-}
-input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-  accent-color: #b6c3d2;
-}
-textarea {
-  resize: vertical;
-  min-height: 100px;
-  line-height: 1.7;
-}
-fieldset {
-  margin: 0;
-  padding: 0;
-  border: 0;
-  min-width: 0;
-}
-form button {
-  margin-bottom: 8px;
-}
-details {
-  margin-top: 20px;
-}
-summary {
-  color: #a9b7c9;
-  font-size: 13px;
-  cursor: pointer;
-}
+:where(input, select, textarea):where(:not([data-slot])):focus { border-color: var(--ring); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 18%, transparent); }
+input[type="checkbox"]:where(:not([data-slot])) { width: 16px; height: 16px; accent-color: var(--primary); }
+textarea:where(:not([data-slot])) { resize: vertical; min-height: 100px; line-height: 1.7; }
+fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
+form button:where(:not([data-slot])) { margin-bottom: 8px; }
+details:where(:not([data-slot])) { margin-top: 20px; }
+summary:where(:not([data-slot])) { color: var(--secondary-foreground); font-size: 13px; cursor: pointer; }
 .workspace-shell {
   display: flex;
   min-height: 100vh;
@@ -1179,7 +1078,7 @@ kbd {
   stroke: #2c3239;
 }
 .progress-ring .ring-value {
-  stroke: var(--accent);
+  stroke: var(--primary);
   transition: stroke-dashoffset 0.6s linear;
 }
 .progress-ring.due .ring-value {
@@ -1198,7 +1097,7 @@ kbd {
   color: #b6d9ef;
 }
 .list-row small.live-status {
-  color: var(--accent);
+  color: var(--primary);
   margin-top: 3px;
 }
 .progress-ring b {
@@ -2147,7 +2046,7 @@ kbd {
   opacity: 0.4;
 }
 .month-day.selected {
-  border-color: var(--accent);
+  border-color: var(--primary);
 }
 .month-date {
   font-size: 11px;
@@ -2158,7 +2057,7 @@ kbd {
   align-self: flex-start;
   padding: 1px 6px;
   border-radius: 10px;
-  background: var(--accent);
+  background: var(--primary);
   color: #171a1e;
   font-weight: 600;
 }

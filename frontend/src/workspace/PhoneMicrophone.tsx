@@ -2,6 +2,9 @@
 import type { Client, MicrophoneStatus, Settings } from "./types";
 import { Action, Card } from "./ui";
 import { SettingsShortcut } from "./Navigation";
+import { Mic, MicOff } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "@/components/ui/item";
 
 export function PhoneMicrophone({
   microphone,
@@ -14,53 +17,46 @@ export function PhoneMicrophone({
   deviceName?: string;
   client: Client;
 }) {
+  const running = microphone?.running;
   return (
-    <div className="phone-microphone">
-      {microphone?.running ? (
-        <>
-          <p role="status">
-            {deviceName || "Phone"} microphone ·{" "}
-            {microphone.muted ? "Muted — capture stopped" : "Capturing audio"}
-          </p>
-          <Action
-            className="text-button"
-            run={() =>
-              client.call("microphone.mute", { muted: !microphone.muted })
-            }
-          >
-            {microphone.muted
-              ? "Unmute phone microphone"
-              : "Mute phone microphone"}
-          </Action>
-          <Action
-            className="text-button"
-            run={() => client.call("microphone.stop")}
-          >
-            Stop phone microphone
-          </Action>
-        </>
-      ) : (
-        <>
-          <Action
-            className="text-button"
-            disabled={!deviceId || !microphone?.available}
-            run={() => client.call("microphone.start", { device_id: deviceId })}
-          >
-            Use phone as microphone
-          </Action>
-          <p className="muted" role="status">
-            {!deviceId
-              ? "Reconnect your phone to start the microphone."
-              : microphone?.message ||
-                "Set up the microphone once in Settings."}
-          </p>
-          {!microphone?.available && (
-            <SettingsShortcut target="Devices">
-              Set up phone microphone
-            </SettingsShortcut>
-          )}
-        </>
-      )}
+    <div className="grid gap-3 p-4">
+      <Item size="flush">
+        <ItemMedia>{running && microphone?.muted ? <MicOff /> : <Mic />}</ItemMedia>
+        <ItemContent>
+          <ItemTitle className="flex items-center gap-2">Microphone {running && <Badge tone={microphone?.muted ? "warn" : "good"}>{microphone?.muted ? "Muted" : "Live"}</Badge>}</ItemTitle>
+          <ItemDescription role="status">
+            {running
+              ? `${deviceName || "Phone"} microphone · ${microphone?.muted ? "Muted — capture stopped" : "Capturing audio"}`
+              : !deviceId
+                ? "Reconnect your phone to start the microphone."
+                : microphone?.message || "Set up the microphone once in Settings."}
+          </ItemDescription>
+        </ItemContent>
+      </Item>
+      <ItemActions className="flex-wrap pl-12">
+        {running ? (
+          <>
+            <Action variant="tonal" size="sm" run={() => client.call("microphone.mute", { muted: !microphone?.muted })}>
+              {microphone?.muted ? "Unmute phone microphone" : "Mute phone microphone"}
+            </Action>
+            <Action variant="destructive" size="sm" run={() => client.call("microphone.stop")}>
+              Stop phone microphone
+            </Action>
+          </>
+        ) : (
+          <>
+            <Action variant="tonal" size="sm" disabled={!deviceId || !microphone?.available}
+              run={() => client.call("microphone.start", { device_id: deviceId })}>
+              Use phone as microphone
+            </Action>
+            {!microphone?.available && (
+              <SettingsShortcut target="Devices">
+                Set up phone microphone
+              </SettingsShortcut>
+            )}
+          </>
+        )}
+      </ItemActions>
     </div>
   );
 }

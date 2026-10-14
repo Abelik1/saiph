@@ -5,6 +5,7 @@ import { PhonePanel } from "./PhonePanel";
 import { PhoneTabs } from "./PhoneTabs";
 import type { PhoneFeatureState } from "./PhoneTabs";
 import type { Client } from "./types";
+import { openTab } from "../test-helpers";
 
 const empty: PhoneFeatureState = { threads: [], messages: [], calls: [], photos: [], files: [] };
 const session = { source: "com.spotify.music", app: "Spotify", title: "Synthetic song", artist: "Synthetic artist", playing: true,
@@ -20,8 +21,8 @@ describe("Phone panel", () => {
     expect(screen.getByRole("button", { name: "Previous track" })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "Pause" }));
     await waitFor(() => expect(call).toHaveBeenCalledWith("phone.media", { device_id: "phone", source: "com.spotify.music", action: "pause" }));
-    expect(screen.getByRole("button", { name: "Ring" })).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: "Silent" }));
+    expect(screen.getByRole("radio", { name: "Ring" })).toHaveAttribute("aria-checked", "true");
+    fireEvent.click(screen.getByRole("radio", { name: "Silent" }));
     await waitFor(() => expect(call).toHaveBeenCalledWith("phone.ringer", { device_id: "phone", mode: "silent" }));
   });
   it("shows nothing when the phone offers neither", () => {
@@ -49,7 +50,7 @@ describe("New messages and calls", () => {
     const call = vi.fn().mockResolvedValue({ queued: true });
     const features = { ...empty, call_logs: [{ device_id: "phone", calls: [{ number: "+447700900123", name: "Alice", timestamp: 1, duration: 3, type: "missed" as const }] }] };
     render(<PhoneTabs features={features} phone={phone(["calls", "call-dial", "call-log"])} client={{ call } as unknown as Client} />);
-    fireEvent.click(screen.getByRole("button", { name: "Calls" }));
+    openTab("Calls");
     await waitFor(() => expect(call).toHaveBeenCalledWith("phone.calls.log", { device_id: "phone" }));
     fireEvent.click(screen.getByRole("button", { name: "Call back Alice" }));
     await waitFor(() => expect(call).toHaveBeenCalledWith("phone.dial", { device_id: "phone", number: "+447700900123" }));
@@ -84,8 +85,7 @@ describe("Phone apps", () => {
     const call = vi.fn(async (method: string) => method === "phone.apps"
       ? { apps: [{ package: "com.spotify.music", name: "Spotify", system: false }, { package: "com.android.settings", name: "Settings", system: true }] } : { opened: true });
     render(<PhoneTabs features={empty} phone={phone([])} client={{ call } as unknown as Client} />);
-    fireEvent.click(screen.getByRole("button", { name: "Apps" }));
-    fireEvent.click(screen.getByRole("button", { name: "Show phone apps" }));
+    openTab("Apps");
     await waitFor(() => expect(screen.getByText("Spotify")).toBeVisible());
     fireEvent.change(screen.getByLabelText("Find a phone app"), { target: { value: "spot" } });
     expect(screen.queryByText("Settings")).toBeNull();

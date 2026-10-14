@@ -41,6 +41,7 @@ def file_sha256(path):
     with Path(path).open('rb') as source:
         while chunk:=source.read(1024*1024):digest.update(chunk)
     return digest.hexdigest()
+_previews={}  # Inline MMS pictures by (path, size, digest, on-disk size, modified time).
 def same_file(path,size,sha256):
     """True while path still holds exactly the recorded bytes; legacy rows without a digest compare size."""
     try:
@@ -405,8 +406,15 @@ class PhoneFeatures:
         view={key:row.get(key) for key in ('id','device_id','thread','message','part','name','mime','size')}
         try:
             path=Path(row['path'])
-            if row['mime'].startswith('image/') and row['size']<=PREVIEW_BYTES and same_file(path,row['size'],row.get('sha256')):
-                view['preview']='data:'+row['mime']+';base64,'+base64.b64encode(path.read_bytes()).decode()
+            if row['mime'].startswith('image/') and row['size']<=PREVIEW_BYTES:
+                # State is read every second: hash and encode each file version once, not every time.
+                info=path.stat();key=(str(path),row['size'],row.get('sha256'),info.st_size,info.st_mtime_ns)
+                preview=_previews.get(key)
+                if preview is None and same_file(path,row['size'],row.get('sha256')):
+                    preview='data:'+row['mime']+';base64,'+base64.b64encode(path.read_bytes()).decode()
+                    if len(_previews)>=256:_previews.clear()
+                    _previews[key]=preview
+                if preview:view['preview']=preview
             view['ready']=path.is_file()
         except (OSError,KeyError):view['ready']=False
         return view

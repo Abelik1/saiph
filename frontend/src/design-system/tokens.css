@@ -1,0 +1,89 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/*
+ * Saiph desktop design tokens: every colour, type stack, radius, shadow and easing
+ * the desktop app uses. See docs/DESKTOP_DESIGN_SYSTEM.md for the rules.
+ *
+ * Roles are derived from the families in families.css, never written as literals,
+ * so a family knob moves every role built on it. Names follow shadcn (background,
+ * foreground, card, primary, secondary, muted, accent, destructive, border, input,
+ * ring) so components copied from shadcn read them unchanged; index.css exposes
+ * them to Tailwind as bg-card, text-muted-foreground and so on.
+ *
+ * Saiph is dark only. Status colours are stated outright on purpose: on, warning
+ * and off must not drift when a brand knob turns.
+ */
+:root {
+  color-scheme: dark;
+
+  /* Surfaces */
+  --background: hsl(var(--hue-night) calc(var(--sat-night) * 70%) 5%);
+  --background-raised: hsl(var(--hue-night) calc(var(--sat-night) * 71%) 11%);
+  --foreground: hsl(var(--hue-night) calc(var(--sat-night) * 37%) 93%);
+  --card: hsl(var(--hue-night) calc(var(--sat-night) * 58%) 9%);
+  --card-foreground: var(--foreground);
+  --popover: hsl(var(--hue-night) calc(var(--sat-night) * 56%) 11%);
+  --popover-foreground: var(--foreground);
+  /* Header and footer bars over the strings. */
+  --chrome: color-mix(in srgb, hsl(var(--hue-night) calc(var(--sat-night) * 68%) 6%) 94%, transparent);
+  --muted: hsl(var(--hue-night) calc(var(--sat-night) * 50%) 14%);
+  --muted-foreground: hsl(var(--hue-night) calc(var(--sat-night) * 28%) 66%);
+
+  /* The main action: Saiph's string, cyan through sky to violet. */
+  --primary: hsl(var(--hue-cyan) calc(var(--sat-cyan) * 86%) 53%);
+  --primary-hover: hsl(var(--hue-cyan) calc(var(--sat-cyan) * 92%) 69%);
+  --primary-foreground: hsl(var(--hue-night) calc(var(--sat-night) * 74%) 7%);
+  --primary-gradient: linear-gradient(120deg, var(--primary), hsl(var(--hue-sky) calc(var(--sat-sky) * 94%) 68%) 55%, var(--violet));
+
+  /* Tonal fills and selection: the main action's colour, low over a card. */
+  --secondary: color-mix(in srgb, var(--primary) 11%, var(--card));
+  --secondary-hover: color-mix(in srgb, var(--primary) 18%, var(--card));
+  --secondary-border: color-mix(in srgb, var(--primary) 30%, var(--card));
+  --secondary-foreground: hsl(var(--hue-cyan) calc(var(--sat-cyan) * 92%) 76%);
+  --accent: var(--secondary);
+  --accent-foreground: var(--secondary-foreground);
+  --accent-strong: var(--primary);
+  --violet: hsl(var(--hue-violet) calc(var(--sat-violet) * 92%) 76%);
+
+  /* Lines and focus */
+  --border: hsl(var(--hue-night) calc(var(--sat-night) * 46%) 19%);
+  --input: hsl(var(--hue-night) calc(var(--sat-night) * 44%) 27%);
+  --field: hsl(var(--hue-night) calc(var(--sat-night) * 64%) 7%);
+  --ring: var(--primary);
+
+  /* Needs you */
+  --attention: hsl(var(--hue-amber) calc(var(--sat-amber) * 92%) 62%);
+  --attention-surface: color-mix(in srgb, var(--attention) 13%, var(--card));
+  --attention-foreground: hsl(var(--hue-amber) calc(var(--sat-amber) * 95%) 82%);
+
+  /* Status: stated outright. Never follows the brand. */
+  --destructive: #f87171;
+  --destructive-foreground: #1c0507;
+  --status-on: #6ee7b7;
+  --status-warn: #fbbf24;
+  --status-off: #f87171;
+  --status-on-surface: color-mix(in srgb, var(--status-on) 13%, var(--card));
+  --status-warn-surface: color-mix(in srgb, var(--status-warn) 13%, var(--card));
+  --status-off-surface: color-mix(in srgb, var(--status-off) 13%, var(--card));
+
+  /* The strings: background field, loaders, progress and the brand mark. */
+  --wave-1: var(--primary);
+  --wave-2: hsl(var(--hue-cyan) calc(var(--sat-cyan) * 92%) 69%);
+  --wave-3: var(--violet);
+  --wave-star: hsl(var(--hue-night) calc(var(--sat-night) * 100%) 97%);
+
+
+  /* Shadows are always this one colour at an alpha, through color-mix(). */
+  --shadow: hsl(var(--hue-night) calc(var(--sat-night) * 80%) 2%);
+  --shadow-sm: 0 1px 2px color-mix(in srgb, var(--shadow) 40%, transparent);
+  --shadow-md: 0 8px 24px color-mix(in srgb, var(--shadow) 45%, transparent);
+  --shadow-lg: 0 20px 60px color-mix(in srgb, var(--shadow) 55%, transparent);
+  --glow: 0 0 0 1px color-mix(in srgb, var(--wave-2) 18%, transparent), 0 10px 40px color-mix(in srgb, var(--primary) 12%, transparent);
+
+  /* Shape, type and motion. */
+  --radius: 14px;
+  --radius-field: 10px;
+  --radius-button: 999px;
+  --font-sans: var(--type-sans);
+  --font-mono: var(--type-mono);
+  --ease: cubic-bezier(.2, .8, .2, 1);
+}

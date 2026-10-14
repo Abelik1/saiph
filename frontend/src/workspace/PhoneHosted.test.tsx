@@ -4,6 +4,7 @@ import { describe, it, expect, vi } from "vitest";
 import { Phone } from "./Phone";
 import { PhoneTabs, type PhoneFeatureState } from "./PhoneTabs";
 import type { Client, State } from "./types";
+import { openTab } from "../test-helpers";
 
 // Synthetic Saiph Hosted phone: no battery capability, marked hosted by the computer.
 const hostedPhone = {
@@ -65,7 +66,7 @@ describe("Saiph Hosted phone on the Phone page", () => {
     fireEvent.change(screen.getByLabelText("New message text"), { target: { value: "Synthetic hello" } });
     fireEvent.click(screen.getAllByRole("button", { name: "Send" })[0]);
     await waitFor(() => expect(call).toHaveBeenCalledWith("phone.sms.compose", { device_id: "dev_hosted", address: "+15550101", text: "Synthetic hello" }));
-    fireEvent.click(screen.getByRole("button", { name: "Calls" }));
+    openTab("Calls");
     expect(screen.getByText("Synthetic Caller")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Answer" }));
     await waitFor(() => expect(call).toHaveBeenCalledWith("phone.call", { device_id: "dev_hosted", operation: "answer" }));
@@ -77,14 +78,14 @@ describe("Saiph Hosted phone on the Phone page", () => {
     const limited = { ...hostedPhone, capabilities: ["files"] };
     render(<PhoneTabs features={features} phone={limited} client={client()} />);
     expect(screen.getByText(/Turn on Texts and calls in Saiph Hosted on your phone and allow SMS/)).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "Calls" }));
+    openTab("Calls");
     expect(screen.getByText(/Turn on Texts and calls in Saiph Hosted on your phone and allow phone access/)).toBeVisible();
     expect(screen.queryByRole("button", { name: "Answer" })).toBeNull();
   });
   it("stops offering answer once another computer handled the call and says which", () => {
     const handled = { ...features, calls: [{ ...features.calls[0], state: "active" as const, handled: "answer" as const, handled_by: "Synthetic laptop" }] };
     render(<PhoneTabs features={handled} phone={hostedPhone} client={client()} />);
-    fireEvent.click(screen.getByRole("button", { name: "Calls" }));
+    openTab("Calls");
     expect(screen.getByText("Call in progress")).toBeVisible();
     expect(screen.getByText("Answered on Synthetic laptop")).toBeVisible();
     expect(screen.queryByRole("button", { name: "Answer" })).toBeNull();
@@ -93,7 +94,7 @@ describe("Saiph Hosted phone on the Phone page", () => {
   it("shows a lost race or a refused dial as a plain note, not an error", () => {
     const declined = { ...features, calls: [{ ...features.calls[0], state: "ended" as const, handled: "reject" as const, handled_by: "Synthetic laptop" }] };
     render(<PhoneTabs features={declined} phone={{ ...hostedPhone, call_notice: "Not dialed: your phone is already on a call." }} client={client()} />);
-    fireEvent.click(screen.getByRole("button", { name: "Calls" }));
+    openTab("Calls");
     expect(screen.getByText("Not dialed: your phone is already on a call.")).toHaveAttribute("role", "status");
     expect(screen.getByText("Declined on Synthetic laptop")).toBeVisible();
     expect(screen.queryByRole("alert")).toBeNull();

@@ -4,6 +4,7 @@ import { describe, it, expect, vi } from "vitest";
 import { PhoneTabs } from "./PhoneTabs";
 import type { PhoneFeatureState } from "./PhoneTabs";
 import type { Client } from "./types";
+import { openTab } from "../test-helpers";
 const info: PhoneFeatureState = {
   threads: [
     {
@@ -60,7 +61,7 @@ describe("Phone tabs", () => {
         client={{ call } as unknown as Client}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Photos" }));
+    openTab("Photos");
     fireEvent.dragStart(screen.getByAltText("Photo.jpg").parentElement!);
     await waitFor(() =>
       expect(screen.getByRole("status")).toHaveTextContent(
@@ -111,7 +112,7 @@ describe("Phone tabs", () => {
         client={{ call } as unknown as Client}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Photos" }));
+    openTab("Photos");
     fireEvent.click(
       screen.getByRole("button", { name: "Actions for Photo.jpg" }),
     );
@@ -122,7 +123,7 @@ describe("Phone tabs", () => {
         photo_id: "17",
       }),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Calls" }));
+    openTab("Calls");
     expect(screen.getByText("Call audio stays on your phone.")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Answer" }));
     await waitFor(() =>
@@ -148,7 +149,7 @@ describe("Phone tabs", () => {
         client={{ call } as unknown as Client}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Photos" }));
+    openTab("Photos");
     fireEvent.click(
       screen.getByRole("button", { name: "Actions for Photo.jpg" }),
     );
@@ -201,7 +202,7 @@ describe("Phone tabs", () => {
     const { rerender } = render(
       <PhoneTabs features={saving} phone={phone} client={client} />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Photos" }));
+    openTab("Photos");
     fireEvent.click(
       screen.getByRole("button", { name: "Actions for Photo.jpg" }),
     );
@@ -261,7 +262,7 @@ describe("Phone tabs", () => {
         client={{ call } as unknown as Client}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Photos" }));
+    openTab("Photos");
     fireEvent.click(
       screen.getByRole("button", { name: "Actions for Photo.jpg" }),
     );
@@ -328,8 +329,8 @@ describe("Phone tabs", () => {
     fireEvent.change(screen.getByLabelText("SMS reply"), {
       target: { value: "Second unfinished reply" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Photos" }));
-    fireEvent.click(screen.getByRole("button", { name: "Messages" }));
+    openTab("Photos");
+    openTab("Messages");
     expect(screen.getByLabelText("SMS reply")).toHaveValue(
       "Second unfinished reply",
     );

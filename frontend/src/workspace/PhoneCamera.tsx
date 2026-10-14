@@ -1,9 +1,27 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useState } from "react";
+import { useId, useState } from "react";
+import { Settings2, Video } from "lucide-react";
 import type { CameraConfig, CameraStatus, Client, DebugPhone } from "./types";
 import { Action } from "./ui";
 import { SettingsShortcut } from "./Navigation";
 import { WirelessDebugging } from "./WirelessDebugging";
+import { Disclosure } from "@/components/ui/disclosure";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Field } from "@/components/ui/field";
+import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "@/components/ui/item";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+function Choice<T extends string>({ label, value, options, onChange }: { label: string; value: T; options: [T, string][]; onChange: (value: T) => void }) {
+  const id = useId();
+  return <Field label={label} htmlFor={id}>
+    <Select value={value} onValueChange={(next) => onChange(next as T)}>
+      <SelectTrigger id={id} size="sm"><SelectValue /></SelectTrigger>
+      <SelectContent>{options.map(([option, text]) => <SelectItem key={option} value={option}>{text}</SelectItem>)}</SelectContent>
+    </Select>
+  </Field>;
+}
 
 const connection = (phone: DebugPhone) =>
   phone.connection === "wifi" ? "Wi‑Fi" : "USB cable";
@@ -61,89 +79,45 @@ export function PhoneCamera({
   };
   const waiting = (phones || []).filter((phone) => phone.state !== "ready");
   return (
-    <div className="phone-camera">
-      {!camera?.running && (
-        <details>
-          <summary>Camera options</summary>
-          <label>
-            Phone camera
-            <select
-              value={facing}
-              onChange={(event) =>
-                setFacing(event.target.value as typeof facing)
-              }
-            >
-              <option value="front">Front camera</option>
-              <option value="back">Rear camera</option>
-            </select>
-          </label>
-          <label>
-            Video quality
-            <select
-              value={quality}
-              onChange={(event) =>
-                setQuality(event.target.value as typeof quality)
-              }
-            >
-              <option value="720p">720p · 30 fps</option>
-              <option value="1080p">1080p · 30 fps</option>
-            </select>
-          </label>
-          <label>
-            Picture rotation
-            <select
-              value={rotation}
-              onChange={(event) =>
-                setRotation(event.target.value as typeof rotation)
-              }
-            >
-              {(["0", "90", "180", "270"] as const).map((value) => (
-                <option key={value} value={value}>
-                  {value}°
-                </option>
-              ))}
-            </select>
-          </label>
-        </details>
-      )}
+    <div className="grid gap-3 p-4">
+      <Item size="flush">
+        <ItemMedia><Video /></ItemMedia>
+        <ItemContent>
+          <ItemTitle className="flex items-center gap-2">Webcam {camera?.running && <Badge tone="good">Live</Badge>}</ItemTitle>
+          <ItemDescription role="status">
+            {camera?.running
+              ? camera.mode === "preview"
+                ? "The preview window is open. Use it to set up OBS, then close it."
+                : `${camera.facing === "back" ? "Rear" : "Front"} camera · ${camera.quality || "720p"}. Check the picture in your meeting app.`
+              : !target
+                ? phones === null
+                  ? "Find your phone to start the camera."
+                  : "Connect your phone to start the camera."
+                : camera?.available
+                  ? "Your camera starts only when you choose to use it."
+                  : "Set up the camera once in Settings."}
+          </ItemDescription>
+        </ItemContent>
+      </Item>
       {!deviceId && !camera?.running && (
-        <div className="camera-phone-picker">
-          <p className="muted">
-            Connect your phone with a USB cable, or over Wi‑Fi with wireless
-            debugging, then find it here.
-          </p>
-          <Action className="text-button" run={find}>
-            {phones ? "Find again" : "Find my phone"}
-          </Action>
-          {phones && ready.length > 1 && (
-            <label>
-              Phone for the camera
-              <select
-                value={chosen?.serial}
-                onChange={(event) => setSerial(event.target.value)}
-              >
-                {ready.map((phone) => (
-                  <option key={phone.serial} value={phone.serial}>
-                    {phone.model} · {connection(phone)}
-                  </option>
-                ))}
-              </select>
-            </label>
+        // Without a Hub-paired phone, use one that allowed this computer over USB or Wi-Fi debugging.
+        <div className="grid gap-2.5 pl-12 text-[12.5px] leading-relaxed text-muted-foreground">
+          <p className="m-0">Connect your phone with a USB cable, or over Wi‑Fi with wireless debugging, then find it here.</p>
+          <div><Action variant="tonal" size="sm" run={find}>{phones ? "Find again" : "Find my phone"}</Action></div>
+          {phones && ready.length > 1 && chosen && (
+            <Choice label="Phone for the camera" value={chosen.serial} onChange={setSerial}
+              options={ready.map((phone) => [phone.serial, `${phone.model} · ${connection(phone)}`] as [string, string])} />
           )}
-          {phones && ready.length === 1 && chosen && (
-            <p className="muted">
-              Using {chosen.model} · {connection(chosen)}
-            </p>
-          )}
+          {phones && ready.length === 1 && chosen && <p className="m-0">Using {chosen.model} · {connection(chosen)}</p>}
           {phones && !ready.length && !waiting.length && (
-            <p className="muted" role="status">
+            <p className="m-0" role="status">
               {adbFound
                 ? "No phone found. Check the cable and that USB debugging is on, or connect over Wi‑Fi below."
                 : "adb was not found. Install scrcpy, which includes adb; Settings → Devices explains how."}
             </p>
           )}
           {waiting.map((phone) => (
-            <p className="muted" role="status" key={phone.serial}>
+            <p className="m-0" role="status" key={phone.serial}>
               {phone.state === "unauthorized"
                 ? `Unlock ${phone.model} and tap Allow on the debugging prompt, then choose Find again.`
                 : phone.state === "no_permission"
@@ -151,54 +125,49 @@ export function PhoneCamera({
                   : `${phone.model} is offline for debugging. Unlock it and reconnect.`}
             </p>
           ))}
-          <details>
-            <summary>Connect over Wi‑Fi</summary>
+          <Disclosure summary="Connect over Wi‑Fi">
             <WirelessDebugging client={client} onConnected={find} />
-          </details>
+          </Disclosure>
         </div>
       )}
-      {camera?.running ? (
-        <Action className="text-button" run={() => client.call("camera.stop")}>
-          {camera.mode === "preview" ? "Close camera preview" : "Stop phone camera"}
-        </Action>
-      ) : (
-        <>
-          <Action
-            className="text-button"
-            disabled={!target || !camera?.available}
-            run={() => start()}
-          >
-            Use phone as webcam
+      <ItemActions className="flex-wrap pl-12">
+        {camera?.running ? (
+          <Action variant="destructive" size="sm" run={() => client.call("camera.stop")}>
+            {camera.mode === "preview" ? "Close camera preview" : "Stop phone camera"}
           </Action>
-          {!camera?.available && camera?.can_preview && (
-            <Action
-              className="text-button"
-              disabled={!target}
-              run={() => start(true)}
-            >
-              Open camera preview
+        ) : (
+          <>
+            <Action variant="tonal" size="sm" disabled={!target || !camera?.available} run={() => start()}>
+              Use phone as webcam
             </Action>
-          )}
-        </>
-      )}
-      <p className="muted" role="status">
-        {camera?.running
-          ? camera.mode === "preview"
-            ? "The preview window is open. Use it to set up OBS, then close it."
-            : `${camera.facing === "back" ? "Rear" : "Front"} camera · ${camera.quality || "720p"}. Check the picture in your meeting app.`
-          : !target
-            ? phones === null
-              ? "Find your phone to start the camera."
-              : "Connect your phone to start the camera."
-            : camera?.available
-              ? "Your camera starts only when you choose to use it."
-              : "Set up the camera once in Settings."}
-      </p>
-      {!camera?.available && (
-        <SettingsShortcut target="Devices">
-          Set up phone camera
-        </SettingsShortcut>
-      )}
+            {!camera?.available && camera?.can_preview && (
+              <Action variant="secondary" size="sm" disabled={!target} run={() => start(true)}>
+                Open camera preview
+              </Action>
+            )}
+          </>
+        )}
+        {!camera?.running && (
+          // The options belong to this button, so they open beside it. They are saved when the camera starts.
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="ghost" size="icon-sm" aria-label="Camera options" title="Camera options"><Settings2 /></Button>
+            </PopoverTrigger>
+            <PopoverContent>
+              <b className="text-[13px] font-semibold">Camera options</b>
+              <Choice label="Phone camera" value={facing} onChange={setFacing} options={[["front", "Front camera"], ["back", "Rear camera"]]} />
+              <Choice label="Video quality" value={quality} onChange={setQuality} options={[["720p", "720p · 30 fps"], ["1080p", "1080p · 30 fps"]]} />
+              <Choice label="Picture rotation" value={rotation} onChange={setRotation} options={(["0", "90", "180", "270"] as const).map((value) => [value, value + "°"])} />
+              <small className="text-[12px] text-muted-foreground">Used the next time you start the webcam.</small>
+            </PopoverContent>
+          </Popover>
+        )}
+        {!camera?.available && (
+          <SettingsShortcut target="Devices">
+            Set up phone camera
+          </SettingsShortcut>
+        )}
+      </ItemActions>
     </div>
   );
 }
