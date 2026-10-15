@@ -308,7 +308,6 @@ class PhoneFeatures:
                         self._copy_original(event['source'],row['photo_id'])
                 if not intent or intent['mode'] not in {'prefetch','copy'}:
                     self._complete_file(event,path)
-                    if photo_key:self._record_save(event['source'],row['photo_id'],'saved',name=path.name,path=str(path),size=row['size'],sha256=row.get('sha256'),file_id=event['id'])
                 else:self.store.delete('phone_transfer',event['id'])
                 self.changed()
             except (OSError,ValueError):
@@ -320,7 +319,7 @@ class PhoneFeatures:
                         self._record_save(event['source'],row['photo_id'],'failed',name=safe_name(row['name']),error='The photo could not be transferred. Try again.')
                     self.changed()
     def _complete_file(self,event,path):
-        """Record receipt and local file Handoff together; replays cannot resurrect it."""
+        """Record receipt, local file Handoff and photo save state together; replays cannot resurrect it."""
         row=event['payload'];now=utc_now()
         saved={'id':event['id'],'device_id':event['source'],'name':Path(path).name,'path':str(path),'size':row['size'],
                'photo_id':row.get('photo_id'),'destination':row.get('destination','downloads'),'sha256':row.get('sha256'),'updated_at':now}
@@ -331,6 +330,10 @@ class PhoneFeatures:
                 item={'id':event['id'],'kind':'file','value':saved['name'],'file_id':event['id'],'source':event['source'],'status':'ready','updated_at':now}
                 connection.execute('INSERT OR IGNORE INTO records VALUES(?,?,?)',('handoff',event['id'],json.dumps(item)))
                 connection.execute("DELETE FROM records WHERE kind='handoff' AND id NOT IN (SELECT id FROM records WHERE kind='handoff' ORDER BY rowid DESC LIMIT 100)")
+            if row.get('photo_id'):
+                # In the same transaction: once the transfer is gone, Save already sees this copy.
+                self._record_save(event['source'],row['photo_id'],'saved',connection=connection,name=saved['name'],path=saved['path'],
+                                  size=row['size'],sha256=row.get('sha256'),file_id=event['id'])
             connection.execute("DELETE FROM records WHERE kind='phone_transfer' AND id=?",(event['id'],))
         if event['type']=='file.offer' and row.get('sha256'):
             try:intent=self.store.get('phone_capture',self._photo_key(event['source'],row['sha256']))
@@ -360,12 +363,14 @@ class PhoneFeatures:
             if Path(row['path']).is_file():return row
         except ValueError:pass
         return None
-    def _record_save(self,device,photo,status,**fields):
+    def _record_save(self,device,photo,status,*,connection=None,**fields):
         """Per-photo save state for the tile: metadata only, never photo bytes."""
+        if connection is None:
+            with self.store.connect() as connection:return self._record_save(device,photo,status,connection=connection,**fields)
         if fields.get('path'):fields['folder']=display_folder(fields['path'])
-        saved=self.store.save('phone_photo_save',{'id':self._photo_key(device,photo),'device_id':device,'photo_id':str(photo),'status':status,**fields})
-        with self.store.connect() as connection:
-            connection.execute("DELETE FROM records WHERE kind='phone_photo_save' AND id NOT IN (SELECT id FROM records WHERE kind='phone_photo_save' ORDER BY rowid DESC LIMIT 500)")
+        saved={'id':self._photo_key(device,photo),'device_id':device,'photo_id':str(photo),'status':status,**fields,'updated_at':utc_now()}
+        connection.execute('INSERT INTO records VALUES(?,?,?) ON CONFLICT(kind,id) DO UPDATE SET data=excluded.data',('phone_photo_save',saved['id'],json.dumps(saved)))
+        connection.execute("DELETE FROM records WHERE kind='phone_photo_save' AND id NOT IN (SELECT id FROM records WHERE kind='phone_photo_save' ORDER BY rowid DESC LIMIT 500)")
         return saved
     @staticmethod
     def _unanswered(row,transfers):
