@@ -112,6 +112,8 @@ p { margin: 0 0 1em; }
   border: 1px solid var(--border); background: var(--surface); padding: 5px 12px; border-radius: 999px; margin-bottom: 20px;
 }
 .pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 10px var(--green); }
+a.pill-link { text-decoration: none; transition: border-color .2s, color .2s; }
+a.pill-link:hover { color: var(--text); border-color: rgba(34, 211, 238, .5); }
 
 /* Why Saiph */
 .origin { margin: 8px auto 22px; max-width: 44ch; }
@@ -177,6 +179,7 @@ button.card:hover { border-color: #33506a; background: var(--surface-2); }
 .plan.featured { border-color: rgba(34, 211, 238, .5); box-shadow: 0 0 0 1px rgba(34, 211, 238, .15), 0 20px 60px -30px rgba(34, 211, 238, .35); }
 .plan .price { font-size: 2.4rem; font-weight: 750; letter-spacing: -0.03em; margin: 6px 0 2px; }
 .plan .price small { font-size: 1rem; color: var(--muted); font-weight: 500; letter-spacing: 0; }
+.plan .price-note { color: var(--cyan-2); font-size: .95rem; margin: 2px 0 0; }
 .plan .checks { margin: 18px 0 24px; }
 .plan .btn { margin-top: auto; }
 
