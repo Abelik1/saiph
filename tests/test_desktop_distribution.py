@@ -221,8 +221,11 @@ while(!File.Exists(args[3])) Thread.Sleep(20); mutex.ReleaseMutex(); }
     # User modifications within even the install directory must survive uninstall.
     custom = install / 'releases/0.1.0-preview.2/app/user-added.txt'
     custom.write_text('user file retained')
+    # A listed release whose folder was already deleted must not block removal.
+    shutil.rmtree(install / 'releases/0.1.0-preview.1')
     assert run(installer('0.1.0-preview.5'), '--uninstall') == 0
     assert custom.read_text() == 'user file retained'
+    assert json.loads((install / 'orion-install.json').read_text())['versions'] == ['0.1.0-preview.2']
     assert (owner / 'pairing-key.txt').read_text() == 'synthetic-key-retained'
     assert run(installer('0.1.0-preview.6')) == 0
 
