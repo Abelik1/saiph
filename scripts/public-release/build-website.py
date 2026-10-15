@@ -16,7 +16,7 @@ FILES = ('index.html', 'self-host.html', 'hosted.html', 'downloads.html', 'waitl
          'assets/site.css', 'assets/site.js', 'assets/stage.js', 'assets/analytics.js')
 PLATFORMS = ('windows', 'linux', 'android', 'server')
 FIELDS = {'sourceVisibility', 'githubUrl', 'releasesUrl', 'downloads', 'subscribeUrl', 'waitlistUrl',
-          'androidBetaUrl', 'betaAccountUrl', 'waitlistPrivacyUrl', 'waitlistNotice', 'hostedPrice', 'hostedPeriod', 'license', 'privacy', 'waitlist', 'release', 'analytics'}
+          'androidBetaUrl', 'betaAccountUrl', 'waitlistPrivacyUrl', 'waitlistNotice', 'hostedPrice', 'hostedPeriod', 'hostedPriceNote', 'license', 'privacy', 'waitlist', 'release', 'analytics'}
 
 
 def public_url(value):
@@ -50,6 +50,7 @@ WAITLIST_FIELDS = ('processorName', 'processorPrivacyUrl', 'processingLocations'
 RELEASE_FIELDS = ('tag', 'sourceCommit', 'checksumsUrl', 'sourceMetadataUrl')
 FIREBASE_INVITE = re.compile(r'https://appdistribution\.firebase\.dev/i/[A-Za-z0-9]{8,64}')
 BETA_ACCOUNT = re.compile(r'https://[a-z0-9.-]+/account')
+PRICE = re.compile(r'€[1-9][0-9]{0,2}(\.[0-9]{2})?')
 
 
 def validate_waitlist_url(value, notice_version):
@@ -86,15 +87,25 @@ def validate_settings(settings, mode):
     config = {'sourceVisibility': 'private', 'githubUrl': '', 'releasesUrl': '',
               'downloads': {name: '' for name in PLATFORMS}, 'release': {},
               'subscribeUrl': '', 'waitlistUrl': '', 'androidBetaUrl': '', 'betaAccountUrl': '', 'waitlistPrivacyUrl': '', 'waitlistNotice': '',
-              'privacy': {}, 'waitlist': {}, 'analytics': {'enabled': False, 'scriptPath': '/_vercel/insights/script.js'}, 'hostedPrice': '', 'hostedPeriod': '/ month',
+              'privacy': {}, 'waitlist': {}, 'analytics': {'enabled': False, 'scriptPath': '/_vercel/insights/script.js'}, 'hostedPrice': '', 'hostedPeriod': '/ month', 'hostedPriceNote': '',
               'license': {'core': 'AGPL-3.0-or-later', 'android': 'GPL-3.0-only'}}
     config.update(settings)
     if not isinstance(config['downloads'], dict) or set(config['downloads']) != set(PLATFORMS):
         raise ValueError('Provide exactly the Windows, Linux, Android and server download fields')
     if config['license'] != {'core': 'AGPL-3.0-or-later', 'android': 'GPL-3.0-only'}:
         raise ValueError('Website licence labels must match the reviewed source licences')
-    if config['subscribeUrl'] or config['hostedPrice']:
-        raise ValueError('Paid Hosted is not ready; keep subscription links and prices empty')
+    # Subscriptions are sold on the account site after sign-in; the site only links there.
+    for name in ('subscribeUrl', 'hostedPrice', 'hostedPriceNote'):
+        if not isinstance(config[name], str):
+            raise ValueError('Hosted plan fields must be text')
+    if bool(config['subscribeUrl']) != bool(config['hostedPrice']):
+        raise ValueError('Set the subscription link and the Hosted price together')
+    if config['subscribeUrl'] and not BETA_ACCOUNT.fullmatch(config['subscribeUrl']):
+        raise ValueError('Subscription link must be the HTTPS account /account page')
+    if config['hostedPrice'] and not PRICE.fullmatch(config['hostedPrice']):
+        raise ValueError('Hosted price must be a euro amount such as €3.99')
+    if len(config['hostedPriceNote']) > 80 or (config['hostedPriceNote'] and not config['hostedPrice']):
+        raise ValueError('Price note must be short and accompany a price')
     for name in ('githubUrl', 'releasesUrl', 'waitlistPrivacyUrl', 'betaAccountUrl'):
         if not isinstance(config[name], str):
             raise ValueError('Public link fields must be text')

@@ -5,7 +5,7 @@
   <meta name="referrer" content="no-referrer">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Saiph: phone, laptop and desktop as one</title>
-  <meta name="description" content="Saiph brings clipboard, notifications, photos and files across your Android phone and Windows and Linux computers, without locking you into one company's devices. Texts, calls and webcam when you self-host. In development.">
+  <meta name="description" content="Saiph brings clipboard, notifications, photos and files across your Android phone and Windows and Linux computers, without locking you into one company's devices. Saiph Hosted connects them for you from €3.99 a month, end-to-end encrypted. Or self-host it for free.">
   <meta name="theme-color" content="#0a0e13">
   <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
   <link rel="stylesheet" href="assets/site.css">
@@ -32,12 +32,12 @@
 <main id="main">
   <section class="hero">
     <div class="wrap center">
-      <span class="pill"><span class="dot"></span>In development &middot; Windows, Linux &amp; Android</span>
+      <a class="pill pill-link" href="#pricing"><span class="dot"></span>Saiph Hosted is here &middot; Windows, Linux &amp; Android</a>
       <h1>Your phone, laptop and desktop, <em>as one.</em></h1>
       <p class="lede">Clipboard, notifications and files flow between your Android phone and your Windows and Linux computers. Like Apple's Continuity, without buying every device from one company.</p>
       <div class="btn-row" style="margin-top:28px">
-        <a class="btn primary" href="#download">Release status</a>
-        <a class="btn" href="self-host.html">Self-host it</a>
+        <a class="btn primary" href="#pricing">Get Saiph Hosted</a>
+        <a class="btn" href="self-host.html">Self-host it free</a>
       </div>
     </div>
   </section>
@@ -98,7 +98,7 @@
           <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></div>
           <h3>Notifications</h3>
           <p class="muted">See and dismiss them on any screen. Reply when you self-host.</p>
-          <span class="feature-tags"><span class="tag ok">Self-hosted</span><span class="tag cyan">Hosted beta</span></span>
+          <span class="feature-tags"><span class="tag ok">Self-hosted</span><span class="tag cyan">Hosted</span></span>
         </button>
         <button class="card" data-goto-scene="messages">
           <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
@@ -116,13 +116,13 @@
           <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg></div>
           <h3>Clipboard</h3>
           <p class="muted">Copy here, paste there. Images when you self-host.</p>
-          <span class="feature-tags"><span class="tag ok">Self-hosted</span><span class="tag cyan">Hosted beta</span></span>
+          <span class="feature-tags"><span class="tag ok">Self-hosted</span><span class="tag cyan">Hosted</span></span>
         </button>
         <button class="card" data-goto-scene="files">
           <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></svg></div>
           <h3>Photos &amp; files</h3>
           <p class="muted">Send photos and files either way. Browse recent photos when you self-host.</p>
-          <span class="feature-tags"><span class="tag ok">Self-hosted</span><span class="tag cyan">Hosted beta</span></span>
+          <span class="feature-tags"><span class="tag ok">Self-hosted</span><span class="tag cyan">Hosted</span></span>
         </button>
         <button class="card" data-goto-scene="webcam">
           <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 8-6 4 6 4V8z"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg></div>
@@ -131,14 +131,14 @@
           <span class="feature-tags"><span class="tag ok">Self-hosted</span></span>
         </button>
       </div>
-      <p class="muted center feature-note">Hosted is an invite-only beta. Texts and calls are coming to it.</p>
+      <p class="muted center feature-note">Texts and calls are coming to Hosted. Webcam works over USB or local Wi-Fi.</p>
     </div>
   </section>
 
   <section class="section" id="download" aria-labelledby="dl-title">
     <div class="wrap">
       <h2 id="dl-title">Download</h2>
-      <p class="muted" style="margin-bottom:28px">Releases are being prepared. <span data-source-notice>The GitHub repository is private for now.</span></p>
+      <p class="muted" style="margin-bottom:28px"><span data-hosted-live hidden>Subscribe to Saiph Hosted, then download Saiph for your computer and phone from your account.</span><span data-hosted-soon>Releases are being prepared.</span> <span data-source-notice>The GitHub repository is private for now.</span></p>
       <div class="grid c3">
         <a class="card dl" data-download="windows" href="#">
           <div class="os">
@@ -175,23 +175,25 @@
           <h3>Self-hosted</h3>
           <div class="price">Free</div>
           <ul class="checks">
-            <li>Every feature</li>
+            <li>Every feature, including texts and calls</li>
             <li>Raspberry Pi, home server or any Debian box</li>
             <li>Synced Cloud folder on your storage</li>
           </ul>
           <a class="btn" href="self-host.html">Self-hosting guide</a>
         </div>
         <div class="card plan featured">
-          <h3>Saiph Hosted <span class="tag cyan" data-hosted-status>Coming soon</span></h3>
+          <h3>Saiph Hosted <span class="tag cyan" data-hosted-status data-live-text="Beta &middot; available now">Coming soon</span></h3>
           <div class="price" data-price>Early access <small>pricing at launch</small></div>
+          <p class="price-note" data-price-note hidden></p>
           <ul class="checks">
-            <li>We run your Hub</li>
-            <li>Planned: encrypted on your devices first</li>
-            <li>Beta: notifications, text clipboard and files</li>
-            <li>Planned: export any time</li>
+            <li>We run the connection: no server, no Tailscale</li>
+            <li>End-to-end encrypted: your devices hold the keys</li>
+            <li>Notifications, text clipboard, photos and files</li>
+            <li>Texts and calls on the way</li>
+            <li>Cancel any time</li>
           </ul>
           <a class="btn primary" data-link="subscribe" data-live-text="Subscribe to Saiph Hosted" href="#">Join the early-access list</a>
-          <a href="hosted.html" style="margin-top:12px;font-size:.92rem;text-align:center">Design and current limits &rarr;</a>
+          <a href="hosted.html" style="margin-top:12px;font-size:.92rem;text-align:center">How Hosted protects your data &rarr;</a>
         </div>
       </div>
     </div>
