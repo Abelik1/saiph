@@ -53,6 +53,9 @@ needed or supplied by this repository.
 
 ## Contributions and releases
 
+UI work follows the [mobile design system](../docs/MOBILE_DESIGN_SYSTEM.md),
+including shared typography, matching setup choices and accessible action layouts.
+
 Contributions require a [DCO sign-off](CONTRIBUTING.md). Report security issues
 privately using [SECURITY.md](SECURITY.md). See the
 [release preparation checklist](docs/SAIPH_PUBLIC_RELEASE.md) for source, signing,

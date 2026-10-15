@@ -1,5 +1,90 @@
 # Current release preparation status
 
+2026-10-15 connection wizard follow-up (source changes only): the Phone tab,
+add-phone dialog and optional guide now share an Account → Computer → Scan →
+Approve wizard. Each screen has one task; Scan shows the QR automatically and
+Continue opens approval. Back returns to scanning and clears the reviewed
+request and comparison. Scan/approval navigation moves keyboard focus to the heading;
+successful approval has a completion screen, while actual connection still
+depends on the native phone state. The scan screen keeps the full-size QR and
+full security code together and fits the main action in the reviewed desktop
+viewports. Desktop and mobile design-system rules now require guided connection
+steps. Native trust, owner verification and pairing formats are unchanged.
+
+Windows / Node 24.18.0, isolated frontend dependencies/cache/TEMP/TMP:
+`npm run test:unit -- --maxWorkers=2 --reporter=json
+--outputFile=../wizard-unit-results.json` passed 175 tests. `npm run build`
+passed TypeScript and production bundling with the existing 500 kB chunk-size
+warning. Targeted Oxlint, React component review, `git diff --check` and the
+public-data check (including new files) passed. Synthetic headless
+Chromium checks passed the full wizard journey, returning to Scan and requiring
+a fresh comparison, keyboard focus, the Settings shortcut, closing the QR
+dialog, and layouts at 1280×1000 and 1024×768 without horizontal overflow or
+scrolling to find Continue. No browser page errors occurred. These checks use
+the dev-only simulated account/phone preview; real OAuth, Hosted service, native
+owner verification and physical scanning were not exercised. No Android code
+changed in this follow-up; Android checks were not repeated. No installer or APK
+was assembled, installed, signed or released. Physical acceptance and independent
+security review remain pending.
+
+2026-10-15 desktop/phone connection flow (source changes only): a fresh desktop
+opens connection setup in the Phone tab. It guides account sign-in, explicit
+main-computer setup, QR scanning and device approval, then shows the connected
+phone. The add-phone dialog and optional setup guide reuse the same Hosted flow;
+Settings links to Phone instead of presenting a second pairing workflow. Manual
+codes, connection details and device-management data are expandable. Android
+points to Phone and calls fingerprints security codes, while retaining full
+computer/device comparisons and owner verification. No identity, signing,
+pairing format or native trust protocol changed. A late manual request inspection
+can no longer replace a newer reviewed request or its comparison state.
+
+Windows / Node 24.18.0, isolated frontend source/dependencies/cache/temp:
+`npm run test:unit -- --maxWorkers=2 --reporter=json` passed 173 tests;
+`npm run build` passed TypeScript and production bundling, with the 500 kB chunk
+size warning. Initial test startup failed on sandbox temporary-file paths;
+workspace-local TEMP/TMP resolved it. Changed visibility expectations and the
+connected-phone fixture were corrected before the clean full run. A headless
+Chromium check of `/onboarding.html` passed the simulated sign-in → QR → request
+→ full-code confirmation → approval → connected-phone journey, the Settings
+shortcut, closing the QR dialog, and 1280/1024 px widths with no page errors.
+Every account, request and QR in that preview is synthetic; it does not contact
+a Hosted service or exercise native account sign-in or owner verification.
+Android JDK 22 checks in the isolated copy passed `:app:compileDebugKotlin
+:app:testDebugUnitTest :app:lintDebug` with independent/Firebase/push-disabled
+settings and version code 1: 8 JVM tests, lint 0 errors / 234 warnings.
+Oxlint on changed TSX files, the React component review, `git diff --check`
+and the public-data check passed, including the new source files.
+No native desktop installer or APK was assembled, signed, installed or released.
+Physical-device acceptance and independent security review remain pending.
+
+2026-10-15 Android layout rework (source changes only): account and self-hosted
+setup now use matching cards with short descriptions and full-width actions.
+Shared controls use a consistent type scale, sentence-case section headings and
+button rows that stack when labels cannot fit, including at larger font sizes.
+Hosted daily use now focuses on files, texts and calls; account, permissions,
+connection and device details live under Settings. Texts and calls have separate
+icon rows, visible approved-computer scope and expandable privacy/limit details.
+The existing palette, gradient actions, background, permission opt-in and owner
+verification paths are retained. Refreshing a Hosted page keeps its scroll position.
+
+Windows / JDK 22, SDK 37.0, isolated source copy and Gradle cache:
+`:app:compileDebugKotlin :app:testDebugUnitTest :app:lintDebug` passed with
+`-PorionFirebase=false -PorionIndependent=true -PorionPush=false
+-PorionVersionCode=1 --no-configuration-cache`; 8 JVM tests passed and lint
+reported 0 errors, 234 warnings. Initial lint failed on the temporary copy's
+Windows SDK property escaping; it was corrected and lint analysis rerun without
+build-cache reuse. A temporary Robolectric 4.14.1 / API 35 native-layout harness
+passed 6 checks covering 320 dp width, doubled font size, button reflow,
+disclosures, Settings/Back, the self-hosted route and locked-screen navigation.
+Its initial API, SSH service-provider classloader and fixture/lifecycle failures
+were corrected; SSH was excluded only from that UI harness's runtime. Native
+synthetic screen renders were inspected. The harness and its dependencies were
+removed from the validation copy before the final product checks; no product
+dependency was added. Existing generated restic inputs were reused for validation.
+`git diff --check` and `check-public-data.py` passed. No APK was assembled,
+signed or installed; no emulator, physical device, real account or Hosted service
+was used. Physical acceptance and independent security review remain pending.
+
 2026-10-15 device approval without typing codes: a phone or second computer that
 has scanned the main computer's code now also offers its signed request through
 the service (`POST/GET /v1/devices/approval-requests`, bound to the pending

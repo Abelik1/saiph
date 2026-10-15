@@ -72,6 +72,44 @@ The Phone page is the model for the others:
 - **Keyboard.** Ctrl+1 to Ctrl+5 open the phone tabs, Ctrl+N starts a message, Enter sends and
   Shift+Enter adds a line, Esc closes a composer, popover or dialog.
 
+## Connection and setup
+
+The **Phone** tab is the home for connecting a phone, including on first launch.
+An empty Phone page shows connection setup instead of empty feature panels.
+Settings offers a **Connect a phone** shortcut to that same flow. The longer
+setup guide is optional, under Settings → General, for feature choices, tools
+and privacy preferences.
+
+- Use a wizard with one task per screen and a visible Account → Computer → Scan
+  → Approve progress indicator. Sign-in and explicit main-computer setup advance
+  when their native state changes. Show the QR automatically on Scan;
+  **Continue to approval** opens device discovery and full-code confirmation.
+  **Back to scanning** clears the previous request and comparison. Move keyboard
+  focus to the heading when navigating Scan and Approve, and show completion
+  only after approval succeeds.
+  Move to the normal Phone page when the phone connects.
+- Reuse `HostedPhoneSetup` in `PhoneSetup.tsx` for Phone, the add-phone dialog
+  and the optional guide. Keep account settings focused on managing the account.
+- Describe fingerprints as **security codes** in the normal flow. Label the
+  computer's code and the device's code distinctly. Explain that signing in finds
+  the account while comparing codes checks the device keys. Show every group;
+  never silently confirm a match or shorten the code used for approval.
+- Keep manual copying and pasting in labelled disclosures next to the relevant
+  step. They are fallbacks when scanning or request discovery is unavailable,
+  including on older services. Connection details and device-management data
+  belong in expandable settings sections; errors and consent stay visible.
+- Keep a QR within the active connection view. Closing it or leaving that view
+  drops the displayed code and ignores late responses. Server expiry and owner
+  verification remain authoritative. Inspecting a different request clears its
+  confirmation; a late inspection must not replace the current request.
+- Self-hosted Hub invitations are an explicit alternative. Preserve their
+  existing approval and pairing flow. Optional tools and usage-sharing prompts
+  must not interrupt a new user's account connection.
+
+Android instructions point to this Phone flow rather than sending people through
+account settings. These layout rules preserve the current beta's computer and
+phone trust confirmations; changing the trust protocol needs separate review.
+
 ## The strings
 
 Saiph's visual language is a field of strings that ripple like plucked guitar strings
@@ -89,6 +127,11 @@ mark and the selected-tab underline all share it, and all read `--wave-1` (cyan)
 
 ## Android
 
+The [mobile design system](MOBILE_DESIGN_SYSTEM.md) defines the layout, typography,
+copy, setup-choice and accessibility rules for mobile applications. Use it when
+building or updating a phone screen; the Android setup and Hosted screens are its
+reference implementation.
+
 The phone app (`android/app/src/main/java/com/orionmini/mobile/Ui.kt`) uses the same roles in
 `Palette`, with the same values in `res/values/colors.xml` for the widgets and the window theme.
 `SaiphPaletteTest` fails if the two drift, or if a widget states a colour instead of reading one.
@@ -101,8 +144,9 @@ The phone app (`android/app/src/main/java/com/orionmini/mobile/Ui.kt`) uses the 
 - **Layout.** A header with Back (on inner screens), the title, and status and Settings on the
   right. On the home screen, Photo, Sketch, Remote and Hotspot sit in a dock fixed at the bottom,
   so a long inbox never pushes them out of reach. Devices come before the inbox, and recent
-  decisions show three until asked for more. The Hosted screen leads with Send and receive and
-  Texts and calls; setup, permissions and the connection switch follow.
+  decisions show three until asked for more. The Hosted daily screen leads with Files and
+  photos and Texts and calls. Account, permissions, connection controls and device details
+  live under Settings, reachable from the header.
 - **The strings** are a static `StringField` behind every screen, built once per size and never
   animated, to spare the battery.
 

@@ -51,10 +51,10 @@ describe("Saiph Hosted phone on the Phone page", () => {
     expect(await screen.findByRole("button", { name: "Find my phone" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Use phone as webcam" })).toBeDisabled();
   });
-  it("explains how a hosted phone appears before it shares texts or calls", () => {
+  it("shows connection setup before a hosted phone has joined", () => {
     render(<Phone state={hostedState(null)} client={client()} />);
-    expect(screen.getByText(/turn on Texts and calls in Saiph Hosted on the phone/)).toBeVisible();
-    expect(screen.getByText("Pair once to get started")).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Connect your phone" })).toBeVisible();
+    expect(screen.queryByRole("tab", { name: /Messages/ })).toBeNull();
   });
   it("keeps saved texts while offline and names Saiph Hosted as the connection", () => {
     render(<Phone state={hostedState({ online: false })} client={client()} />);

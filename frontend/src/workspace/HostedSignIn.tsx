@@ -14,7 +14,7 @@ export function HostedSignIn({ client, hosted }: { client: Client; hosted: Hoste
   return <>
     <p>{signingIn ? "Finish signing in in your browser, then return to Saiph." : "Use the same Saiph account on your phone and computer."}</p>
     {!signingIn && !hosted.identity && <p className="muted">New to the beta? Activate your invitation code on your Saiph account page first, with the account you sign in with here.</p>}
-    <Action disabled={!hosted.configured || signingIn || hosted.self_hosted_paired}
+    <Action variant="default" disabled={!hosted.configured || signingIn || hosted.self_hosted_paired}
       run={() => signInToSaiph(client, hosted)}>{signingIn ? "Waiting for sign-in…" : "Sign in to Saiph"}</Action>
   </>;
 }

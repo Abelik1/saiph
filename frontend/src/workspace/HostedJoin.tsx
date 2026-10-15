@@ -19,12 +19,12 @@ export function HostedJoin({ client, waiting }: { client: Client; waiting: boole
   const [inspected, setInspected] = useState<Inspected | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const [request, setRequest] = useState<RequestCode | null>(null);
-  const muted = "m-0 text-[12.5px] leading-relaxed text-muted-foreground";
+  const muted = "m-0 text-sm leading-relaxed text-muted-foreground";
 
   if (waiting || request) return <div className="grid gap-3" aria-label="Waiting for your main computer">
     <p className={muted}>
-      Open Saiph on your main computer: this computer appears there by itself under Settings → Saiph account.
-      Check that every group of the fingerprint it shows matches the one below before approving. If it does not appear,
+      Open Phone → Connect a phone on your main computer: this computer appears in the approval list there.
+      Check that every group of the security code it shows matches the one below before approving. If it does not appear,
       paste the request code there instead.
     </p>
     {request ? <>
@@ -42,8 +42,8 @@ export function HostedJoin({ client, waiting }: { client: Client; waiting: boole
 
   return <div className="grid gap-3" aria-label="Join as another computer">
     <p className={muted}>
-      Already using Saiph Hosted on another computer? On that main computer, open Settings → Saiph Hosted, choose
-      <b className="text-foreground"> Show root approval code</b> and paste the code here. Sign in here with the same account.
+      On your main computer, open Phone → Connect a phone. Under its QR code, choose
+      <b className="text-foreground"> Can't scan? Copy a code instead</b> and paste the computer code here. Sign in here with the same account.
     </p>
     <Field label="Main computer's code" htmlFor={id + "-root"}>
       <Textarea id={id + "-root"} value={code} rows={3} spellCheck={false}
