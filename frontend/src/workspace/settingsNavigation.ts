@@ -4,6 +4,8 @@ import { createContext, useContext, useState } from "react";
 export type SettingsTarget = "Connections" | "Devices";
 export const SettingsNavigation = createContext<{
   openSettings?: (target: SettingsTarget) => void;
+  connectPhone?: () => void;
+  phoneSetupRequest?: number;
   request?: { section: string; id: number };
 }>({});
 export const useSettingsNavigation = () => useContext(SettingsNavigation);

@@ -377,11 +377,10 @@ your user folder (`C:\Users\YourName`) unless you changed folders with `cd`.
 
 ### 6.2 Open it in Saiph
 
-1. Double-click the `.orion-enrollment` file. Or, in Saiph's setup guide (it opens
-   on first run, or from **Settings → General → Setup guide**), choose
-   **I self-host my own Hub**, click **Continue**, then **Open server invitation**
-   and choose the file. Saiph preselects **Saiph account**; self-hosting is
-   always your explicit choice.
+1. Double-click the `.orion-enrollment` file. Or open Saiph's **Phone** tab,
+   choose **Use my own Hub instead**, then **Open server invitation** and choose
+   the file. The optional setup guide remains under **Settings → General**.
+   Saiph defaults to a Saiph account; self-hosting is always your explicit choice.
 2. Saiph shows *"Your invitation is ready. Approve it to pair this computer."*
    Click **Use invitation** only if this is your own server's invitation.
 3. If Tailscale isn't running on this computer yet, click

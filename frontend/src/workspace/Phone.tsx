@@ -7,6 +7,7 @@ import { HubSuggestions } from "./HubInbox";
 import { PhoneTabs } from "./PhoneTabs";
 import { PhonePanel } from "./PhonePanel";
 import { Enrollment } from "./Enrollment";
+import { HostedPhoneSetup, PhoneSetup } from "./PhoneSetup";
 import { PhoneCamera } from "./PhoneCamera";
 import { PhoneMicrophone } from "./PhoneMicrophone";
 import { PairingQr, validQr, type PairingQrCode } from "./PairingQr";
@@ -159,7 +160,8 @@ export function Phone({
   const hostedOn = state.hosted?.enabled === true;
   const [selected, setSelected] = useState("");
   const phone = phones.find((d) => d.id === selected) || phones[0];
-  const { openSettings } = useSettingsNavigation();
+  const hasPhone = Boolean(phone);
+  const { openSettings, phoneSetupRequest = 0 } = useSettingsNavigation();
   const canAct = Boolean(phone?.online && phone.capabilities.includes("notifications"));
   const hub = state.settings?.hub;
   const hubIdentity = JSON.stringify([hub?.paired, hub?.base_url, hub?.device_id]);
@@ -175,6 +177,16 @@ export function Phone({
   const [pairing, setPairing] = useState<{ qr: PairingQrCode; shownAt: number; known: string[] | null; hub: string } | null>(null);
   const [pairingNotice, setPairingNotice] = useState("");
   const [adding, setAdding] = useState(false);
+  const handledSetup = useRef(0);
+  useEffect(() => {
+    if (handledSetup.current !== phoneSetupRequest) {
+      handledSetup.current = phoneSetupRequest;
+      setAdding(hasPhone);
+    }
+  }, [phoneSetupRequest, hasPhone]);
+  useEffect(() => {
+    if (!active) { setAdding(false); setPairing(null); }
+  }, [active]);
   if (pairing && (!hub?.paired || pairing.hub !== hubIdentity || (info &&
       (pairing.known === null || info.devices.some((d) => !pairing.known?.includes(d.id)))))) {
     setPairing(null);
@@ -237,6 +249,7 @@ export function Phone({
   const cameraLive = camera && Boolean(state.camera?.running);
   const microphoneLive = Boolean(state.microphone?.running);
   const quick = phone && (phone.capabilities.includes("ringer") || state.phone_features?.media?.some((row) => row.device_id === phone.id && row.sessions.length) || state.dnd?.enabled);
+  if (!phone && !hub?.paired) return active ? <PhoneSetup state={state} client={client} /> : null;
   return <div className="flex min-h-[560px] flex-col gap-5 lg:h-[calc(100dvh-168px)]">
     <header className="flex flex-wrap items-center gap-x-5 gap-y-3" aria-label="Device">
       <span aria-hidden="true" className="flex h-[52px] w-8 shrink-0 items-center justify-center rounded-[9px] border border-secondary-border text-wave-2 [background-image:linear-gradient(155deg,color-mix(in_srgb,var(--wave-1)_24%,var(--card)),var(--card)_65%,color-mix(in_srgb,var(--wave-3)_22%,var(--card)))] [&_svg]:size-4"><Smartphone strokeWidth={1.5} /></span>
@@ -255,13 +268,14 @@ export function Phone({
           <PopoverTrigger asChild><Button variant="secondary" size="sm" title="Use your phone as this computer's microphone"><Mic />Microphone</Button></PopoverTrigger>
           <PopoverContent className="w-80 p-0"><PhoneMicrophone microphone={state.microphone} deviceId={phone?.online && !phone.hosted ? phone.id : undefined} deviceName={phone?.name} client={client} /></PopoverContent>
         </Popover>}
-        {state.settings?.hub?.paired && <Dialog open={adding} onOpenChange={addDevice}>
-          <DialogTrigger asChild><Button variant="tonal" size="sm"><Plus />Add a device</Button></DialogTrigger>
-          <DialogContent>
+        {(hub?.paired || state.hosted?.available) && <Dialog open={adding} onOpenChange={addDevice}>
+          <DialogTrigger asChild><Button variant="tonal" size="sm"><Plus />{hub?.paired ? "Add a device" : "Connect a phone"}</Button></DialogTrigger>
+          <DialogContent className={hub?.paired ? undefined : "w-[min(640px,calc(100vw-32px))]"}>
             <DialogHeader>
-              <DialogTitle>Add a device</DialogTitle>
-              <DialogDescription>Pair another phone or computer with this one.</DialogDescription>
+              <DialogTitle>{hub?.paired ? "Add a device" : "Connect a phone"}</DialogTitle>
+              <DialogDescription>{hub?.paired ? "Pair another phone or computer with this one." : "Sign in on your phone, scan the code and approve it here."}</DialogDescription>
             </DialogHeader>
+            {!hub?.paired ? state.hosted && <HostedPhoneSetup hosted={state.hosted} client={client} onDone={() => setAdding(false)} /> : <>
             {pairing && <PairingQr qr={pairing.qr} shownAt={pairing.shownAt} onExpire={expirePairing} onClose={() => setPairing(null)} />}
             <div className="grid gap-3" role="group" aria-label="Add a device">
                   {pairingNotice && <p className="m-0 rounded-[10px] bg-muted px-3 py-2.5 text-[13px]" role="status">{pairingNotice}</p>}
@@ -272,6 +286,7 @@ export function Phone({
                   <p className="m-0 text-[12.5px] leading-relaxed text-muted-foreground">A QR works once and only for a few minutes. Use an invitation file for a device that can't scan.</p>
                   {state.user_verification === "unavailable" && <p className="m-0 text-[12.5px] text-muted-foreground">Set up Windows Hello so adding a device needs your face, fingerprint or PIN.</p>}
             </div>
+            </>}
           </DialogContent>
         </Dialog>}
         {openSettings && <Button variant="ghost" size="icon-sm" aria-label="Device settings" title="Device settings" onClick={() => openSettings("Devices")}><Settings2 /></Button>}
@@ -279,6 +294,11 @@ export function Phone({
     </header>
     {/* Server invitations are for self-hosting; a Saiph account never sees them. */}
     {(state.enrollment?.ready || state.setup?.mode === "hub") && <Enrollment state={state} client={client} />}
+    {!phone && hub?.paired && <Card className="gap-3 p-6">
+      <h2 className="m-0 text-xl font-semibold">Connect your phone</h2>
+      <p className="m-0 text-muted-foreground">Open Saiph on your phone and scan a pairing QR from this computer.</p>
+      <div><Button variant="default" onClick={() => addDevice(true)}><QrCode />Connect a phone</Button></div>
+    </Card>}
     <div className="grid min-h-0 flex-1 grid-cols-[300px_minmax(0,1fr)] gap-5 max-[1100px]:grid-cols-[272px_minmax(0,1fr)]">
       <aside className="flex min-h-0 flex-col gap-4" aria-label="Phone status and notifications">
         {phone && !phone.online && <p className="m-0 rounded-[12px] border border-border bg-card/90 px-4 py-3 text-[12.5px] leading-relaxed text-muted-foreground" role="status">

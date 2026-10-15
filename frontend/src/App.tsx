@@ -106,6 +106,7 @@ function Screens({ providedClient }: { providedClient?: Client }) {
   const [page, setPage] = useState<Page>("Phone");
   const [error, setError] = useState("");
   const [guide, setGuide] = useState(false);
+  const [phoneSetupRequest, setPhoneSetupRequest] = useState(0);
   const scroll = useRef<HTMLElement>(null);
   const positions = useRef<Partial<Record<Page, number>>>({});
   const [settingsRequest, setSettingsRequest] = useState<{
@@ -189,6 +190,11 @@ function Screens({ providedClient }: { providedClient?: Client }) {
     [hasWorkspace, navigate],
   );
   const opening = !state || !client;
+  const connectPhone = useCallback(() => {
+    setPhoneSetupRequest(current => current + 1);
+    positions.current.Phone = 0;
+    navigate("Phone");
+  }, [navigate]);
   // While connecting, the background strings curl around the mark.
   useEffect(() => {
     if (opening && !error)
@@ -206,19 +212,19 @@ function Screens({ providedClient }: { providedClient?: Client }) {
         )}
       </div>
     );
-  // First run, or re-run from Settings: the setup guide takes the whole window.
-  if (guide || state.setup?.show) return <div className="workspace-shell link-shell setup-shell"><main className="page-content">
+  // First connection lives in Phone. The longer guide is available for optional setup.
+  if (guide) return <div className="workspace-shell link-shell setup-shell"><main className="page-content">
     <SetupWizard state={state} client={client} close={() => { setGuide(false); void refresh(); }} /></main></div>;
   const workspacePage =
     workspacePages.includes(page) || (page === "Settings" && hasWorkspace);
   const status = connection(state);
   return (
     <SettingsNavigation.Provider
-      value={{ openSettings, request: settingsRequest }}
+      value={{ openSettings, request: settingsRequest, connectPhone, phoneSetupRequest }}
     >
       <CallBanner.Provider value={true}>
       <div className="workspace-shell link-shell relative z-[1] grid h-dvh min-h-0 grid-rows-[64px_auto_minmax(0,1fr)_28px] bg-transparent">
-        {state.usage?.available && state.usage.consent === null && <UsagePrompt client={client} />}
+        {(!state.setup || state.setup.completed || state.phone?.devices.some(device => device.hosted || device.capabilities.includes("battery"))) && state.usage?.available && state.usage.consent === null && <UsagePrompt client={client} />}
         <header className="link-header relative z-20 flex min-h-0 items-center gap-10 border-b border-border bg-chrome px-8 max-[1100px]:gap-6 max-[1100px]:px-6">
           <div className="flex shrink-0 items-center gap-2.5">
             <span className="grid size-9 place-items-center rounded-[11px] border border-secondary-border bg-[radial-gradient(circle_at_50%_45%,color-mix(in_srgb,var(--wave-1)_16%,transparent),var(--background)_70%)]">

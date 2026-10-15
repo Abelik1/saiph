@@ -138,7 +138,7 @@ supplied checksum), and there has been no independent security review yet.
 | --- | --- |
 | [`src/`](src/), [`frontend/`](frontend/) | The desktop app: a Python service with a React interface ([design system](docs/DESKTOP_DESIGN_SYSTEM.md)) |
 | [`hub/`](hub/) | The Saiph Hub, for self-hosting, and the Hosted service |
-| [`android/`](android/README.MD) | The Android app, a fork of [Sefirah Android](https://github.com/shrimqy/Sefirah-Android) with its GPL licence and upstream credits retained |
+| [`android/`](android/README.MD) | The Android app, a fork of [Sefirah Android](https://github.com/shrimqy/Sefirah-Android) with its GPL licence and upstream credits retained ([mobile design system](docs/MOBILE_DESIGN_SYSTEM.md)) |
 | [`sdk/`](sdk/) | A small Python client that lets your own scripts and tools report status to the desktop app ([plugins](docs/PLUGINS.md)) |
 | [`website/`](website/), [`account-web/`](account-web/) | usesaiph.com and the account site |
 

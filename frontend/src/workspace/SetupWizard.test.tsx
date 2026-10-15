@@ -64,8 +64,9 @@ describe("Setup guide", () => {
     // Setting up moves straight on to the phone and shows this computer's code without another click.
     expect(await screen.findByText("Add your Android phone")).toBeVisible();
     await waitFor(() => expect(call).toHaveBeenCalledWith("hosted.root_code"));
+    fireEvent.click(screen.getByRole("button", { name: "Continue to approval" }));
     expect(screen.getByText(/Waiting for your device/)).toBeVisible();  // Offered requests appear by themselves.
-    expect(screen.getByText("Paste a request code instead")).toBeVisible();
+    expect(screen.getByText("My device hasn't appeared")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Skip for now" }));
     expect(screen.getByLabelText(/Share the clipboard/)).toBeChecked();
     expect(screen.queryByLabelText(/Phone remote/)).toBeNull();
@@ -126,10 +127,16 @@ describe("Setup guide", () => {
     expect(screen.queryByLabelText("Device request code")).toBeNull();
     expect(screen.getByRole("button", { name: "Skip for now" })).toBeVisible();
   });
-  it("appears on first run, not for computers that are already connected, and can be skipped", async () => {
+  it("opens first connection in Phone and keeps the optional guide reachable from Settings", async () => {
     const call = vi.fn(async (method: string) => method === "state" ? hubState(false) : {});
     render(<App providedClient={{ call, subscribe: () => () => {} } as unknown as Client} />);
-    expect(await screen.findByRole("dialog", { name: "Saiph setup" })).toBeVisible();
+    expect(await screen.findByRole("heading", { name: "Connect your phone" })).toBeVisible();
+    expect(screen.queryByRole("dialog", { name: "Saiph setup" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Sign in to Saiph" })).toBeEnabled();
+    expect(call.mock.calls.map(([method]) => method)).toEqual(["state"]);
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "Run the setup guide" }));
+    expect(screen.getByRole("dialog", { name: "Saiph setup" })).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Set up later" }));
     await waitFor(() => expect(call).toHaveBeenCalledWith("settings.save", { setup: { completed: true } }));
   });
