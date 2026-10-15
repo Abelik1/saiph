@@ -40,14 +40,26 @@ export default async function Withdraw({ searchParams }: { searchParams: Promise
     <div className="page-head">
       <div>
         <p className="eyebrow">Saiph Hosted subscription</p>
-        <h1>{status !== "unavailable" && status.state === "withdrawn" ? "Withdrawal received." : "Withdraw from contract."}</h1>
+        <h1>{status !== "unavailable" && status.state === "withdrawn" ? (status.complete ? "Withdrawal received." : "Withdrawal received, still processing.") : "Withdraw from contract."}</h1>
         <p className="lede">Within 14 days of subscribing you can withdraw without giving a reason and get a full refund.</p>
       </div>
       <SignOut />
     </div>
     {status === "unavailable" ? <Notice tone="warn" title="We couldn't check your subscription just now.">
       Please try again shortly, or write to support@usesaiph.com and we will process your withdrawal.
-    </Notice> : status.state === "withdrawn" ? <section className="card" aria-labelledby="withdraw-title">
+    </Notice> : status.state === "withdrawn" && !status.complete ? <section className="card" aria-labelledby="withdraw-title">
+      <h2 id="withdraw-title">We have your withdrawal, but it isn't finished yet.</h2>
+      <dl className="facts">
+        <div><dt>Received</dt><dd>{when(status.at, true)}</dd></div>
+        <div><dt>Refunded so far</dt><dd>{money(status.refunded, status.currency)}</dd></div>
+        <div><dt>Still to refund</dt><dd>{money(status.outstanding, status.currency)}</dd></div>
+      </dl>
+      <p>Part of the cancellation or refund could not be completed just now. Your withdrawal still counts from the time above. Press the button to finish it, or write to support@usesaiph.com and we will.</p>
+      <form method="post" action="/api/billing/withdraw" className="actions">
+        <input type="hidden" name="confirm" value="withdraw" />
+        <button type="submit">Finish withdrawal</button>
+      </form>
+    </section> : status.state === "withdrawn" ? <section className="card" aria-labelledby="withdraw-title">
       <h2 id="withdraw-title">{done ? "Your withdrawal is confirmed." : "You have withdrawn from this subscription."}</h2>
       <dl className="facts">
         <div><dt>Received</dt><dd>{when(status.at, true)}</dd></div>

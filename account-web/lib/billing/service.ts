@@ -162,27 +162,32 @@ export type WithdrawalStatus=
   {state:"none"}|
   {state:"eligible";subscriptionId:string;startedAt:number;deadline:number;refund:number;currency:string}|
   {state:"expired";deadline:number}|
-  {state:"withdrawn";at:number;refunded:number;currency:string};
-async function withdrawalFacts(stripe:Stripe,config:BillingConfig,mapping:Mapping,now:number):Promise<{status:WithdrawalStatus;charges:Stripe.Charge[]}> {
+  // complete=false: received and recorded, but the cancellation or a refund has
+  // not finished yet (for example a provider timeout); confirming again resumes it.
+  {state:"withdrawn";at:number;refunded:number;outstanding:number;currency:string;complete:boolean};
+type WithdrawalFacts={status:WithdrawalStatus;subscription:Stripe.Subscription|null;outstanding:Stripe.Charge[]};
+async function withdrawalFacts(stripe:Stripe,config:BillingConfig,mapping:Mapping,now:number):Promise<WithdrawalFacts> {
   await assertBinding(stripe,config,mapping);
   const subscriptions=await stripe.subscriptions.list({customer:mapping.customerId,status:"all",limit:100});
   if (subscriptions.has_more) throw new Error("Subscription reconciliation required");
   const latest=subscriptions.data.filter(s=>s.livemode===config.livemode && validMetadata(s.metadata,config,mapping.subject))
     .sort((a,b)=>b.created-a.created)[0];
-  if (!latest) return {status:{state:"none"},charges:[]};
+  if (!latest) return {status:{state:"none"},subscription:null,outstanding:[]};
   const deadline=latest.start_date+WITHDRAWAL_SECONDS;
   const listed=await stripe.charges.list({customer:mapping.customerId,created:{gte:latest.start_date},limit:100});
   if (listed.has_more) throw new Error("Charge reconciliation required");
   const charges=listed.data.filter(c=>c.livemode===config.livemode && c.paid && c.status==="succeeded");
+  const outstanding=charges.filter(c=>c.amount_refunded<c.amount);
+  const remaining=outstanding.reduce((sum,c)=>sum+(c.amount-c.amount_refunded),0);
   const currency=charges[0]?.currency ?? "eur";
+  const ended=["canceled","incomplete_expired"].includes(latest.status);
   const withdrawnAt=Number(latest.metadata?.saiph_withdrawal_at);
   if (Number.isSafeInteger(withdrawnAt) && withdrawnAt>0)
-    return {status:{state:"withdrawn",at:withdrawnAt,refunded:charges.reduce((sum,c)=>sum+c.amount_refunded,0),currency},charges};
-  if (["canceled","incomplete_expired"].includes(latest.status)) return {status:{state:"none"},charges:[]};
-  if (now>=deadline) return {status:{state:"expired",deadline},charges:[]};
-  const refundable=charges.filter(c=>!c.refunded);
-  return {status:{state:"eligible",subscriptionId:latest.id,startedAt:latest.start_date,deadline,
-    refund:refundable.reduce((sum,c)=>sum+(c.amount-c.amount_refunded),0),currency},charges:refundable};
+    return {subscription:latest,outstanding,status:{state:"withdrawn",at:withdrawnAt,currency,outstanding:remaining,
+      refunded:charges.reduce((sum,c)=>sum+c.amount_refunded,0),complete:ended && outstanding.length===0}};
+  if (ended) return {status:{state:"none"},subscription:latest,outstanding:[]};
+  if (now>=deadline) return {status:{state:"expired",deadline},subscription:latest,outstanding:[]};
+  return {subscription:latest,outstanding,status:{state:"eligible",subscriptionId:latest.id,startedAt:latest.start_date,deadline,refund:remaining,currency}};
 }
 /** What the withdrawal page shows. Reads Stripe; changes nothing. */
 export async function withdrawalStatus(stripe:Stripe,store:BillingStore,config:BillingConfig,subject:string,now=Math.floor(Date.now()/1000)) {
@@ -190,22 +195,29 @@ export async function withdrawalStatus(stripe:Stripe,store:BillingStore,config:B
   return mapping ? (await withdrawalFacts(stripe,config,mapping,now)).status : {state:"none"} as WithdrawalStatus;
 }
 /**
- * Withdraw within 14 days: mark, end the subscription now and refund every
- * charge since it started in full (owner policy: no deduction for use).
- * Hosted access ends through the resulting signed webhook, as for any
- * cancellation. Repeat-safe: refunds use per-charge idempotency keys.
+ * Withdraw within 14 days: record the time received, end the subscription now
+ * and refund every charge since it started in full (owner policy: no deduction
+ * for use). Hosted access ends through the resulting signed webhook, as for any
+ * cancellation. Resumable: once recorded, confirming again (even after the
+ * deadline) finishes a cancellation or refund that failed part-way, and
+ * per-charge idempotency keys mean no charge is ever refunded twice.
  */
 export async function withdraw(stripe:Stripe,store:BillingStore,config:BillingConfig,subject:string,now=Math.floor(Date.now()/1000)) {
   return store.withCustomer(subject,async(mapping)=>{
-    const {status,charges}=await withdrawalFacts(stripe,config,mapping,now);
-    if (status.state!=="eligible") throw new WithdrawalUnavailable("No contract to withdraw from");
-    await stripe.subscriptions.update(status.subscriptionId,{metadata:{saiph_withdrawal_at:String(now)}});
-    await stripe.subscriptions.cancel(status.subscriptionId,{invoice_now:false,prorate:false,
-      cancellation_details:{comment:"Withdrawal within 14 days (EU right of withdrawal)"}});
-    for (const charge of charges) {
-      await stripe.refunds.create({charge:charge.id,reason:"requested_by_customer",metadata:{saiph_withdrawal:"1"}},
-        {idempotencyKey:WITHDRAWAL_REFUND_PREFIX+charge.id});
+    const {status,subscription,outstanding}=await withdrawalFacts(stripe,config,mapping,now);
+    if (!subscription || !(status.state==="eligible" || status.state==="withdrawn" && !status.complete))
+      throw new WithdrawalUnavailable("No contract to withdraw from");
+    const at=status.state==="withdrawn" ? status.at : now;
+    if (status.state==="eligible") await stripe.subscriptions.update(subscription.id,{metadata:{saiph_withdrawal_at:String(at)}});
+    if (!["canceled","incomplete_expired"].includes(subscription.status))
+      await stripe.subscriptions.cancel(subscription.id,{invoice_now:false,prorate:false,
+        cancellation_details:{comment:"Withdrawal within 14 days (EU right of withdrawal)"}});
+    let refunded=0;
+    for (const charge of outstanding) {
+      await stripe.refunds.create({charge:charge.id,amount:charge.amount-charge.amount_refunded,reason:"requested_by_customer",metadata:{saiph_withdrawal:"1"}},
+        {idempotencyKey:WITHDRAWAL_REFUND_PREFIX+charge.id+"-"+charge.amount_refunded});
+      refunded+=charge.amount-charge.amount_refunded;
     }
-    return {at:now,refunded:status.refund,currency:status.currency};
+    return {at,refunded,currency:outstanding[0]?.currency ?? "eur"};
   });
 }

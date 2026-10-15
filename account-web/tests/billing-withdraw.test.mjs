@@ -33,7 +33,7 @@ function fixture({startedAgo=86400,status="active"}={}) {
     },
     charges:{list:async(params)=>{calls.chargeQuery=params;return {has_more:false,data:charges};}},
     refunds:{create:async(params,options)=>{calls.refunds.push({params,options});
-      const charge=charges.find(c=>c.id===params.charge);charge.amount_refunded=charge.amount;charge.refunded=true;return {id:"re_"+params.charge};}},
+      const charge=charges.find(c=>c.id===params.charge);charge.amount_refunded+=params.amount;charge.refunded=charge.amount_refunded>=charge.amount;return {id:"re_"+params.charge};}},
     prices:{retrieve:async(id)=>({id,active:true,livemode:false,currency:"eur",unit_amount:399,type:"recurring",recurring:{interval:"month",interval_count:1},product:{id:config.productId,active:true,livemode:false}})},
     checkout:{sessions:{list:async()=>({has_more:false,data:[]}),create:async(params,options)=>{calls.checkout.push({params,options});
       return {...params,id:"cs_test_synthetic",livemode:false,url:"https://checkout.stripe.com/c/pay/cs_test_synthetic"};}}},
@@ -58,11 +58,11 @@ test("within 14 days: one confirmation cancels at once and refunds every paid ch
   assert.equal(response.headers.get("location"),config.origin+"/account/withdraw?done=1");
   assert.equal(f.calls.update[0].params.metadata.saiph_withdrawal_at,String(NOW));
   assert.deepEqual(f.calls.cancel[0].params,{invoice_now:false,prorate:false,cancellation_details:{comment:"Withdrawal within 14 days (EU right of withdrawal)"}});
-  assert.deepEqual(f.calls.refunds.map(r=>[r.params.charge,r.params.reason,r.options.idempotencyKey]),
-    [["ch_first","requested_by_customer","saiph-withdrawal-v1-ch_first"],["ch_second","requested_by_customer","saiph-withdrawal-v1-ch_second"]]);
+  assert.deepEqual(f.calls.refunds.map(r=>[r.params.charge,r.params.amount,r.params.reason,r.options.idempotencyKey]),
+    [["ch_first",399,"requested_by_customer","saiph-withdrawal-v1-ch_first-0"],["ch_second",399,"requested_by_customer","saiph-withdrawal-v1-ch_second-0"]]);
   assert.equal(f.calls.chargeQuery.created.gte,NOW-86400,"only charges since the subscription started");
   const after=await withdrawalStatus(f.stripe,f.store,config,owner,NOW+60);
-  assert.deepEqual(after,{state:"withdrawn",at:NOW,refunded:798,currency:"eur"});
+  assert.deepEqual(after,{state:"withdrawn",at:NOW,refunded:798,outstanding:0,currency:"eur",complete:true});
   // A second click is refused and refunds nothing more.
   assert.equal((await withdrawAction(confirm(),f.deps)).status,409);
   assert.equal(f.calls.refunds.length,2);
@@ -117,4 +117,41 @@ test("checkout shows the beta notice above the pay button",async()=>{
   assert.match(BETA_CHECKOUT_NOTICE,/beta/);assert.match(BETA_CHECKOUT_NOTICE,/14 days/);
   assert.ok(BETA_CHECKOUT_NOTICE.length<=1200,"Stripe's limit for custom text");
   assert.match(f.calls.checkout[0].options.idempotencyKey,/^saiph-checkout-v3-/);
+});
+
+test("a withdrawal interrupted part-way is shown as unfinished and a retry completes it without refunding twice",async(t)=>{
+  t.mock.timers.enable({apis:["Date"],now:NOW*1000});
+  const f=fixture();
+  const create=f.stripe.refunds.create;let failSecond=true;
+  f.stripe.refunds.create=async(params,options)=>{
+    if (params.charge==="ch_second" && failSecond) {failSecond=false;throw new Error("timeout");}
+    return create(params,options);
+  };
+  assert.equal((await withdrawAction(confirm(),f.deps)).status,503);
+  assert.equal(f.calls.cancel.length,1);
+  const half=await withdrawalStatus(f.stripe,f.store,config,owner,NOW+60);
+  assert.deepEqual(half,{state:"withdrawn",at:NOW,refunded:399,outstanding:399,currency:"eur",complete:false},
+    "not reported as finished while money is still owed");
+  // The retry may come after the 14 days: the withdrawal was received in time.
+  t.mock.timers.setTime((NOW+WITHDRAWAL_SECONDS+3600)*1000);
+  assert.equal((await withdrawAction(confirm(),f.deps)).status,303);
+  assert.deepEqual(f.calls.refunds.map(r=>r.params.charge),["ch_first","ch_second"],"ch_first is not refunded again");
+  assert.equal(f.calls.cancel.length,1,"an already cancelled subscription is not cancelled again");
+  assert.equal(f.calls.update.length,1,"the received time is recorded once");
+  assert.deepEqual(await withdrawalStatus(f.stripe,f.store,config,owner,NOW+WITHDRAWAL_SECONDS+7200),
+    {state:"withdrawn",at:NOW,refunded:798,outstanding:0,currency:"eur",complete:true});
+  assert.equal((await withdrawAction(confirm(),f.deps)).status,409,"nothing left to do");
+});
+
+test("a cancellation failure after recording is also resumed",async(t)=>{
+  t.mock.timers.enable({apis:["Date"],now:NOW*1000});
+  const f=fixture();
+  const cancel=f.stripe.subscriptions.cancel;let fail=true;
+  f.stripe.subscriptions.cancel=async(id,params)=>{if(fail){fail=false;throw new Error("timeout");}return cancel(id,params);};
+  assert.equal((await withdrawAction(confirm(),f.deps)).status,503);
+  assert.equal(f.calls.refunds.length,0);
+  assert.equal((await withdrawalStatus(f.stripe,f.store,config,owner,NOW+60)).complete,false);
+  assert.equal((await withdrawAction(confirm(),f.deps)).status,303);
+  assert.equal(f.sub.status,"canceled");
+  assert.equal(f.calls.refunds.length,2);
 });
