@@ -59,6 +59,8 @@ describe("Hosted settings on a joined computer", () => {
     expect(screen.queryByLabelText("Device request code")).toBeNull();
     expect(screen.queryByRole("button", { name: /Revoke/ })).toBeNull();
     expect(screen.queryByRole("button", { name: "Show root approval code" })).toBeNull();
+    expect(screen.getByText(/joined your account as another computer/)).not.toBeVisible();
+    fireEvent.click(screen.getByText("Connection details"));
     expect(screen.getByText(/joined your account as another computer/)).toBeVisible();
     expect(screen.getByRole("option", { name: "Main computer" })).toBeInTheDocument();
     expect(screen.queryByRole("option", { name: "This computer" })).toBeNull();
@@ -67,7 +69,7 @@ describe("Hosted settings on a joined computer", () => {
     const fresh: HostedState = { ...member, identity: false, role: null, roster: null, status: "setup" };
     render(<HostedSettings hosted={fresh} client={client(vi.fn())} />);
     expect(screen.getByText("Join as another computer")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Set up this computer as root" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Set up this computer" })).toBeVisible();
   });
   it("shows the waiting state while the main computer has not approved yet", () => {
     render(<HostedSettings hosted={{ ...member, status: "awaiting_approval", roster: null }} client={client(vi.fn())} />);

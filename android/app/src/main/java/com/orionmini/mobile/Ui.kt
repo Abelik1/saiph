@@ -73,6 +73,14 @@ object Palette {
 /** What a button is for; each has one look across the app. */
 enum class Tone { PRIMARY, SECONDARY, TONAL, DANGER }
 
+/** A small, shared type scale; explanatory text stays as readable as the controls. */
+object UiType {
+    const val SCREEN = 26f
+    const val TITLE = 18f
+    const val BODY = 16f
+    const val META = 14f
+}
+
 fun Context.dp(value: Int) = (value * resources.displayMetrics.density).toInt()
 
 fun Context.outline(fill: Int, stroke: Int, radius: Int = 12): GradientDrawable =
@@ -85,27 +93,38 @@ fun Context.gradientFill(radius: Int = 999): GradientDrawable =
 
 private fun Context.pressable(shape: Drawable, ripple: Int = 0x33FFFFFF) = RippleDrawable(ColorStateList.valueOf(ripple), shape, null)
 
-fun Context.text(value: String, size: Float = 14f, color: Int = Palette.TEXT, bold: Boolean = false) = TextView(this).apply {
-    text = value; textSize = size; setTextColor(color); setLineSpacing(0f, 1.15f)
-    if (bold) setTypeface(typeface, Typeface.BOLD)
+fun Context.text(value: String, size: Float = UiType.BODY, color: Int = Palette.TEXT, bold: Boolean = false) = TextView(this).apply {
+    text = value; textSize = size; setTextColor(color); setLineSpacing(0f, 1.2f)
+    typeface = Typeface.create("sans-serif", if (bold) Typeface.BOLD else Typeface.NORMAL)
 }
 
 fun Context.eyebrow(value: String) = text(value.uppercase(), 12f, Palette.EYEBROW, true).apply { letterSpacing = 0.08f }
 
-fun Context.heading(value: String) = text(value, 26f, Palette.TEXT, true).apply { letterSpacing = -0.02f }
+fun Context.heading(value: String) = text(value, UiType.SCREEN, Palette.TEXT, true).apply {
+    letterSpacing = -0.02f; androidx.core.view.ViewCompat.setAccessibilityHeading(this, true)
+}
 
-fun Context.section(value: String) = eyebrow(value).apply { setPadding(dp(4), dp(22), 0, dp(8)) }
+fun Context.section(value: String) = text(value, UiType.TITLE, bold = true).apply {
+    setPadding(dp(2), dp(20), 0, dp(10)); androidx.core.view.ViewCompat.setAccessibilityHeading(this, true)
+}
+
+fun Context.cardTitle(value: String) = text(value, UiType.TITLE, bold = true).apply {
+    setPadding(0, 0, 0, dp(8)); androidx.core.view.ViewCompat.setAccessibilityHeading(this, true)
+}
+
+fun Context.body(value: String) = text(value, UiType.BODY, Palette.MUTED)
 
 /**
  * Buttons are pills. `primary` keeps its old meaning for existing call sites:
  * the one main action on a screen. Use [tone] for the quieter looks.
  */
 fun Context.button(label: String, primary: Boolean = false, tone: Tone = if (primary) Tone.PRIMARY else Tone.SECONDARY, run: () -> Unit) = Button(this).apply {
-    text = label; isAllCaps = false; textSize = 14f; stateListAnimator = null
-    minHeight = dp(48); minimumHeight = dp(48); minWidth = 0; minimumWidth = 0
+    text = label; isAllCaps = false; textSize = UiType.BODY; stateListAnimator = null
+    typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+    minHeight = dp(52); minimumHeight = dp(52); minWidth = 0; minimumWidth = 0
     setPadding(dp(18), dp(10), dp(18), dp(10))
     when (tone) {
-        Tone.PRIMARY -> { setTextColor(Palette.ON_ACCENT); setTypeface(typeface, Typeface.BOLD); background = pressable(gradientFill(), 0x33050D1F) }
+        Tone.PRIMARY -> { setTextColor(Palette.ON_ACCENT); background = pressable(gradientFill(), 0x33050D1F) }
         Tone.SECONDARY -> { setTextColor(Palette.TEXT); background = pressable(outline(Palette.CARD, Palette.LINE_STRONG, 999)) }
         Tone.TONAL -> { setTextColor(Palette.ON_TONAL); background = pressable(outline(Palette.TONAL, Palette.TONAL_LINE, 999)) }
         Tone.DANGER -> { setTextColor(Palette.BAD); background = pressable(outline(Palette.CARD, 0x73F87171, 999)) }
@@ -125,12 +144,12 @@ fun Context.iconButton(icon: Int, label: String, run: () -> Unit) = ImageButton(
 
 /** A short status: a dot and a word or two. */
 fun Context.badge(label: String, color: Int, surface: Int) = TextView(this).apply {
-    text = "●  $label"; textSize = 12f; setTextColor(color); setTypeface(typeface, Typeface.BOLD)
+    text = "●  $label"; textSize = UiType.META; setTextColor(color); setTypeface(typeface, Typeface.BOLD)
     background = outline(surface, surface, 999); setPadding(dp(10), dp(4), dp(12), dp(4))
 }
 
 fun Context.field(hint: String, number: Boolean = false) = EditText(this).apply {
-    this.hint = hint; setHintTextColor(Palette.MUTED); setTextColor(Palette.TEXT); textSize = 15f
+    this.hint = hint; setHintTextColor(Palette.MUTED); setTextColor(Palette.TEXT); textSize = UiType.BODY
     background = outline(Palette.FIELD, Palette.LINE_STRONG, 12); setPadding(dp(14), dp(12), dp(14), dp(12))
     if (number) inputType = InputType.TYPE_CLASS_NUMBER
     layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
@@ -141,9 +160,9 @@ fun Context.field(hint: String, number: Boolean = false) = EditText(this).apply 
 fun Context.card(strong: Boolean = false) = LinearLayout(this).apply {
     orientation = LinearLayout.VERTICAL
     background = outline(if (strong) Palette.TONAL else 0xE60A1224.toInt(), if (strong) Palette.TONAL_LINE else Palette.LINE, 16)
-    setPadding(dp(16), dp(14), dp(16), dp(14))
+    setPadding(dp(20), dp(18), dp(20), dp(18))
     layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-        .apply { bottomMargin = dp(10) }
+        .apply { bottomMargin = dp(12) }
 }
 
 /** A hairline between rows inside one card. */
@@ -152,12 +171,76 @@ fun Context.divider() = View(this).apply {
     layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(1)).apply { topMargin = dp(12); bottomMargin = dp(12) }
 }
 
-fun Context.buttonRow(vararg buttons: Button) = LinearLayout(this).apply {
-    orientation = LinearLayout.HORIZONTAL; gravity = Gravity.START; setPadding(0, dp(12), 0, 0)
-    buttons.forEachIndexed { i, b ->
-        addView(b, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-            .apply { if (i > 0) marginStart = dp(8) })
+/** Full-width actions, paired only when both labels fit at the current font scale. */
+fun Context.buttonRow(vararg buttons: Button): LinearLayout = ActionLayout(this).apply {
+    setPadding(0, dp(16), 0, 0)
+    buttons.forEach { addView(it) }
+}
+
+private class ActionLayout(context: Context) : LinearLayout(context) {
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        val visible = (0 until childCount).map(::getChildAt).filter { it.visibility != View.GONE }
+        val available = (MeasureSpec.getSize(widthMeasureSpec) - paddingLeft - paddingRight).coerceAtLeast(0)
+        val gap = context.dp(8)
+        val slot = (available - gap * (visible.size - 1).coerceAtLeast(0)) / visible.size.coerceAtLeast(1)
+        val paired = visible.size > 1 && MeasureSpec.getMode(widthMeasureSpec) != MeasureSpec.UNSPECIFIED && visible.all {
+            it.measure(MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED), MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED))
+            it.measuredWidth <= slot
+        }
+        orientation = if (paired) HORIZONTAL else VERTICAL
+        visible.forEachIndexed { index, child ->
+            val width = if (paired) 0 else ViewGroup.LayoutParams.MATCH_PARENT
+            val weight = if (paired) 1f else 0f
+            val start = if (paired && index > 0) gap else 0
+            val top = if (!paired && index > 0) gap else 0
+            val params = child.layoutParams as LayoutParams
+            if (params.width != width || params.weight != weight || params.marginStart != start || params.topMargin != top) {
+                params.width = width; params.height = ViewGroup.LayoutParams.WRAP_CONTENT; params.weight = weight
+                params.marginStart = start; params.topMargin = top; child.layoutParams = params
+            }
+        }
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
     }
+}
+
+/** Two setup routes share a title, one sentence and one aligned action. */
+fun Context.connectionChoice(title: String, detail: String, action: String, primary: Boolean = false, run: () -> Unit) = card().apply {
+    addView(cardTitle(title)); addView(body(detail)); addView(buttonRow(button(action, primary, run = run)))
+}
+
+/** A compact feature explanation, with a decorative icon and readable copy. */
+fun Context.featureRow(icon: Int, title: String, detail: String): LinearLayout = LinearLayout(this).apply {
+    orientation = LinearLayout.HORIZONTAL; gravity = Gravity.TOP
+    setPadding(0, dp(8), 0, dp(8))
+    addView(android.widget.ImageView(context).apply {
+        setImageResource(icon); imageTintList = ColorStateList.valueOf(Palette.ON_TONAL)
+        background = outline(Palette.TONAL, Palette.TONAL_LINE, 12); setPadding(dp(8), dp(8), dp(8), dp(8))
+        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+    }, LinearLayout.LayoutParams(dp(40), dp(40)).apply { marginEnd = dp(12) })
+    addView(LinearLayout(context).apply {
+        orientation = LinearLayout.VERTICAL
+        addView(text(title, UiType.BODY, bold = true))
+        addView(body(detail).apply { setPadding(0, dp(4), 0, 0) })
+    }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+}
+
+/** Secondary explanations expand in place, without losing the screen's scroll position. */
+fun Context.disclosure(label: String, build: LinearLayout.() -> Unit): LinearLayout = LinearLayout(this).apply {
+    orientation = LinearLayout.VERTICAL
+    val content = LinearLayout(context).apply {
+        orientation = LinearLayout.VERTICAL; visibility = View.GONE; setPadding(0, dp(12), 0, 0); build()
+    }
+    val toggle = button("$label  ▾") {
+        val expanded = content.visibility != View.VISIBLE
+        content.visibility = if (expanded) View.VISIBLE else View.GONE
+        (getChildAt(0) as Button).text = "$label  ${if (expanded) "▴" else "▾"}"
+        androidx.core.view.ViewCompat.setStateDescription(getChildAt(0), if (expanded) "Expanded" else "Collapsed")
+    }
+    toggle.contentDescription = label
+    androidx.core.view.ViewCompat.setStateDescription(toggle, "Collapsed")
+    addView(toggle, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+    addView(content)
+    layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(16) }
 }
 
 /** Switches take Saiph's colours: cyan when on, a quiet track when off. */
@@ -166,7 +249,7 @@ fun Switch.saiph(): Switch = apply {
     // On reads as a lit cyan knob on a tonal track; off as a quiet knob on a dark track.
     thumbTintList = ColorStateList(states, intArrayOf(Palette.ACCENT, Palette.MUTED))
     trackTintList = ColorStateList(states, intArrayOf(Palette.TONAL_LINE, Palette.LINE_STRONG))
-    setTextColor(Palette.TEXT); textSize = 15f
+    setTextColor(Palette.TEXT); textSize = UiType.BODY
     minHeight = context.dp(48)
 }
 
@@ -176,7 +259,7 @@ fun Context.switchRow(label: String, detail: String? = null, checked: Boolean, c
         orientation = LinearLayout.VERTICAL; setPadding(0, dp(4), 0, dp(4))
         addView(Switch(context).saiph().apply { text = label; isChecked = checked; setOnCheckedChangeListener { _, on -> changed(on) } },
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        detail?.let { addView(text(it, 13f, Palette.MUTED).apply { setPadding(dp(4), 0, dp(56), dp(6)) }) }
+        detail?.let { addView(body(it).apply { setPadding(0, dp(4), 0, dp(8)) }) }
     }
 
 /**

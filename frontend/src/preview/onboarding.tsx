@@ -24,7 +24,7 @@ function onboardingClient(): Client {
       account: { status: "signed_out", error: "", refresh_tokens: false }, roster: null, user_verification: "windows_hello" },
   } as unknown as State;
   const hosted = () => state.hosted!;
-  const root = { id: "root", label: "This computer", root: true, self: true, fingerprint: "7C1E 0A42 9D3B 55F0 E218 6B7A" };
+  const root = { id: "root", label: "This computer", root: true, self: true, fingerprint: "7C1E 0A42 9D3B 55F0 E218 6B7A 1023 4567 89AB CDEF 0123 4567 89AB CDEF 0123 4567" };
   let rootShown = 0;
   let approved = false;
   // The desktop bridge signals every change; App refreshes its state on that signal.
@@ -52,13 +52,17 @@ function onboardingClient(): Client {
       if (method === "hosted.approve") {
         approved = true;
         hosted().roster = { ...hosted().roster!, version: 2, members: [root, { ...phone, label: String(args?.label || "Phone") }] };
+        state.phone = { status: "Connected", error: "", notifications: [], devices: [{
+          id: phone.id, name: String(args?.label || "Phone"), online: true, hosted: true,
+          last_seen_at: null, capabilities: ["files", "notifications"],
+        }] };
       }
       return { ok: true } as T;
     },
     subscribe(fn) { listeners.add(fn); return () => { listeners.delete(fn); }; },
   };
 }
-const phone = { id: "dev_phone", label: "Phone", root: false, fingerprint: "3F9A 1C07 B2E4 6D18 90AF 52C3" };
+const phone = { id: "dev_phone", label: "Phone", root: false, fingerprint: "3F9A 1C07 B2E4 6D18 90AF 52C3 0123 4567 89AB CDEF 0123 4567 89AB CDEF 0123 4567" };
 const offered = { code: "orion-approve-v1:preview", device_id: phone.id, fingerprint: phone.fingerprint, expires_at: 1_900_000_000 };
 
 createRoot(document.getElementById("root")!).render(

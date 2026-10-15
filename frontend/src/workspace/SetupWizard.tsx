@@ -4,7 +4,7 @@ import { Check, Cloud, Server } from "lucide-react";
 import type { Client, State } from "./types";
 import { Action, Card, Form } from "./ui";
 import { Enrollment } from "./Enrollment";
-import { HostedApproveDevice, HostedRootCode } from "./HostedSettings";
+import { HostedPhoneSetup } from "./PhoneSetup";
 import { HostedJoin } from "./HostedJoin";
 import { HostedSignIn, signInToSaiph } from "./HostedSignIn";
 import { PairingQr, validQr, type PairingQrCode } from "./PairingQr";
@@ -148,13 +148,8 @@ export function SetupWizard({ state, client, close }: { state: State; client: Cl
       </>}
       {mode === "hosted" && hosted && <>
         {phoneReady && <p role="status" className="setup-ok"><Check size={16} />{hostedPhones.map((m) => m.label).join(", ")} approved.</p>}
-        {hosted.role === "member" ? <p>Phones are added on your main computer: open Settings → Saiph account there, show its code to your phone and approve the phone when it appears.</p>
-          : phoneReady ? <details><summary>Add another phone</summary><HostedRootCode hosted={hosted} client={client} /><HostedApproveDevice hosted={hosted} client={client} /></details> : <>
-          <p>1. On your phone, open Saiph, sign in with the same Saiph account and tap Scan the code on your computer.</p>
-          <HostedRootCode hosted={hosted} client={client} autoShow />
-          <p>2. Your phone appears here by itself. Compare its full fingerprint with the phone, name it and approve it.</p>
-          <HostedApproveDevice hosted={hosted} client={client} />
-        </>}
+        {phoneReady ? <details><summary>Add another phone</summary><HostedPhoneSetup hosted={hosted} client={client} /></details>
+          : <HostedPhoneSetup hosted={hosted} client={client} />}
       </>}
       <Action className="text-button" run={() => client.call("setup.open", { link: "android" })}>Where do I get the Android app?</Action>
       <div className="actions"><button type="button" className="text-button" onClick={next("connect")}>Back</button>
