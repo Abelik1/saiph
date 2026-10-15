@@ -166,10 +166,11 @@ def test_downloads_require_public_source_and_exact_release():
         site.validate_settings(settings, 'preview')
 
 
-def test_draft_controller_can_ship_without_enabling_collection(tmp_path):
+def test_approved_controller_ships_without_enabling_collection(tmp_path):
     settings = json.loads((ROOT / 'website/landing-settings.json').read_text(encoding='utf-8'))
     result = site.validate_settings(settings, 'preview')
-    assert result['privacy']['status'] == 'draft'
+    assert result['privacy']['status'] == 'approved'
+    assert result['privacy']['contactEmail'] == 'support@usesaiph.com'
     assert result['waitlistUrl'] == ''
     assert result['release'] == {}
     assert not any(result['downloads'].values())
@@ -207,7 +208,7 @@ def test_only_reviewed_tally_form_and_matching_notice_query_are_accepted(url):
 def test_single_opt_in_form_preserves_query_but_does_not_relax_other_urls(tmp_path):
     settings = launch_settings()
     output = tmp_path / 'single-opt-in'
-    site.prepare(ROOT / 'website', output, settings, 'launch')
+    site.prepare(ROOT / 'website', output, settings, 'launch', SYNTHETIC_ADDRESS)
     config = (output / 'assets/config.js').read_text(encoding='utf-8')
     assert settings['waitlistUrl'] in config
     assert '"optInMode": "single"' in config
@@ -219,7 +220,7 @@ def test_single_opt_in_form_preserves_query_but_does_not_relax_other_urls(tmp_pa
 
 def test_published_form_stays_disabled_without_controller_contact():
     settings = json.loads((ROOT / 'website/landing-settings.json').read_text(encoding='utf-8'))
-    assert settings['privacy']['contactEmail'] == ''
+    settings['privacy'].update(status='draft', contactEmail='')
     assert settings['waitlist']['optInMode'] == 'single'
     settings['waitlistUrl'] = 'https://tally.so/r/gDy42K?consent_version=' + settings['waitlist']['noticeVersion']
     with pytest.raises(ValueError, match='approved'):
@@ -378,3 +379,32 @@ def test_reviewed_waitlist_still_comes_before_beta_access():
     settings = launch_settings()
     settings['betaAccountUrl'] = BETA_ACCOUNT
     assert render_site_script(settings)['subscribe'] == 'waitlist.html'
+
+
+SYNTHETIC_ADDRESS = '1 Synthetic Street, Testtown, A00 B000'
+
+
+def test_trader_address_reaches_only_the_noindexed_contact_page(tmp_path):
+    settings = json.loads((ROOT / 'website/landing-settings.json').read_text(encoding='utf-8'))
+    site.prepare(ROOT / 'website', tmp_path / 'with', settings, 'preview', '  1 Synthetic Street,\n Testtown, A00 B000 ')
+    contact = (tmp_path / 'with/contact.html').read_text(encoding='utf-8')
+    assert '<span data-trader-address>' + SYNTHETIC_ADDRESS + '</span>' in contact
+    assert '<meta name="robots" content="noindex">' in contact
+    others = [p for p in (tmp_path / 'with').rglob('*') if p.is_file() and p.name != 'contact.html']
+    assert others and not any('Synthetic Street' in p.read_text(encoding='utf-8') for p in others)
+    site.prepare(ROOT / 'website', tmp_path / 'without', settings)
+    assert 'available on request' in (tmp_path / 'without/contact.html').read_text(encoding='utf-8')
+    assert 'Synthetic Street' not in (ROOT / 'website/contact.html').read_text(encoding='utf-8')
+
+
+@pytest.mark.parametrize('value', ['<script>1 Main St</script>', 'No number street', '1 Main St & Co', 'x' * 250 + ' 1'])
+def test_trader_address_must_be_one_plain_line(tmp_path, value):
+    settings = json.loads((ROOT / 'website/landing-settings.json').read_text(encoding='utf-8'))
+    with pytest.raises(ValueError, match='Trader address'):
+        site.prepare(ROOT / 'website', tmp_path / 'bad', settings, 'preview', value)
+    assert not (tmp_path / 'bad').exists()
+
+
+def test_launch_requires_trader_address(tmp_path):
+    with pytest.raises(ValueError, match='SAIPH_TRADER_ADDRESS'):
+        site.prepare(ROOT / 'website', tmp_path / 'launch', launch_settings(), 'launch')

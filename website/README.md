@@ -40,6 +40,12 @@ the email list. Keep claims aligned with
 [the security model](../docs/SECURITY_MODEL.md): Hosted is a beta service without
 an independent security review yet, and texts and calls are still coming to it.
 
+The trader's postal address is required on the contact page but is not kept in
+Git. The hosting project sets `SAIPH_TRADER_ADDRESS` (one plain line, for example
+`1 Example Street, Town, A00 B000`); the builder escapes it and writes it only into
+`contact.html`, which is marked `noindex`. Without it the page says the address is
+available on request, and `--mode launch` refuses to build.
+
 Website changes belong in their own product worktree/branch. Hand operations the
 signed-off commit, validation evidence and hostname decision. Do not change the
 hosting runtime pin merely to consume a website-only commit.
