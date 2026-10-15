@@ -48,7 +48,7 @@ class OrionActivity : ComponentActivity() {
     private var screen = "home"
     private var lastRender = ""
     private var pairingInProgress = false
-    private var hostedOpened = false  // Open a running Saiph account once per launch, so Back still works.
+    private var hostedOpened = false  // Show account sign-in first, once per launch, so Back still works.
     private var devices: List<LinkDevice> = emptyList()
     private val prefs by lazy { getSharedPreferences("orion", MODE_PRIVATE) }
     private val lock = AppLock(this)
@@ -72,6 +72,7 @@ class OrionActivity : ComponentActivity() {
     }
     override fun onCreate(state: Bundle?) {
         super.onCreate(state); Api.migrateMesh(this)
+        hostedOpened = state?.getBoolean("hostedOpened") ?: false
         backupSettings = OrionBackupSettings(this) { if (screen == "advanced") advanced() }
         root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(4), dp(18), dp(28)) }
         scroll = ScrollView(this).apply { addView(root); isFillViewport = true }
@@ -115,6 +116,10 @@ class OrionActivity : ComponentActivity() {
         })
         handleQr(intent)
     }
+    override fun onSaveInstanceState(state: Bundle) {
+        state.putBoolean("hostedOpened", hostedOpened)
+        super.onSaveInstanceState(state)
+    }
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent); setIntent(intent); handleQr(intent)
         if (intent.getBooleanExtra("setup", false) && prefs.contains("device_id")) setup()
@@ -147,9 +152,10 @@ class OrionActivity : ComponentActivity() {
     private fun resumeUnlocked() {
         showingLock = false
         UsageAnalytics.count(this, "app_open")
-        UsageAnalytics.ask(this)
         updates.checkStartup()
+        // The usage question waits until the phone is set up, so sign-in comes first.
         if (!prefs.contains("device_id")) { pairing(); return }
+        UsageAnalytics.ask(this)
         val requestedSetup = intent.getBooleanExtra("setup", false)
         intent.removeExtra("setup")
         val requestedSettings = intent.getBooleanExtra("settings", false)
@@ -198,7 +204,7 @@ class OrionActivity : ComponentActivity() {
         // after the owner says they self-host, or opens an invitation from their server.
         if (invite == null && !prefs.getBoolean("self_host", false)) {
             val hostedOn = HostedRuntime.get(this).enabled()
-            if (hostedOn && !hostedOpened) { hostedOpened = true; openHosted() }
+            if (!hostedOpened) { hostedOpened = true; openHosted(); return }
             root.addView(text("One system, wherever you are.", 15f, Palette.MUTED))
             root.addView(card().apply {
                 addView(text("Connect with your Saiph account", 16f, bold = true))

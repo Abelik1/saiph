@@ -35,6 +35,27 @@ def test_bundled_public_defaults_do_not_enable_hosted_or_override_user_configura
     assert controller.workspace.settings == {'hosted':{'service_url':'invalid'}}
 
 
+def test_fresh_link_state_exposes_bundled_settings_without_enabling_or_creating_keys(tmp_path, monkeypatch):
+    from orion_mini.link_operations import LinkOperations
+    from types import SimpleNamespace
+
+    bundle = tmp_path / 'bundle'
+    bundle.mkdir()
+    (bundle / 'hosted-defaults.json').write_text(json.dumps(settings()))
+    monkeypatch.setattr(sys, 'frozen', True, raising=False)
+    monkeypatch.setattr(sys, '_MEIPASS', str(bundle), raising=False)
+    monkeypatch.setattr('orion_mini.link_operations.hosted_available', lambda: True)
+    profile = SimpleNamespace(root=tmp_path / 'fresh-profile', settings={})
+    profile.hosted_controller = lambda: pytest.fail('No controller or transport before sign-in')
+    snapshot = LinkOperations.hosted_state(profile)
+    assert snapshot['available'] and snapshot['configured']
+    assert snapshot['config']['client_id'] == settings()['desktop_client_id']
+    assert snapshot['enabled'] is False and snapshot['identity'] is False
+    assert snapshot['account']['status'] == 'signed_out'
+    assert profile.settings == {}
+    assert not profile.root.exists()
+
+
 @pytest.mark.parametrize('mutation', ['secret','http','query','issuer','clients','oversize'])
 def test_unsafe_build_configuration_fails_closed(tmp_path, monkeypatch, mutation):
     value = settings()

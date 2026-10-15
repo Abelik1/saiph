@@ -4,6 +4,7 @@ import type { Client, HostedConfig, HostedState } from "./types";
 import { Action, Card, Form } from "./ui";
 import { validQr } from "./PairingQr";
 import { HostedJoin } from "./HostedJoin";
+import { HostedSignIn } from "./HostedSignIn";
 
 type RootCode = {code: string; fingerprint: string; modules: string[]; expires_at: string; expires_in: number};
 type Request = {device_id: string; fingerprint: string; expires_at: number};
@@ -64,24 +65,25 @@ export function HostedSettings({hosted, client}: {hosted?: HostedState; client: 
   const members = hosted?.roster?.members.filter(member => member.self === undefined ? !member.root : !member.self) || [];
   const isMember = hosted?.role === "member";
   const enabled = hosted?.enabled === true;
-  const signedIn = hosted?.account?.status === "signed_in";
+  const signedIn = enabled && hosted?.account?.status === "signed_in";
   const active = enabled && signedIn && !!hosted?.roster;
-  return <Card title="Saiph Hosted preview" subtitle="Sign in with your Saiph account after activating your beta invitation.">
+  return <Card title="Saiph account" subtitle="Your phone and computers, connected through Saiph Hosted.">
     <p role="status">{statuses[hosted?.status || "off"] || "Starting"}</p>
     {!hosted?.available ? <p>This build does not include Hosted support.</p> : <>
-      {isMember
+      {hosted.identity && (isMember
         ? <p className="muted">This computer joined your account as another computer. Your main computer approves and removes devices and renews approvals; keep it online at least every 12 hours.</p>
-        : <p className="muted">This computer is the root device. Keep it online to renew approvals every 8 hours. Devices stop syncing after 12 hours without renewal. Lost root keys cannot be recovered or transferred yet.</p>}
-      <details><summary>Deployment settings</summary><Form submit={() => client.call("hosted.configure", {...config})}>
+        : <p className="muted">This computer approves your other devices. Keep it online to renew approvals every 8 hours. Devices stop syncing after 12 hours without renewal. Lost root keys cannot be recovered or transferred yet.</p>)}
+      {!hosted.configured && <><p>This build cannot connect to Saiph accounts. Download the current beta from your account page.</p>
+      <details><summary>Custom service (advanced)</summary><Form submit={() => client.call("hosted.configure", {...config})}>
         {([['service_url', 'Hosted service address'], ['issuer', 'Sign-in issuer'], ['audience', 'API audience'], ['client_id', 'Desktop client ID']] as const).map(([key, title]) => <label key={key}>{title}<input value={config[key]} required disabled={enabled} onChange={event => setConfig({...config, [key]: event.target.value})} /></label>)}
         <label><input type="checkbox" checked={config.refresh_tokens} disabled={enabled} onChange={event => setConfig({...config, refresh_tokens: event.target.checked})} /> Keep me signed in using a protected rotating refresh token (requires deployment support)</label>
         <button disabled={enabled}>Save deployment</button>
-      </Form></details>
-      {hosted.self_hosted_paired ? <p>This computer is paired with a self-hosted Hub. Use a separate profile for this preview.</p> : <Action disabled={!enabled && !hosted.configured} run={() => client.call("hosted.enable", {enabled: !enabled})}>{enabled ? "Turn off Hosted" : "Turn on Hosted"}</Action>}
+      </Form></details></>}
+      {hosted.self_hosted_paired ? <p>This computer is paired with a self-hosted Hub. Use a separate profile for Saiph Hosted.</p>
+        : !signedIn && hosted.configured && <HostedSignIn hosted={hosted} client={client} />}
+      {hosted.account?.error && <p role="alert">{hosted.account.error}</p>}
       {enabled && <>
-        <p>{hosted.account?.status === "signing_in" ? "Finish sign-in in your browser." : signedIn ? "Signed in" : "Sign in to continue"}</p>
-        {signedIn ? <Action run={() => client.call("hosted.sign_out")}>Sign out</Action> : <Action disabled={hosted.account?.status === "signing_in"} run={() => client.call("hosted.sign_in")}>Sign in with your browser</Action>}
-        {hosted.account?.error && <p role="alert">{hosted.account.error}</p>}
+        {signedIn && <><p>Signed in</p><Action run={() => client.call("hosted.sign_out")}>Sign out</Action></>}
         {signedIn && !isMember && <HostedRootCode hosted={hosted} client={client} />}
         {signedIn && !hosted.identity && <details><summary>Join as another computer</summary><HostedJoin client={client} waiting={false} /></details>}
         {signedIn && isMember && hosted.status === "awaiting_approval" && <HostedJoin client={client} waiting />}
@@ -96,6 +98,7 @@ export function HostedSettings({hosted, client}: {hosted?: HostedState; client: 
           {hosted.notifications?.map(item => <div key={item.id}><b>{item.app}: {item.title}</b><p>{item.text}</p><Action run={() => client.call("hosted.notification.dismiss", {id: item.id})}>Dismiss notification</Action></div>)}
         </>}
         {hosted.error && <p role="alert">{hosted.error}</p>}
+        <Action run={() => client.call("hosted.enable", {enabled: false})}>Turn off Hosted</Action>
       </>}
       {!enabled && hosted.identity && <><label><input type="checkbox" checked={forget} onChange={event => setForget(event.target.checked)} /> {isMember ? "Retire this computer's Hosted identity; remove it on your main computer too" : "Retire this computer's root identity; other devices will stop syncing when approvals expire"}</label><Action disabled={!forget} run={() => client.call("hosted.forget", {confirm: true})}>Forget Hosted on this computer</Action></>}
     </>}

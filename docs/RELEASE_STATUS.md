@@ -1,5 +1,56 @@
 # Current release preparation status
 
+2026-10-15 Hosted onboarding correction (`codex/hosted-onboarding`, based on
+`ca36587`, source changes only): a fresh desktop profile now reads validated
+bundled public connection defaults without importing the crypto runtime or
+creating keys. The wizard and account settings offer one Sign in to Saiph
+action that enables the selected connection and opens the system browser.
+Packaged account setup no longer asks for service URLs or client IDs. Android
+opens the account screen directly, puts sign-in ahead of approval and permission
+controls, and offers a regular-browser retry through AppAuth. Device identities,
+state/PKCE checks, full fingerprint confirmation and explicit device approval
+are retained. Windows beta.5 setup and Android browser trouble were reported by
+the owner; see [the attended attempt](ACCEPTANCE_PENDING.md#attended-hosted-setup-attempt-2026-10-15).
+
+Validation on Windows, Python 3.12 / Node 24.18.0, using synthetic profiles and
+separate caches: `python -m pytest tests/test_hosted_distribution.py
+tests/test_hosted_runtime.py tests/test_setup_guide.py tests/test_link_service.py
+-q` passed 75; frontend `npm run test:unit` passed 164 and `npm run build`
+passed. The first Python run failed the existing lazy-import boundary test;
+reading defaults was moved to the lightweight distribution module, and the
+full selected set passed on rerun. Initial npm cache and test-runner temporary
+file access failures were resolved in the isolated clone. Android compilation
+(`:app:compileDebugKotlin`) and app JVM tests (`:app:testDebugUnitTest`, 8 passed)
+passed on JDK 22 with independent Firebase/push-disabled settings, version code
+1 and an isolated Gradle cache. `:app:lintDebug` passed with 0 errors and 233
+warnings. Initial Android checks could not find the SDK at the configured path;
+an existing SDK was located and the existing ignored restic ABI binaries were
+copied into the validation clone. Lint first rejected that clone's SDK property
+escaping; the property was corrected and stale generated analysis was rerun
+with build-cache reuse disabled. No corrected installer/APK has been built,
+installed or distributed; the exact reported browser failure and physical
+acceptance remain open. No real account, emulator or physical device was used
+for these checks.
+
+Review fixes on the same branch (2026-10-15): an approved phone keeps its daily
+screen and keeps syncing when its short-lived account token has expired (the
+sign-in screen is only for phones that are not yet approved; signing in again
+stays available under Account). Android checks for app updates again before the
+self-hosted pairing check. The runtime validates bundled connection defaults
+before use. Setting up or joining with an account that has not redeemed an
+invitation now says to activate the invitation instead of "unreachable", and the
+desktop sign-in card points new testers to their invitation. Turning Hosted back
+on keeps an existing desktop sign-in instead of reopening the browser. Hosted
+desktop tests 81 passed, frontend unit tests and `tsc` passed.
+The actual Windows `scripts/build-native.py --profile link --version
+0.1.0-onboarding.1 --build-number 0 --hosted-config build/synthetic-hosted.json`
+build passed, including the native-origin audit, with separate PyInstaller
+cache/output and synthetic connection settings only. A new synthetic profile
+read those built bundle defaults with Hosted off and no Hosted keys. The
+executable was not launched, packaged as an installer or offered for account
+sign-in. Candidate staged changes and public main history passed gitleaks;
+the isolated clone passed `check-public-data.py --history`.
+
 2026-10-14 the repository is public. The owner changed visibility after a fresh
 audit clone of every GitHub branch passed `check-public-data.py --history` and
 gitleaks; five fully merged branches were deleted first. `main` requires pull

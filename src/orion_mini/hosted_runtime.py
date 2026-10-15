@@ -28,7 +28,6 @@ import json
 import mimetypes
 import os
 import shutil
-import sys
 import threading
 import time
 from pathlib import Path
@@ -48,6 +47,7 @@ from .hosted_features import (
     read_notification, read_phone_data, refused_request, subscribe_payload,
 )
 from .hosted_identity import HostedIdentity
+from .hosted_distribution import packaged_config
 from .hosted_keys import KeyStorageError
 from .hosted_login import HostedLoginConfig
 from .hosted_mailbox import DurableMailbox
@@ -64,6 +64,8 @@ SUBSCRIBE_SECONDS = 90  # Renew this computer's subscription with each phone hea
 NOTICE_SECONDS = 60  # "Answered on <computer>" and similar notes stay this long.
 FAST_POLL_SECONDS = 4  # Ringing calls need prompt delivery once texts and calls are on.
 ROOT_ONLY = "Only your main computer can approve or remove devices."
+NO_ACCESS = ("This Saiph account has no beta access yet. Activate your invitation code on your Saiph "
+             "account page with this same account, then try again.")
 EXCLUSIVE = ("This computer is paired with a self-hosted Hub. A device uses either a self-hosted Hub "
              "or Saiph Hosted, never both.")
 HOSTED_ACTIVE = ("This computer uses Saiph Hosted. A device uses either Saiph Hosted or a self-hosted Hub, "
@@ -71,18 +73,12 @@ HOSTED_ACTIVE = ("This computer uses Saiph Hosted. A device uses either Saiph Ho
 CONFIG_KEYS = {"service_url", "issuer", "audience", "client_id", "refresh_tokens"}
 
 
-def packaged_config():
-    if not getattr(sys, 'frozen', False) or not getattr(sys, '_MEIPASS', None):
-        return None
-    from .hosted_distribution import read_configuration, desktop_config
-    try:
-        return validate_config(desktop_config(read_configuration(Path(sys._MEIPASS) / 'hosted-defaults.json')))
-    except (ValueError, OSError, TypeError, KeyError):
-        return None
-
-
 class HostedError(ValueError):
     pass
+
+
+def _unreachable(error) -> str:
+    return NO_ACCESS if error.status == 403 else "Saiph Hosted is unreachable. Try again when you are online."
 
 
 def hosted_settings(settings) -> dict:
@@ -209,9 +205,10 @@ class HostedController:
     def _config(self):
         settings = self.settings
         if not any(key in settings for key in CONFIG_KEYS):
-            return None if self.identity.exists() else packaged_config()
+            bundled = None if self.identity.exists() else packaged_config()
+            settings = bundled or {}
         try:
-            return validate_config({key: settings[key] for key in CONFIG_KEYS if key in settings})
+            return validate_config({key: settings[key] for key in CONFIG_KEYS if key in settings}) if settings else None
         except HostedError:
             return None
 
@@ -407,6 +404,8 @@ class HostedController:
                 try:
                     deployment = probe.discover_account(token)
                     page = probe.roster_page(token)
+                except TransportError as error:
+                    raise HostedError(_unreachable(error)) from None
                 finally:
                     probe.close()
                 if page["chain"]:
@@ -639,8 +638,8 @@ class HostedController:
             try:
                 deployment = probe.discover_account(token)
                 page = probe.roster_page(token)
-            except TransportError:
-                raise HostedError("Saiph Hosted is unreachable. Try again when you are online.") from None
+            except TransportError as error:
+                raise HostedError(_unreachable(error)) from None
             finally:
                 probe.close()
             if deployment != root.deployment_id:

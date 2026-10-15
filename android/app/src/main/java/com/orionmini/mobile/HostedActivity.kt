@@ -3,6 +3,7 @@ package com.orionmini.mobile
 
 import android.Manifest
 import android.content.Intent
+import android.content.ActivityNotFoundException
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.net.Uri
@@ -15,13 +16,14 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.*
 import net.openid.appauth.AuthorizationResponse
 import net.openid.appauth.AuthorizationService
+import net.openid.appauth.AppAuthConfiguration
 import sefirah.network.orion.HostedApprovalCodes
 
 private val PHONE_PERMISSIONS = listOf(Manifest.permission.READ_SMS, Manifest.permission.SEND_SMS, Manifest.permission.RECEIVE_SMS,
     Manifest.permission.READ_PHONE_STATE, Manifest.permission.ANSWER_PHONE_CALLS, Manifest.permission.CALL_PHONE,
     Manifest.permission.READ_CALL_LOG, Manifest.permission.READ_CONTACTS)
 
-/** A separate preview screen; opening it leaves the setting off. */
+/** Account sign-in first; choosing Sign in applies this build's public defaults. */
 class HostedActivity : ComponentActivity() {
     private val lock = AppLock(this)
     private var showingLock = false
@@ -33,9 +35,23 @@ class HostedActivity : ComponentActivity() {
     private var saving = ""
     private var poll: Job? = null
     private var deploymentSettings = false
+    private var signingIn = false
+    private var loginState: String? = null
+    private var loginError = ""
+    private var authorizationService: AuthorizationService? = null
     private val login = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        signingIn = false
+        loginState = null
+        authorizationService?.dispose(); authorizationService = null
         val response = result.data?.let(AuthorizationResponse::fromIntent)
-        if (response == null) message("Sign-in did not complete.") else action { account.complete(response) }
+        if (response == null) {
+            loginError = "Sign-in did not complete. Try again, or use your browser app instead."
+            if (!AppLock.locked(this)) render()
+        } else lifecycleScope.launch {
+            try { withContext(Dispatchers.IO) { account.complete(response) }; loginError = "" }
+            catch (_: Exception) { loginError = "Saiph could not finish signing in. Check your connection and try again." }
+            if (!AppLock.locked(this@HostedActivity)) render()
+        }
     }
     private val scanRoot = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         result.data?.getStringExtra(OrionQrActivity.HOSTED_ROOT_CODE)?.let(::checkRoot)
@@ -47,9 +63,14 @@ class HostedActivity : ComponentActivity() {
     override fun onCreate(state: Bundle?) {
         super.onCreate(state); lock.protectWindow()
         saving = state?.getString("saving") ?: ""; deploymentSettings = state?.getBoolean("deploymentSettings") ?: false
+        loginState = state?.getString("loginState")
+        signingIn = state?.getBoolean("signingIn") == true && loginState != null &&
+            loginState == prefs.getString("pending_state", null) &&
+            prefs.getLong("pending_until", 0) > System.currentTimeMillis()
         if (!AppLock.locked(this)) render()
     }
-    override fun onSaveInstanceState(state: Bundle) { state.putString("saving", saving); state.putBoolean("deploymentSettings", deploymentSettings); super.onSaveInstanceState(state) }
+    override fun onSaveInstanceState(state: Bundle) { state.putString("saving", saving); state.putBoolean("deploymentSettings", deploymentSettings); state.putBoolean("signingIn", signingIn); state.putString("loginState", loginState); super.onSaveInstanceState(state) }
+    override fun onDestroy() { authorizationService?.dispose(); authorizationService = null; super.onDestroy() }
     override fun onResume() {
         super.onResume()
         if (runtime.enabled() && !sefirah.network.orion.OrionPause.paused(this)) ContextCompat.startForegroundService(this, Intent(this, HostedSyncService::class.java))
@@ -58,9 +79,9 @@ class HostedActivity : ComponentActivity() {
     private fun resumeUnlocked() {
         if (showingLock || !::status.isInitialized) { showingLock = false; render() }
         UsageAnalytics.opened(this, "hosted")
-        UsageAnalytics.ask(this) { render() }
+        if (prefs.contains("device_id")) UsageAnalytics.ask(this) { render() }
         poll?.cancel()
-        poll = lifecycleScope.launch { while (isActive) { status.text = runtime.status + if (account.signedIn()) " · Signed in" else " · Sign in again"; delay(1000) } }
+        poll = lifecycleScope.launch { while (isActive) { status.text = statusLine(); delay(1000) } }
     }
     private fun lockedScreen() {
         if (showingLock) return
@@ -77,6 +98,38 @@ class HostedActivity : ComponentActivity() {
     private fun verified(reason: String, requireScreenLock: Boolean = true, run: () -> Unit) =
         lock.confirm(reason, requireScreenLock, failure = ::message, success = run)
     private fun message(value: String) = Toast.makeText(this, value, Toast.LENGTH_LONG).show()
+    /** AppAuth owns the browser round trip and verifies state and PKCE for either browser mode. */
+    private fun signIn(browserApp: Boolean = false) {
+        if (signingIn) return
+        signingIn = true; loginState = null; loginError = ""; render()
+        lifecycleScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    if (!runtime.enabled()) { runtime.applyPackagedDefaults(); runtime.setEnabled(true) }
+                }
+                authorizationService?.dispose()
+                val configuration = if (browserApp) AppAuthConfiguration.Builder()
+                    .setBrowserMatcher { browser -> !browser.useCustomTab }.build() else AppAuthConfiguration.DEFAULT
+                val service = AuthorizationService(this@HostedActivity, configuration)
+                authorizationService = service
+                val request = account.request()
+                loginState = request.state
+                login.launch(service.getAuthorizationRequestIntent(request))
+            } catch (failure: CancellationException) {
+                throw failure
+            } catch (_: ActivityNotFoundException) {
+                signingIn = false; loginState = null
+                authorizationService?.dispose(); authorizationService = null
+                loginError = "No browser is available for sign-in. Enable a browser in Android Settings, then try again."
+                render()
+            } catch (_: Exception) {
+                signingIn = false; loginState = null
+                authorizationService?.dispose(); authorizationService = null
+                loginError = "Saiph could not open sign-in. Check your connection or download the current beta from your account page."
+                render()
+            }
+        }
+    }
     private fun action(run: suspend () -> Unit) {
         lifecycleScope.launch { try { withContext(Dispatchers.IO) { run() }; render() } catch (_: Exception) { message("Hosted could not complete this step. Check sign-in, the root device and your connection, then retry.") } }
     }
@@ -159,38 +212,23 @@ class HostedActivity : ComponentActivity() {
     }
     private fun render() {
         shell("Saiph Hosted")
-        status = text(runtime.status, 13f, Palette.MUTED).apply { setPadding(dp(4), 0, 0, dp(6)) }; root.addView(status)
+        status = text(statusLine(), 13f, Palette.MUTED).apply { setPadding(dp(4), 0, 0, dp(6)) }; root.addView(status)
         if (getSharedPreferences("orion", 0).contains("device_id")) {
             root.addView(card().apply { addView(text("This phone is paired with a self-hosted Hub. Use an unpaired phone for Hosted.", 15f)) }); return
         }
         val enrolled = prefs.contains("device_id")
+        // An approved phone keeps syncing with its device keys; the account token only matters
+        // for enrolment, so only a phone that is not yet approved starts at sign-in.
+        if (!enrolled && !account.signedIn()) {
+            signInScreen(enrolled)
+            return
+        }
         if (!runtime.enabled()) {
             root.addView(card(strong = true).apply {
-                addView(text("Activate your beta invitation on the account website first. Use the same account on your phone and computer. Saiph hosts the connection; no server or Tailscale is needed. Your computer approves this phone. Sync stops after 12 hours without renewal from your computer.", 14f))
-                if (!enrolled) {
-                    val packagedDefaults = runtime.hasPackagedDefaults()
-                    if (packagedDefaults) {
-                        addView(text("Connection settings are included in this beta build. Turn on Hosted to continue.", 13f, Palette.MUTED).apply { setPadding(0, dp(8), 0, 0) })
-                        actions(button(if (deploymentSettings) "Hide advanced connection settings" else "Advanced connection settings", tone = Tone.TONAL) { deploymentSettings = !deploymentSettings; render() })
-                    }
-                    if (!packagedDefaults || deploymentSettings) {
-                        val origin = field("Hosted service address", prefs.getString("origin", "")!!, this)
-                        val issuer = field("Sign-in issuer (HTTPS, ending in /)", prefs.getString("issuer", "")!!, this)
-                        val audience = field("API audience", prefs.getString("audience", "")!!, this)
-                        val client = field("Android native client ID", prefs.getString("client_id", "")!!, this)
-                        val refresh = CheckBox(context).apply { text = "Keep me signed in with a protected rotating refresh token"; isChecked = prefs.getBoolean("refresh_tokens", false); setTextColor(Palette.TEXT); buttonTintList = android.content.res.ColorStateList.valueOf(Palette.ACCENT) }; addView(refresh)
-                        actions(button("Save deployment") { verified("Change the Saiph Hosted connection", requireScreenLock = false) {
-                            action { runtime.configure(origin.text.toString(), issuer.text.toString(), audience.text.toString(), client.text.toString(), refresh.isChecked) }
-                        } })
-                        addView(text("Register the native redirect: ${HostedAccount.REDIRECT}", 13f, Palette.MUTED).apply { setPadding(0, dp(8), 0, 0) })
-                    }
-                }
-                actions(button("Turn on Hosted", true) { toggleHosted() })
+                addView(text("Sync is turned off on this phone. Your account and device approval are kept.", 15f))
+                actions(button("Resume syncing", true) { toggleHosted() })
             })
-            if (enrolled) root.addView(buttonRow(button("Retire this phone's Hosted identity", tone = Tone.DANGER) {
-                android.app.AlertDialog.Builder(this).setTitle("Retire Hosted identity?").setMessage("Revoke this phone on the root computer too. Its encrypted keys and trust history stay on this phone for recovery.")
-                    .setNegativeButton("Cancel", null).setPositiveButton("Retire") { _, _ -> verified("Retire this phone's Hosted identity", requireScreenLock = false) { action { runtime.retire() } } }.show()
-            }))
+            if (enrolled) retirementAction()
         } else if (enrolled) {
             // Daily use first: files across, then texts and calls.
             group("Send and receive") {
@@ -219,10 +257,14 @@ class HostedActivity : ComponentActivity() {
         if (runtime.enabled()) {
             group("Account") {
                 if (account.signedIn()) actions(button("Sign out") { action { account.signOut() } })
-                else actions(button("Sign in with your browser", true) { runCatching {
-                    val service = AuthorizationService(this@HostedActivity)
-                    try { login.launch(service.getAuthorizationRequestIntent(account.request())) } finally { service.dispose() }
-                }.onFailure { message("Could not open sign-in. Check deployment settings.") } })
+                else {
+                    addView(text("Sync keeps running. Sign in again only to change this phone's approval.", 14f, Palette.MUTED))
+                    actions(button(if (signingIn) "Waiting for sign-in…" else "Sign in to Saiph") { signIn() }.apply { isEnabled = !signingIn })
+                    if (loginError.isNotEmpty()) {
+                        addView(text(loginError, 14f, Palette.WARN))
+                        actions(button("Use browser app instead", tone = Tone.TONAL) { signIn(browserApp = true) }.apply { isEnabled = !signingIn })
+                    }
+                }
             }
             group("Sharing permissions") {
                 addView(text("Choose only the features you want. Notification access lets Saiph share your phone notifications. Android may restrict clipboard access while Saiph is in the background.", 14f, Palette.MUTED))
@@ -245,6 +287,49 @@ class HostedActivity : ComponentActivity() {
         })
         UsageAnalytics.settingsViews(this).forEach(root::addView)
     }
+    private fun signInScreen(enrolled: Boolean) {
+        root.addView(card(strong = true).apply {
+            addView(text("Your phone and computers, in tune.", 22f, bold = true))
+            addView(text("Sign in with the same Saiph account you use on your computer. Connection settings are taken care of for you.", 15f))
+            actions(button(if (signingIn) "Waiting for sign-in…" else "Sign in to Saiph", true) { signIn() }.apply { isEnabled = !signingIn })
+            if (signingIn) addView(text("Finish signing in in your browser, then return to Saiph.", 14f, Palette.MUTED))
+            if (loginError.isNotEmpty()) {
+                addView(text(loginError, 14f, Palette.WARN).apply { accessibilityLiveRegion = android.view.View.ACCESSIBILITY_LIVE_REGION_POLITE })
+                actions(button("Use browser app instead", tone = Tone.TONAL) { signIn(browserApp = true) }.apply { isEnabled = !signingIn })
+            }
+        })
+        if (!runtime.enabled() && !enrolled) {
+            actionsOnRoot(button("I self-host my own Hub") {
+                getSharedPreferences("orion", 0).edit().putBoolean("self_host", true).apply()
+                finish()
+            })
+            // Custom builds retain manual configuration outside the normal account flow.
+            if (!runtime.hasPackagedDefaults()) {
+                actionsOnRoot(button(if (deploymentSettings) "Hide custom service settings" else "Custom service (advanced)", tone = Tone.TONAL) { deploymentSettings = !deploymentSettings; render() })
+                if (deploymentSettings) group("Custom service") {
+                    val origin = field("Hosted service address", prefs.getString("origin", "")!!, this)
+                    val issuer = field("Sign-in issuer (HTTPS, ending in /)", prefs.getString("issuer", "")!!, this)
+                    val audience = field("API audience", prefs.getString("audience", "")!!, this)
+                    val client = field("Android native client ID", prefs.getString("client_id", "")!!, this)
+                    val refresh = CheckBox(context).apply { text = "Keep me signed in with a protected rotating refresh token"; isChecked = prefs.getBoolean("refresh_tokens", false); setTextColor(Palette.TEXT); buttonTintList = android.content.res.ColorStateList.valueOf(Palette.ACCENT) }; addView(refresh)
+                    actions(button("Save custom service") { verified("Change the Saiph Hosted connection", requireScreenLock = false) {
+                        action { runtime.configure(origin.text.toString(), issuer.text.toString(), audience.text.toString(), client.text.toString(), refresh.isChecked) }
+                    } })
+                }
+            }
+        }
+        if (!runtime.enabled() && enrolled) retirementAction()
+    }
+    private fun statusLine() = when {
+        account.signedIn() -> runtime.status + " · Signed in"
+        prefs.contains("device_id") -> runtime.status
+        else -> ""
+    }
+    private fun actionsOnRoot(vararg buttons: Button) = root.addView(buttonRow(*buttons))
+    private fun retirementAction() = actionsOnRoot(button("Retire this phone's Hosted identity", tone = Tone.DANGER) {
+        android.app.AlertDialog.Builder(this).setTitle("Retire Hosted identity?").setMessage("Revoke this phone on the root computer too. Its encrypted keys and trust history stay on this phone for recovery.")
+            .setNegativeButton("Cancel", null).setPositiveButton("Retire") { _, _ -> verified("Retire this phone's Hosted identity", requireScreenLock = false) { action { runtime.retire() } } }.show()
+    })
     /** One switch for the whole service; starting it also applies this build's connection defaults. */
     private fun toggleHosted() = action {
         val enabled = !runtime.enabled()

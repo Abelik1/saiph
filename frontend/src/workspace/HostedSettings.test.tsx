@@ -7,7 +7,23 @@ const off: HostedState = {available: true, enabled: false, configured: true, ide
 const active: HostedState = {...off, enabled: true, identity: true, status: "active", account: {status: "signed_in", refresh_tokens: false, error: ""}, roster: {expires_at: 1900000000, version: 2, clock_warning: false, members: [{id: "root", label: "This computer", root: true, fingerprint: "root fingerprint"}, {id: "phone", label: "Phone", root: false, fingerprint: "phone fingerprint"}]}};
 function setup(hosted: HostedState, call = vi.fn().mockResolvedValue({})) { render(<HostedSettings hosted={hosted} client={{call} as unknown as Client} />); return call; }
 describe("Hosted preview settings", () => {
-  it("opens off without performing any native action", () => { const call = setup(off); expect(screen.getByRole("status")).toHaveTextContent("Off"); expect(call).not.toHaveBeenCalled(); expect(screen.queryByRole("button", {name: "Sign in with your browser"})).toBeNull(); });
+  it("offers one sign-in action while off, without performing native work until clicked", async () => {
+    const call = setup(off);
+    expect(screen.getByRole("status")).toHaveTextContent("Off"); expect(call).not.toHaveBeenCalled();
+    expect(screen.queryByText("Deployment settings")).toBeNull();
+    expect(screen.queryByRole("textbox")).toBeNull();
+    fireEvent.click(screen.getByRole("button", {name: "Sign in to Saiph"}));
+    await waitFor(() => expect(call).toHaveBeenCalledWith("hosted.sign_in"));
+    expect(call.mock.calls.map(([method]) => method)).toEqual(["hosted.enable", "hosted.sign_in"]);
+  });
+  it("turns Hosted back on without reopening the browser when the account is still signed in", async () => {
+    const call = setup({...off, identity: true, account: {status: "signed_in", refresh_tokens: false, error: ""}});
+    expect(screen.queryByText(/New to the beta/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", {name: "Sign in to Saiph"}));
+    await waitFor(() => expect(call).toHaveBeenCalledWith("hosted.enable", {enabled: true}));
+    expect(call).not.toHaveBeenCalledWith("hosted.sign_in");
+  });
+  it("points a new tester to their invitation before signing in", () => { setup(off); expect(screen.getByText(/Activate your invitation code/)).toBeVisible(); });
   it("requires deployment config and respects self-hosted pairing", () => { setup({...off, configured: false, self_hosted_paired: true}); expect(screen.queryByRole("button", {name: "Turn on Hosted"})).toBeNull(); expect(screen.getByText(/paired with a self-hosted Hub/)).toBeVisible(); });
   it("requires explicit full-fingerprint confirmation before approval", async () => {
     const call = setup(active, vi.fn().mockResolvedValue({device_id: "phone", fingerprint: "FULL FINGERPRINT", expires_at: 1900000000}));

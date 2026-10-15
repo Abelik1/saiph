@@ -53,8 +53,7 @@ describe("Setup guide", () => {
     const call = vi.fn().mockResolvedValue({});
     const state = { ...hubState(false), hosted: { available: true, enabled: true, status: "setup", identity: false, configured: true, account: { status: "signed_out", error: "", refresh_tokens: false } } } as unknown as State;
     const { rerender } = render(<SetupWizard state={state} client={{ call } as unknown as Client} close={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));  // Saiph account is the default.
-    fireEvent.click(await screen.findByRole("button", { name: "Sign in with your browser" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sign in to Saiph" }));
     expect(call).toHaveBeenCalledWith("settings.save", { setup: { mode: "hosted" } });
     await waitFor(() => expect(call).toHaveBeenCalledWith("hosted.sign_in"));
     const signedIn = { ...state, hosted: { ...state.hosted!, account: { status: "signed_in", error: "", refresh_tokens: false } } } as State;
@@ -67,6 +66,41 @@ describe("Setup guide", () => {
     fireEvent.click(screen.getByRole("button", { name: "Skip for now" }));
     expect(screen.getByLabelText(/Share the clipboard/)).toBeChecked();
     expect(screen.queryByLabelText(/Phone remote/)).toBeNull();
+  });
+
+  it("starts from a fresh bundled account with one sign-in action and no deployment form", async () => {
+    const call = vi.fn().mockResolvedValue({});
+    render(<SetupWizard state={hubState(false)} client={{ call } as unknown as Client} close={vi.fn()} />);
+    expect(call).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Sign in to Saiph" }));
+    await waitFor(() => expect(call).toHaveBeenCalledWith("hosted.sign_in"));
+    expect(call.mock.calls.map(([method]) => method)).toEqual(["settings.save", "hosted.enable", "hosted.sign_in"]);
+    expect(screen.queryByText(/Enter them under Settings/)).toBeNull();
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(call).not.toHaveBeenCalledWith("hosted.setup_root");
+  });
+
+  it("reports a failed enable without opening the browser or losing the retry action", async () => {
+    const call = vi.fn(async (method: string) => {
+      if (method === "hosted.enable") throw new Error("Connection could not be started.");
+      return {};
+    });
+    render(<SetupWizard state={hubState(false)} client={{ call } as unknown as Client} close={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Sign in to Saiph" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Connection could not be started.");
+    expect(call).not.toHaveBeenCalledWith("hosted.sign_in");
+    expect(screen.getByRole("button", { name: "Sign in to Saiph" })).toBeEnabled();
+  });
+
+  it("does not ask people to supply service settings when a build is incomplete", () => {
+    const state = hubState(false);
+    state.hosted!.configured = false;
+    const call = vi.fn();
+    render(<SetupWizard state={state} client={{ call } as unknown as Client} close={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "Sign in to Saiph" })).toBeDisabled();
+    expect(screen.getByRole("status")).toHaveTextContent("Download the current beta");
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(call).not.toHaveBeenCalled();
   });
 
   it("lets a second computer join as another computer and waits for its main computer", async () => {

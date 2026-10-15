@@ -8,8 +8,8 @@ from uuid import uuid4
 import pytest
 import requests
 
-from orion_mini.hosted_runtime import ROOT_ONLY, HostedController, HostedError
-from orion_mini.hosted_transport import HostedTransport
+from orion_mini.hosted_runtime import NO_ACCESS, ROOT_ONLY, HostedController, HostedError
+from orion_mini.hosted_transport import HostedTransport, TransportError
 
 from test_hosted_runtime import CONFIG, Presence, SyntheticProtection, workspace
 
@@ -211,3 +211,24 @@ def test_a_member_stays_connected_after_restart_without_its_own_root_keys(tmp_pa
     again.step()
     assert again.status == "keys_unavailable"
     assert again.session is None
+
+
+def test_account_without_beta_access_is_told_to_activate_its_invitation(tmp_path, monkeypatch):
+    """The service answers 403 until the account redeems an invitation; say so instead of 'unreachable'."""
+    service = SyntheticService()
+    main = computer(tmp_path, "main", service, monkeypatch, [])
+    root_code = main.setup_root()
+
+    class NoAccess(HostedTransport):
+        def _call(self, method, path, *, token=None, value=None):
+            raise TransportError(403)
+
+    newcomer = computer(tmp_path, "newcomer", service, monkeypatch, [])
+    newcomer._transport_factory = NoAccess
+    with pytest.raises(HostedError, match="no beta access yet") as error:
+        newcomer.setup_root()
+    assert str(error.value) == NO_ACCESS
+    assert not newcomer.identity.exists()
+    with pytest.raises(HostedError, match="no beta access yet"):
+        newcomer.join(root_code["code"], True)
+    assert not newcomer.identity.exists()
