@@ -62,6 +62,33 @@ def test_scoped_reads_cannot_authenticate_normal_device_bus_or_browser_apis(agen
     assert "PRIVATE_BODY" not in caplog.text and grant["token"] not in caplog.text
 
 
+def test_devices_report_battery_and_do_not_disturb_to_a_devices_read_delegate(agents):
+    hub, c, _, _, phone = agents
+    _, auth = delegate(agents, ["devices.read"])
+    body = c.get("/v1/agents/devices", headers=auth).json()
+    # Nothing reported yet: unknown, not "off" and not 0 percent.
+    assert body["dnd"] is None
+    assert next(d for d in body["devices"] if d["id"] == phone)["battery"] is None
+    hub.LINK.store.publish(phone, event(type="battery", payload={"battery_level": 64, "is_charging": True}))
+    now = int(time.time())
+    hub.LINK.store.publish(phone, event(type="focus.state", payload={"active": True, "changed_at": now}))
+    body = c.get("/v1/agents/devices", headers=auth).json()
+    row = next(d for d in body["devices"] if d["id"] == phone)
+    assert row["battery"]["battery_level"] == 64 and row["battery"]["is_charging"] is True and "updated_at" in row["battery"]
+    assert body["dnd"] == {"source": phone, "active": True, "changed_at": now}
+    # The fields that were already there are unchanged, and no notification content leaks in.
+    assert {"id", "name", "online", "last_seen_at", "capabilities"} <= set(row)
+    assert "PRIVATE_BODY" not in json.dumps(body)
+    hub.LINK.store.publish(phone, event(type="focus.state", payload={"active": False, "changed_at": now + 60}))
+    assert c.get("/v1/agents/devices", headers=auth).json()["dnd"]["active"] is False
+
+
+def test_devices_still_need_the_devices_read_scope(agents):
+    _, c, *_ = agents
+    _, auth = delegate(agents, ["notifications.read"])
+    assert c.get("/v1/agents/devices", headers=auth).status_code == 403
+
+
 def test_delegate_requires_mesh_no_browser_origin_and_a_live_unexpired_owner(agents):
     hub, c, _, owner, _ = agents
     grant, auth = delegate(agents)

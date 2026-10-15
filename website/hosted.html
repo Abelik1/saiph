@@ -5,7 +5,7 @@
   <meta name="referrer" content="no-referrer">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Saiph Hosted</title>
-  <meta name="description" content="Explore the Saiph Hosted design and current development status. Paid subscriptions are not open.">
+  <meta name="description" content="Saiph Hosted connects your Android phone and Windows and Linux computers with no server to run. End-to-end encrypted, from €3.99 a month or €36 a year.">
   <meta name="theme-color" content="#0a0e13">
   <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
   <link rel="stylesheet" href="assets/site.css">
@@ -32,13 +32,39 @@
 <main id="main">
   <section class="hero">
     <div class="wrap center">
-      <span class="pill" data-hosted-status data-beta-text="Design preview · invite-only beta">Design preview &middot; not open yet</span>
+      <span class="pill" data-hosted-status data-live-text="Beta · available now" data-beta-text="Invite-only beta">Coming soon</span>
       <h1>Saiph, <em>without the server.</em></h1>
-      <p class="lede">We run the Hub for you. Your devices encrypt content before it leaves them.</p>
+      <p class="lede">We run the connection for you: no server, no Tailscale, nothing to keep running at home. Your devices encrypt content before it leaves them.</p>
       <div class="btn-row" style="margin-top:28px">
-        <a class="btn primary" data-link="subscribe" href="#">Early access coming soon</a>
+        <a class="btn primary" data-link="subscribe" data-live-text="Subscribe" href="#">Early access coming soon</a>
         <a class="btn" href="self-host.html">Self-host instead</a>
       </div>
+    </div>
+  </section>
+  <section class="section" id="plans" aria-labelledby="plans-title" data-hosted-live hidden>
+    <div class="wrap" style="max-width:900px">
+      <h2 id="plans-title" class="center" style="margin-bottom:32px">One plan, two ways to pay.</h2>
+      <div class="plans">
+        <div class="card plan">
+          <h3>Monthly</h3>
+          <div class="price">€3.99 <small>/ month</small></div>
+          <ul class="checks">
+            <li>Everything in Saiph Hosted</li>
+            <li>Cancel any time</li>
+          </ul>
+          <a class="btn" data-link="subscribe" data-live-text="Choose monthly" href="#">Choose monthly</a>
+        </div>
+        <div class="card plan featured">
+          <h3>Yearly <span class="tag cyan">Save 25%</span></h3>
+          <div class="price">€36 <small>/ year</small></div>
+          <ul class="checks">
+            <li>Works out at €3 a month</li>
+            <li>Cancel any time; access runs to the end of the year you paid for</li>
+          </ul>
+          <a class="btn primary" data-link="subscribe" data-live-text="Choose yearly" href="#">Choose yearly</a>
+        </div>
+      </div>
+      <p class="muted center" style="font-size:.92rem;margin-top:18px">Sign in to your Saiph account to subscribe, then download Saiph for your computer and phone there. EU consumers can withdraw within 14 days for a full refund; see <a href="refunds.html">refunds and cancellation</a>.</p>
     </div>
   </section>
   <section class="section alt" id="trust" aria-labelledby="trust-title">
@@ -54,15 +80,21 @@
   </section>
   <section class="section" aria-labelledby="status-title">
     <div class="wrap" style="max-width:720px">
-      <h2 id="status-title">Before launch</h2>
-      <p>Invite-only beta access covers notifications and dismissal, text clipboard, and files or photos you choose to send.</p>
-      <ul class="checks todo">
-        <li>Texts, calls, image clipboard and photo browsing (self-hosted only for now)</li>
-        <li>App integration and independent security review</li>
-        <li>Price, regions, retention and privacy terms</li>
-        <li>Export and migration</li>
+      <h2 id="status-title">What's included</h2>
+      <ul class="checks">
+        <li>Phone notifications on your computers, and dismissing them</li>
+        <li>Text clipboard in both directions</li>
+        <li>Photos and files you choose to send, either way</li>
+        <li>Approving and revoking your own devices</li>
       </ul>
-      <p class="muted" style="font-size:.92rem">This is a design preview with an invite-only beta, not a public service or a verified security guarantee. Self-hosted Hubs currently handle readable content on your own server.</p>
+      <h3 style="margin-top:28px">Coming next</h3>
+      <ul class="checks todo">
+        <li>Texts and calls (available on a self-hosted Hub today)</li>
+        <li>Image clipboard and browsing recent photos</li>
+        <li>Export and migration</li>
+        <li>An independent security review</li>
+      </ul>
+      <p class="muted" style="font-size:.92rem">Saiph Hosted is a beta service: expect the odd bug and occasional downtime while it grows. It has not yet had an independent security review. A self-hosted Hub handles readable content on your own server instead.</p>
     </div>
   </section>
 </main>

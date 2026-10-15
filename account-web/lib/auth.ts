@@ -2,7 +2,7 @@
 import "server-only";
 import { Auth0Client } from "@auth0/nextjs-auth0/server";
 import { NextResponse } from "next/server";
-import { accountCookieName, readAuthConfig } from "./policy.mjs";
+import { accountCookieName, loginParameters, readAuthConfig } from "./policy.mjs";
 import {canUseAccount, completedSecondFactor, readBetaConfig, secondFactorRequired} from "./beta-policy.mjs";
 let instance: Auth0Client | undefined;
 export function getAuth0() {
@@ -14,7 +14,7 @@ export function getAuth0() {
     instance = new Auth0Client({
       domain: config.domain, clientId: config.clientId, clientSecret: config.clientSecret,
       secret: config.secret, appBaseUrl: config.appBaseUrl,
-      authorizationParameters: {scope: "openid profile email", ...(beta ? {audience:beta.audience} : {})},
+      authorizationParameters: loginParameters(beta),
       enableAccessTokenEndpoint: false, enableConnectAccountEndpoint: false,
       enableTelemetry: false, signInReturnToPath: "/account",
       session: {rolling: false, absoluteDuration: 3600, inactivityDuration: 1800,

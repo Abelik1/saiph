@@ -47,9 +47,15 @@ def test_launch_needs_every_artifact_and_waitlist_privacy():
         site.validate_settings(config, 'launch')
 
 
-@pytest.mark.parametrize('settings', [{'subscribeUrl': 'https://payments.github.com/pay'},
-    {'hostedPrice': '5'}, {'AUTH_TOKEN': 'private'}, {'license': {'core': 'MIT'}}])
-def test_paid_hosted_credentials_and_wrong_licences_fail(settings):
+SUBSCRIBE = {'subscribeUrl': 'https://account.dev.usesaiph.com/account', 'hostedPrice': '€3.99'}
+
+
+@pytest.mark.parametrize('settings', [{'subscribeUrl': 'https://payments.github.com/pay', 'hostedPrice': '€3.99'},
+    {'subscribeUrl': 'https://account.dev.usesaiph.com/account?plan=x', 'hostedPrice': '€3.99'},
+    {**SUBSCRIBE, 'hostedPrice': '5'}, {**SUBSCRIBE, 'hostedPrice': '€0'}, {'hostedPrice': '€3.99'},
+    {'subscribeUrl': SUBSCRIBE['subscribeUrl']}, {'hostedPriceNote': 'or €36 a year'},
+    {**SUBSCRIBE, 'hostedPriceNote': 'x' * 81}, {'AUTH_TOKEN': 'private'}, {'license': {'core': 'MIT'}}])
+def test_bad_hosted_plan_settings_credentials_and_wrong_licences_fail(settings):
     with pytest.raises(ValueError):
         site.validate_settings(settings, 'preview')
 
@@ -72,20 +78,21 @@ def test_existing_output_is_never_overwritten(tmp_path):
         site.prepare(ROOT / 'website', tmp_path / 'existing', {})
 
 
-def test_public_source_landing_has_truthful_link_and_no_checkout(tmp_path):
-    settings = json.loads((ROOT / 'website/landing-settings.json').read_text())
+def test_public_source_landing_has_truthful_link_and_account_checkout(tmp_path):
+    settings = json.loads((ROOT / 'website/landing-settings.json').read_text(encoding='utf-8'))
     output = tmp_path / 'landing'
     site.prepare(ROOT / 'website', output, settings)
-    config = (output / 'assets/config.js').read_text()
+    config = (output / 'assets/config.js').read_text(encoding='utf-8')
     assert 'https://github.com/Abelik1/saiph' in config
     assert '"sourceVisibility": "public"' in config
-    assert '"subscribeUrl": ""' in config
+    # Checkout happens on the account site after sign-in, never on these pages.
+    assert '"subscribeUrl": "https://account.dev.usesaiph.com/account"' in config
     assert '"waitlistUrl": ""' in config
     # Public source alone does not open launch mode: release downloads and the
     # reviewed waitlist remain separate gates.
     with pytest.raises(ValueError, match='Launch requires'):
         site.validate_settings(settings, 'launch')
-    assert 'design preview' in (output / 'hosted.html').read_text()
+    assert 'beta service' in (output / 'hosted.html').read_text(encoding='utf-8')
 
 
 def launch_settings():
@@ -294,7 +301,7 @@ BETA_INVITE = 'https://appdistribution.firebase.dev/i/0123abcd4567ef89'
 def test_android_beta_invite_is_optional_and_shown_when_configured(tmp_path):
     assert site.validate_settings({}, 'preview')['androidBetaUrl'] == ''
     assert site.validate_settings({'androidBetaUrl': BETA_INVITE}, 'preview')['androidBetaUrl'] == BETA_INVITE
-    settings = json.loads((ROOT / 'website/landing-settings.json').read_text())
+    settings = json.loads((ROOT / 'website/landing-settings.json').read_text(encoding='utf-8'))
     settings['androidBetaUrl'] = BETA_INVITE
     result = render_site_script(settings)
     assert result['beta'] == BETA_INVITE and result['betaHidden'] is False
@@ -330,7 +337,9 @@ def test_beta_access_account_link_rejects_other_links(value):
 
 
 def test_early_access_opens_beta_access_until_signup_or_payment_opens():
-    settings = json.loads((ROOT / 'website/landing-settings.json').read_text())
+    settings = json.loads((ROOT / 'website/landing-settings.json').read_text(encoding='utf-8'))
+    for name in ('subscribeUrl', 'hostedPrice', 'hostedPriceNote'):
+        settings.pop(name, None)
     settings['betaAccountUrl'] = BETA_ACCOUNT
     result = render_site_script(settings)
     # The beta's front page explains the invitation before asking anyone to sign in.
@@ -346,6 +355,23 @@ def test_early_access_opens_beta_access_until_signup_or_payment_opens():
     result = render_site_script(settings)
     assert result['subscribe'] == '' and result['subscribeDisabled'] == 'true'
     assert result['subscribeText'] == 'Early access coming soon'
+
+
+def test_hosted_plan_settings_accept_the_account_page_and_euro_price():
+    config = site.validate_settings({**SUBSCRIBE, 'hostedPriceNote': 'or €36 a year'}, 'preview')
+    assert config['subscribeUrl'] == SUBSCRIBE['subscribeUrl'] and config['hostedPrice'] == '€3.99'
+
+
+def test_open_subscriptions_link_to_the_account_and_show_hosted_as_available():
+    settings = json.loads((ROOT / 'website/landing-settings.json').read_text(encoding='utf-8'))
+    assert settings['subscribeUrl'] == BETA_ACCOUNT and settings['hostedPrice'] == '€3.99'
+    site.validate_settings(settings, 'preview')
+    result = render_site_script(settings)
+    assert result['subscribe'] == BETA_ACCOUNT and result['subscribeDisabled'] == ''
+    assert result['subscribeText'] == 'Subscribe' and result['hostedStatus'] == 'Available now'
+    # Subscriptions take precedence over the email list and invitation-only access.
+    settings = {**launch_settings(), **SUBSCRIBE, 'betaAccountUrl': BETA_ACCOUNT}
+    assert render_site_script(settings)['subscribe'] == SUBSCRIBE['subscribeUrl']
 
 
 def test_reviewed_waitlist_still_comes_before_beta_access():

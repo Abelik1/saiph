@@ -173,6 +173,10 @@ button:disabled { background: var(--muted); border-color: var(--border); color: 
 .sign-in > p { margin-top: 10px; }
 .sign-in .button { margin-top: 14px; }
 .sign-in .fine { margin: 16px 0 0; }
+/* Google's dark sign-in button: their colours, their "G", sentence-case label. */
+.google-button { display: flex; align-items: center; justify-content: center; gap: 12px; width: 100%; min-height: 48px; margin-top: 16px; padding: 10px 20px; border-radius: 999px; border: 1px solid #8e918f; background: #131314; color: #e3e3e3; font: 500 .95rem var(--sans); text-decoration: none; transition: background .15s, border-color .15s; }
+.google-button:hover { background: #1f1f20; border-color: #c4c7c5; color: #e3e3e3; }
+.google-button svg { flex: none; }
 .steps { position: relative; list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; counter-reset: step; }
 .steps li { counter-increment: step; position: relative; padding: 24px; border: 1px solid var(--border); border-radius: var(--radius); background: color-mix(in srgb, var(--card) 70%, transparent); }
 .steps li::before { content: counter(step); display: grid; place-items: center; width: 30px; height: 30px; margin-bottom: 18px; border-radius: 50%; border: 1px solid var(--secondary-border); background: var(--secondary); color: var(--secondary-foreground); font: 600 .82rem var(--mono); }
