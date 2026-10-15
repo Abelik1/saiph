@@ -45,6 +45,7 @@ condition = "AND"
 paths = [
   '''(^|[\\/])account-web[\\/]tests[\\/]billing-routes\.test\.mjs$''',
   '''(^|[\\/])account-web[\\/]tests[\\/]billing-lifecycle\.test\.mjs$''',
+  '''(^|[\\/])account-web[\\/]tests[\\/]billing-withdraw\.test\.mjs$''',
   '''(^|[\\/])account-web[\\/]tests[\\/]http-smoke\.mjs$''',
 ]
 regexTarget = "secret"

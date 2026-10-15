@@ -2,7 +2,7 @@
 import {timingSafeEqual} from "node:crypto";
 import type Stripe from "stripe";
 import {billingHeaders,maySubscribe,readBillingConfig,reportBillingConfig,type BillingConfig,type PlanKey} from "./policy.ts";
-import {BillingConflict,checkout,grantPolicy,portal,processWebhook,eventDescriptor,type BillingStore} from "./service.ts";
+import {BillingConflict,WithdrawalUnavailable,checkout,grantPolicy,portal,processWebhook,eventDescriptor,withdraw,type BillingStore} from "./service.ts";
 import {syncGrants} from "./grant-sync.mjs";
 import type {GrantValue} from "./grant-push.mjs";
 import {secondFactorRequired} from "../beta-policy.mjs";
@@ -53,6 +53,30 @@ export async function accountAction(request:Request,action:"checkout"|"portal",d
       ? reply(409,"You already have a subscription. Use Manage billing on your account page.")
       : reply(409,"No subscription has been started on this account yet.");
     return reply(503,"Billing is temporarily unavailable. Please try again shortly.");
+  }
+}
+/** EU withdrawal confirmation: exactly `confirm=withdraw` from the account's own form. */
+export async function withdrawAction(request:Request,deps:Dependencies):Promise<Response> {
+  if (request.method!=="POST") return reply(405,"Method not allowed.");
+  const config=readBillingConfig(deps.env);if(!config) return reportBillingConfig(deps.env), reply(503,"Subscriptions are not available yet.");
+  if (request.headers.get("origin")!==config.origin || request.headers.get("sec-fetch-site") && request.headers.get("sec-fetch-site")!=="same-origin"
+    || new URL(request.url).search) return reply(403,"Request rejected.");
+  try {
+    const body=await boundedBody(request,256);
+    const fields=request.headers.get("content-type")?.split(";")[0].trim()==="application/x-www-form-urlencoded"
+      ? [...new URLSearchParams(body.toString("utf8")).entries()] : [];
+    if (fields.length!==1 || fields[0][0]!=="confirm" || fields[0][1]!=="withdraw") return reply(400,"Confirm the withdrawal on your account page.");
+  } catch {return reply(400,"Request rejected.");}
+  try {
+    const session=await deps.getSession();if(!session) return reply(401,"Sign in required.");
+    const subject=session.user.sub;
+    if(!maySubscribe(config,subject) || secondFactorRequired(deps.env) && session.user.mfa!==true) return reply(403,"Access denied.");
+    await deps.withStore(config,store=>withdraw(deps.createStripe(config),store,config,subject));
+    // The page re-reads the outcome from Stripe; the query only selects wording.
+    return new Response(null,{status:303,headers:{...billingHeaders,Location:config.origin+"/account/withdraw?done=1"}});
+  } catch (error) {
+    if (error instanceof WithdrawalUnavailable) return reply(409,"There is no subscription within its 14-day withdrawal period on this account.");
+    return reply(503,"Withdrawal is temporarily unavailable. Please try again shortly or contact support@usesaiph.com.");
   }
 }
 export async function webhook(request:Request,deps:Dependencies):Promise<Response> {
