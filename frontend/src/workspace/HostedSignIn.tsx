@@ -1,0 +1,20 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+import type { Client, HostedState } from "./types";
+import { Action } from "./ui";
+
+/** One explicit sign-in action selects the bundled connection before opening the browser. */
+export async function signInToSaiph(client: Client, hosted: HostedState) {
+  if (!hosted.enabled) await client.call("hosted.enable", { enabled: true });
+  // Turning Hosted back on keeps an existing sign-in; only open the browser when it is needed.
+  if (hosted.account?.status !== "signed_in") await client.call("hosted.sign_in");
+}
+
+export function HostedSignIn({ client, hosted }: { client: Client; hosted: HostedState }) {
+  const signingIn = hosted.account?.status === "signing_in";
+  return <>
+    <p>{signingIn ? "Finish signing in in your browser, then return to Saiph." : "Use the same Saiph account on your phone and computer."}</p>
+    {!signingIn && !hosted.identity && <p className="muted">New to the beta? Activate your invitation code on your Saiph account page first, with the account you sign in with here.</p>}
+    <Action variant="default" disabled={!hosted.configured || signingIn || hosted.self_hosted_paired}
+      run={() => signInToSaiph(client, hosted)}>{signingIn ? "Waiting for sign-in…" : "Sign in to Saiph"}</Action>
+  </>;
+}

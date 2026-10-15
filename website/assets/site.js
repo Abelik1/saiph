@@ -50,12 +50,17 @@
   document.querySelectorAll("[data-beta-access]").forEach((el) => { el.hidden = !betaAccountUrl; });
   document.querySelectorAll('[data-link="beta-account"]').forEach((a) => link(a, betaAccountUrl, "Beta access invitations are not open"));
   document.querySelectorAll('[data-link="releases"]').forEach((a) => link(a, cfg.releasesUrl, "Releases coming soon"));
+  // With subscriptions open, installers for every platform are in the subscriber's account.
+  const subscribeUrl = /^https:\/\/[a-z0-9.-]+\/account$/.test(cfg.subscribeUrl || "") ? cfg.subscribeUrl : "";
   document.querySelectorAll("[data-download]").forEach((a) => {
-    const betaDesktop = ["windows", "linux"].includes(a.dataset.download) && betaAccountUrl;
-    const url = cfg.downloads && cfg.downloads[a.dataset.download] || betaDesktop;
+    const fromAccount = (["windows", "linux", "android"].includes(a.dataset.download) && subscribeUrl)
+      || (["windows", "linux"].includes(a.dataset.download) && betaAccountUrl);
+    const url = cfg.downloads && cfg.downloads[a.dataset.download] || fromAccount;
     link(a, url, "Download coming soon");
     const go = a.querySelector(".go");
-    if (betaDesktop && go) go.textContent = "Get beta access";
+    if (fromAccount && go && !(cfg.downloads && cfg.downloads[a.dataset.download])) {
+      go.textContent = subscribeUrl ? "Download from your account →" : "Get beta access";
+    }
     if (!url && go) {
       go.textContent = "Coming soon";
       go.classList.add("muted");
@@ -63,8 +68,8 @@
   });
 
   document.querySelectorAll('[data-link="subscribe"]').forEach((a) => {
-    if (cfg.subscribeUrl) {
-      link(a, cfg.subscribeUrl);
+    if (subscribeUrl) {
+      link(a, subscribeUrl);
       a.textContent = a.dataset.liveText || "Subscribe";
     } else if (waitlistReady) {
       link(a, "waitlist.html");
@@ -98,15 +103,23 @@
   });
   // The Hosted plan's label says what is open now.
   document.querySelectorAll("[data-hosted-status]").forEach((el) => {
-    if (!cfg.subscribeUrl && !waitlistReady && betaAccountUrl) el.textContent = el.dataset.betaText || "Invite-only beta";
+    if (subscribeUrl) el.textContent = el.dataset.liveText || "Available now";
+    else if (!waitlistReady && betaAccountUrl) el.textContent = el.dataset.betaText || "Invite-only beta";
   });
+  document.querySelectorAll("[data-hosted-live]").forEach((el) => { el.hidden = !subscribeUrl; });
+  document.querySelectorAll("[data-hosted-soon]").forEach((el) => { el.hidden = Boolean(subscribeUrl); });
 
+  const price = subscribeUrl && cfg.hostedPrice;
   document.querySelectorAll("[data-price]").forEach((el) => {
-    el.textContent = cfg.hostedPrice || "Early access";
+    el.textContent = price || "Early access";
     const period = document.createElement("small");
-    period.textContent = cfg.hostedPrice ? cfg.hostedPeriod || "" : "pricing at launch";
+    period.textContent = price ? cfg.hostedPeriod || "" : "pricing at launch";
     el.appendChild(document.createTextNode(" "));
     el.appendChild(period);
+  });
+  document.querySelectorAll("[data-price-note]").forEach((el) => {
+    el.textContent = price && cfg.hostedPriceNote || "";
+    el.hidden = !el.textContent;
   });
   document.querySelectorAll("[data-license]").forEach((el) => {
     el.textContent = (cfg.license && cfg.license[el.dataset.license]) || "";
@@ -140,7 +153,8 @@
   document.querySelectorAll('[data-link="processor-privacy"]').forEach((a) => link(a, waitlistReady ? waitlist.processorPrivacyUrl : "", "Provider information is not activated yet"));
   const release = cfg.release || {};
   const releaseReady = cfg.sourceVisibility === "public" && Boolean(cfg.releasesUrl) && Boolean(release.sourceCommit);
-  if (betaAccountUrl && !releaseReady) fill("[data-release-status]", "Beta installers are available from your Saiph account. Sign in and activate your invitation code. No compilation or personal server is required.");
+  if (subscribeUrl && !releaseReady) fill("[data-release-status]", "Installers for Windows, Linux and Android are in your Saiph account. Subscribe to Saiph Hosted or activate an invitation code, then download them there. No compilation or personal server is required.");
+  else if (betaAccountUrl && !releaseReady) fill("[data-release-status]", "Beta installers are available from your Saiph account. Sign in and activate your invitation code. No compilation or personal server is required.");
   document.querySelectorAll("[data-release-details]").forEach((el) => { el.hidden = !releaseReady; });
   if (releaseReady) fill("[data-release-status]", "Downloads are pinned to " + release.tag + ". Read the release notes and verify your download before installing.");
   fill("[data-release-tag]", release.tag);

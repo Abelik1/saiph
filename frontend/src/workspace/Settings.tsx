@@ -13,7 +13,9 @@ import { RemoteSettings } from "./RemoteSettings";
 import { BluetoothLockSettings } from "./BluetoothLockSettings";
 import { SettingsLayout } from "./SettingsLayout";
 import { RetainedView } from "./Navigation";
-import { useSettingsSection } from "./settingsNavigation";
+import { useSettingsNavigation, useSettingsSection } from "./settingsNavigation";
+import { Button } from "@/components/ui/button";
+import { Disclosure } from "@/components/ui/disclosure";
 import { UsageSettings, YourWeekSettings } from "./UsageSharing";
 import { YourWeek } from "./YourWeek";
 
@@ -38,6 +40,7 @@ export function WorkspaceModule({
 }
 
 export function Settings({ state, client, openSetup }: { state: State; client: Client; openSetup?: () => void }) {
+  const { connectPhone } = useSettingsNavigation();
   const [tab, setTab] = useSettingsSection("General" as string);
   const [name, setName] = useState(state.settings.machine?.name || "");
   const [hub, setHub] = useState(state.settings.hub?.base_url || ""),
@@ -60,6 +63,9 @@ export function Settings({ state, client, openSetup }: { state: State; client: C
       <RetainedView active={tab === "General"}>
         {() => (
           <div className="columns">
+            {connectPhone && <Card title="Connect your phone" subtitle="Sign in, scan a QR code and approve your phone from the Phone tab.">
+              <Button variant="default" onClick={connectPhone}>Connect a phone</Button>
+            </Card>}
             <div>
               <Card title="This computer">
                 <Form
@@ -126,7 +132,7 @@ export function Settings({ state, client, openSetup }: { state: State; client: C
             <div>
               <WorkspaceModule installed={state.modules?.workspace?.installed} />
               {openSetup && (
-                <Card title="Setup guide" subtitle="Connect, add a phone, choose features and optional tools.">
+                <Card title="Optional setup guide" subtitle="Choose features, check optional tools and review privacy preferences.">
                   <button type="button" onClick={openSetup}>Run the setup guide</button>
                 </Card>
               )}
@@ -151,6 +157,7 @@ export function Settings({ state, client, openSetup }: { state: State; client: C
               workspace={false}
             />
             <HostedSettings hosted={state.hosted} client={client} />
+            <Disclosure summary="Self-hosted Hub" open={state.settings.hub?.paired || !state.hosted?.enabled || undefined}>
             <Card title="Saiph Hub">
               <Form
                 submit={async () => {
@@ -192,6 +199,7 @@ export function Settings({ state, client, openSetup }: { state: State; client: C
                 <p className="inline-error">{state.phone.error}</p>
               )}
             </Card>
+            </Disclosure>
             <HotspotSettings hotspot={state.hotspot} client={client} />
           </div>
         )}

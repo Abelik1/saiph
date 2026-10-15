@@ -12,7 +12,7 @@ from uuid import NAMESPACE_URL, uuid5
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 
-from . import inbox, phone
+from . import continuity, inbox, phone
 from .security import hash_token, now_iso, verify_device_request
 from .link import Event, require_mesh
 
@@ -269,7 +269,12 @@ def router(db, bus, notify):
     @routes.get("/devices")
     async def devices(request: Request):
         authenticate(db, request, "devices.read")
-        return {"devices": bus.presence()}
+        # Battery and Do Not Disturb are device status, not phone content, so they ride the same scope. `battery`
+        # is null until a phone reports it; `dnd` is the latest change from any device, or null.
+        battery = {r["device_id"]: {**json.loads(r["battery_json"]), "updated_at": r["updated_at"]}
+                   for r in db.rows("SELECT * FROM phone_state")}
+        return {"devices": [{**d, "battery": battery.get(d["id"])} for d in bus.presence()],
+                "dnd": continuity.snapshot(db)["dnd"]}
 
     @routes.get("/notifications")
     async def notifications(request: Request, limit: int = 100):

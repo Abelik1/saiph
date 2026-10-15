@@ -8,7 +8,7 @@ import sefirah.network.orion.MeshOrigin
 class BuildVariantTest {
     @Test fun independentDistributionNeverUsesOwnerHubDefault() {
         assertEquals("com.orionmini.mobile", BuildConfig.APPLICATION_ID)
-        assertEquals("0.9.0", BuildConfig.VERSION_NAME)
+        assertEquals("0.9.2", BuildConfig.VERSION_NAME)
         if (BuildConfig.INDEPENDENT) {
             // Push is an explicit opt-in that needs Firebase; it is never implied by it.
             assertTrue(!BuildConfig.HAS_FIREBASE_PUSH || BuildConfig.HAS_FIREBASE)

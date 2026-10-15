@@ -3,9 +3,11 @@
 """Prepare a static Saiph site without publishing it or inventing release URLs."""
 import argparse
 import hashlib
+from html import escape
 from html.parser import HTMLParser
 import ipaddress
 import json
+import os
 import re
 from datetime import date
 from pathlib import Path
@@ -16,7 +18,7 @@ FILES = ('index.html', 'self-host.html', 'hosted.html', 'downloads.html', 'waitl
          'assets/site.css', 'assets/site.js', 'assets/stage.js', 'assets/analytics.js')
 PLATFORMS = ('windows', 'linux', 'android', 'server')
 FIELDS = {'sourceVisibility', 'githubUrl', 'releasesUrl', 'downloads', 'subscribeUrl', 'waitlistUrl',
-          'androidBetaUrl', 'betaAccountUrl', 'waitlistPrivacyUrl', 'waitlistNotice', 'hostedPrice', 'hostedPeriod', 'license', 'privacy', 'waitlist', 'release', 'analytics'}
+          'androidBetaUrl', 'betaAccountUrl', 'waitlistPrivacyUrl', 'waitlistNotice', 'hostedPrice', 'hostedPeriod', 'hostedPriceNote', 'license', 'privacy', 'waitlist', 'release', 'analytics'}
 
 
 def public_url(value):
@@ -50,6 +52,20 @@ WAITLIST_FIELDS = ('processorName', 'processorPrivacyUrl', 'processingLocations'
 RELEASE_FIELDS = ('tag', 'sourceCommit', 'checksumsUrl', 'sourceMetadataUrl')
 FIREBASE_INVITE = re.compile(r'https://appdistribution\.firebase\.dev/i/[A-Za-z0-9]{8,64}')
 BETA_ACCOUNT = re.compile(r'https://[a-z0-9.-]+/account')
+# The trader's postal address is required on the contact page but kept out of Git:
+# the hosting build supplies it in SAIPH_TRADER_ADDRESS and only contact.html gets it.
+TRADER_ADDRESS = re.compile(r"[^\W_][\w .,'/-]{8,198}")
+ADDRESS_SLOT = re.compile(r'(<span data-trader-address>)[^<]*(</span>)')
+
+
+def trader_address(value):
+    value = ' '.join((value or '').split())
+    if value and (not TRADER_ADDRESS.fullmatch(value) or not re.search(r'[0-9]', value)):
+        raise ValueError('Trader address must be one plain line of text with a street number or postcode')
+    return value
+
+
+PRICE = re.compile(r'€[1-9][0-9]{0,2}(\.[0-9]{2})?')
 
 
 def validate_waitlist_url(value, notice_version):
@@ -86,15 +102,25 @@ def validate_settings(settings, mode):
     config = {'sourceVisibility': 'private', 'githubUrl': '', 'releasesUrl': '',
               'downloads': {name: '' for name in PLATFORMS}, 'release': {},
               'subscribeUrl': '', 'waitlistUrl': '', 'androidBetaUrl': '', 'betaAccountUrl': '', 'waitlistPrivacyUrl': '', 'waitlistNotice': '',
-              'privacy': {}, 'waitlist': {}, 'analytics': {'enabled': False, 'scriptPath': '/_vercel/insights/script.js'}, 'hostedPrice': '', 'hostedPeriod': '/ month',
+              'privacy': {}, 'waitlist': {}, 'analytics': {'enabled': False, 'scriptPath': '/_vercel/insights/script.js'}, 'hostedPrice': '', 'hostedPeriod': '/ month', 'hostedPriceNote': '',
               'license': {'core': 'AGPL-3.0-or-later', 'android': 'GPL-3.0-only'}}
     config.update(settings)
     if not isinstance(config['downloads'], dict) or set(config['downloads']) != set(PLATFORMS):
         raise ValueError('Provide exactly the Windows, Linux, Android and server download fields')
     if config['license'] != {'core': 'AGPL-3.0-or-later', 'android': 'GPL-3.0-only'}:
         raise ValueError('Website licence labels must match the reviewed source licences')
-    if config['subscribeUrl'] or config['hostedPrice']:
-        raise ValueError('Paid Hosted is not ready; keep subscription links and prices empty')
+    # Subscriptions are sold on the account site after sign-in; the site only links there.
+    for name in ('subscribeUrl', 'hostedPrice', 'hostedPriceNote'):
+        if not isinstance(config[name], str):
+            raise ValueError('Hosted plan fields must be text')
+    if bool(config['subscribeUrl']) != bool(config['hostedPrice']):
+        raise ValueError('Set the subscription link and the Hosted price together')
+    if config['subscribeUrl'] and not BETA_ACCOUNT.fullmatch(config['subscribeUrl']):
+        raise ValueError('Subscription link must be the HTTPS account /account page')
+    if config['hostedPrice'] and not PRICE.fullmatch(config['hostedPrice']):
+        raise ValueError('Hosted price must be a euro amount such as €3.99')
+    if len(config['hostedPriceNote']) > 80 or (config['hostedPriceNote'] and not config['hostedPrice']):
+        raise ValueError('Price note must be short and accompany a price')
     for name in ('githubUrl', 'releasesUrl', 'waitlistPrivacyUrl', 'betaAccountUrl'):
         if not isinstance(config[name], str):
             raise ValueError('Public link fields must be text')
@@ -214,9 +240,12 @@ class Page(HTMLParser):
                 self.links.append(attrs[key])
 
 
-def prepare(source, output, settings, mode='preview'):
+def prepare(source, output, settings, mode='preview', address=''):
     source, output = Path(source).resolve(), Path(output).absolute()
     config = validate_settings(settings, mode)
+    address = trader_address(address)
+    if mode == 'launch' and not address:
+        raise ValueError('Launch requires the trader address in SAIPH_TRADER_ADDRESS')
     if output.exists() or output.resolve().is_relative_to(source):
         raise ValueError('Use a fresh output directory outside the website source')
     contents = {}
@@ -225,6 +254,12 @@ def prepare(source, output, settings, mode='preview'):
         if any(part.is_symlink() or part.is_junction() for part in [path, *path.parents] if part != source.parent):
             raise ValueError('Website inputs must not use links or junctions')
         contents[name] = path.read_bytes()
+    contact, slots = ADDRESS_SLOT.subn(lambda m: m[1] + escape(address) + m[2] if address else m[0],
+                                       contents['contact.html'].decode('utf-8'))
+    if slots != 1 or any(ADDRESS_SLOT.search(data.decode('utf-8'))
+                         for name, data in contents.items() if name.endswith('.html') and name != 'contact.html'):
+        raise ValueError('Only contact.html may hold the trader address, exactly once')
+    contents['contact.html'] = contact.encode('utf-8')
     pages = {name: Page(data.decode('utf-8')) for name, data in contents.items() if name.endswith('.html')}
     for name, page in pages.items():
         for link in page.links:
@@ -262,8 +297,10 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--mode', choices=('preview', 'launch'), default='preview')
     args = parser.parse_args()
-    result = prepare(args.website, args.output, json.loads(args.settings.read_text(encoding='utf-8')), args.mode)
-    print(f"Prepared {len(result['files'])} static files ({args.mode}); nothing published.")
+    address = os.environ.get('SAIPH_TRADER_ADDRESS', '')
+    result = prepare(args.website, args.output, json.loads(args.settings.read_text(encoding='utf-8')), args.mode, address)
+    print(f"Prepared {len(result['files'])} static files ({args.mode}); "
+          f"trader address {'included' if address.strip() else 'not set'}; nothing published.")
 
 
 if __name__ == '__main__':

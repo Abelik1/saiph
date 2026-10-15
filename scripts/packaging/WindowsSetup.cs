@@ -355,6 +355,7 @@ public static class Setup {
         if (installation == null) return targets;
         foreach (string version in installation.versions) {
             string release = Under(destination, "releases/" + version);
+            if (!Directory.Exists(release)) continue; // Already removed outside setup; it owns nothing now.
             string path = Under(release, "package-manifest.json");
             if (!File.Exists(path)) throw new InvalidDataException();
             var manifest = Json.Deserialize<Package>(File.ReadAllText(path));
@@ -463,6 +464,8 @@ public static class Setup {
         var retained = new List<string>();
         foreach (string version in installation.versions) {
             string release = Under(destination, "releases/" + version);
+            // A listed release whose folder is gone must not block removal of the rest.
+            if (!Directory.Exists(release)) continue;
             string manifestFile = Under(release, "package-manifest.json"); if (!File.Exists(manifestFile)) throw new InvalidDataException();
             var manifest = Json.Deserialize<Package>(File.ReadAllText(manifestFile));
             if (manifest.format != "orion-desktop-package" || manifest.version != version || manifest.files == null) throw new InvalidDataException();

@@ -47,9 +47,15 @@ def test_launch_needs_every_artifact_and_waitlist_privacy():
         site.validate_settings(config, 'launch')
 
 
-@pytest.mark.parametrize('settings', [{'subscribeUrl': 'https://payments.github.com/pay'},
-    {'hostedPrice': '5'}, {'AUTH_TOKEN': 'private'}, {'license': {'core': 'MIT'}}])
-def test_paid_hosted_credentials_and_wrong_licences_fail(settings):
+SUBSCRIBE = {'subscribeUrl': 'https://account.dev.usesaiph.com/account', 'hostedPrice': '€3.99'}
+
+
+@pytest.mark.parametrize('settings', [{'subscribeUrl': 'https://payments.github.com/pay', 'hostedPrice': '€3.99'},
+    {'subscribeUrl': 'https://account.dev.usesaiph.com/account?plan=x', 'hostedPrice': '€3.99'},
+    {**SUBSCRIBE, 'hostedPrice': '5'}, {**SUBSCRIBE, 'hostedPrice': '€0'}, {'hostedPrice': '€3.99'},
+    {'subscribeUrl': SUBSCRIBE['subscribeUrl']}, {'hostedPriceNote': 'or €36 a year'},
+    {**SUBSCRIBE, 'hostedPriceNote': 'x' * 81}, {'AUTH_TOKEN': 'private'}, {'license': {'core': 'MIT'}}])
+def test_bad_hosted_plan_settings_credentials_and_wrong_licences_fail(settings):
     with pytest.raises(ValueError):
         site.validate_settings(settings, 'preview')
 
@@ -72,20 +78,21 @@ def test_existing_output_is_never_overwritten(tmp_path):
         site.prepare(ROOT / 'website', tmp_path / 'existing', {})
 
 
-def test_public_source_landing_has_truthful_link_and_no_checkout(tmp_path):
-    settings = json.loads((ROOT / 'website/landing-settings.json').read_text())
+def test_public_source_landing_has_truthful_link_and_account_checkout(tmp_path):
+    settings = json.loads((ROOT / 'website/landing-settings.json').read_text(encoding='utf-8'))
     output = tmp_path / 'landing'
     site.prepare(ROOT / 'website', output, settings)
-    config = (output / 'assets/config.js').read_text()
+    config = (output / 'assets/config.js').read_text(encoding='utf-8')
     assert 'https://github.com/Abelik1/saiph' in config
     assert '"sourceVisibility": "public"' in config
-    assert '"subscribeUrl": ""' in config
+    # Checkout happens on the account site after sign-in, never on these pages.
+    assert '"subscribeUrl": "https://account.dev.usesaiph.com/account"' in config
     assert '"waitlistUrl": ""' in config
     # Public source alone does not open launch mode: release downloads and the
     # reviewed waitlist remain separate gates.
     with pytest.raises(ValueError, match='Launch requires'):
         site.validate_settings(settings, 'launch')
-    assert 'design preview' in (output / 'hosted.html').read_text()
+    assert 'beta service' in (output / 'hosted.html').read_text(encoding='utf-8')
 
 
 def launch_settings():
@@ -159,10 +166,11 @@ def test_downloads_require_public_source_and_exact_release():
         site.validate_settings(settings, 'preview')
 
 
-def test_draft_controller_can_ship_without_enabling_collection(tmp_path):
+def test_approved_controller_ships_without_enabling_collection(tmp_path):
     settings = json.loads((ROOT / 'website/landing-settings.json').read_text(encoding='utf-8'))
     result = site.validate_settings(settings, 'preview')
-    assert result['privacy']['status'] == 'draft'
+    assert result['privacy']['status'] == 'approved'
+    assert result['privacy']['contactEmail'] == 'support@usesaiph.com'
     assert result['waitlistUrl'] == ''
     assert result['release'] == {}
     assert not any(result['downloads'].values())
@@ -200,7 +208,7 @@ def test_only_reviewed_tally_form_and_matching_notice_query_are_accepted(url):
 def test_single_opt_in_form_preserves_query_but_does_not_relax_other_urls(tmp_path):
     settings = launch_settings()
     output = tmp_path / 'single-opt-in'
-    site.prepare(ROOT / 'website', output, settings, 'launch')
+    site.prepare(ROOT / 'website', output, settings, 'launch', SYNTHETIC_ADDRESS)
     config = (output / 'assets/config.js').read_text(encoding='utf-8')
     assert settings['waitlistUrl'] in config
     assert '"optInMode": "single"' in config
@@ -212,7 +220,7 @@ def test_single_opt_in_form_preserves_query_but_does_not_relax_other_urls(tmp_pa
 
 def test_published_form_stays_disabled_without_controller_contact():
     settings = json.loads((ROOT / 'website/landing-settings.json').read_text(encoding='utf-8'))
-    assert settings['privacy']['contactEmail'] == ''
+    settings['privacy'].update(status='draft', contactEmail='')
     assert settings['waitlist']['optInMode'] == 'single'
     settings['waitlistUrl'] = 'https://tally.so/r/gDy42K?consent_version=' + settings['waitlist']['noticeVersion']
     with pytest.raises(ValueError, match='approved'):
@@ -294,7 +302,7 @@ BETA_INVITE = 'https://appdistribution.firebase.dev/i/0123abcd4567ef89'
 def test_android_beta_invite_is_optional_and_shown_when_configured(tmp_path):
     assert site.validate_settings({}, 'preview')['androidBetaUrl'] == ''
     assert site.validate_settings({'androidBetaUrl': BETA_INVITE}, 'preview')['androidBetaUrl'] == BETA_INVITE
-    settings = json.loads((ROOT / 'website/landing-settings.json').read_text())
+    settings = json.loads((ROOT / 'website/landing-settings.json').read_text(encoding='utf-8'))
     settings['androidBetaUrl'] = BETA_INVITE
     result = render_site_script(settings)
     assert result['beta'] == BETA_INVITE and result['betaHidden'] is False
@@ -330,7 +338,9 @@ def test_beta_access_account_link_rejects_other_links(value):
 
 
 def test_early_access_opens_beta_access_until_signup_or_payment_opens():
-    settings = json.loads((ROOT / 'website/landing-settings.json').read_text())
+    settings = json.loads((ROOT / 'website/landing-settings.json').read_text(encoding='utf-8'))
+    for name in ('subscribeUrl', 'hostedPrice', 'hostedPriceNote'):
+        settings.pop(name, None)
     settings['betaAccountUrl'] = BETA_ACCOUNT
     result = render_site_script(settings)
     # The beta's front page explains the invitation before asking anyone to sign in.
@@ -348,7 +358,53 @@ def test_early_access_opens_beta_access_until_signup_or_payment_opens():
     assert result['subscribeText'] == 'Early access coming soon'
 
 
+def test_hosted_plan_settings_accept_the_account_page_and_euro_price():
+    config = site.validate_settings({**SUBSCRIBE, 'hostedPriceNote': 'or €36 a year'}, 'preview')
+    assert config['subscribeUrl'] == SUBSCRIBE['subscribeUrl'] and config['hostedPrice'] == '€3.99'
+
+
+def test_open_subscriptions_link_to_the_account_and_show_hosted_as_available():
+    settings = json.loads((ROOT / 'website/landing-settings.json').read_text(encoding='utf-8'))
+    assert settings['subscribeUrl'] == BETA_ACCOUNT and settings['hostedPrice'] == '€3.99'
+    site.validate_settings(settings, 'preview')
+    result = render_site_script(settings)
+    assert result['subscribe'] == BETA_ACCOUNT and result['subscribeDisabled'] == ''
+    assert result['subscribeText'] == 'Subscribe' and result['hostedStatus'] == 'Available now'
+    # Subscriptions take precedence over the email list and invitation-only access.
+    settings = {**launch_settings(), **SUBSCRIBE, 'betaAccountUrl': BETA_ACCOUNT}
+    assert render_site_script(settings)['subscribe'] == SUBSCRIBE['subscribeUrl']
+
+
 def test_reviewed_waitlist_still_comes_before_beta_access():
     settings = launch_settings()
     settings['betaAccountUrl'] = BETA_ACCOUNT
     assert render_site_script(settings)['subscribe'] == 'waitlist.html'
+
+
+SYNTHETIC_ADDRESS = '1 Synthetic Street, Testtown, A00 B000'
+
+
+def test_trader_address_reaches_only_the_noindexed_contact_page(tmp_path):
+    settings = json.loads((ROOT / 'website/landing-settings.json').read_text(encoding='utf-8'))
+    site.prepare(ROOT / 'website', tmp_path / 'with', settings, 'preview', '  1 Synthetic Street,\n Testtown, A00 B000 ')
+    contact = (tmp_path / 'with/contact.html').read_text(encoding='utf-8')
+    assert '<span data-trader-address>' + SYNTHETIC_ADDRESS + '</span>' in contact
+    assert '<meta name="robots" content="noindex">' in contact
+    others = [p for p in (tmp_path / 'with').rglob('*') if p.is_file() and p.name != 'contact.html']
+    assert others and not any('Synthetic Street' in p.read_text(encoding='utf-8') for p in others)
+    site.prepare(ROOT / 'website', tmp_path / 'without', settings)
+    assert 'available on request' in (tmp_path / 'without/contact.html').read_text(encoding='utf-8')
+    assert 'Synthetic Street' not in (ROOT / 'website/contact.html').read_text(encoding='utf-8')
+
+
+@pytest.mark.parametrize('value', ['<script>1 Main St</script>', 'No number street', '1 Main St & Co', 'x' * 250 + ' 1'])
+def test_trader_address_must_be_one_plain_line(tmp_path, value):
+    settings = json.loads((ROOT / 'website/landing-settings.json').read_text(encoding='utf-8'))
+    with pytest.raises(ValueError, match='Trader address'):
+        site.prepare(ROOT / 'website', tmp_path / 'bad', settings, 'preview', value)
+    assert not (tmp_path / 'bad').exists()
+
+
+def test_launch_requires_trader_address(tmp_path):
+    with pytest.raises(ValueError, match='SAIPH_TRADER_ADDRESS'):
+        site.prepare(ROOT / 'website', tmp_path / 'launch', launch_settings(), 'launch')

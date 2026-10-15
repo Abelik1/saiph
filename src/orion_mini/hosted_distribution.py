@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 import re
+import sys
 from urllib.parse import urlsplit
 
 FIELDS = {'service_url', 'issuer', 'audience', 'desktop_client_id', 'android_client_id'}
@@ -35,3 +36,13 @@ def read_configuration(path):
 def desktop_config(value):
     return {**{key:value[key] for key in ('service_url', 'issuer', 'audience')},
             'client_id':value['desktop_client_id'], 'refresh_tokens':False}
+
+
+def packaged_config():
+    """Read validated public defaults without loading crypto or creating a profile."""
+    if not getattr(sys, 'frozen', False) or not getattr(sys, '_MEIPASS', None):
+        return None
+    try:
+        return desktop_config(read_configuration(Path(sys._MEIPASS) / 'hosted-defaults.json'))
+    except (ValueError, OSError, TypeError, KeyError):
+        return None

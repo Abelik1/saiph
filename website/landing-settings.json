@@ -2,18 +2,22 @@
   "sourceVisibility": "public",
   "githubUrl": "https://github.com/Abelik1/saiph",
   "privacy": {
-    "status": "draft",
+    "status": "approved",
     "controllerName": "Alexander Belik, operating as Abelik1",
     "controllerCountry": "Ireland",
-    "contactEmail": "",
-    "updatedAt": "2026-10-11",
-    "hostingRetention": "",
-    "hostingTransfers": "",
-    "contactProcessing": ""
+    "contactEmail": "support@usesaiph.com",
+    "updatedAt": "2026-10-15",
+    "hostingRetention": "Saiph keeps no access logs of its own for these pages. Vercel keeps request logs and security records for the limited periods described in its privacy policy.",
+    "hostingTransfers": "Vercel serves these pages from its global network, so requests may be handled outside the EEA, including in the United States, under the safeguards in Vercel's data processing terms (EU-US Data Privacy Framework or standard contractual clauses).",
+    "contactProcessing": "Emails to support@usesaiph.com are forwarded by ImprovMX to the controller's Gmail mailbox (Google), including servers in the United States. Correspondence is kept for 12 months after the matter is resolved, unless it is needed longer for a billing record or dispute."
   },
   "waitlistUrl": "",
   "androidBetaUrl": "https://appdistribution.firebase.dev/i/127ea32988e8362f",
   "betaAccountUrl": "https://account.dev.usesaiph.com/account",
+  "subscribeUrl": "https://account.dev.usesaiph.com/account",
+  "hostedPrice": "€3.99",
+  "hostedPeriod": "/ month",
+  "hostedPriceNote": "or €36 a year, which saves 25%",
   "waitlistPrivacyUrl": "privacy.html#waitlist",
   "waitlistNotice": "I agree to receive the Saiph launch announcement and occasional launch updates by email. I can unsubscribe or ask for my email to be deleted at any time.",
   "waitlist": {

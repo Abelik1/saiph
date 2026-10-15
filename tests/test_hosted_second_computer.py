@@ -8,8 +8,8 @@ from uuid import uuid4
 import pytest
 import requests
 
-from orion_mini.hosted_runtime import ROOT_ONLY, HostedController, HostedError
-from orion_mini.hosted_transport import HostedTransport
+from orion_mini.hosted_runtime import NO_ACCESS, ROOT_ONLY, HostedController, HostedError
+from orion_mini.hosted_transport import HostedTransport, TransportError
 
 from test_hosted_runtime import CONFIG, Presence, SyntheticProtection, workspace
 
@@ -19,7 +19,7 @@ class SyntheticService:
 
     def __init__(self):
         self.deployment = str(uuid4())
-        self.chain, self.inboxes, self.requests = [], {}, []
+        self.chain, self.inboxes, self.requests, self.offered = [], {}, [], []
 
     def transport(self):
         service = self
@@ -37,6 +37,11 @@ class SyntheticService:
                     assert value["deployment_id"] == service.deployment
                     service.requests.append(value["device"]["id"])
                     return {"status": "pending", "expires_at": int(time.time()) + 300}
+                if method == "POST" and path == "/v1/devices/approval-requests":
+                    service.offered.append(value["code"])
+                    return {"status": "offered", "expires_at": int(time.time()) + 300}
+                if method == "GET" and path == "/v1/devices/approval-requests":
+                    return {"requests": list(service.offered)}
                 if method == "POST" and path == "/v1/devices/rosters":
                     assert value["roster"]["version"] == len(service.chain) + 1
                     service.chain.append(deepcopy(value))
@@ -95,6 +100,14 @@ def test_second_computer_joins_syncs_and_is_removed_by_the_main_computer(tmp_pat
     assert request["modules"] and request["code"].startswith("orion-approve-v1:")
     assert service.requests == [main.info.device_id, laptop.info.device_id]
     assert laptop.snapshot()["role"] == "member"
+    # The main computer finds the request itself; nothing long is typed across.
+    offered = main.offered_requests()
+    assert [item["device_id"] for item in offered] == [laptop.info.device_id]
+    assert offered[0]["fingerprint"] == request["fingerprint"]
+    service.offered.append("orion-approve-v1:{}")  # The service is untrusted: junk is dropped.
+    assert [item["device_id"] for item in main.offered_requests()] == [laptop.info.device_id]
+    with pytest.raises(HostedError, match=ROOT_ONLY):
+        laptop.offered_requests()
 
     # Before approval the laptop signs nothing and stays waiting.
     laptop.step()
@@ -211,3 +224,24 @@ def test_a_member_stays_connected_after_restart_without_its_own_root_keys(tmp_pa
     again.step()
     assert again.status == "keys_unavailable"
     assert again.session is None
+
+
+def test_account_without_beta_access_is_told_to_activate_its_invitation(tmp_path, monkeypatch):
+    """The service answers 403 until the account redeems an invitation; say so instead of 'unreachable'."""
+    service = SyntheticService()
+    main = computer(tmp_path, "main", service, monkeypatch, [])
+    root_code = main.setup_root()
+
+    class NoAccess(HostedTransport):
+        def _call(self, method, path, *, token=None, value=None):
+            raise TransportError(403)
+
+    newcomer = computer(tmp_path, "newcomer", service, monkeypatch, [])
+    newcomer._transport_factory = NoAccess
+    with pytest.raises(HostedError, match="no beta access yet") as error:
+        newcomer.setup_root()
+    assert str(error.value) == NO_ACCESS
+    assert not newcomer.identity.exists()
+    with pytest.raises(HostedError, match="no beta access yet"):
+        newcomer.join(root_code["code"], True)
+    assert not newcomer.identity.exists()

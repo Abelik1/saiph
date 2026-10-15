@@ -19,7 +19,7 @@ from .user_presence import confirm as confirm_user
 HOSTED_METHODS = frozenset({'hosted.configure', 'hosted.enable', 'hosted.sign_in', 'hosted.sign_out', 'hosted.setup_root',
                             'hosted.root_code', 'hosted.request.inspect', 'hosted.approve', 'hosted.revoke', 'hosted.forget',
                             'hosted.notification.dismiss', 'hosted.file.send', 'hosted.file.save',
-                            'hosted.join.inspect', 'hosted.join', 'hosted.join.request'})
+                            'hosted.join.inspect', 'hosted.join', 'hosted.join.request', 'hosted.requests'})
 _HOSTED_OFF = {'available': False, 'enabled': False, 'status': 'off', 'identity': False}
 
 
@@ -51,11 +51,17 @@ class LinkOperations:
         return (self.root / 'hosted' / 'identity').exists()
 
     def hosted_state(self) -> dict:
-        settings = self.settings.get('hosted')
-        if not (isinstance(settings, dict) and settings) and not (self.root / 'hosted').exists():
-            return {**_HOSTED_OFF, 'available': hosted_available()}
         if not hosted_available():
             return dict(_HOSTED_OFF)
+        settings = self.settings.get('hosted')
+        if not (isinstance(settings, dict) and settings) and not (self.root / 'hosted').exists():
+            # A fresh profile needs the installer's public defaults, but must not
+            # load crypto, create keys or contact the service before opt-in.
+            from .hosted_distribution import packaged_config
+            config = packaged_config()
+            return {**_HOSTED_OFF, 'available': True, 'configured': config is not None,
+                    'config': config, 'self_hosted_paired': bool((self.settings.get('hub') or {}).get('paired')),
+                    'account': {'status': 'signed_out', 'refresh_tokens': False, 'error': ''}}
         return {'available': True, **self.hosted_controller().snapshot()}
 
     def _active_hosted(self):
@@ -389,6 +395,8 @@ class LinkOperations:
             return controller.join(args.get('code'), args.get('confirmed'))
         if method == 'hosted.join.request':
             return controller.request_code()
+        if method == 'hosted.requests':
+            return {'requests': controller.offered_requests()}
         if method == 'hosted.request.inspect':
             return controller.inspect_request(args.get('code'))
         if method == 'hosted.approve':

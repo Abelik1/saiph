@@ -1,5 +1,188 @@
 # Current release preparation status
 
+2026-10-15 native desktop UI control (development tooling only): added a
+disposable Qt launcher and a Playwright controller for accessible snapshots,
+tabs/buttons, form entry, checkboxes/selects, keyboard input, screenshots and
+reusable local test flows. The instance has its own data, browser-cache/storage
+and temporary directories. Its debug endpoint binds to loopback, and the
+controller verifies the dashboard and a per-session window marker before acting.
+Clean shutdown is scoped to that session. Normal app startup and the existing
+local automation API are unchanged. `AGENTS.md` and `docs/TESTING.md` direct
+future agents to use these tools for routine desktop interaction. Explicit live
+mode enables real services in a fresh test profile; native owner verification
+and external-provider sign-in are preserved.
+
+Windows / Python 3.12.10 / PySide6 6.12.0 / Node 24.18.0, isolated environment,
+dependency caches and profiles: `python -m pytest tests/test_desktop_ui_control.py
+tests/test_automation.py -q` passed 13 tests; `node --test
+tests/packaging/desktop_control_session.test.cjs` passed 1 test. The native
+`desktop_control_smoke.cjs` flow passed both without and with the Hosted extras
+installed: Settings tab navigation, typed/saved computer name, on-disk native
+bridge persistence, Phone setup navigation, mismatched-session refusal and
+screenshots, with no page errors. Individual CLI click/fill/save/screenshot/stop
+commands also passed, and the session reached `stopped` with the typed name
+retained in its isolated profile. The previously validated production frontend
+build was reused; no frontend implementation changed. Initial restricted Qt
+launches aborted before WebEngine became ready; a scoped permitted launch
+resolved this without disabling Chromium's sandbox. Qt logged GLES context
+fallback errors while the native UI and screenshot checks succeeded.
+No installed app was restarted, installed or modified. No real account/service,
+physical device, OS owner-verification prompt, native file picker or live mode
+was exercised. These are native isolated UI checks, not installation, Hosted
+connection, cryptography or physical acceptance evidence.
+
+2026-10-15 connection wizard follow-up (source changes only): the Phone tab,
+add-phone dialog and optional guide now share an Account → Computer → Scan →
+Approve wizard. Each screen has one task; Scan shows the QR automatically and
+Continue opens approval. Back returns to scanning and clears the reviewed
+request and comparison. Scan/approval navigation moves keyboard focus to the heading;
+successful approval has a completion screen, while actual connection still
+depends on the native phone state. The scan screen keeps the full-size QR and
+full security code together and fits the main action in the reviewed desktop
+viewports. Desktop and mobile design-system rules now require guided connection
+steps. Native trust, owner verification and pairing formats are unchanged.
+
+Windows / Node 24.18.0, isolated frontend dependencies/cache/TEMP/TMP:
+`npm run test:unit -- --maxWorkers=2 --reporter=json
+--outputFile=../wizard-unit-results.json` passed 175 tests. `npm run build`
+passed TypeScript and production bundling with the existing 500 kB chunk-size
+warning. Targeted Oxlint, React component review, `git diff --check` and the
+public-data check (including new files) passed. Synthetic headless
+Chromium checks passed the full wizard journey, returning to Scan and requiring
+a fresh comparison, keyboard focus, the Settings shortcut, closing the QR
+dialog, and layouts at 1280×1000 and 1024×768 without horizontal overflow or
+scrolling to find Continue. No browser page errors occurred. These checks use
+the dev-only simulated account/phone preview; real OAuth, Hosted service, native
+owner verification and physical scanning were not exercised. No Android code
+changed in this follow-up; Android checks were not repeated. No installer or APK
+was assembled, installed, signed or released. Physical acceptance and independent
+security review remain pending.
+
+2026-10-15 desktop/phone connection flow (source changes only): a fresh desktop
+opens connection setup in the Phone tab. It guides account sign-in, explicit
+main-computer setup, QR scanning and device approval, then shows the connected
+phone. The add-phone dialog and optional setup guide reuse the same Hosted flow;
+Settings links to Phone instead of presenting a second pairing workflow. Manual
+codes, connection details and device-management data are expandable. Android
+points to Phone and calls fingerprints security codes, while retaining full
+computer/device comparisons and owner verification. No identity, signing,
+pairing format or native trust protocol changed. A late manual request inspection
+can no longer replace a newer reviewed request or its comparison state.
+
+Windows / Node 24.18.0, isolated frontend source/dependencies/cache/temp:
+`npm run test:unit -- --maxWorkers=2 --reporter=json` passed 173 tests;
+`npm run build` passed TypeScript and production bundling, with the 500 kB chunk
+size warning. Initial test startup failed on sandbox temporary-file paths;
+workspace-local TEMP/TMP resolved it. Changed visibility expectations and the
+connected-phone fixture were corrected before the clean full run. A headless
+Chromium check of `/onboarding.html` passed the simulated sign-in → QR → request
+→ full-code confirmation → approval → connected-phone journey, the Settings
+shortcut, closing the QR dialog, and 1280/1024 px widths with no page errors.
+Every account, request and QR in that preview is synthetic; it does not contact
+a Hosted service or exercise native account sign-in or owner verification.
+Android JDK 22 checks in the isolated copy passed `:app:compileDebugKotlin
+:app:testDebugUnitTest :app:lintDebug` with independent/Firebase/push-disabled
+settings and version code 1: 8 JVM tests, lint 0 errors / 234 warnings.
+Oxlint on changed TSX files, the React component review, `git diff --check`
+and the public-data check passed, including the new source files.
+No native desktop installer or APK was assembled, signed, installed or released.
+Physical-device acceptance and independent security review remain pending.
+
+2026-10-15 Android layout rework (source changes only): account and self-hosted
+setup now use matching cards with short descriptions and full-width actions.
+Shared controls use a consistent type scale, sentence-case section headings and
+button rows that stack when labels cannot fit, including at larger font sizes.
+Hosted daily use now focuses on files, texts and calls; account, permissions,
+connection and device details live under Settings. Texts and calls have separate
+icon rows, visible approved-computer scope and expandable privacy/limit details.
+The existing palette, gradient actions, background, permission opt-in and owner
+verification paths are retained. Refreshing a Hosted page keeps its scroll position.
+
+Windows / JDK 22, SDK 37.0, isolated source copy and Gradle cache:
+`:app:compileDebugKotlin :app:testDebugUnitTest :app:lintDebug` passed with
+`-PorionFirebase=false -PorionIndependent=true -PorionPush=false
+-PorionVersionCode=1 --no-configuration-cache`; 8 JVM tests passed and lint
+reported 0 errors, 234 warnings. Initial lint failed on the temporary copy's
+Windows SDK property escaping; it was corrected and lint analysis rerun without
+build-cache reuse. A temporary Robolectric 4.14.1 / API 35 native-layout harness
+passed 6 checks covering 320 dp width, doubled font size, button reflow,
+disclosures, Settings/Back, the self-hosted route and locked-screen navigation.
+Its initial API, SSH service-provider classloader and fixture/lifecycle failures
+were corrected; SSH was excluded only from that UI harness's runtime. Native
+synthetic screen renders were inspected. The harness and its dependencies were
+removed from the validation copy before the final product checks; no product
+dependency was added. Existing generated restic inputs were reused for validation.
+`git diff --check` and `check-public-data.py` passed. No APK was assembled,
+signed or installed; no emulator, physical device, real account or Hosted service
+was used. Physical acceptance and independent security review remain pending.
+
+2026-10-15 device approval without typing codes: a phone or second computer that
+has scanned the main computer's code now also offers its signed request through
+the service (`POST/GET /v1/devices/approval-requests`, bound to the pending
+candidate's keys, expiring with it, signature checked). The main computer lists
+offered requests, verifies each against its own pinned root and shows the
+fingerprint; the owner still compares every group and approves explicitly, and
+pasting stays as a fallback. Older services answer 404 and clients fall back to
+pasting. The setup guide confirms the sign-in, moves on after Set up this
+computer, shows the computer's code without another click and folds pairing away
+once a phone is approved. Android shows one waiting screen until the computer
+approves the phone, then moves on by itself; sharing permissions appear only
+after approval. A dev-only onboarding preview (`frontend/onboarding.html`)
+walks the desktop flow on a simulated account. Checks: Hub hosted tests 123,
+desktop Hosted tests, frontend unit tests and `tsc`, Android `:core:network`
+and `:app` unit tests with `:app:compileDebugKotlin`.
+
+2026-10-15 Hosted onboarding correction (`codex/hosted-onboarding`, based on
+`ca36587`, source changes only): a fresh desktop profile now reads validated
+bundled public connection defaults without importing the crypto runtime or
+creating keys. The wizard and account settings offer one Sign in to Saiph
+action that enables the selected connection and opens the system browser.
+Packaged account setup no longer asks for service URLs or client IDs. Android
+opens the account screen directly, puts sign-in ahead of approval and permission
+controls, and offers a regular-browser retry through AppAuth. Device identities,
+state/PKCE checks, full fingerprint confirmation and explicit device approval
+are retained. Windows beta.5 setup and Android browser trouble were reported by
+the owner; see [the attended attempt](ACCEPTANCE_PENDING.md#attended-hosted-setup-attempt-2026-10-15).
+
+Validation on Windows, Python 3.12 / Node 24.18.0, using synthetic profiles and
+separate caches: `python -m pytest tests/test_hosted_distribution.py
+tests/test_hosted_runtime.py tests/test_setup_guide.py tests/test_link_service.py
+-q` passed 75; frontend `npm run test:unit` passed 164 and `npm run build`
+passed. The first Python run failed the existing lazy-import boundary test;
+reading defaults was moved to the lightweight distribution module, and the
+full selected set passed on rerun. Initial npm cache and test-runner temporary
+file access failures were resolved in the isolated clone. Android compilation
+(`:app:compileDebugKotlin`) and app JVM tests (`:app:testDebugUnitTest`, 8 passed)
+passed on JDK 22 with independent Firebase/push-disabled settings, version code
+1 and an isolated Gradle cache. `:app:lintDebug` passed with 0 errors and 233
+warnings. Initial Android checks could not find the SDK at the configured path;
+an existing SDK was located and the existing ignored restic ABI binaries were
+copied into the validation clone. Lint first rejected that clone's SDK property
+escaping; the property was corrected and stale generated analysis was rerun
+with build-cache reuse disabled. No corrected installer/APK has been built,
+installed or distributed; the exact reported browser failure and physical
+acceptance remain open. No real account, emulator or physical device was used
+for these checks.
+
+Review fixes on the same branch (2026-10-15): an approved phone keeps its daily
+screen and keeps syncing when its short-lived account token has expired (the
+sign-in screen is only for phones that are not yet approved; signing in again
+stays available under Account). Android checks for app updates again before the
+self-hosted pairing check. The runtime validates bundled connection defaults
+before use. Setting up or joining with an account that has not redeemed an
+invitation now says to activate the invitation instead of "unreachable", and the
+desktop sign-in card points new testers to their invitation. Turning Hosted back
+on keeps an existing desktop sign-in instead of reopening the browser. Hosted
+desktop tests 81 passed, frontend unit tests and `tsc` passed.
+The actual Windows `scripts/build-native.py --profile link --version
+0.1.0-onboarding.1 --build-number 0 --hosted-config build/synthetic-hosted.json`
+build passed, including the native-origin audit, with separate PyInstaller
+cache/output and synthetic connection settings only. A new synthetic profile
+read those built bundle defaults with Hosted off and no Hosted keys. The
+executable was not launched, packaged as an installer or offered for account
+sign-in. Candidate staged changes and public main history passed gitleaks;
+the isolated clone passed `check-public-data.py --history`.
+
 2026-10-14 the repository is public. The owner changed visibility after a fresh
 audit clone of every GitHub branch passed `check-public-data.py --history` and
 gitleaks; five fully merged branches were deleted first. `main` requires pull

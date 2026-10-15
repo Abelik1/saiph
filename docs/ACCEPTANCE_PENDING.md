@@ -8,6 +8,30 @@ a tick. Detailed steps live in the linked documents.
 Updated 2026-10-14, after merging the Hosted webcam, Hosted texts and calls,
 call-audio research and website wording branches.
 
+## Attended Hosted setup attempt, 2026-10-15
+
+Owner-reported Windows desktop 0.1.0-beta.5 installed, with Android 0.9.0 intended
+for the fresh Hosted run. Installer hash, Android version code, build source,
+phone reinstall and network conditions have not yet been independently checked.
+No acceptance checkbox below is completed by this attempt.
+
+- Desktop onboarding blocked: the wizard did not provide a usable Hosted path;
+  Settings presented manual connection fields. Source inspection found that a
+  fresh profile's Hosted snapshot omitted the installer's bundled defaults.
+- Android onboarding blocked: account sign-in was below phone approval controls
+  after an extra Open Saiph screen. The owner also reported that the browser
+  sign-in button did not work and the page it opened was broken; exact browser
+  error and a successful callback are not yet recorded.
+- Device approval, full fingerprint comparison, clipboard, notifications, file
+  hashes, texts, calls and webcam remain unverified in this fresh install.
+- Re-test the corrected builds from first launch: sign in without entering
+  service settings, return from the browser, scan the computer's code, check that
+  the phone appears on the computer by itself, then explicitly approve it by full
+  fingerprint before testing sync. Webcam and call audio remain local.
+
+The source correction and automated checks are recorded separately in
+[release status](RELEASE_STATUS.md); they do not complete this physical run.
+
 ## Before inviting friends (current beta.4 build)
 
 - [ ] Signed-in download of each beta.4 file from the account site; Windows

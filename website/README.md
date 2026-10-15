@@ -30,10 +30,21 @@ collection. Review controller/contact, retention, deletion, processor location a
 transfers, consent/withdrawal and access/security. No example notice is a legal
 approval. Keep collection disabled until those decisions are reviewed. The privacy link may point to the local draft notice while signup is disabled.
 
-`subscribeUrl` and `hostedPrice` must remain empty. Company, payment, legal,
-product acceptance and independent security review gates apply before paid Hosted.
-The builder rejects paid settings. Keep claims aligned with
-[the security model](../docs/SECURITY_MODEL.md).
+Saiph Hosted subscriptions opened on 15 October 2026. `subscribeUrl` points to the
+account site's `/account` page, where people sign in and choose a plan; checkout
+never runs on these static pages. Set it together with `hostedPrice` (a euro
+amount such as `€3.99`), `hostedPeriod` and an optional short `hostedPriceNote`.
+The builder rejects any other subscription link, a price without a link, or a
+link without a price. With the link empty the pages fall back to beta access or
+the email list. Keep claims aligned with
+[the security model](../docs/SECURITY_MODEL.md): Hosted is a beta service without
+an independent security review yet, and texts and calls are still coming to it.
+
+The trader's postal address is required on the contact page but is not kept in
+Git. The hosting project sets `SAIPH_TRADER_ADDRESS` (one plain line, for example
+`1 Example Street, Town, A00 B000`); the builder escapes it and writes it only into
+`contact.html`, which is marked `noindex`. Without it the page says the address is
+available on request, and `--mode launch` refuses to build.
 
 Website changes belong in their own product worktree/branch. Hand operations the
 signed-off commit, validation evidence and hostname decision. Do not change the
@@ -41,7 +52,7 @@ hosting runtime pin merely to consume a website-only commit.
 
 ## Informational landing page
 
-`landing-settings.json` links the real, private product repository with a visible access notice. It enables no release downloads, waitlist collection or checkout. Publishing these static pages does not publish either Git repository or launch Hosted. Use the builder in preview mode for this informational deployment; full launch validation remains stricter.
+`landing-settings.json` links the public product repository and sends Subscribe buttons to the account site. It enables no release downloads or waitlist collection. Publishing these static pages does not publish either Git repository or launch Hosted. Use the builder in preview mode for this informational deployment; full launch validation remains stricter.
 
 
 ## Release downloads, waitlist and privacy

@@ -37,6 +37,9 @@ def cleanup_database(config, *, now=None, batch_size=256):
         db.execute('DELETE FROM nonces WHERE rowid IN (SELECT rowid FROM nonces WHERE seen_at<=? ORDER BY seen_at LIMIT ?)',
                    (now - 120, batch_size))
         tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        if 'approval_requests' in tables:  # Created when a newer service first opens the workspace.
+            db.execute('DELETE FROM approval_requests WHERE device IN (SELECT device FROM approval_requests WHERE expires_at<=? ORDER BY expires_at LIMIT ?)',
+                       (now, batch_size))
         if {'hosted_blobs', 'hosted_blob_chunks'} <= tables:
             expired = [row[0] for row in db.execute('SELECT id FROM hosted_blobs WHERE expires_at<=? ORDER BY expires_at LIMIT ?',
                                                    (now, batch_size))]

@@ -19,20 +19,34 @@ finishes. The Linux `.run` asks the same about start-up and the GNOME Files and
 Dolphin "Send to phone" actions. On an update the choices start from what is
 installed now; unticking one removes only what Saiph added.
 
-When Saiph opens for the first time, a setup guide walks you through:
+When Saiph opens for the first time, **Phone** shows a **Connect your phone**
+wizard, with one task on each screen:
 
-1. **How to connect:** a Saiph account is preselected. Choose
-   **I self-host my own Hub** only if you run your own server.
-2. **Connect this computer:** account sign-in and setting it up as the device that
-   approves your others, or your Hub invitation and the secure connection.
-3. **Add your phone:** the QR code, approval and confirmation that it connected.
-4. **Choose features:** plain-language switches with safe defaults. With a Saiph
-   account only the features Hosted supports are offered.
-5. **Optional tools:** which helpers are installed, links to each project's
-   official download, and on Linux the package command for missing helpers.
+1. **Sign in to Saiph** with the account you use on your phone. New beta testers
+   activate their invitation on their account page first.
+2. Choose **Set up this computer** to make it your main computer, which approves
+   your other devices. If you already have a main computer, expand **Already use
+   Saiph on another computer?** to join it instead.
+3. Open Saiph on your phone, sign in with the same account and scan the QR shown
+   in the desktop's Phone tab. Compare every group of the computer's security
+   code when the phone asks. Choose **Continue to approval** on the desktop.
+4. The phone's request appears on the approval screen. Choose **Review and approve**,
+   compare every group of its security code with the phone, give it a name and
+   approve it. **Back to scanning** returns to the QR if needed and clears any
+   previous comparison. The normal Phone page appears when the phone connects.
 
-"Set up later" closes it. Run it again from Settings → General → Setup guide.
-Computers that are already connected never see it automatically.
+The security codes are fingerprints of the devices' encryption keys. Sign-in
+finds your account; the comparisons check which devices you are trusting.
+**Can't scan? Copy a code instead** and **My device hasn't appeared** contain
+manual fallbacks. They still require the full security-code checks.
+
+Add another phone from **Phone → Connect a phone**. Settings → General also has
+a **Connect a phone** shortcut to this flow. The **Optional setup guide** in
+that section covers feature choices, optional tools and privacy preferences;
+it does not interrupt first connection. Its **Set up later** action closes it.
+
+Choose **Use my own Hub instead** only if you manage your own server. Use its
+private invitation to connect this computer, then scan its phone pairing QR.
 
 ## Self-hosting: pair your devices
 
@@ -222,7 +236,7 @@ does not download originals.
 
 The desktop header and bottom bar stay fixed while content scrolls inside the
 window. Settings uses sidebar sections: **General** (this computer, startup and
-the setup guide), **Connections** (Cloud, clipboard and continuity, Saiph account,
+the optional setup guide and a Phone connection shortcut), **Connections** (Cloud, clipboard and continuity, Saiph account,
 your Hub and phone hotspot), **Devices** (phone camera and microphone, phone
 remote and lock when your phone leaves), **Updates** and **Advanced**
 (keyboard and mouse sharing).
