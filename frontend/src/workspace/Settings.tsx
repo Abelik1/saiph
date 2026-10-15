@@ -41,6 +41,8 @@ export function WorkspaceModule({
 
 export function Settings({ state, client, openSetup }: { state: State; client: Client; openSetup?: () => void }) {
   const { connectPhone } = useSettingsNavigation();
+  // Once a phone is connected, adding another lives in the Phone tab's header.
+  const hasPhone = Boolean(state.phone?.devices.some((device) => device.hosted || device.capabilities.includes("battery")));
   const [tab, setTab] = useSettingsSection("General" as string);
   const [name, setName] = useState(state.settings.machine?.name || "");
   const [hub, setHub] = useState(state.settings.hub?.base_url || ""),
@@ -63,7 +65,7 @@ export function Settings({ state, client, openSetup }: { state: State; client: C
       <RetainedView active={tab === "General"}>
         {() => (
           <div className="columns">
-            {connectPhone && <Card title="Connect your phone" subtitle="Sign in, scan a QR code and approve your phone from the Phone tab.">
+            {connectPhone && !hasPhone && <Card title="Connect your phone" subtitle="Sign in, scan a QR code and approve your phone from the Phone tab.">
               <Button variant="default" onClick={connectPhone}>Connect a phone</Button>
             </Card>}
             <div>

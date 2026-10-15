@@ -1,5 +1,40 @@
 # Current release preparation status
 
+2026-10-15 UX review follow-up (source changes only). Desktop: the Phone tab's
+connection wizard watches for the phone's request on the Scan step and moves to
+Approve by itself, with Continue to approval kept as a fallback and Back to
+scanning holding on requests already seen; after approval it waits for the phone
+to connect, names it when it does, and leaves the Phone page to Done. An empty
+quick-controls card no longer renders for a Hosted phone, Settings → General
+shows its Connect a phone shortcut only until a phone is connected, and the
+optional guide starts at Choose features on a connected computer. Android: the
+account-or-Hub choice appears once (the self-hosted home screen), the account
+sign-in screen offers self-hosting as one secondary action, the connection
+screen offers Sign out before approval, disclosures are quiet text rows with a
+chevron, Hosted Settings run Account → Sharing permissions → Connection → This
+phone → Security, the computer security-code comparison is an in-app themed
+screen (grouped monospace code, Cancel, Every group matches through owner
+verification, kept across rotation), received files redraw by themselves, and
+people-facing copy says "Saiph account". Pairing, identities, permission
+opt-in, explicit approval and owner verification paths are unchanged.
+
+Windows / Node 24, isolated caches: frontend `vitest run` passed 177 tests
+(four wizard tests rewritten or added), `tsc --noEmit` and oxlint on the changed
+files passed. The Vite onboarding preview (`/onboarding.html`, synthetic client)
+was walked through sign-in → set up → Scan auto-advance → Back to scanning hold
+→ Approve → waiting → connected → Done → Phone page → Settings → guide at
+Choose features, with no page errors from the final code. Windows / JDK 22,
+SDK 37.0, isolated Gradle home: `:app:compileDebugKotlin :app:testDebugUnitTest
+:app:lintDebug` passed with `-PorionFirebase=false -PorionIndependent=true
+-PorionVersionCode=1 --no-configuration-cache --no-daemon`; 8 JVM tests passed
+(`SaiphPaletteTest` included) and lint reported 0 errors, 232 warnings. The
+only compiler warnings on the changed files are the pre-existing parameter-name
+and deprecated-permission-callback notes. `git diff --check` and the
+public-data check passed. No native desktop
+installer or APK was assembled, installed or released; the Qt shell, a live
+account, an emulator and a physical phone were not used for these checks.
+Physical-device acceptance and independent security review remain pending.
+
 2026-10-15 native desktop UI control (development tooling only): added a
 disposable Qt launcher and a Playwright controller for accessible snapshots,
 tabs/buttons, form entry, checkboxes/selects, keyboard input, screenshots and

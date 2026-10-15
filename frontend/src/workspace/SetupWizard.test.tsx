@@ -127,6 +127,13 @@ describe("Setup guide", () => {
     expect(screen.queryByLabelText("Device request code")).toBeNull();
     expect(screen.getByRole("button", { name: "Skip for now" })).toBeVisible();
   });
+  it("starts a connected computer at the feature choices", () => {
+    const call = vi.fn().mockResolvedValue({});
+    render(<SetupWizard state={{ ...hubState(true, true), setup: { ...setup, mode: "hub", connected: true, show: false } } as State} client={{ call } as unknown as Client} close={vi.fn()} />);
+    expect(screen.getByRole("heading", { name: "Choose features" })).toBeVisible();
+    expect(screen.queryByText("How do you want to connect your devices?")).toBeNull();
+    expect(screen.getByLabelText(/Share the clipboard/)).toBeChecked();
+  });
   it("opens first connection in Phone and keeps the optional guide reachable from Settings", async () => {
     const call = vi.fn(async (method: string) => method === "state" ? hubState(false) : {});
     render(<App providedClient={{ call, subscribe: () => () => {} } as unknown as Client} />);

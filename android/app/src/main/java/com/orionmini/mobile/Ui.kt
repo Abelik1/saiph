@@ -224,23 +224,59 @@ fun Context.featureRow(icon: Int, title: String, detail: String): LinearLayout =
     }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
 }
 
-/** Secondary explanations expand in place, without losing the screen's scroll position. */
+/**
+ * Secondary explanations expand in place, without losing the screen's scroll position.
+ * The toggle is a quiet text row with a chevron, as on the desktop, so it never reads as
+ * one more action among the buttons; it still fills the row and a 48 dp touch target.
+ */
 fun Context.disclosure(label: String, build: LinearLayout.() -> Unit): LinearLayout = LinearLayout(this).apply {
     orientation = LinearLayout.VERTICAL
     val content = LinearLayout(context).apply {
-        orientation = LinearLayout.VERTICAL; visibility = View.GONE; setPadding(0, dp(12), 0, 0); build()
+        orientation = LinearLayout.VERTICAL; visibility = View.GONE; setPadding(0, dp(4), 0, 0); build()
     }
-    val toggle = button("$label  ▾") {
-        val expanded = content.visibility != View.VISIBLE
-        content.visibility = if (expanded) View.VISIBLE else View.GONE
-        (getChildAt(0) as Button).text = "$label  ${if (expanded) "▴" else "▾"}"
-        androidx.core.view.ViewCompat.setStateDescription(getChildAt(0), if (expanded) "Expanded" else "Collapsed")
+    val chevron = android.widget.ImageView(context).apply {
+        setImageResource(com.castle.sefirah.R.drawable.saiph_ic_chevron_down)
+        imageTintList = ColorStateList.valueOf(Palette.MUTED)
+        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
     }
-    toggle.contentDescription = label
-    androidx.core.view.ViewCompat.setStateDescription(toggle, "Collapsed")
+    val title = text(label, UiType.BODY, Palette.MUTED, bold = true)
+    val toggle = LinearLayout(context).apply {
+        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+        minimumHeight = dp(48); setPadding(dp(2), dp(8), dp(2), dp(8))
+        background = pressable(outline(0, 0, 12))
+        isClickable = true; isFocusable = true
+        contentDescription = label
+        androidx.core.view.ViewCompat.setAccessibilityDelegate(this, object : androidx.core.view.AccessibilityDelegateCompat() {
+            override fun onInitializeAccessibilityNodeInfo(host: View, info: androidx.core.view.accessibility.AccessibilityNodeInfoCompat) {
+                super.onInitializeAccessibilityNodeInfo(host, info); info.className = Button::class.java.name
+            }
+        })
+        androidx.core.view.ViewCompat.setStateDescription(this, "Collapsed")
+        addView(title, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        addView(chevron, LinearLayout.LayoutParams(dp(24), dp(24)).apply { marginStart = dp(8) })
+        setOnClickListener {
+            val expanded = content.visibility != View.VISIBLE
+            content.visibility = if (expanded) View.VISIBLE else View.GONE
+            chevron.rotation = if (expanded) 180f else 0f
+            title.setTextColor(if (expanded) Palette.TEXT else Palette.MUTED)
+            androidx.core.view.ViewCompat.setStateDescription(this, if (expanded) "Expanded" else "Collapsed")
+        }
+    }
     addView(toggle, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
     addView(content)
-    layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(16) }
+    layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) }
+}
+
+/**
+ * A security code the owner has to compare group by group: grouped monospace text on its own
+ * surface, as the desktop shows it, readable and selectable at any text size.
+ */
+fun Context.securityCode(value: String) = TextView(this).apply {
+    text = value; textSize = UiType.TITLE; setTextColor(Palette.TEXT); typeface = Typeface.MONOSPACE
+    setLineSpacing(0f, 1.3f); letterSpacing = 0.04f; setTextIsSelectable(true)
+    background = outline(Palette.FIELD, Palette.LINE_STRONG, 12); setPadding(dp(14), dp(12), dp(14), dp(12))
+    layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        .apply { topMargin = dp(12); bottomMargin = dp(4) }
 }
 
 /** Switches take Saiph's colours: cyan when on, a quiet track when off. */

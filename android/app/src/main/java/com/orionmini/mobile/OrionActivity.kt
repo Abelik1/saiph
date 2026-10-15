@@ -588,7 +588,7 @@ class OrionActivity : ComponentActivity() {
         UsageAnalytics.opened(this, "advanced")
         root.addView(card().apply {
             addView(text("Hub: ${runCatching { Api.base(this@OrionActivity) }.getOrDefault("Invalid saved configuration")}\nDevice: ${prefs.getString("device_id", "Unpaired")}\n${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})", UiType.META, Palette.MUTED))
-            addView(buttonRow(button("Saiph Hosted preview", tone = Tone.TONAL) { startActivity(Intent(this@OrionActivity, HostedActivity::class.java)) }))
+            addView(buttonRow(button("Saiph account", tone = Tone.TONAL) { startActivity(Intent(this@OrionActivity, HostedActivity::class.java)) }))
         })
         root.addView(section("Tailscale"))
         root.addView(card().apply {

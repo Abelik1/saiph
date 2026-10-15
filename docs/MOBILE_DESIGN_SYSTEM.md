@@ -57,21 +57,39 @@ text. Never shrink text to make a layout fit.
   act, whether a feature is enabled, missing permissions, and where call audio
   plays. Do not hide information needed to give informed consent.
 - Put longer privacy explanations, uncommon limitations and alternate manual
-  setup methods behind clearly labelled disclosures. Expand them in place and
-  expose their expanded or collapsed state to assistive technology.
+  setup methods behind clearly labelled disclosures. A disclosure is a quiet
+  text row with a chevron, not a button, so it never reads as one more action;
+  it still fills its row with a 48 dp target. Expand it in place and expose
+  its expanded or collapsed state to assistive technology.
+- Lists that update by themselves, such as received files, redraw when their
+  contents change instead of offering a Refresh button.
+- Call the service "Saiph account" in copy for people ("Sign in to Saiph",
+  "Remove this phone from your account"). "Hosted" stays in technical places
+  only, such as custom service fields and identifiers.
 - Use clear empty states that explain what will appear there. Keep received
   file names separate from a short Save action; give the action a spoken label
   identifying its file.
 
 ## Setup choices
 
-Present account and self-hosted routes using the same card structure: a short
+Offer the account-or-Hub choice on one screen only, the self-hosted home
+screen, and present both routes there using the same card structure: a short
 title, a comparable amount of explanatory text and one full-width action.
 Both routes have a card surface and aligned content. The recommended route may
 use the primary gradient; the alternative uses a secondary button. Express
 priority through button tone, without giving only one choice a box or filling
 one card with extra instructions. Invitation help and advanced configuration sit
 outside the choice cards. Show additional setup steps when they become relevant.
+The account sign-in screen opens on top of that choice and has one job, signing
+in; it offers self-hosting as a single secondary action rather than repeating
+the choice cards, and Back returns to the choice. Until the phone is approved,
+the connection screen offers a way to sign out of a wrong account.
+
+Show a security code the owner must compare on its own themed screen or card:
+grouped monospace text on a field surface (`securityCode` in `Ui.kt`), the same
+explanation of what the comparison checks, a Cancel action and one explicit
+"Every group matches" action that still goes through owner verification. Do
+not put the code in a system dialog message.
 
 Use a wizard for multi-step device connection: show one task at a time, the
 current step and a clear next action. Keep Back available between reversible
@@ -122,7 +140,7 @@ built once per size to spare the battery.
 The Android implementation lives in
 [`Ui.kt`](../android/app/src/main/java/com/orionmini/mobile/Ui.kt): `Palette`,
 `UiType`, `heading`, `section`, `cardTitle`, `body`, `card`, `button`, `buttonRow`,
-`connectionChoice`, `featureRow`, `disclosure` and `switchRow`. Reuse these
+`connectionChoice`, `featureRow`, `disclosure`, `securityCode` and `switchRow`. Reuse these
 helpers rather than duplicating their styling. Widget and window colours live
 in [`colors.xml`](../android/app/src/main/res/values/colors.xml);
 `SaiphPaletteTest` checks that they agree with the shared palette.

@@ -24,6 +24,9 @@ private val PHONE_PERMISSIONS = listOf(Manifest.permission.READ_SMS, Manifest.pe
     Manifest.permission.READ_PHONE_STATE, Manifest.permission.ANSWER_PHONE_CALLS, Manifest.permission.CALL_PHONE,
     Manifest.permission.READ_CALL_LOG, Manifest.permission.READ_CONTACTS)
 
+/** A computer code the owner is comparing: the signed code and its displayed fingerprint. */
+private data class PendingRoot(val code: String, val fingerprint: String)
+
 /** Account sign-in first; choosing Sign in applies this build's public defaults. */
 class HostedActivity : ComponentActivity() {
     private val lock = AppLock(this)
@@ -41,6 +44,10 @@ class HostedActivity : ComponentActivity() {
     private var settingsPage = false
     private var signingIn = false
     private var shownWaiting = false
+    /** Received-file ids the daily screen last drew; a change redraws it without a Refresh button. */
+    private var shownOffers: List<String> = emptyList()
+    /** A scanned or pasted computer code waiting for the owner's group-by-group comparison. */
+    private var pendingRoot: PendingRoot? = null
     private var loginState: String? = null
     private var loginError = ""
     private var authorizationService: AuthorizationService? = null
@@ -70,18 +77,27 @@ class HostedActivity : ComponentActivity() {
         saving = state?.getString("saving") ?: ""; deploymentSettings = state?.getBoolean("deploymentSettings") ?: false
         settingsPage = state?.getBoolean("settingsPage") ?: false
         loginState = state?.getString("loginState")
+        pendingRoot = state?.getString("pendingRootCode")?.let { code -> state.getString("pendingRootFingerprint")?.let { PendingRoot(code, it) } }
         signingIn = state?.getBoolean("signingIn") == true && loginState != null &&
             loginState == prefs.getString("pending_state", null) &&
             prefs.getLong("pending_until", 0) > System.currentTimeMillis()
         if (!AppLock.locked(this)) render()
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (settingsPage && !showingLock) { settingsPage = false; render() }
+                if (showingLock) { isEnabled = false; onBackPressedDispatcher.onBackPressed(); isEnabled = true }
+                else if (pendingRoot != null) { pendingRoot = null; render() }
+                else if (settingsPage) { settingsPage = false; render() }
                 else { isEnabled = false; onBackPressedDispatcher.onBackPressed(); isEnabled = true }
             }
         })
     }
-    override fun onSaveInstanceState(state: Bundle) { state.putBoolean("settingsPage", settingsPage); state.putString("saving", saving); state.putBoolean("deploymentSettings", deploymentSettings); state.putBoolean("signingIn", signingIn); state.putString("loginState", loginState); super.onSaveInstanceState(state) }
+    override fun onSaveInstanceState(state: Bundle) {
+        state.putBoolean("settingsPage", settingsPage); state.putString("saving", saving); state.putBoolean("deploymentSettings", deploymentSettings)
+        state.putBoolean("signingIn", signingIn); state.putString("loginState", loginState)
+        // Only public keys and a signature: safe to keep across a rotation while the owner compares.
+        pendingRoot?.let { state.putString("pendingRootCode", it.code); state.putString("pendingRootFingerprint", it.fingerprint) }
+        super.onSaveInstanceState(state)
+    }
     override fun onDestroy() { authorizationService?.dispose(); authorizationService = null; super.onDestroy() }
     override fun onResume() {
         super.onResume()
@@ -94,14 +110,19 @@ class HostedActivity : ComponentActivity() {
         if (prefs.contains("device_id")) UsageAnalytics.ask(this) { render() }
         poll?.cancel()
         // The waiting screen turns into the daily screen by itself once the computer approves.
-        poll = lifecycleScope.launch { while (isActive) { if (waitingForApproval() != shownWaiting) render() else status.text = statusLine(); delay(1000) } }
+        // Received files appear by themselves too; a changed list redraws the daily screen in place.
+        poll = lifecycleScope.launch { while (isActive) {
+            if (waitingForApproval() != shownWaiting || (shownPage == "home" && runtime.offers.map { it.first } != shownOffers)) render()
+            else status.text = statusLine()
+            delay(1000)
+        } }
     }
     private fun lockedScreen() {
         if (showingLock) return
         showingLock = true; poll?.cancel()
         shell("Saiph is locked")
         root.addView(card().apply {
-            addView(text("Confirm it's you to see Saiph Hosted.", UiType.BODY))
+            addView(text("Confirm it's you to open Saiph.", UiType.BODY))
             actions(button("Unlock", true) { lock.declined = false; lock.open({}, ::resumeUnlocked) })
         })
     }
@@ -144,18 +165,29 @@ class HostedActivity : ComponentActivity() {
         }
     }
     private fun action(run: suspend () -> Unit) {
-        lifecycleScope.launch { try { withContext(Dispatchers.IO) { run() }; render() } catch (_: Exception) { message("Hosted could not complete this step. Check sign-in, the root device and your connection, then retry.") } }
+        lifecycleScope.launch { try { withContext(Dispatchers.IO) { run() }; render() } catch (_: Exception) { message("Saiph could not complete this step. Check your sign-in, your main computer and your connection, then try again.") } }
     }
     /** Scanned and pasted codes take the same path: nothing is trusted until every fingerprint group is confirmed. */
     private fun checkRoot(value: String) {
         runCatching {
             val inspected = HostedApprovalCodes.inspect(value)
-            val fingerprint = HostedApprovalCodes.displayFingerprint(inspected.fingerprint())
-            android.app.AlertDialog.Builder(this).setTitle("Check this computer's security code").setMessage("Compare every group below with the code shown on your computer. This checks which computer you are trusting:\n\n$fingerprint")
-                .setNegativeButton("Cancel", null).setPositiveButton("Every group matches") { _, _ ->
-                    verified("Trust your computer as this phone's root device") { action { runtime.enroll(value, fingerprint) } }
-                }.show()
-        }.onFailure { message("Invalid or expired root code. Ask your computer for a new code.") }
+            pendingRoot = PendingRoot(value, HostedApprovalCodes.displayFingerprint(inspected.fingerprint()))
+            if (!AppLock.locked(this)) render()
+        }.onFailure { message("Invalid or expired computer code. Ask your computer for a new code.") }
+    }
+    /** The trust step on its own themed screen: the full code, grouped, then one explicit confirmation. */
+    private fun confirmRootScreen(pending: PendingRoot) {
+        root.addView(card(strong = true).apply {
+            addView(cardTitle("Check this computer's security code"))
+            addView(body("Compare every group below with the code shown on your computer. This checks which computer you are trusting."))
+            addView(securityCode(pending.fingerprint))
+            addView(disclosure("Why compare security codes?") {
+                addView(body("A security code is the fingerprint of a device's encryption keys. Signing in finds your account; comparing every group on both screens checks which computer you are trusting."))
+            })
+            actions(button("Cancel") { pendingRoot = null; render() }, button("Every group matches", true) {
+                verified("Trust this computer as your main computer") { pendingRoot = null; action { runtime.enroll(pending.code, pending.fingerprint) } }
+            })
+        })
     }
     /** The same frame as the home screen: strings behind, a header with Back, then the page. */
     private fun shell(title: String, page: String = title) {
@@ -166,7 +198,10 @@ class HostedActivity : ComponentActivity() {
             orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
             setPadding(dp(10), dp(8), dp(10), dp(8)); minimumHeight = dp(64)
             addView(iconButton(com.castle.sefirah.R.drawable.saiph_ic_back, "Back") {
-                if (settingsPage && !showingLock) { settingsPage = false; render() } else finish()
+                if (showingLock) finish()
+                else if (pendingRoot != null) { pendingRoot = null; render() }
+                else if (settingsPage) { settingsPage = false; render() }
+                else finish()
             })
             addView(heading(title).apply { setPadding(dp(2), 0, dp(8), 0) },
                 LinearLayout.LayoutParams(0, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
@@ -223,7 +258,7 @@ class HostedActivity : ComponentActivity() {
             }
         })
         addView(disclosure("Privacy and limits") {
-            addView(body("Texts, numbers and names are end-to-end encrypted; Saiph Hosted cannot read them."))
+            addView(body("Texts, numbers and names are end-to-end encrypted; Saiph's servers cannot read them."))
             addView(body("Pictures (MMS) and group replies stay on this phone.").apply { setPadding(0, dp(12), 0, 0) })
             addView(body("If two computers answer or decline the same call, the first action wins. The other computer is told.").apply { setPadding(0, dp(12), 0, 0) })
         })
@@ -244,7 +279,9 @@ class HostedActivity : ComponentActivity() {
     private fun render() {
         if (!prefs.contains("device_id") || waitingForApproval()) settingsPage = false
         val enrolled = prefs.contains("device_id")
+        if (enrolled) pendingRoot = null
         val page = when {
+            pendingRoot != null -> "confirm"
             settingsPage -> "settings"
             !enrolled && !account.signedIn() -> "sign-in"
             waitingForApproval() -> "waiting"
@@ -255,8 +292,9 @@ class HostedActivity : ComponentActivity() {
         shell(if (settingsPage) "Settings" else "Saiph", page)
         status = text(statusLine(), UiType.META, Palette.MUTED).apply { setPadding(dp(2), 0, 0, dp(6)); visibility = if (text.isEmpty()) android.view.View.GONE else android.view.View.VISIBLE }; root.addView(status)
         if (getSharedPreferences("orion", 0).contains("device_id")) {
-            root.addView(card().apply { addView(text("This phone is paired with a self-hosted Hub. Use an unpaired phone for Hosted.", UiType.BODY)) }); return
+            root.addView(card().apply { addView(text("This phone is paired with a self-hosted Hub. Use an unpaired phone for a Saiph account.", UiType.BODY)) }); return
         }
+        pendingRoot?.let { confirmRootScreen(it); return }
         // An approved phone keeps syncing with its device keys; the account token only matters
         // for enrolment, so only a phone that is not yet approved starts at sign-in.
         shownWaiting = waitingForApproval()
@@ -277,18 +315,18 @@ class HostedActivity : ComponentActivity() {
             if (enrolled) retirementAction()
         } else if (enrolled) {
             // Daily use first: files across, then texts and calls.
+            shownOffers = runtime.offers.map { it.first }
             group("Files and photos") {
                 addView(featureRow(com.castle.sefirah.R.drawable.saiph_ic_photo, "Send to your computers", "Choose a file or photo from this phone."))
                 actions(button("Send a file or photo", true) { sendFile.launch(arrayOf("*/*")) })
                 addView(divider())
                 addView(cardTitle("Received files"))
-                if (runtime.offers.isEmpty()) addView(body("Files sent from your computers appear here."))
+                if (runtime.offers.isEmpty()) addView(body("Files sent from your computers appear here by themselves."))
                 runtime.offers.forEachIndexed { index, (id, name) ->
                     if (index > 0) addView(divider())
                     addView(text(name))
                     actions(button("Save file", tone = Tone.TONAL) { saving = id; saveFile.launch(name) }.apply { contentDescription = "Save $name" })
                 }
-                actions(button("Refresh files") { render() })
             }
             textsAndCalls()
         } else {
@@ -300,19 +338,16 @@ class HostedActivity : ComponentActivity() {
                     actions(button("Check code", tone = Tone.TONAL) { checkRoot(code.text.toString()) })
                 })
             }
-        }
-    }
-    private fun hostedSettings() {
-        val enrolled = prefs.contains("device_id")
-        group("This phone") {
-            addView(body("Full device fingerprint"))
-            addView(text(runtime.fingerprint, UiType.META).apply { setPadding(0, dp(8), 0, 0); setTextIsSelectable(true) })
-            actions(button("Create a fresh request", tone = Tone.TONAL) { verified("Show a request to add this phone") { action { runtime.freshRequest() } } })
-            if (runtime.requestCode.isNotEmpty()) addView(disclosure("View approval request code") {
-                addView(body("Paste this request into your computer. Compare every fingerprint group before approving.").apply { setPadding(0, dp(12), 0, dp(8)) })
-                addView(context.field("Phone device approval request code").apply { setText(runtime.requestCode); isFocusable = false; contentDescription = "Phone device approval request code" })
+            // A wrong account must have a way out before this phone is approved and Settings exists.
+            root.addView(card().apply {
+                addView(body("Not the account you use on your computer?"))
+                actions(button("Sign out") { action { account.signOut() } })
             })
         }
+    }
+    /** Settings in the order they are needed: account, what is shared, the connection, then this phone's details. */
+    private fun hostedSettings() {
+        val enrolled = prefs.contains("device_id")
         if (runtime.enabled()) {
             group("Account") {
                 if (account.signedIn()) actions(button("Sign out") { action { account.signOut() } })
@@ -349,6 +384,15 @@ class HostedActivity : ComponentActivity() {
             addView(body("Sync is off. Your account and device approval are kept."))
             actions(button("Resume syncing", true) { toggleHosted() })
         }
+        group("This phone") {
+            addView(body("Full device fingerprint"))
+            addView(text(runtime.fingerprint, UiType.META).apply { setPadding(0, dp(8), 0, 0); setTextIsSelectable(true) })
+            actions(button("Create a fresh request", tone = Tone.TONAL) { verified("Show a request to add this phone") { action { runtime.freshRequest() } } })
+            if (runtime.requestCode.isNotEmpty()) addView(disclosure("View approval request code") {
+                addView(body("Paste this request into your computer. Compare every fingerprint group before approving.").apply { setPadding(0, dp(12), 0, dp(8)) })
+                addView(context.field("Phone device approval request code").apply { setText(runtime.requestCode); isFocusable = false; contentDescription = "Phone device approval request code" })
+            })
+        }
         root.addView(section("Security"))
         root.addView(card().apply {
             addView(lock.toggle())
@@ -356,12 +400,13 @@ class HostedActivity : ComponentActivity() {
         })
         UsageAnalytics.settingsViews(this).forEach(root::addView)
     }
+    /** One job here: sign in. The account-or-Hub choice is the home screen behind Back, offered once. */
     private fun signInScreen(enrolled: Boolean) {
         root.addView(heading("Your devices, in tune.").apply { setPadding(dp(2), dp(16), 0, dp(8)) })
-        root.addView(body("Choose how to connect your phone.").apply { setPadding(dp(2), 0, 0, dp(24)) })
+        root.addView(body("Sign in with the same account as your computer. Saiph takes care of the connection.").apply { setPadding(dp(2), 0, 0, dp(24)) })
         root.addView(card().apply {
             addView(cardTitle("Use your Saiph account"))
-            addView(body("Sign in with the same account as your computer. Saiph takes care of the connection."))
+            addView(body("New to the beta? Activate your invitation code on your Saiph account page first, with the account you sign in with here."))
             actions(button(if (signingIn) "Waiting for sign-in…" else "Sign in to Saiph", true) { signIn() }.apply { isEnabled = !signingIn })
             if (signingIn) addView(body("Finish signing in in your browser, then return here.").apply { setPadding(0, dp(12), 0, 0) })
             if (loginError.isNotEmpty()) {
@@ -370,14 +415,12 @@ class HostedActivity : ComponentActivity() {
             }
         })
         if (!runtime.enabled() && !enrolled) {
-            root.addView(connectionChoice("Use your own Hub", "Connect through a Saiph Hub you manage on your own network.", "Connect to my Hub") {
+            // Self-hosting stays one tap away without repeating the home screen's choice cards here.
+            actionsOnRoot(button("Use my own Hub instead") {
                 getSharedPreferences("orion", 0).edit().putBoolean("self_host", true).apply()
                 finish()
             })
         }
-        if (!signingIn && !enrolled) root.addView(disclosure("New to the beta?") {
-            addView(body("Activate your invitation code on your Saiph account page first. Use that same account to sign in here."))
-        })
         if (!runtime.enabled() && !enrolled) {
             // Custom builds retain manual configuration outside the normal account flow.
             if (!runtime.hasPackagedDefaults()) {
@@ -388,7 +431,7 @@ class HostedActivity : ComponentActivity() {
                     val audience = field("API audience", prefs.getString("audience", "")!!, this)
                     val client = field("Android native client ID", prefs.getString("client_id", "")!!, this)
                     val refresh = CheckBox(context).apply { text = "Keep me signed in with a protected rotating refresh token"; isChecked = prefs.getBoolean("refresh_tokens", false); setTextColor(Palette.TEXT); buttonTintList = android.content.res.ColorStateList.valueOf(Palette.ACCENT) }; addView(refresh)
-                    actions(button("Save custom service") { verified("Change the Saiph Hosted connection", requireScreenLock = false) {
+                    actions(button("Save custom service") { verified("Change the custom service settings", requireScreenLock = false) {
                         action { runtime.configure(origin.text.toString(), issuer.text.toString(), audience.text.toString(), client.text.toString(), refresh.isChecked) }
                     } })
                 }
@@ -407,7 +450,7 @@ class HostedActivity : ComponentActivity() {
         root.addView(card(strong = true).apply {
             addView(cardTitle("Approve this phone"))
             addView(body("Open the Phone tab in Saiph on your computer. Compare every group of this security code with the phone request shown there, then approve it."))
-            if (runtime.fingerprint.isNotEmpty()) addView(text(runtime.fingerprint, 18f, bold = true).apply { setPadding(0, dp(10), 0, dp(10)); setTextIsSelectable(true) })
+            if (runtime.fingerprint.isNotEmpty()) addView(securityCode(runtime.fingerprint))
             addView(text("This screen moves on by itself once your computer approves the phone.", UiType.BODY, Palette.MUTED))
             actions(button("Send a fresh request", tone = Tone.TONAL) {
                 if (!account.signedIn()) signIn() else verified("Show a request to add this phone") { action { runtime.freshRequest() } }
@@ -421,9 +464,9 @@ class HostedActivity : ComponentActivity() {
         retirementAction()
     }
     private fun actionsOnRoot(vararg buttons: Button) = root.addView(buttonRow(*buttons))
-    private fun retirementAction() = actionsOnRoot(button("Retire this phone's Hosted identity", tone = Tone.DANGER) {
-        android.app.AlertDialog.Builder(this).setTitle("Retire Hosted identity?").setMessage("Revoke this phone on the root computer too. Its encrypted keys and trust history stay on this phone for recovery.")
-            .setNegativeButton("Cancel", null).setPositiveButton("Retire") { _, _ -> verified("Retire this phone's Hosted identity", requireScreenLock = false) { action { runtime.retire() } } }.show()
+    private fun retirementAction() = actionsOnRoot(button("Remove this phone from your account", tone = Tone.DANGER) {
+        android.app.AlertDialog.Builder(this).setTitle("Remove this phone from your account?").setMessage("Also remove it on your main computer. Its encrypted keys and trust history stay on this phone for recovery.")
+            .setNegativeButton("Cancel", null).setPositiveButton("Remove") { _, _ -> verified("Remove this phone from your account", requireScreenLock = false) { action { runtime.retire() } } }.show()
     })
     /** One switch for the whole service; starting it also applies this build's connection defaults. */
     private fun toggleHosted() = action {
