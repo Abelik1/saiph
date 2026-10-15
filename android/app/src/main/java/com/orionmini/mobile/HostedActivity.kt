@@ -36,6 +36,7 @@ class HostedActivity : ComponentActivity() {
     private var poll: Job? = null
     private var deploymentSettings = false
     private var signingIn = false
+    private var shownWaiting = false
     private var loginState: String? = null
     private var loginError = ""
     private var authorizationService: AuthorizationService? = null
@@ -81,7 +82,8 @@ class HostedActivity : ComponentActivity() {
         UsageAnalytics.opened(this, "hosted")
         if (prefs.contains("device_id")) UsageAnalytics.ask(this) { render() }
         poll?.cancel()
-        poll = lifecycleScope.launch { while (isActive) { status.text = statusLine(); delay(1000) } }
+        // The waiting screen turns into the daily screen by itself once the computer approves.
+        poll = lifecycleScope.launch { while (isActive) { if (waitingForApproval() != shownWaiting) render() else status.text = statusLine(); delay(1000) } }
     }
     private fun lockedScreen() {
         if (showingLock) return
@@ -219,8 +221,13 @@ class HostedActivity : ComponentActivity() {
         val enrolled = prefs.contains("device_id")
         // An approved phone keeps syncing with its device keys; the account token only matters
         // for enrolment, so only a phone that is not yet approved starts at sign-in.
+        shownWaiting = waitingForApproval()
         if (!enrolled && !account.signedIn()) {
             signInScreen(enrolled)
+            return
+        }
+        if (shownWaiting) {
+            waitingScreen()
             return
         }
         if (!runtime.enabled()) {
@@ -247,9 +254,9 @@ class HostedActivity : ComponentActivity() {
                 }
             }
         } else {
-            group("Approve this phone") {
-                addView(text("Your computer approves this phone. Scan the root QR it shows, or paste its root approval code.", 14f, Palette.MUTED))
-                actions(button("Scan root QR from your computer", true) { scanRoot.launch(OrionQrActivity.hostedRoot(this@HostedActivity)) })
+            group("Connect to your computer") {
+                addView(text("On your computer, open Saiph and choose Show root approval code (in the setup guide, or Settings → Saiph account). Scan the code it shows.", 14f, Palette.MUTED))
+                actions(button("Scan the code on your computer", true) { scanRoot.launch(OrionQrActivity.hostedRoot(this@HostedActivity)) })
                 val code = field("Or paste the root approval code from your computer", into = this)
                 actions(button("Check root code", tone = Tone.TONAL) { checkRoot(code.text.toString()) })
             }
@@ -266,7 +273,7 @@ class HostedActivity : ComponentActivity() {
                     }
                 }
             }
-            group("Sharing permissions") {
+            if (enrolled) group("Sharing permissions") {
                 addView(text("Choose only the features you want. Notification access lets Saiph share your phone notifications. Android may restrict clipboard access while Saiph is in the background.", 14f, Palette.MUTED))
                 fun settings(label: String, target: Intent) = actions(button(label, tone = Tone.TONAL) {
                     runCatching { startActivity(target) }.onFailure { message("Open Android Settings to manage Saiph permissions.") }
@@ -291,6 +298,7 @@ class HostedActivity : ComponentActivity() {
         root.addView(card(strong = true).apply {
             addView(text("Your phone and computers, in tune.", 22f, bold = true))
             addView(text("Sign in with the same Saiph account you use on your computer. Connection settings are taken care of for you.", 15f))
+            if (!signingIn && !enrolled) addView(text("New to the beta? Activate your invitation code on your Saiph account page first, with the account you sign in with here.", 13f, Palette.MUTED).apply { setPadding(0, dp(6), 0, 0) })
             actions(button(if (signingIn) "Waiting for sign-in…" else "Sign in to Saiph", true) { signIn() }.apply { isEnabled = !signingIn })
             if (signingIn) addView(text("Finish signing in in your browser, then return to Saiph.", 14f, Palette.MUTED))
             if (loginError.isNotEmpty()) {
@@ -324,6 +332,25 @@ class HostedActivity : ComponentActivity() {
         account.signedIn() -> runtime.status + " · Signed in"
         prefs.contains("device_id") -> runtime.status
         else -> ""
+    }
+    private fun waitingForApproval() = prefs.contains("device_id") && runtime.enabled() && runtime.status.startsWith("Waiting for root approval")
+    /** One job while the computer has not approved this phone yet: compare and approve there. */
+    private fun waitingScreen() {
+        root.addView(card(strong = true).apply {
+            addView(text("Approve this phone on your computer", 20f, bold = true))
+            addView(text("Open Saiph on your computer. This phone appears there by itself. Check that every group of this fingerprint matches, then approve it:", 15f))
+            if (runtime.fingerprint.isNotEmpty()) addView(text(runtime.fingerprint, 18f, bold = true).apply { setPadding(0, dp(10), 0, dp(10)); setTextIsSelectable(true) })
+            addView(text("This screen moves on by itself once your computer approves the phone.", 14f, Palette.MUTED))
+            actions(button("Send a fresh request", tone = Tone.TONAL) {
+                if (!account.signedIn()) signIn() else verified("Show a request to add this phone") { action { runtime.freshRequest() } }
+            })
+            if (runtime.requestCode.isNotEmpty()) actions(button("Share the request code instead", tone = Tone.TONAL) {
+                // Only public keys and a signature: safe to send to yourself if the computer cannot see the request.
+                runCatching { startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, runtime.requestCode), "Share request code")) }
+            })
+            if (loginError.isNotEmpty()) addView(text(loginError, 14f, Palette.WARN))
+        })
+        retirementAction()
     }
     private fun actionsOnRoot(vararg buttons: Button) = root.addView(buttonRow(*buttons))
     private fun retirementAction() = actionsOnRoot(button("Retire this phone's Hosted identity", tone = Tone.DANGER) {

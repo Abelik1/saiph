@@ -148,13 +148,16 @@ class HostedRuntime private constructor(private val context: Context) {
         requestCode = HostedApprovalCodes.request(current)
         fingerprint = HostedApprovalCodes.deviceFingerprint(current.enrollment().getValue("device").jsonObject)
         transport!!.submitEnrollment(token)
+        offer(token)
         UsageAnalytics.count(context, "hosted_enrolled")
         status = "Waiting for root approval"
     }
     suspend fun freshRequest() = mutex.withLock {
         check(enabled()); val token = HostedAccount.get(context).token(); val current = open()
-        requestCode = HostedApprovalCodes.request(current); transport!!.submitEnrollment(token)
+        requestCode = HostedApprovalCodes.request(current); transport!!.submitEnrollment(token); offer(token)
     }
+    /** Best effort: an older service has no offered requests, and the code can still be shared. */
+    private fun offer(token: String) { runCatching { transport!!.offerRequest(token, requestCode) } }
     fun enqueue(type: String, value: JsonObject): Boolean {
         if (!enabled() || status != "Connected" || !HostedAccount.get(context).signedIn()) return false
         val access = OrionPermissions.read(context)

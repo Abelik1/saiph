@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Client, HostedConfig, HostedState } from "./types";
 import { Action, Card, Form } from "./ui";
 import { validQr } from "./PairingQr";
@@ -8,6 +8,7 @@ import { HostedSignIn } from "./HostedSignIn";
 
 type RootCode = {code: string; fingerprint: string; modules: string[]; expires_at: string; expires_in: number};
 type Request = {device_id: string; fingerprint: string; expires_at: number};
+type Offered = Request & {code: string};
 const emptyConfig: HostedConfig = {service_url: "", issuer: "", audience: "", client_id: "", refresh_tokens: false};
 const statuses: Record<string, string> = {off: "Off", starting: "Starting", setup: "Set up this computer as root", active: "Connected", signed_out: "Signed out", sign_in_required: "Sign in again", offline: "Offline; reconnecting", renewal_pending: "Waiting to renew device approvals", retrying: "Reconnecting", clock: "Check this computer's clock", keys_unavailable: "Hosted keys could not be unlocked", awaiting_approval: "Waiting for your main computer to approve this computer", removed: "Removed by your main computer"};
 
@@ -19,39 +20,70 @@ export function VerificationNote({value}: {value?: string}) {
 }
 
 /** The signed root code a phone scans to trust this computer. Shown only on request. */
-export function HostedRootCode({hosted, client}: {hosted: HostedState; client: Client}) {
+export function HostedRootCode({hosted, client, autoShow = false}: {hosted: HostedState; client: Client; autoShow?: boolean}) {
   const [root, setRoot] = useState<RootCode | null>(null);
+  const [error, setError] = useState("");
   async function showRoot(method: string) {
     const result = await client.call<RootCode>(method);
     if (!validQr(result)) throw new Error("Could not display the root QR code.");
     setRoot(result);
   }
+  // In the setup guide the next step is scanning, so the code is shown straight away.
+  useEffect(() => {
+    if (autoShow && hosted.identity) showRoot("hosted.root_code").catch(failure => setError(failure instanceof Error ? failure.message : String(failure)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoShow, hosted.identity]);
   return <>
-    <Action run={() => showRoot(hosted.identity ? "hosted.root_code" : "hosted.setup_root")}>{hosted.identity ? "Show root approval code" : "Set up this computer as root"}</Action>
     {root && <div>
-      <p>On your phone, scan this QR or paste the root code, then compare the full fingerprint on both screens. The code expires at {new Date(root.expires_at).toLocaleTimeString()}.</p>
+      <p>On your phone, scan this code, then check that the full fingerprint matches on both screens. It expires at {new Date(root.expires_at).toLocaleTimeString()}.</p>
       <svg role="img" aria-label="Hosted root approval QR code" viewBox={`0 0 ${root.modules.length} ${root.modules.length}`} width="264" height="264" shapeRendering="crispEdges"><rect width="100%" height="100%" fill="white" /><path fill="black" d={root.modules.map((row, y) => [...row].map((cell, x) => cell === "1" ? `M${x} ${y}h1v1h-1z` : "").join("")).join("")} /></svg>
-      <label>Root code<textarea readOnly value={root.code} /></label><p className="muted">Full root fingerprint</p><code>{root.fingerprint}</code>
+      <p className="muted">Full root fingerprint</p><code>{root.fingerprint}</code>
+      <details><summary>Can't scan? Copy the code instead</summary><label>Root code<textarea readOnly value={root.code} /></label></details>
       <button type="button" onClick={() => setRoot(null)}>Hide root code</button>
     </div>}
+    {error && !root && <p role="alert">{error}</p>}
+    <Action run={() => showRoot(hosted.identity ? "hosted.root_code" : "hosted.setup_root")}>{!hosted.identity ? "Set up this computer as root" : root ? "Show a new code" : "Show root approval code"}</Action>
   </>;
 }
 
-/** Approve a phone's signed request after the owner compares its full fingerprint. */
+/** Approve a device's signed request after the owner compares its full fingerprint.
+ * Devices that signed in offer their request through the service, so it appears here by
+ * itself; the code is verified on this computer and pasting stays as a fallback. */
 export function HostedApproveDevice({hosted, client}: {hosted: HostedState; client: Client}) {
   const [code, setCode] = useState("");
   const [request, setRequest] = useState<Request | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const [label, setLabel] = useState("");
+  const [offered, setOffered] = useState<Offered[]>([]);
+  useEffect(() => {
+    let alive = true;
+    const look = () => client.call<{requests: Offered[]}>("hosted.requests")
+      .then(value => { if (alive) setOffered(Array.isArray(value?.requests) ? value.requests : []); }).catch(() => undefined);
+    void look();
+    const timer = window.setInterval(look, 4000);
+    return () => { alive = false; window.clearInterval(timer); };
+  }, [client]);
+  const review = (item: Offered) => { setCode(item.code); setRequest(item); setConfirmed(false); setLabel(""); };
+  const reset = () => { setRequest(null); setCode(""); setConfirmed(false); setLabel(""); };
   return <>
-    <Form submit={async () => {const inspected = await client.call<Request>("hosted.request.inspect", {code}); setRequest(inspected); setConfirmed(false);}}>
-      <label>Device request code<textarea value={code} required onChange={event => {setCode(event.target.value); setRequest(null); setConfirmed(false);}} /></label><button>Check request</button>
-    </Form>
-    {request && <Form submit={async () => {await client.call("hosted.approve", {code, label, confirmed}); setRequest(null); setCode(""); setConfirmed(false);}}>
-      <p>Compare this full fingerprint with the device you are adding:</p><code>{request.fingerprint}</code>
-      <label>Device name<input value={label} maxLength={40} required onChange={event => setLabel(event.target.value)} /></label>
-      <label><input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} /> The full fingerprint matches the device</label><button disabled={!confirmed}>Approve device</button>
+    {!request && (offered.length ? <div className="hosted-offered" aria-live="polite">
+      {offered.map(item => <div key={item.device_id} className="hosted-offered-item">
+        <p><b>A device is asking to join your Saiph account.</b></p>
+        <p className="muted">Its fingerprint begins <code>{item.fingerprint.split(" ").slice(0, 2).join(" ")}</code>.</p>
+        <button type="button" onClick={() => review(item)}>Review and approve</button>
+      </div>)}
+    </div> : <p className="muted" aria-live="polite">Waiting for your device… After it signs in and checks this computer's code, it appears here.</p>)}
+    {request && <Form submit={async () => {await client.call("hosted.approve", {code, label, confirmed}); reset();}}>
+      <p>Compare every group of this fingerprint with the one on the device you are adding:</p><code>{request.fingerprint}</code>
+      <label>Device name<input value={label} maxLength={40} required placeholder="For example: My phone" onChange={event => setLabel(event.target.value)} /></label>
+      <label className="check"><input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} /> The full fingerprint matches the device</label>
+      <div className="actions"><button type="button" className="text-button" onClick={reset}>Not this device</button><button disabled={!confirmed}>Approve device</button></div>
     </Form>}
+    {!request && <details><summary>Paste a request code instead</summary>
+      <Form submit={async () => {const inspected = await client.call<Request>("hosted.request.inspect", {code}); setRequest(inspected); setConfirmed(false);}}>
+        <label>Device request code<textarea value={code} required onChange={event => {setCode(event.target.value); setRequest(null); setConfirmed(false);}} /></label><button>Check request</button>
+      </Form>
+    </details>}
     <VerificationNote value={hosted.user_verification} />
   </>;
 }

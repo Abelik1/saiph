@@ -163,6 +163,20 @@ class HostedTransport:
             raise TransportError()
         return self._call("POST", "/v1/devices/requests", token=access_token, value=candidate)
 
+    def offer_request(self, access_token, code):
+        """Hand this device's signed request to the service so the main computer can fetch it."""
+        if access_token is None or type(code) is not str:
+            raise TransportError()
+        return self._call("POST", "/v1/devices/approval-requests", token=access_token, value={"code": code})
+
+    def offered_requests(self, access_token):
+        if access_token is None:
+            raise TransportError()
+        result = self._call("GET", "/v1/devices/approval-requests", token=access_token)
+        if (set(result) != {"requests"} or type(result["requests"]) is not list or len(result["requests"]) > 10
+                or any(type(code) is not str or len(code) > 4096 for code in result["requests"])):
+            raise TransportError()
+        return result["requests"]
     def rosters(self, access_token):
         if access_token is None:
             raise TransportError()

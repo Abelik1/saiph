@@ -23,8 +23,9 @@ export function HostedJoin({ client, waiting }: { client: Client; waiting: boole
 
   if (waiting || request) return <div className="grid gap-3" aria-label="Waiting for your main computer">
     <p className={muted}>
-      On your main computer, open Settings → Saiph Hosted, paste this request code under <b className="text-foreground">Device request code</b>,
-      and check that the fingerprint it shows matches the one below before approving.
+      Open Saiph on your main computer: this computer appears there by itself under Settings → Saiph account.
+      Check that every group of the fingerprint it shows matches the one below before approving. If it does not appear,
+      paste the request code there instead.
     </p>
     {request ? <>
       <Field label="Request code for your main computer" htmlFor={id + "-request"}>

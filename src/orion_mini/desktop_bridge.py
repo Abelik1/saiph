@@ -237,7 +237,7 @@ class DesktopBridge(QObject):
                 if args:raise ValueError('Unknown microphone action.')
                 open_target('https://vb-audio.com/Cable/' if sys.platform == 'win32' else 'https://github.com/Genymobile/scrcpy/blob/v3.3.4/doc/audio.md#source')
                 result={'opened':True}
-            elif method in {"hosted.setup_root", "hosted.approve", "hosted.revoke", "hosted.sign_out", "hosted.file.save", "hosted.root_code", "hosted.configure", "hosted.forget", "hosted.enable", "hosted.request.inspect", "hosted.sign_in", "hosted.notification.dismiss", "hosted.join.inspect", "hosted.join", "hosted.join.request"}:
+            elif method in {"hosted.setup_root", "hosted.approve", "hosted.revoke", "hosted.sign_out", "hosted.file.save", "hosted.root_code", "hosted.configure", "hosted.forget", "hosted.enable", "hosted.request.inspect", "hosted.sign_in", "hosted.notification.dismiss", "hosted.join.inspect", "hosted.join", "hosted.join.request", "hosted.requests"}:
                 self.background(request_id, lambda: self.window.workspace.dispatch(method, args)); return
             elif method == "hosted.file.choose":
                 path, _ = QFileDialog.getOpenFileName(self.window, "Send a file with Saiph Hosted")

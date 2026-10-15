@@ -108,14 +108,14 @@ export function SetupWizard({ state, client, close }: { state: State; client: Cl
       <div className="actions"><Action disabled={!mode || (mode === "hosted" && (!hosted?.configured || hosted.account?.status === "signing_in"))} run={chooseMode}>{mode === "hosted" && !signedIn ? "Sign in to Saiph" : "Continue"}</Action></div>
     </Card>}
 
-    {step === "connect" && <Card title={mode === "hosted" ? "Sign in with your Saiph account" : "Pair with your Hub"}>
+    {step === "connect" && <Card title={mode === "hosted" ? (signedIn ? "You're signed in" : "Sign in with your Saiph account") : "Pair with your Hub"}>
       {mode === "hosted" && hosted && <>
         {hosted.self_hosted_paired ? <p>This computer is already paired with your own Hub. A device uses one or the other.</p>
           : !hosted.configured ? <p>This build cannot connect to Saiph accounts. Download the current beta from your account page.</p>
           : <>
             {!signedIn && <HostedSignIn hosted={hosted} client={client} />}
             {signedIn && !hosted.identity && <><p>This computer becomes the device that approves your others. Keep it online now and then so approvals stay current.</p>
-              <Action run={() => client.call("hosted.setup_root")}>Set up this computer</Action>
+              <Action run={async () => { await client.call("hosted.setup_root"); setStep("phone"); }}>Set up this computer</Action>
               <details><summary>Already use Saiph Hosted on another computer?</summary><HostedJoin client={client} waiting={false} /></details></>}
             {signedIn && joining && <HostedJoin client={client} waiting />}
             {connected && <p role="status" className="setup-ok"><Check size={16} />Signed in and set up.</p>}
@@ -148,10 +148,11 @@ export function SetupWizard({ state, client, close }: { state: State; client: Cl
       </>}
       {mode === "hosted" && hosted && <>
         {phoneReady && <p role="status" className="setup-ok"><Check size={16} />{hostedPhones.map((m) => m.label).join(", ")} approved.</p>}
-        {hosted.role === "member" ? <p>Phones are added on your main computer: open Settings → Saiph Hosted there, show its code to your phone and approve the phone's request.</p> : <>
-          <p>1. On your phone, sign in with the same Saiph account and scan this computer's code.</p>
-          <HostedRootCode hosted={hosted} client={client} />
-          <p>2. Paste the request your phone shows, compare the fingerprint and approve it.</p>
+        {hosted.role === "member" ? <p>Phones are added on your main computer: open Settings → Saiph account there, show its code to your phone and approve the phone when it appears.</p>
+          : phoneReady ? <details><summary>Add another phone</summary><HostedRootCode hosted={hosted} client={client} /><HostedApproveDevice hosted={hosted} client={client} /></details> : <>
+          <p>1. On your phone, open Saiph, sign in with the same Saiph account and tap Scan the code on your computer.</p>
+          <HostedRootCode hosted={hosted} client={client} autoShow />
+          <p>2. Your phone appears here by itself. Compare its full fingerprint with the phone, name it and approve it.</p>
           <HostedApproveDevice hosted={hosted} client={client} />
         </>}
       </>}

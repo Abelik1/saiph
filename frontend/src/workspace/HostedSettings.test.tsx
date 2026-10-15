@@ -32,10 +32,22 @@ describe("Hosted preview settings", () => {
     fireEvent.change(screen.getByLabelText("Device name"), {target: {value: "My phone"}}); fireEvent.click(screen.getByLabelText("The full fingerprint matches the device")); fireEvent.click(screen.getByRole("button", {name: "Approve device"}));
     await waitFor(() => expect(call).toHaveBeenCalledWith("hosted.approve", {code: "orion-approve-v1:synthetic", label: "My phone", confirmed: true}));
   });
-  it("invalidates confirmation whenever request code changes", async () => {
+  it("drops confirmation when the owner rejects or replaces a request", async () => {
     setup(active, vi.fn().mockResolvedValue({device_id: "phone", fingerprint: "fingerprint", expires_at: 1900000000}));
-    fireEvent.change(screen.getByLabelText("Device request code"), {target: {value: "first"}}); fireEvent.click(screen.getByRole("button", {name: "Check request"})); await screen.findByText("Compare this full fingerprint with the device you are adding:");
-    fireEvent.click(screen.getByLabelText("The full fingerprint matches the device")); fireEvent.change(screen.getByLabelText("Device request code"), {target: {value: "different"}}); expect(screen.queryByRole("button", {name: "Approve device"})).toBeNull();
+    fireEvent.change(screen.getByLabelText("Device request code"), {target: {value: "first"}}); fireEvent.click(screen.getByRole("button", {name: "Check request"})); await screen.findByText(/Compare every group/);
+    fireEvent.click(screen.getByLabelText("The full fingerprint matches the device")); fireEvent.click(screen.getByRole("button", {name: "Not this device"})); expect(screen.queryByRole("button", {name: "Approve device"})).toBeNull();
+    fireEvent.change(screen.getByLabelText("Device request code"), {target: {value: "different"}}); fireEvent.click(screen.getByRole("button", {name: "Check request"})); await screen.findByText(/Compare every group/); expect(screen.getByLabelText("The full fingerprint matches the device")).not.toBeChecked();
+  });
+  it("shows a device that offered its request and approves it only after the full fingerprint is confirmed", async () => {
+    const offered = {code: "orion-approve-v1:synthetic", device_id: "dev_phone", fingerprint: "ABCD 1234 EF56 7890", expires_at: 1900000000};
+    const call = setup(active, vi.fn(async (method: string) => method === "hosted.requests" ? {requests: [offered]} : {}));
+    fireEvent.click(await screen.findByRole("button", {name: "Review and approve"}));
+    expect(screen.getByText("ABCD 1234 EF56 7890")).toBeVisible();
+    fireEvent.change(screen.getByLabelText("Device name"), {target: {value: "My phone"}});
+    expect(screen.getByRole("button", {name: "Approve device"})).toBeDisabled();
+    fireEvent.click(screen.getByLabelText("The full fingerprint matches the device"));
+    fireEvent.click(screen.getByRole("button", {name: "Approve device"}));
+    await waitFor(() => expect(call).toHaveBeenCalledWith("hosted.approve", {code: offered.code, label: "My phone", confirmed: true}));
   });
   it("says whether Windows Hello protects device changes and lists recent changes", () => {
     setup({...active, user_verification: "windows_hello", security_events: [{id: "e1", kind: "added", device_id: "phone", label: "Phone", at: 1900000000}]});

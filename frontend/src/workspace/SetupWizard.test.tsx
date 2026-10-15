@@ -61,8 +61,11 @@ describe("Setup guide", () => {
     fireEvent.click(screen.getByRole("button", { name: "Set up this computer" }));
     await waitFor(() => expect(call).toHaveBeenCalledWith("hosted.setup_root"));
     rerender(<SetupWizard state={{ ...signedIn, hosted: { ...signedIn.hosted!, identity: true, roster: { expires_at: 1, version: 1, clock_warning: false, members: [] } } } as State} client={{ call } as unknown as Client} close={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    expect(screen.getByLabelText("Device request code")).toBeVisible();
+    // Setting up moves straight on to the phone and shows this computer's code without another click.
+    expect(await screen.findByText("Add your Android phone")).toBeVisible();
+    await waitFor(() => expect(call).toHaveBeenCalledWith("hosted.root_code"));
+    expect(screen.getByText(/Waiting for your device/)).toBeVisible();  // Offered requests appear by themselves.
+    expect(screen.getByText("Paste a request code instead")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Skip for now" }));
     expect(screen.getByLabelText(/Share the clipboard/)).toBeChecked();
     expect(screen.queryByLabelText(/Phone remote/)).toBeNull();

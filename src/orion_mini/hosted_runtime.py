@@ -510,6 +510,32 @@ class HostedController:
             device = request["candidate"]["device"]
             return {"device_id": device["id"], "fingerprint": device_fingerprint(device), "expires_at": request["expires_at"]}
 
+    def offered_requests(self) -> list:
+        """Requests that devices offered through the service, verified here against this root.
+
+        The service is untrusted: each code must carry a valid signature bound to this
+        computer's root, and the owner still compares the full fingerprint before approving."""
+        with self.lock:
+            self._require_enabled()
+            self._open()
+            self._require_root()
+            token = self._token_or_error()
+            try:
+                codes = self.transport.offered_requests(token)
+            except TransportError:
+                return []  # Offline, or a service without offered requests: pasting still works.
+            members = set(self.session.current())
+            offered = {}
+            for code in codes:
+                try:
+                    request = verify_request_code(code, self.root)
+                except ApprovalError:
+                    continue
+                device = request["candidate"]["device"]
+                if device["id"] not in members:
+                    offered[device["id"]] = {"code": code, "device_id": device["id"], "fingerprint": device_fingerprint(device),
+                                             "expires_at": request["expires_at"]}
+            return sorted(offered.values(), key=lambda item: item["expires_at"])
     def approve(self, code, label, confirmed) -> dict:
         if confirmed is not True:
             raise HostedError("Compare the device fingerprint on both screens, then confirm.")
@@ -675,6 +701,10 @@ class HostedController:
                 self._pending(self.transport.enroll(token, candidate), candidate["device"])
             except (ApprovalError, TransportError):
                 raise HostedError("The request could not be sent to Saiph Hosted. Try again shortly.") from None
+            try:
+                self.transport.offer_request(token, code)
+            except TransportError:
+                pass  # An older service: the code can still be pasted on the main computer.
             return {"code": code, "modules": qr_modules(code), "expires_in": 300,
                     "fingerprint": device_fingerprint(candidate["device"]),
                     "root_fingerprint": self.root.display_fingerprint}

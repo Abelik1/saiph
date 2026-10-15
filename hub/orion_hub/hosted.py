@@ -29,6 +29,8 @@ from .security import canonical as request_canonical
 DEVICE = re.compile(r"dev_[a-f0-9]{32}\Z")
 ROSTER_DOMAIN = b"Orion hosted roster v1\0"
 ENROLL_DOMAIN = b"Orion hosted enrollment v1\0"
+REQUEST_PREFIX = "orion-approve-v1:"
+REQUEST_DOMAIN = b"Orion hosted device approval code v1\0"
 MAX_BODY = 65_536
 SCHEMA = """
 PRAGMA journal_mode=WAL;
@@ -40,6 +42,7 @@ CREATE TABLE IF NOT EXISTS nonces(device TEXT NOT NULL, nonce TEXT NOT NULL, see
 CREATE TABLE IF NOT EXISTS sealed_events(id TEXT PRIMARY KEY, source TEXT NOT NULL, target TEXT NOT NULL, version INTEGER NOT NULL, header TEXT NOT NULL, ciphertext TEXT NOT NULL, digest TEXT NOT NULL, expires_at INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS sealed_target ON sealed_events(target,expires_at);
 CREATE TABLE IF NOT EXISTS roster_catchups(request_hash TEXT PRIMARY KEY, version INTEGER NOT NULL, digest TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS approval_requests(device TEXT PRIMARY KEY, code TEXT NOT NULL, expires_at INTEGER NOT NULL);
 """
 
 
@@ -192,6 +195,43 @@ class Mailbox:
             expiry = int(time.time()) + 600
             db.execute("INSERT INTO candidates VALUES(?,?,?,?)", (proposed["id"], proposed["signing_key"], proposed["encryption_key"], expiry))
         return {"status": "pending", "expires_at": expiry}
+
+    def offer_request(self, value):
+        """Hold a pending candidate's signed approval request for the root computer to fetch.
+
+        The server only bounds it and binds it to the stored candidate keys; the root
+        verifies it against its own pinned identity and the owner compares fingerprints."""
+        exact(value, ("code",))
+        code = value["code"]
+        if not isinstance(code, str) or not code.startswith(REQUEST_PREFIX) or len(code) > 4096:
+            reject()
+        try:
+            parsed = json.loads(code[len(REQUEST_PREFIX):])
+        except ValueError:
+            reject()
+        exact(parsed, ("data", "signature"))
+        data = parsed["data"]
+        if (not isinstance(data, dict) or data.get("deployment_id") != self.config.deployment_id
+                or not isinstance(data.get("candidate"), dict)):
+            reject()
+        device = data["candidate"].get("device")
+        member(device)
+        signature(public_key(device["signing_key"]), parsed["signature"], REQUEST_DOMAIN + stable(data))
+        now = int(time.time())
+        with self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            db.execute("DELETE FROM approval_requests WHERE expires_at<=?", (now,))
+            row = db.execute("SELECT * FROM candidates WHERE id=? AND expires_at>?", (device["id"], now)).fetchone()
+            if row is None or row["signing_key"] != device["signing_key"] or row["encryption_key"] != device["encryption_key"]:
+                reject(409)
+            db.execute("INSERT OR REPLACE INTO approval_requests VALUES(?,?,?)", (device["id"], code, row["expires_at"]))
+        return {"status": "offered", "expires_at": row["expires_at"]}
+
+    def offered_requests(self):
+        with self.connect() as db:
+            rows = db.execute("SELECT code FROM approval_requests WHERE expires_at>? AND device NOT IN "
+                              "(SELECT id FROM used_devices) ORDER BY expires_at LIMIT 10", (int(time.time()),)).fetchall()
+        return {"requests": [row["code"] for row in rows]}
 
     def admit(self, value):
         now = int(time.time())
@@ -435,6 +475,17 @@ def create_app(config: HostedConfig, *, tokens=None, device_registry=None):
         await account(request)
         _, value = await body(request)
         return await asyncio.to_thread(mailbox.candidate, value)
+
+    @app.post("/v1/devices/approval-requests")
+    async def offer_request(request: Request):
+        await account(request)
+        _, value = await body(request)
+        return await asyncio.to_thread(mailbox.offer_request, value)
+
+    @app.get("/v1/devices/approval-requests")
+    async def offered_requests(request: Request):
+        await account(request)
+        return await asyncio.to_thread(mailbox.offered_requests)
 
     @app.post("/v1/devices/rosters")
     async def admit_device(request: Request):

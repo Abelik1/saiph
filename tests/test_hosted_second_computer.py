@@ -19,7 +19,7 @@ class SyntheticService:
 
     def __init__(self):
         self.deployment = str(uuid4())
-        self.chain, self.inboxes, self.requests = [], {}, []
+        self.chain, self.inboxes, self.requests, self.offered = [], {}, [], []
 
     def transport(self):
         service = self
@@ -37,6 +37,11 @@ class SyntheticService:
                     assert value["deployment_id"] == service.deployment
                     service.requests.append(value["device"]["id"])
                     return {"status": "pending", "expires_at": int(time.time()) + 300}
+                if method == "POST" and path == "/v1/devices/approval-requests":
+                    service.offered.append(value["code"])
+                    return {"status": "offered", "expires_at": int(time.time()) + 300}
+                if method == "GET" and path == "/v1/devices/approval-requests":
+                    return {"requests": list(service.offered)}
                 if method == "POST" and path == "/v1/devices/rosters":
                     assert value["roster"]["version"] == len(service.chain) + 1
                     service.chain.append(deepcopy(value))
@@ -95,6 +100,14 @@ def test_second_computer_joins_syncs_and_is_removed_by_the_main_computer(tmp_pat
     assert request["modules"] and request["code"].startswith("orion-approve-v1:")
     assert service.requests == [main.info.device_id, laptop.info.device_id]
     assert laptop.snapshot()["role"] == "member"
+    # The main computer finds the request itself; nothing long is typed across.
+    offered = main.offered_requests()
+    assert [item["device_id"] for item in offered] == [laptop.info.device_id]
+    assert offered[0]["fingerprint"] == request["fingerprint"]
+    service.offered.append("orion-approve-v1:{}")  # The service is untrusted: junk is dropped.
+    assert [item["device_id"] for item in main.offered_requests()] == [laptop.info.device_id]
+    with pytest.raises(HostedError, match=ROOT_ONLY):
+        laptop.offered_requests()
 
     # Before approval the laptop signs nothing and stays waiting.
     laptop.step()

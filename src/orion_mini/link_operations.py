@@ -19,7 +19,7 @@ from .user_presence import confirm as confirm_user
 HOSTED_METHODS = frozenset({'hosted.configure', 'hosted.enable', 'hosted.sign_in', 'hosted.sign_out', 'hosted.setup_root',
                             'hosted.root_code', 'hosted.request.inspect', 'hosted.approve', 'hosted.revoke', 'hosted.forget',
                             'hosted.notification.dismiss', 'hosted.file.send', 'hosted.file.save',
-                            'hosted.join.inspect', 'hosted.join', 'hosted.join.request'})
+                            'hosted.join.inspect', 'hosted.join', 'hosted.join.request', 'hosted.requests'})
 _HOSTED_OFF = {'available': False, 'enabled': False, 'status': 'off', 'identity': False}
 
 
@@ -395,6 +395,8 @@ class LinkOperations:
             return controller.join(args.get('code'), args.get('confirmed'))
         if method == 'hosted.join.request':
             return controller.request_code()
+        if method == 'hosted.requests':
+            return {'requests': controller.offered_requests()}
         if method == 'hosted.request.inspect':
             return controller.inspect_request(args.get('code'))
         if method == 'hosted.approve':

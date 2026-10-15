@@ -25,8 +25,9 @@ No acceptance checkbox below is completed by this attempt.
 - Device approval, full fingerprint comparison, clipboard, notifications, file
   hashes, texts, calls and webcam remain unverified in this fresh install.
 - Re-test the corrected builds from first launch: sign in without entering
-  service settings, return from the browser, then explicitly approve the phone
-  by full fingerprint before testing sync. Webcam and call audio remain local.
+  service settings, return from the browser, scan the computer's code, check that
+  the phone appears on the computer by itself, then explicitly approve it by full
+  fingerprint before testing sync. Webcam and call audio remain local.
 
 The source correction and automated checks are recorded separately in
 [release status](RELEASE_STATUS.md); they do not complete this physical run.

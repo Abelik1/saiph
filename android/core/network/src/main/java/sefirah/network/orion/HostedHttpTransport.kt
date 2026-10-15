@@ -173,6 +173,10 @@ class HostedHttpTransport private constructor(
 
     fun submitEnrollment(accessToken: String): JsonObject = call("POST", "/v1/devices/requests", session.enrollment(), accessToken)
 
+    /** Hands this phone's signed request to the service so the computer can show it without pasting. */
+    fun offerRequest(accessToken: String, code: String): JsonObject =
+        call("POST", "/v1/devices/approval-requests", buildJsonObject { put("code", code) }, accessToken)
+
     fun refreshTrust(accessToken: String, maximumPages: Int = 64) {
         session.invalidate()
         try {

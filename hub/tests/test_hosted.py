@@ -491,3 +491,33 @@ def test_catchup_rejects_pending_key_substitution_and_removed_id_reuse(setup):
     replacement = catchup_suffix(setup, members=members)
     assert post_catchup(setup, replacement).status_code == 409
     assert setup["client"].get("/v1/sealed/events", headers=headers(outsider, "/v1/sealed/events")).status_code == 403
+
+
+def test_root_fetches_a_pending_devices_signed_approval_request(setup):
+    """A phone offers its signed request so the root needs no long code typed across; the root still verifies it."""
+    from orion_mini.hosted_approval import local_root, make_request_code, verify_request_code
+
+    client, account, outsider = setup["client"], setup["account"], setup["outsider"]
+    root = local_root(setup["deployment"], setup["root"]["id"], setup["root"]["sign"], setup["root"]["enc"])
+    code = make_request_code(root, outsider["id"], outsider["sign"], outsider["enc"])
+    offer = lambda value: client.post("/v1/devices/approval-requests", json={"code": value}, headers=account)
+
+    assert offer(code).status_code == 409  # Not a pending candidate yet.
+    setup["invite"](outsider)
+    assert offer(code).status_code == 200
+    listed = client.get("/v1/devices/approval-requests", headers=account)
+    assert listed.status_code == 200 and listed.json() == {"requests": [code]}
+    assert verify_request_code(listed.json()["requests"][0], root)["candidate"]["device"]["id"] == outsider["id"]
+
+    # Forged or foreign requests never reach the list.
+    value = json.loads(code.removeprefix("orion-approve-v1:"))
+    value["data"]["nonce"] = "altered"
+    assert offer("orion-approve-v1:" + json.dumps(value)).status_code == 403
+    assert offer("not-a-request").status_code == 400
+    assert client.post("/v1/devices/approval-requests", json={"code": code, "extra": 1}, headers=account).status_code == 400
+    assert client.get("/v1/devices/approval-requests").status_code == 401
+
+    # Once admitted, the device is no longer offered.
+    setup["roster"]([setup["entries"][-1]["roster"]["members"][0], setup["entries"][-1]["roster"]["members"][1],
+                     {key: value["data"]["candidate"]["device"][key] for key in ("id", "signing_key", "encryption_key")}])
+    assert client.get("/v1/devices/approval-requests", headers=account).json() == {"requests": []}

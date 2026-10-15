@@ -1,5 +1,21 @@
 # Current release preparation status
 
+2026-10-15 device approval without typing codes: a phone or second computer that
+has scanned the main computer's code now also offers its signed request through
+the service (`POST/GET /v1/devices/approval-requests`, bound to the pending
+candidate's keys, expiring with it, signature checked). The main computer lists
+offered requests, verifies each against its own pinned root and shows the
+fingerprint; the owner still compares every group and approves explicitly, and
+pasting stays as a fallback. Older services answer 404 and clients fall back to
+pasting. The setup guide confirms the sign-in, moves on after Set up this
+computer, shows the computer's code without another click and folds pairing away
+once a phone is approved. Android shows one waiting screen until the computer
+approves the phone, then moves on by itself; sharing permissions appear only
+after approval. A dev-only onboarding preview (`frontend/onboarding.html`)
+walks the desktop flow on a simulated account. Checks: Hub hosted tests 123,
+desktop Hosted tests, frontend unit tests and `tsc`, Android `:core:network`
+and `:app` unit tests with `:app:compileDebugKotlin`.
+
 2026-10-15 Hosted onboarding correction (`codex/hosted-onboarding`, based on
 `ca36587`, source changes only): a fresh desktop profile now reads validated
 bundled public connection defaults without importing the crypto runtime or

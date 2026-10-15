@@ -103,7 +103,7 @@ def classify(method: str, path: str) -> str | None:
     if path == "/v1/account":
         return "account"
     if path.startswith("/v1/devices/"):
-        return "devices.requests" if path == "/v1/devices/requests" else "devices.rosters"
+        return "devices.requests" if path in ("/v1/devices/requests", "/v1/devices/approval-requests") else "devices.rosters"
     if path == "/v1/sealed/events":
         return "sealed.publish" if method == "POST" else "sealed.poll"
     if path.startswith("/v1/sealed/events/"):
