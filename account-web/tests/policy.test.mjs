@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import {test} from "node:test";
 import assert from "node:assert/strict";
-import {readAuthConfig, isOwner, isAccountCookie} from "../lib/policy.mjs";
+import {readAuthConfig, isOwner, isAccountCookie, loginParameters} from "../lib/policy.mjs";
 const env = {NODE_ENV: "production", AUTH0_DOMAIN: "synthetic.us.auth0.com", AUTH0_CLIENT_ID: "synthetic_web_client", AUTH0_CLIENT_SECRET: "synthetic-secret-not-real", AUTH0_SECRET: "ab".repeat(32), APP_BASE_URL: "https://account.dev.saiph.test", SAIPH_OWNER_SUBJECT: "synthetic|owner"};
 test("missing owner and provider secrets fail closed without values in errors", () => {
   for (const key of Object.keys(env).filter(k => k !== "NODE_ENV")) {
@@ -29,4 +29,10 @@ test("ownership uses exact validated subject, with no email or client fallbacks"
 test("denied callbacks identify all chunked session cookies without clearing unrelated cookies", () => {
   for (const name of ["__Host-saiph_account", "__Host-saiph_account.0", "__Host-saiph_account.1", "__Host-saiph_account__0", "__Host-saiph_account__1"]) assert.equal(isAccountCookie(name), true);
   for (const name of ["other", "__Host-saiph_account_backup", "__Host-personal_cv"]) assert.equal(isAccountCookie(name), false);
+});
+
+test("sign-in goes straight to Google with fixed scopes and only the beta audience added", () => {
+  assert.deepEqual(loginParameters(null), {scope: "openid profile email", connection: "google-oauth2"});
+  assert.deepEqual(loginParameters({audience: "https://api.saiph.test"}),
+    {scope: "openid profile email", connection: "google-oauth2", audience: "https://api.saiph.test"});
 });
