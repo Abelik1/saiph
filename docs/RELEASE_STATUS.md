@@ -1,5 +1,36 @@
 # Current release preparation status
 
+2026-10-15 native desktop UI control (development tooling only): added a
+disposable Qt launcher and a Playwright controller for accessible snapshots,
+tabs/buttons, form entry, checkboxes/selects, keyboard input, screenshots and
+reusable local test flows. The instance has its own data, browser-cache/storage
+and temporary directories. Its debug endpoint binds to loopback, and the
+controller verifies the dashboard and a per-session window marker before acting.
+Clean shutdown is scoped to that session. Normal app startup and the existing
+local automation API are unchanged. `AGENTS.md` and `docs/TESTING.md` direct
+future agents to use these tools for routine desktop interaction. Explicit live
+mode enables real services in a fresh test profile; native owner verification
+and external-provider sign-in are preserved.
+
+Windows / Python 3.12.10 / PySide6 6.12.0 / Node 24.18.0, isolated environment,
+dependency caches and profiles: `python -m pytest tests/test_desktop_ui_control.py
+tests/test_automation.py -q` passed 13 tests; `node --test
+tests/packaging/desktop_control_session.test.cjs` passed 1 test. The native
+`desktop_control_smoke.cjs` flow passed both without and with the Hosted extras
+installed: Settings tab navigation, typed/saved computer name, on-disk native
+bridge persistence, Phone setup navigation, mismatched-session refusal and
+screenshots, with no page errors. Individual CLI click/fill/save/screenshot/stop
+commands also passed, and the session reached `stopped` with the typed name
+retained in its isolated profile. The previously validated production frontend
+build was reused; no frontend implementation changed. Initial restricted Qt
+launches aborted before WebEngine became ready; a scoped permitted launch
+resolved this without disabling Chromium's sandbox. Qt logged GLES context
+fallback errors while the native UI and screenshot checks succeeded.
+No installed app was restarted, installed or modified. No real account/service,
+physical device, OS owner-verification prompt, native file picker or live mode
+was exercised. These are native isolated UI checks, not installation, Hosted
+connection, cryptography or physical acceptance evidence.
+
 2026-10-15 connection wizard follow-up (source changes only): the Phone tab,
 add-phone dialog and optional guide now share an Account → Computer → Scan →
 Approve wizard. Each screen has one task; Scan shows the QR automatically and
