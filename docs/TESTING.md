@@ -78,6 +78,9 @@ node scripts/desktop-ui.cjs --session build/desktop-ui/my-test/session.json stop
 node scripts/desktop-ui.cjs --session build/desktop-ui/my-test/session.json run --script tests/packaging/desktop_control_smoke.cjs
 ```
 
+For Cloud settings and the visible weekly summary, also run
+`node scripts/desktop-ui.cjs --session <session.json> run --script tests/packaging/desktop_layout_smoke.cjs`. This saves an isolated Cloud path, checks native persistence, and toggles the local summary. It does not open Explorer, install file sync or contact an account service.
+
 The smoke flow navigates Settings, saves a synthetic name through the real native
 bridge, checks the written profile, returns to Phone, exercises available setup
 choices and captures screenshots/results under the session's `evidence/` folder.

@@ -42,11 +42,19 @@ function phoneOf(state: State) {
   return state.phone?.devices.find((d) => d.capabilities.includes("battery"));
 }
 
+function alreadyConnected(state: State, mode: Mode | null) {
+  if (mode === "hub") return Boolean(state.settings?.hub?.paired);
+  const hosted = state.hosted;
+  return Boolean(mode === "hosted" && hosted?.identity && hosted.enabled && hosted.account?.status === "signed_in"
+    && !(hosted.role === "member" && hosted.status === "awaiting_approval"));
+}
+
 /** First-run setup: connect, add a phone, choose features and optional tools. */
 export function SetupWizard({ state, client, close }: { state: State; client: Client; close: () => void }) {
-  const [step, setStep] = useState<Step>("welcome");
   // A Saiph account is the default; your own Hub is only for people who self-host.
   const [mode, setMode] = useState<Mode | null>(state.setup?.mode || (state.hosted?.available === false ? null : "hosted"));
+  // A computer that is already connected starts at the optional choices; connection lives in the Phone tab.
+  const [step, setStep] = useState<Step>(() => alreadyConnected(state, mode) ? "features" : "welcome");
   const link = state.settings?.link as Record<string, unknown> | undefined;
   const [choices, setChoices] = useState<Record<string, boolean>>(() => Object.fromEntries(features.map((f) =>
     [f.key, f.key === "remote" ? (link?.remote as { enabled?: boolean } | undefined)?.enabled === true
@@ -105,7 +113,7 @@ export function SetupWizard({ state, client, close }: { state: State; client: Cl
           <Server size={28} /><b>I self-host my own Hub</b><span>Only if you run a Saiph Hub on your own private network. You'll need an invitation from it.</span></button>
       </div>
       {mode === "hosted" && hosted?.available && !hosted.configured && <p role="status">This build cannot connect to Saiph accounts. Download the current beta from your account page.</p>}
-      <div className="actions"><Action disabled={!mode || (mode === "hosted" && (!hosted?.configured || hosted.account?.status === "signing_in"))} run={chooseMode}>{mode === "hosted" && !signedIn ? "Sign in to Saiph" : "Continue"}</Action></div>
+      <div className="actions"><Action disabled={!mode || (mode === "hosted" && (!hosted?.configured || hosted.account?.status === "signing_in"))} run={chooseMode}>{mode === "hosted" && !signedIn ? "Continue with Google" : "Continue"}</Action></div>
     </Card>}
 
     {step === "connect" && <Card title={mode === "hosted" ? (signedIn ? "You're signed in" : "Sign in with your Saiph account") : "Pair with your Hub"}>

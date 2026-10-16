@@ -279,7 +279,7 @@ export type DndStatus = {enabled:boolean;active:boolean;source:string;changed_at
 export type UsageBatch = {schema: number; day: string; app: string; platform: string; version: string; mode: string; install_age: string; stage: string; features: Record<string, string>};
 export type UsageState = {available: boolean; consent: "granted" | "declined" | null; pending: UsageBatch[]; last_sent: UsageBatch | null};
 /** "Your week": calculated on this computer when opened; never sent. */
-export type WeekSummary = {enabled: boolean; from?: string; to?: string; actions: number; busiest_day: string | null; screen: string | null;
+export type WeekSummary = {enabled: boolean; from?: string; to?: string; actions: number; days?: {date: string; actions: number}[]; busiest_day: string | null; screen: string | null;
   top: {feature: string; label: string; count: number}[]; people: {name: string; sent: number; received: number; total: number}[]};
 export type State = {
   hosted?: HostedState;

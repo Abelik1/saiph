@@ -37,6 +37,10 @@ def test_week_summarises_features_and_people_without_sharing(workspace):
     workspace.store.save("phone_message", message(2, 30, "outgoing", 10))  # Older than a week.
     week = workspace.dispatch("insights.week", {})
     assert week["actions"] == 4 and week["screen"] == "messages" and week["busiest_day"] == "Friday"
+    assert len(week["days"]) == 7
+    assert week["days"][0] == {"date": "2027-01-09", "actions": 0}
+    assert week["days"][-1] == {"date": "2027-01-15", "actions": 4}
+    assert sum(day["actions"] for day in week["days"]) == week["actions"]
     assert week["top"][0] == {"feature": "sms_send", "label": "Text message sent through the phone", "count": 3}
     assert week["people"] == [{"name": "Synthetic Ana", "sent": 2, "received": 2, "total": 4},
                               {"name": "Synthetic Ben", "sent": 1, "received": 0, "total": 1}]

@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from "react";
 import type { Client, UsageBatch, UsageState } from "./types";
-import { Action, Card, Modal } from "./ui";
+import { Action, Modal } from "./ui";
+import { PreferenceCard as Card } from "./PreferenceCard";
+import { Disclosure } from "@/components/ui/disclosure";
 
 /** The plain-language agreement shown in setup, in the one-time prompt and in Settings. */
 export function UsageExplanation() {
@@ -41,9 +43,9 @@ function Batch({ batch }: { batch: UsageBatch }) {
 /** Settings for the local-only weekly summary shown on the Phone page. */
 export function YourWeekSettings({ enabled, client }: { enabled?: boolean; client: Client }) {
   if (enabled === undefined) return null;
-  return <Card title="Your week" subtitle={enabled ? "On: a weekly summary on the Phone page." : "Off: nothing is kept for it."}>
-    <p>A summary of what you did with Saiph and who you texted most, worked out on this computer and never sent anywhere. Turning it off deletes its counts.</p>
-    <Action run={() => client.call("insights.enable", { enabled: !enabled })}>{enabled ? "Turn off Your week" : "Turn on Your week"}</Action>
+  return <Card title="Weekly summary" subtitle={enabled ? "On · kept on this computer" : "Off · no activity counts saved"}>
+    <p>See your activity and frequent conversations. Turning this off deletes its saved counts.</p>
+    <div><Action run={() => client.call("insights.enable", { enabled: !enabled })}>{enabled ? "Turn off Your week" : "Turn on Your week"}</Action></div>
   </Card>;
 }
 
@@ -51,14 +53,14 @@ export function YourWeekSettings({ enabled, client }: { enabled?: boolean; clien
 export function UsageSettings({ usage, client }: { usage?: UsageState; client: Client }) {
   if (!usage?.available) return null;
   const granted = usage.consent === "granted";
-  return <Card title="Anonymous usage statistics" subtitle={granted ? "On: anonymous daily counts are shared." : "Off: nothing is counted or sent."}>
-    <UsageExplanation />
-    <Action run={() => client.call("usage.consent", { granted: !granted })}>{granted ? "Stop sharing and delete local counts" : "Share anonymous usage"}</Action>
-    {granted && <details>
-      <summary>See what Saiph sends</summary>
+  return <Card title="Anonymous usage statistics" subtitle={granted ? "On · daily counts shared" : "Off · nothing counted or sent"}>
+    <p>Optional feature counts help improve Saiph. Your content and account details are excluded.</p>
+    <Disclosure summary="What is shared?"><UsageExplanation /></Disclosure>
+    <div><Action run={() => client.call("usage.consent", { granted: !granted })}>{granted ? "Stop sharing and delete local counts" : "Share anonymous usage"}</Action></div>
+    {granted && <Disclosure summary="See what Saiph sends">
       {usage.pending.length ? <><p className="muted">Waiting to be sent:</p>{usage.pending.map((batch) => <Batch key={batch.day} batch={batch} />)}</>
         : <p className="muted">Nothing is waiting. Today's counts are sent after the day ends.</p>}
       {usage.last_sent && <><p className="muted">Last sent:</p><Batch batch={usage.last_sent} /></>}
-    </details>}
+    </Disclosure>}
   </Card>;
 }

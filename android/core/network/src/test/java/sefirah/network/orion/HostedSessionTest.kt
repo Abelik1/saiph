@@ -115,6 +115,19 @@ class HostedSessionTest {
         assertTrue(restored.receiveIntoEncryptedInbox(envelope).duplicate)
     }
 
+    @Test fun retainedApprovalRestoresNavigationButNeverActivatesContent() {
+        val f = Fixture()
+        assertFalse(f.phone.hasRetainedApproval())
+        f.approved()
+        f.now += 86_400 // Expired history is still evidence of prior approval only.
+        val restored = HostedSession(f.root, f.phoneId, f.phoneKeys, f.phoneState) { f.now }
+        assertTrue(restored.hasRetainedApproval())
+        rejected { restored.currentMembers() }
+        rejected { restored.encrypt(f.rootId, buildJsonObject { put("type", "test.synthetic") }) }
+        f.phoneState.signedAnchor = JsonObject(f.approved + ("signature" to JsonPrimitive("invalid")))
+        rejected { restored.hasRetainedApproval() }
+    }
+
     @Test fun failedCommitAndConflictingEventIdLeaveInboxUnchanged() {
         val f = Fixture(); f.approved(); val envelope = f.event()
         f.phoneState.failCommit = true
