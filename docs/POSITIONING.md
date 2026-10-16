@@ -1,6 +1,7 @@
 # Positioning and promotion copy
 
-Draft for owner review, 14 October 2026. Nothing here is posted or scheduled.
+Promotion drafts for owner review, 14 October 2026. Landing-page copy updated
+16 October 2026. Nothing here is posted or scheduled.
 
 ## The message
 
@@ -42,15 +43,16 @@ Do not invent further quotes or attribute other words to the owner or the friend
 
 ## Landing page
 
-- Hero (unchanged): **Your phone, laptop and desktop, as one.**
-- Lede: Clipboard, notifications and files flow between your Android phone and
-  your Windows and Linux computers. Like Apple's Continuity, without buying every
-  device from one company.
-- Why Saiph: the origin line, then: Copy on your phone, paste on your laptop. See
-  your phone's notifications on the screen you're at. Send a photo across without
-  a cable. Apple made this feel normal, but only if every device comes from Apple.
-  Saiph brings the same everyday flow to Windows, Linux and Android, so your next
-  phone or computer can be whatever suits you.
+- Hero: **Your devices. Connected.**
+- Lede: Clipboard, notifications and files across Android, Windows and Linux.
+- Keep the interactive device graphic, followed directly by the download buttons.
+  Firebase is the primary Android install option; the standalone APK is secondary.
+- Omit the origin quote, Why Saiph, feature-card grid and separate security pitch.
+  Keep pricing compact and link to the Hosted and self-hosting detail pages.
+- Below downloads and pricing, compare current Apple Continuity, Microsoft Phone
+  Link and Saiph capabilities in one table. Highlight Windows/Linux support and
+  free self-hosting, retain competitors' strengths, and qualify Hosted versus
+  self-hosted features. Link dated primary sources; exclude unreleased additions.
 
 ## Promotion variants
 

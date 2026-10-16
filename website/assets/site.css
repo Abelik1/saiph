@@ -78,6 +78,8 @@ p { margin: 0 0 1em; }
   color: var(--muted); text-decoration: none; font-size: 0.93rem; padding: 8px 10px; border-radius: 8px;
 }
 .nav-links a:hover, .nav-links a[aria-current="page"] { color: var(--text); background: var(--surface); }
+.nav-links .account-nav { color: var(--cyan-2); border: 1px solid rgba(34, 211, 238, .5); font-weight: 650; }
+.nav-links .account-nav:hover { background: var(--cyan-dim); border-color: var(--cyan); }
 .nav-links .hide-sm { display: none; }
 @media (min-width: 760px) { .nav-links .hide-sm { display: inline-block; } }
 
@@ -114,12 +116,6 @@ p { margin: 0 0 1em; }
 .pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 10px var(--green); }
 a.pill-link { text-decoration: none; transition: border-color .2s, color .2s; }
 a.pill-link:hover { color: var(--text); border-color: rgba(34, 211, 238, .5); }
-
-/* Why Saiph */
-.origin { margin: 8px auto 22px; max-width: 44ch; }
-.origin p { font-size: clamp(1.2rem, 2.4vw, 1.55rem); line-height: 1.35; color: var(--text); margin: 0 0 10px; }
-.origin cite { font-style: normal; color: var(--muted); font-size: 0.92rem; }
-.trademark-note { font-size: 0.8rem; margin-top: 18px; }
 
 /* Cards / grids */
 .grid { display: grid; gap: 16px; }
@@ -171,6 +167,50 @@ button.card:hover { border-color: #33506a; background: var(--surface-2); }
 .dl .os span { color: var(--muted); font-size: 0.88rem; font-family: var(--mono); }
 .dl .go { margin-top: auto; color: var(--cyan); font-weight: 650; font-size: 0.95rem; }
 .dl .go.muted { color: var(--muted); font-weight: 500; }
+a[aria-disabled="true"] { opacity: .55; cursor: default; pointer-events: none; }
+
+/* Compact home: demo, downloads, then pricing. */
+.landing .hero { padding: 36px 0 12px; }
+.landing .nav-links .download-nav { color: var(--cyan-2); font-weight: 650; }
+.landing .showcase { scroll-margin-top: 78px; }
+.landing .hero h1 { max-width: 24ch; }
+.landing .hero .lede { max-width: 60ch; margin-bottom: 12px; }
+.landing .showcase { padding-bottom: 16px; }
+.landing-download { padding: 8px 0 28px; text-align: center; scroll-margin-top: 78px; }
+.landing-download h2 { font-size: 1.5rem; margin-bottom: 18px; }
+.download-buttons { display: grid; gap: 12px; max-width: 940px; margin-inline: auto; }
+.download-btn { flex-direction: column; align-items: flex-start; text-align: left; padding: 14px 18px; }
+.download-btn .os { display: flex; align-items: center; gap: 12px; }
+.download-btn .os svg { width: 26px; height: 26px; flex: none; }
+.download-btn .os strong, .download-btn .os span { display: block; }
+.download-btn .os span { font-size: .78rem; font-weight: 500; }
+.download-btn .go { font-size: .85rem; }
+.download-note { font-size: .85rem; margin: 14px 0 0; }
+.download-secondary { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 24px; margin-top: 12px; font-size: .88rem; }
+.landing-pricing { padding: 0 0 28px; }
+.pricing-summary {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 24px;
+  padding: 28px; border: 1px solid rgba(34, 211, 238, .5); border-radius: 18px;
+  background: radial-gradient(ellipse at top left, rgba(34, 211, 238, .16), transparent 70%), var(--surface);
+  box-shadow: 0 12px 40px -24px rgba(34, 211, 238, .45);
+}
+.pricing-summary h2 { font-size: 1.65rem; margin-bottom: 8px; }
+.pricing-summary h2 a { color: var(--cyan-2); text-decoration: none; }
+.pricing-summary h2 a:hover { color: var(--text); }
+.pricing-summary p { margin: 0; }
+.pricing-summary .price { font-size: 2rem; font-weight: 750; }
+.pricing-summary .price small { font-size: .95rem; font-weight: 500; color: var(--muted); }
+.pricing-summary .price-note { font-size: .88rem; }
+.pricing-summary .hosted-cta { padding: 14px 22px; }
+.landing-details { font-size: .88rem; margin: 14px 0 0; }
+@media (max-width: 600px) {
+  .pricing-summary { padding: 22px; gap: 18px; }
+  .pricing-summary .hosted-cta { width: 100%; }
+}
+.landing footer { padding-block: 24px; }
+@media (min-width: 820px) { .download-buttons { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 819px) { .download-btn { flex-direction: row; align-items: center; justify-content: space-between; } }
+@media (max-width: 420px) { .download-btn { padding-inline: 12px; } .download-btn .go { max-width: 13ch; text-align: right; } }
 
 /* Pricing */
 .plans { display: grid; gap: 18px; }
@@ -191,6 +231,35 @@ th { background: var(--surface-2); font-weight: 650; font-size: 0.85rem; color: 
 tr:last-child td { border-bottom: 0; }
 td.yes { color: var(--green); font-weight: 650; white-space: nowrap; }
 td.no { color: var(--red); font-weight: 650; white-space: nowrap; }
+
+/* Comparison stays below the main download and Hosted actions. */
+.landing-comparison { padding: 32px 0 40px; border-top: 1px solid #151c26; }
+.landing-comparison h2 { font-size: clamp(1.5rem, 3vw, 2rem); }
+.comparison-intro { margin-bottom: 22px; }
+.comparison-table { min-width: 760px; table-layout: fixed; }
+.comparison-table col { width: 24%; }
+.comparison-table col:first-child { width: 28%; }
+.comparison-table .saiph-column { background: rgba(34, 211, 238, .07); }
+.comparison-table th, .comparison-table td { padding: 14px 18px; }
+.comparison-table thead th { font-size: 1rem; text-transform: none; letter-spacing: 0; color: var(--text); }
+.comparison-table thead th:first-child { font-size: .85rem; color: var(--muted); }
+.comparison-table thead th span, .comparison-table small { display: block; color: var(--muted); font-size: .8rem; font-weight: 400; }
+.comparison-table tbody th { background: transparent; color: var(--text); font-size: .92rem; font-weight: 600; text-transform: none; letter-spacing: 0; }
+.comparison-table .saiph-heading { color: var(--cyan-2); background: rgba(34, 211, 238, .12); }
+.comparison-table td:last-child strong { color: var(--cyan-2); }
+.comparison-table sup { color: var(--muted); margin-left: 2px; font-size: .7rem; }
+.comparison-table .comparison-limit { color: var(--muted); }
+.comparison-scroll { display: none; font-size: .8rem; margin-bottom: 8px; }
+.comparison-note { font-size: .85rem; margin: 12px 0 18px; }
+.comparison-sources { background: transparent; margin: 0; }
+.comparison-sources summary { flex-wrap: wrap; justify-content: flex-start; align-items: center; column-gap: 12px; font-size: .88rem; }
+.comparison-sources summary span { color: var(--muted); font-size: .78rem; font-weight: 400; }
+.comparison-sources summary::after { margin-left: auto; }
+.comparison-sources > div { font-size: .85rem; }
+.comparison-sources ol { padding-left: 20px; margin-top: 0; }
+.comparison-sources li { margin-bottom: 10px; }
+.comparison-trademarks { font-size: .78rem; }
+@media (max-width: 819px) { .comparison-scroll { display: block; } }
 
 /* Callouts */
 .callout {
@@ -564,22 +633,6 @@ footer a:hover { color: var(--text); }
   overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
 }
 
-/* Landing: short statements instead of paragraphs */
-#features h2 { max-width: 28ch; margin: 0 auto 36px; }
-.feature-cards .card h3 { margin-bottom: 4px; }
-.feature-cards .card { display: flex; flex-direction: column; }
-.feature-cards .card p { margin-bottom: 0; }
-.feature-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; padding-top: 12px; }
-.feature-tags .tag { margin-left: 0; white-space: nowrap; }
-.feature-note { font-size: .92rem; margin: 22px auto 0; max-width: 60ch; }
-.pillars {
-  list-style: none; padding: 0; margin: 28px auto 24px; display: flex; flex-wrap: wrap;
-  justify-content: center; gap: 12px; max-width: 760px;
-}
-.pillars li {
-  border: 1px solid var(--border); background: var(--surface); border-radius: 999px;
-  padding: 10px 18px; font-weight: 600;
-}
 .checks.todo li::before {
   width: 10px; height: 10px; top: 0.5em; border: 1.5px solid var(--faint); border-radius: 50%; transform: none;
 }
