@@ -243,6 +243,8 @@ export function Phone({
     setDismissed((current) => current.filter((id) => !ids.includes(id)));
   }
   const notices = (info?.notifications || []).filter((n) => (!phone || n.device_id === phone.id) && !dismissed.includes(n.id));
+  const cloudNotices = (state.hosted?.notifications || []).filter((n) => n.device_id === phone?.id);
+  const noticeCount = phone?.hosted ? cloudNotices.length : notices.length;
 
   const camera = state.settings?.link?.camera?.enabled !== false;
   const microphone = state.settings?.link?.microphone?.enabled === true || state.microphone?.running;
@@ -326,7 +328,7 @@ export function Phone({
         <Card className="min-h-[240px] flex-1 gap-0 overflow-hidden py-0" aria-label="Notifications">
           <div className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-3">
             <h2 className="m-0 flex-1 text-[15px] font-semibold">Notifications</h2>
-            {notices.length > 0 && <Badge tone="default" className="tabular">{notices.length}</Badge>}
+            {noticeCount > 0 && <Badge tone="default" className="tabular">{noticeCount}</Badge>}
             {notices.length > 1 && canAct && <Button variant="ghost" size="sm" className="h-7 px-2.5 text-[12.5px]" onClick={() => dismiss(notices.map((n) => n.id))}>Clear all</Button>}
           </div>
           {undoable > 0 && <div className="flex shrink-0 items-center gap-2 bg-secondary px-4 py-2 text-[12.5px]" role="status">
@@ -336,7 +338,12 @@ export function Phone({
           {dismissError && <p className="inline-error m-0 px-4 pt-2 text-[12.5px]" role="alert">{dismissError}</p>}
           <div className="grid min-h-0 flex-1 content-start gap-2.5 overflow-y-auto p-4">
             <HubSuggestions state={state} client={client} />
-            {phone?.hosted ? <p className="m-0 text-[12.5px] leading-relaxed text-muted-foreground">Phone notifications appear in Settings → Saiph Cloud.</p>
+            {phone?.hosted ? cloudNotices.length ? cloudNotices.map((row) => <article key={row.id} className="grid gap-2 rounded-[10px] border border-border bg-card p-3">
+                <small className="text-muted-foreground">{row.app}</small>
+                <b className="text-[13px]">{row.title}</b>
+                {row.text && <p className="m-0 whitespace-pre-wrap text-[12.5px] leading-relaxed [overflow-wrap:anywhere]">{row.text}</p>}
+                <Action variant="tonal" size="sm" disabled={!phone.online} ariaLabel={`Dismiss ${row.title}`} run={() => client.call("hosted.notification.dismiss", {id: row.id})}>Dismiss</Action>
+              </article>) : <p className="m-0 text-[12.5px] leading-relaxed text-muted-foreground">No notifications yet. On your phone, tap Allow notifications in Saiph.</p>
               : notices.length ? notices.map((row) => <Notification key={row.id} row={row} client={client} online={canAct} dismiss={() => dismiss([row.id])} />)
               : <div className="grid gap-1 py-6 text-center">
                   <h3 className="m-0 text-[14px] font-semibold">{!phone ? "Connect your phone" : !phone.online ? "Phone disconnected" : !canAct ? "Allow notifications" : "All clear"}</h3>

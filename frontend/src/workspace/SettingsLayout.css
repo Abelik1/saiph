@@ -17,7 +17,7 @@
   font-weight: 500;
   line-height: 1.3;
   letter-spacing: -0.35px;
-  color: #edf0f5;
+  color: var(--foreground);
 }
 .settings-sidebar [role="tablist"] {
   display: grid;
@@ -29,21 +29,21 @@
   padding: 13px 14px;
   border: 1px solid transparent;
   background: transparent;
-  color: #aeb9ca;
+  color: var(--muted-foreground);
   font-size: 13px;
   border-radius: 10px;
 }
 .settings-sidebar button:hover {
-  background: #ffffff06;
-  color: #edf0f5;
+  background: color-mix(in srgb, var(--foreground) 3%, transparent);
+  color: var(--foreground);
 }
 .settings-sidebar button[aria-selected="true"] {
-  background: #62c4ef12;
-  border-color: #62c4ef28;
-  color: #a0ddf7;
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+  border-color: color-mix(in srgb, var(--primary) 16%, transparent);
+  color: var(--primary);
 }
 .settings-sidebar > p {
-  color: #8590a1;
+  color: var(--muted-foreground);
   font-size: 12px;
   padding: 18px 12px;
 }
@@ -57,7 +57,7 @@
   margin: 0 0 8px;
 }
 .settings-section-title p {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--muted-foreground);
   margin: 0;
 }
@@ -88,9 +88,10 @@
   gap: 18px;
 }
 .settings-content label {
+  margin: 0;
   gap: 9px;
-  font-size: 12px;
-  color: #bec7d4;
+  font-size: 13px;
+  color: var(--foreground);
 }
 .settings-content input:not([type="checkbox"]),
 .settings-content select {
@@ -100,9 +101,6 @@
 .settings-content form fieldset > button {
   align-self: start;
   padding: 10px 18px;
-  background: #334652;
-  border-color: #4d6b7a;
-  color: #dbf3ff;
 }
 .settings-content .check,
 .settings-content .switch-row {
@@ -123,14 +121,14 @@
   margin-top: 6px;
   line-height: 1.6;
 }
-.settings-content details {
-  border: 1px solid #ffffff10;
+.settings-content details:not([data-slot="disclosure"]) {
+  border: 1px solid var(--border);
   padding: 14px;
   border-radius: 10px;
 }
 .settings-content .notice {
-  border: 1px solid #62c4ef35;
-  background: #62c4ef0b;
+  border: 1px solid color-mix(in srgb, var(--primary) 22%, transparent);
+  background: color-mix(in srgb, var(--primary) 5%, transparent);
   border-radius: 10px;
   padding: 12px 16px;
 }
@@ -147,19 +145,19 @@
   }
 }
 
-.settings-content button[role="switch"] {
+.settings-content button[role="switch"]:not([data-slot="switch"]) {
   width: 42px;
   height: 24px;
   flex-shrink: 0;
   padding: 3px;
   justify-content: flex-start;
   border-radius: 20px;
-  background: #434c5a;
-  border: 1px solid #697588;
+  background: var(--muted);
+  border: 1px solid var(--border);
 }
-.settings-content button[role="switch"][aria-checked="true"] {
-  background: #62c4ef;
-  border-color: #62c4ef;
+.settings-content button[role="switch"]:not([data-slot="switch"])[aria-checked="true"] {
+  background: var(--primary);
+  border-color: var(--primary);
   justify-content: flex-end;
 }
 .settings-switch-thumb {
@@ -167,13 +165,13 @@
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: #f0f5fc;
-  box-shadow: 0 1px 3px #0003;
+  background: var(--foreground);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--background) 20%, transparent);
 }
 .settings-content
-  button[role="switch"][aria-checked="true"]
+  button[role="switch"]:not([data-slot="switch"])[aria-checked="true"]
   .settings-switch-thumb {
-  background: #163046;
+  background: var(--primary-foreground);
 }
 
 .settings-content form fieldset {
@@ -182,7 +180,7 @@
 }
 .settings-content .settings-saved {
   display: block;
-  color: #99d5ba;
+  color: var(--status-on);
   margin-top: 10px;
 }
 .settings-content .form-grid {
@@ -229,7 +227,7 @@
 .settings-content .settings-unsaved {
   display: block;
   margin-top: 10px;
-  color: #e2c58e;
+  color: var(--attention);
 }
 .settings-content input[type="time"] {
   color-scheme: dark;
@@ -242,4 +240,26 @@
 }
 .settings-content .settings-folder-picker button {
   min-height: 40px;
+}
+
+.settings-content [data-slot="card"] { min-width: 0; }
+.settings-content [data-slot="card-header"] { gap: 6px; }
+.settings-content [data-slot="card-description"] { max-width: 60ch; }
+.settings-content [data-slot="card-content"] { gap: 18px; }
+.settings-content [data-slot="card-content"] > form { margin: 0; }
+.settings-content details:not([data-slot="disclosure"]) > :not(summary):first-of-type { margin-top: 16px; }
+.settings-content details:not([data-slot="disclosure"]) > :not(summary) + :not(summary) { margin-top: 14px; }
+.settings-content fieldset fieldset { border: 0; padding: 0; margin: 0; }
+.settings-content fieldset fieldset legend { padding: 0 0 12px; color: var(--foreground); font-size: 13px; font-weight: 600; }
+.settings-content .preference-options { display: grid; gap: 12px; }
+.settings-content .preference-options label { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 10px; align-items: start; }
+.settings-content .preference-options input { margin-top: 3px; }
+.settings-content .preference-options small { display: block; margin-top: 4px; color: var(--muted-foreground); font-size: 12px; line-height: 1.5; }
+@media (max-width: 700px) {
+  .settings-layout { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .settings-sidebar { position: static; border: 0; padding: 0; }
+  .settings-sidebar-title { margin: 0 0 16px; }
+  .settings-sidebar [role="tablist"] { display: flex; flex-wrap: wrap; }
+  .settings-sidebar > p { display: none; }
+  .settings-content .form-grid, .settings-content .settings-folder-picker { grid-template-columns: minmax(0, 1fr); }
 }

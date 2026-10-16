@@ -58,6 +58,23 @@ class HostedActivity : ComponentActivity() {
     private var loginState: String? = null
     private var loginError = ""
     private var authorizationService: AuthorizationService? = null
+    private var permissionRequest = ""
+    private var returningFromSettings = false
+    private val sharingPermissions = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        val requested = permissionRequest
+        permissionRequest = ""
+        runtime.photosRevision++
+        runtime.wake.trySend(Unit)
+        if (showingLock || AppLock.locked(this)) return@registerForActivityResult
+        render()
+        val access = sefirah.network.orion.OrionPermissions.read(this)
+        if ((requested == "photos" && !access.photos) || (requested == "phone" && PHONE_PERMISSIONS.any { !granted(it) })) {
+            android.app.AlertDialog.Builder(this).setTitle("Finish in Android Settings")
+                .setMessage(if (requested == "photos") "Photo access is still off. You can allow selected photos or your photo library in Saiph's permissions."
+                    else "Some text or call permissions are still off. Open Saiph's permissions to allow them. Android may restrict these on sideloaded apps.")
+                .setNegativeButton("Not now", null).setPositiveButton("Open permissions") { _, _ -> openAppPermissions() }.show()
+        }
+    }
     private val login = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         signingIn = false
         loginState = null
@@ -81,6 +98,9 @@ class HostedActivity : ComponentActivity() {
     }
     override fun onCreate(state: Bundle?) {
         super.onCreate(state); lock.protectWindow()
+        runtime.applyPackagedDefaults()
+        permissionRequest = state?.getString("permissionRequest") ?: ""
+        returningFromSettings = state?.getBoolean("returningFromSettings") ?: false
         saving = state?.getString("saving") ?: ""
         settingsPage = state?.getBoolean("settingsPage") ?: false
         welcomePage = state?.getBoolean("welcomePage") ?: intent.getBooleanExtra(SHOW_WELCOME, false)
@@ -101,6 +121,8 @@ class HostedActivity : ComponentActivity() {
         state.putBoolean("welcomePage", welcomePage)
         state.putBoolean("signingIn", signingIn); state.putString("loginState", loginState)
         state.putBoolean("googleSignIn", googleSignIn)
+        state.putString("permissionRequest", permissionRequest)
+        state.putBoolean("returningFromSettings", returningFromSettings)
         // Only public keys and a signature: safe to keep across a rotation while the owner compares.
         pendingRoot?.let { state.putString("pendingRootCode", it.code); state.putString("pendingRootFingerprint", it.fingerprint) }
         super.onSaveInstanceState(state)
@@ -119,14 +141,16 @@ class HostedActivity : ComponentActivity() {
         lock.open(::lockedScreen, ::resumeUnlocked)
     }
     private fun resumeUnlocked() {
-        if (showingLock || !::status.isInitialized) { showingLock = false; render() }
+        if (showingLock || !::status.isInitialized || returningFromSettings) { showingLock = false; returningFromSettings = false; render() }
+        runtime.wake.trySend(Unit)
         UsageAnalytics.opened(this, "hosted")
-        if (prefs.contains("device_id")) UsageAnalytics.ask(this) { render() }
+        if (runtime.setupStage() == HostedSetup.Stage.HOME && account.signedIn() &&
+            prefs.getBoolean("sharing_setup_complete", false) && permissionRequest.isEmpty()) UsageAnalytics.ask(this) { render() }
         poll?.cancel()
         // The waiting screen turns into the daily screen by itself once the computer approves.
         // Received files appear by themselves too; a changed list redraws the daily screen in place.
         poll = lifecycleScope.launch { while (isActive) {
-            if (!busy && (runtime.setupStage() != shownStage || (shownPage == "home" && runtime.offers.map { it.first } != shownOffers))) render()
+            if (!busy && permissionRequest.isEmpty() && !lock.prompting && (runtime.setupStage() != shownStage || (shownPage == "home" && runtime.offers.map { it.first } != shownOffers))) render()
             else status.text = statusLine()
             delay(1000)
         } }
@@ -297,9 +321,64 @@ class HostedActivity : ComponentActivity() {
     private fun allowPhotos() {
         verified("Share recent photos with your approved computers") {
             runtime.setPhotosShared(true)
-            requestPermissions(photoPermissions(), 48)
-            render()
+            if (sefirah.network.orion.OrionPermissions.read(this).photos) render() else requestSharingPermissions("photos")
         }
+    }
+    private fun openAppPermissions() = openSharingSettings(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
+    private fun openSharingSettings(target: Intent) {
+        returningFromSettings = true
+        runCatching { startActivity(target) }.onFailure { returningFromSettings = false; message("Open Android Settings → Apps → Saiph → Permissions.") }
+    }
+    private fun requestSharingPermissions(feature: String) {
+        if (permissionRequest.isNotEmpty()) return
+        val permissions = if (feature == "photos") photoPermissions().toList() else PHONE_PERMISSIONS
+        val missing = permissions.filterNot(::granted)
+        val selected = feature == "photos" && android.os.Build.VERSION.SDK_INT >= 34 &&
+            granted(Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED) && !granted(Manifest.permission.READ_MEDIA_IMAGES)
+        val asked = prefs.getBoolean("permission_requested_$feature", false)
+        if (HostedSharing.route(missing.isEmpty(), selected, asked, missing.any(::shouldShowRequestPermissionRationale)) == HostedSharing.Route.SETTINGS) {
+            openAppPermissions(); return
+        }
+        check(prefs.edit().putBoolean("permission_requested_$feature", true).commit())
+        permissionRequest = feature
+        sharingPermissions.launch(permissions.toTypedArray())
+    }
+    private fun allowPhone() {
+        if (runtime.textsAndCalls()) requestSharingPermissions("phone")
+        else verified("Let your computer send texts and handle calls") {
+            runtime.setTextsAndCalls(true)
+            if (PHONE_PERMISSIONS.all(::granted)) render() else requestSharingPermissions("phone")
+        }
+    }
+    private fun notificationAccess() {
+        val component = android.content.ComponentName(this, sefirah.notification.NotificationListener::class.java)
+        val target = if (android.os.Build.VERSION.SDK_INT >= 30)
+            Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS).putExtra(Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME, component.flattenToString())
+            else Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+        if (target.resolveActivity(packageManager) != null) openSharingSettings(target)
+        else openSharingSettings(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+    }
+    /** Presented automatically after approval, including existing installs. Every feature remains a choice. */
+    private fun sharingSetup() {
+        val step = prefs.getInt("sharing_setup_step", 0).coerceIn(0, 2)
+        val access = sefirah.network.orion.OrionPermissions.read(this)
+        root.addView(text("Sharing setup · ${step + 1} of 3", UiType.META, Palette.MUTED))
+        setupIntro(SetupArtwork.Scene.WELCOME,
+            listOf("Your photos, on your computer", "Your phone notifications", "Your texts and calls")[step],
+            listOf("Choose which photos your approved computers can see.", "Allow Saiph notification access in Android Settings.", "Read and send texts. Handle calls with audio on your phone.")[step])
+        val allowed = when (step) {
+            0 -> runtime.photosShared() && access.photos
+            1 -> access.notifications
+            else -> runtime.textsAndCalls() && PHONE_PERMISSIONS.all(::granted)
+        }
+        if (allowed) root.addView(badge("Allowed", Palette.GOOD, Palette.GOOD_SURFACE))
+        else dockActions(button(listOf("Allow photo gallery", "Allow notifications", "Allow texts and calls")[step], true) {
+            when (step) { 0 -> allowPhotos(); 1 -> notificationAccess(); else -> allowPhone() }
+        })
+        dockActions(button(if (step == 2 && allowed) "Finish setup" else if (allowed) "Continue" else "Not now", primary = allowed) {
+            check(prefs.edit().putInt("sharing_setup_step", step + 1).putBoolean("sharing_setup_complete", step == 2).commit())
+            render()
+        })
     }
     /** Off by default: approved computers may act on texts and calls only after the owner turns this on here. */
     private fun textsAndCalls() = group("Texts and calls") {
@@ -313,21 +392,10 @@ class HostedActivity : ComponentActivity() {
             if (missing.isEmpty()) addView(body("Android access is allowed.").apply { setPadding(0, dp(8), 0, 0) })
             else {
                 addView(body("Some Android access is missing. Allow it to use all text and call features.").apply { setPadding(0, dp(8), 0, 0) })
-                actions(button("Allow Android access", tone = Tone.TONAL) { requestPermissions(missing.toTypedArray(), 47) })
+                actions(button("Allow texts and calls", tone = Tone.TONAL) { allowPhone() })
             }
             actions(button("Turn off texts and calls") { runtime.setTextsAndCalls(false); render() })
-        } else actions(button("Turn on texts and calls", tone = Tone.TONAL) {
-            verified("Let your computer send texts and handle calls") {
-                runtime.setTextsAndCalls(true)
-                PHONE_PERMISSIONS.filterNot(::granted).takeIf { it.isNotEmpty() }?.let { requestPermissions(it.toTypedArray(), 47) }
-                render()
-            }
-        })
-    }
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 48) runtime.setPhotosShared(runtime.photosShared())
-        if (requestCode in listOf(47, 48) && !showingLock) render()
+        } else actions(button("Allow texts and calls", tone = Tone.TONAL) { allowPhone() })
     }
     private fun field(label: String, value: String = "", into: LinearLayout = root): EditText {
         val labelView = text(label, UiType.BODY, Palette.MUTED).apply { setPadding(dp(2), dp(8), 0, dp(6)) }
@@ -352,6 +420,7 @@ class HostedActivity : ComponentActivity() {
             welcomePage || (!enrolled && !account.signedIn()) -> "welcome"
             waitingForApproval() -> "waiting"
             !runtime.enabled() -> "paused"
+            HostedSharing.needsSetup(shownStage == HostedSetup.Stage.HOME, prefs.getBoolean("sharing_setup_complete", false)) -> "sharing"
             enrolled -> "home"
             else -> "connect"
         }
@@ -382,6 +451,15 @@ class HostedActivity : ComponentActivity() {
         pendingRoot?.let { confirmRootScreen(it); return }
         if (settingsPage) { hostedSettings(); return }
         if (shownStage == HostedSetup.Stage.RECOVERY) { recoveryScreen(); return }
+        if (shownStage == HostedSetup.Stage.HOME && runtime.enabled() && !account.signedIn()) {
+            root.addView(card(strong = true).apply {
+                addView(cardTitle("Sign in to resume syncing"))
+                addView(body("Your computer's approval is kept."))
+                if (loginError.isNotEmpty()) addView(text(loginError, UiType.BODY, Palette.WARN))
+                actions(button(if (signingIn) "Waiting for sign-in…" else "Continue with Google", true) { signIn() }.apply { isEnabled = !signingIn })
+            })
+            return
+        }
         // Account expiry does not erase device approval or return to the welcome menu.
         shownWaiting = waitingForApproval()
         if (welcomePage || (!enrolled && !account.signedIn())) {
@@ -392,6 +470,7 @@ class HostedActivity : ComponentActivity() {
             waitingScreen()
             return
         }
+        if (page == "sharing") { sharingSetup(); return }
         if (!runtime.enabled()) {
             root.addView(card(strong = true).apply {
                 addView(text("Sync is turned off on this phone. Your account and device approval are kept.", UiType.BODY))
@@ -403,11 +482,11 @@ class HostedActivity : ComponentActivity() {
             shownOffers = runtime.offers.map { it.first }
             group("Files and photos") {
                 addView(featureRow(com.castle.sefirah.R.drawable.saiph_ic_photo, "Photo gallery", "Recent photos on your computers. You choose which photos Android allows."))
-                if (!runtime.photosShared()) actions(button("Allow photos", tone = Tone.TONAL) { allowPhotos() })
+                if (!runtime.photosShared()) actions(button("Allow photo gallery", true) { allowPhotos() })
                 else {
                     if (!sefirah.network.orion.OrionPermissions.read(this@HostedActivity).photos)
-                        actions(button("Allow photos", tone = Tone.TONAL) { requestPermissions(photoPermissions(), 48) })
-                    else actions(button("Choose photo access", tone = Tone.TONAL) { requestPermissions(photoPermissions(), 48) })
+                        actions(button("Allow photo gallery", true) { requestSharingPermissions("photos") })
+                    else actions(button("Manage photo access", tone = Tone.TONAL) { requestSharingPermissions("photos") })
                     actions(button("Stop sharing photos") { runtime.setPhotosShared(false); render() })
                 }
                 actions(button("Send a file or photo", true) { sendFile.launch(arrayOf("*/*")) })
@@ -421,6 +500,11 @@ class HostedActivity : ComponentActivity() {
                 }
             }
             textsAndCalls()
+            group("Phone notifications") {
+                val allowed = sefirah.network.orion.OrionPermissions.read(this@HostedActivity).notifications
+                addView(body(if (allowed) "Notification sharing is allowed." else "Allow notifications to see them on your computer."))
+                actions(button(if (allowed) "Manage notification access" else "Allow notifications", tone = Tone.TONAL) { notificationAccess() })
+            }
         } else {
             root.addView(setupProgress(1))
             setupIntro(SetupArtwork.Scene.SCAN, "Scan your computer's QR", "On your computer: Saiph → Phone → Connect a phone.")
@@ -460,7 +544,7 @@ class HostedActivity : ComponentActivity() {
                 })
                 addView(cardTitle("Phone notifications"))
                 addView(body("Allow Saiph to share notifications with your computers."))
-                settings("Manage notification access", Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                actions(button("Manage notification access", tone = Tone.TONAL) { notificationAccess() })
                 addView(divider())
                 addView(cardTitle("Connection notifications"))
                 addView(body("Choose which Saiph status alerts appear on this phone."))

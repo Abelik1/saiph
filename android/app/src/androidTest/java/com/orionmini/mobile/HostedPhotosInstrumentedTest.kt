@@ -32,7 +32,7 @@ class HostedPhotosInstrumentedTest {
         }
         val uri = context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)!!
         try {
-            val bitmap = Bitmap.createBitmap(240, 120, Bitmap.Config.ARGB_8888).apply { eraseColor(0xff448866.toInt()) }
+            val bitmap = Bitmap.createBitmap(768, 384, Bitmap.Config.ARGB_8888).apply { eraseColor(0xff448866.toInt()) }
             context.contentResolver.openOutputStream(uri)!!.use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
             bitmap.recycle()
             context.contentResolver.update(uri, ContentValues().apply { put(MediaStore.Images.Media.IS_PENDING, 0) }, null, null)
@@ -46,8 +46,8 @@ class HostedPhotosInstrumentedTest {
             val bytes = Base64.getDecoder().decode(row.getValue("preview").jsonPrimitive.content.substringAfter(','))
             assertTrue(bytes.size <= 12_000)
             val preview = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)!!
-            assertEquals(96, preview.width)
-            assertEquals(48, preview.height)
+            assertEquals(384, preview.width)
+            assertEquals(192, preview.height)
             preview.recycle()
             runtime.setPhotosShared(false)
             assertTrue(photos.readItems().isEmpty())
@@ -55,5 +55,19 @@ class HostedPhotosInstrumentedTest {
             runtime.setPhotosShared(false)
             context.contentResolver.delete(uri, null, null)
         }
+    }
+    @Test fun highDetailPreviewStaysInsideTheSealedFrameBudget() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val bitmap = Bitmap.createBitmap(512, 512, Bitmap.Config.ARGB_8888)
+        val random = java.util.Random(17)
+        bitmap.setPixels(IntArray(512 * 512) { random.nextInt() or 0xff000000.toInt() }, 0, 512, 0, 0, 512, 512)
+        try {
+            val bytes = HostedPhotos(context, HostedRuntime.get(context)).preview(bitmap)
+            assertTrue(bytes.size <= 12_000)
+            val decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)!!
+            assertTrue(decoded.width in 96..384)
+            assertEquals(decoded.width, decoded.height)
+            decoded.recycle()
+        } finally { bitmap.recycle() }
     }
 }

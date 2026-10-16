@@ -29,7 +29,7 @@ export type PhoneFeatureState = { threads: SmsThread[]; messages: SmsMessage[]; 
 type PhoneDevice = { id: string; name: string; online: boolean; capabilities: string[]; hosted?: boolean; call_notice?: string | null };
 /** Saiph Cloud phones also need the phone's own Texts and calls switch. */
 const hostedPermission = (permission: string, result: string) =>
-  `Turn on Texts and calls in Saiph Cloud on your phone and allow ${permission} to ${result}.`;
+  `On your phone, tap Allow texts and calls in Saiph and allow ${permission} to ${result}.`;
 const noFeatures: PhoneFeatureState = { threads: [], messages: [], calls: [], photos: [], files: [] };
 
 /** A heading for a tab, with its main action on the right. */
@@ -192,8 +192,8 @@ function Messages({
   }, [active, available, client, threadDevice, threadNumber, requestKey]);
   if (!phone?.capabilities.includes("sms"))
     return (
-      <Empty title={phone?.online ? "Messages aren't shared" : "No saved messages"}>
-        {phone?.online
+      <Empty title={phone?.online || phone?.hosted ? "Messages aren't shared" : "No saved messages"}>
+        {phone?.online || phone?.hosted
           ? phone.hosted ? hostedPermission("SMS", "see conversations and reply here")
             : `${phone.name} isn't sharing text messages. If it can send texts, allow SMS in Saiph on it.`
           : `Reconnect ${phone?.name || "your phone"} to see its messages.`}

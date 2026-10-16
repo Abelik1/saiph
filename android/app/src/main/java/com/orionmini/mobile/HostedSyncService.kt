@@ -27,6 +27,7 @@ class HostedSyncService : Service() {
     private val photos by lazy { HostedPhotos(this, runtime) }
     override fun onCreate() {
         super.onCreate()
+        runtime.applyPackagedDefaults()
         if (!runtime.enabled()) { stopSelf(); return }
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(NotificationChannel("orion_hosted", "Saiph Cloud preview", NotificationManager.IMPORTANCE_LOW))
@@ -50,9 +51,14 @@ class HostedSyncService : Service() {
         scope.launch {
             notifications.enable(""); clipboard.enable("")
             var connected = false
+            var listenerReady = false
             while (isActive && runtime.enabled()) {
                 runCatching { runtime.step() }
-                if (runtime.status == "Connected" && !connected) notifications.sendActiveNotifications("")
+                // Access may be granted while the transport is already connected.
+                // Also reconcile after Android rebinds its listener.
+                val ready = notifications.isAvailable()
+                if (runtime.status == "Connected" && (!connected || ready && !listenerReady)) notifications.sendActiveNotifications("")
+                listenerReady = ready
                 connected = runtime.status == "Connected"
                 runCatching { phone.refresh(runtime.textsAndCalls(), connected, runtime.subscribers().keys) }
                 runCatching { photos.refresh(connected) }

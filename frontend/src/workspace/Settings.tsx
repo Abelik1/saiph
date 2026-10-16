@@ -148,6 +148,7 @@ export function Settings({ state, client, openSetup }: { state: State; client: C
       <RetainedView active={tab === "Connections"}>
         {() => (
           <div className="columns">
+            <HostedSettings hosted={state.hosted} client={client} />
             <ContinuitySettings
               platform={state.platform}
               settings={state.settings}
@@ -155,9 +156,10 @@ export function Settings({ state, client, openSetup }: { state: State; client: C
               client={client}
               workspace={false}
             />
-            <HostedSettings hosted={state.hosted} client={client} />
-            <Disclosure summary="Self-hosted Hub" open={state.settings.hub?.paired || !state.hosted?.enabled || undefined}>
-            <Card title="Saiph Hub">
+            <Disclosure summary="Self-hosted Hub" open={state.settings.hub?.paired || undefined}>
+            <Card title="Saiph Hub" subtitle="Connect through a server you manage.">
+              <p role="status">{state.settings.hub?.paired ? "This computer is paired." : "Use your server invitation to connect."}</p>
+              <Disclosure summary="Pair using a code" open={!state.settings.hub?.paired}>
               <Form
                 submit={async () => {
                   await client.call("hub.pair", {
@@ -173,6 +175,7 @@ export function Settings({ state, client, openSetup }: { state: State; client: C
                   Hub address
                   <input
                     aria-label="Saiph Hub address"
+                    type="url" required
                     value={hub}
                     onChange={(event) => setHub(event.target.value)}
                   />
@@ -181,19 +184,16 @@ export function Settings({ state, client, openSetup }: { state: State; client: C
                   One-time pairing code
                   <input
                     aria-label="Saiph Hub pairing code"
+                    required
                     value={code}
                     inputMode="numeric"
                     maxLength={8}
                     onChange={(event) => setCode(event.target.value)}
                   />
                 </label>
-                <button>Pair desktop</button>
+                <Button type="submit" variant="secondary" className="justify-self-start">Pair desktop</Button>
               </Form>
-              <p className="muted">
-                {state.settings.hub?.paired
-                  ? "This computer is paired."
-                  : "Pair once using your server invitation."}
-              </p>
+              </Disclosure>
               {state.phone?.error && (
                 <p className="inline-error">{state.phone.error}</p>
               )}

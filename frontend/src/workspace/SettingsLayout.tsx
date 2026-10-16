@@ -25,8 +25,8 @@ const icons = {
 };
 const descriptions: Record<string, string> = {
   General: "Your computer, startup and everyday preferences.",
-  Connections: "Your server, Cloud folders and shared clipboard.",
-  Devices: "Use your phone as a camera or microphone.",
+  Connections: "Your account, Cloud folder and connection preferences.",
+  Devices: "Camera, microphone and controls for this computer.",
   Updates: "Keep this computer up to date.",
   AI: "Choose how your assistant runs and which models it uses.",
   Accounts: "Manage the accounts connected to your workspace.",

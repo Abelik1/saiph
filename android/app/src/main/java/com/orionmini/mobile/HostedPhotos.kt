@@ -5,9 +5,9 @@ import android.content.ContentUris
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.ImageDecoder
 import android.os.Build
 import android.provider.MediaStore
-import android.util.Size
 import kotlinx.serialization.json.*
 import sefirah.network.orion.OrionPermissions
 import java.io.ByteArrayOutputStream
@@ -56,16 +56,23 @@ internal class HostedPhotos(private val context: Context, private val runtime: H
                 if (id <= 0 || id > 9_007_199_254_740_991L) continue
                 val uri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id)
                 runCatching {
-                    val bitmap = if (Build.VERSION.SDK_INT >= 29) context.contentResolver.loadThumbnail(uri, Size(128, 128), null)
-                    else context.contentResolver.openInputStream(uri)!!.use {
-                        BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = 32 })
+                    // MediaStore may return a tiny cached thumbnail regardless of
+                    // the requested Size. Decode the permitted image at a bounded
+                    // target instead; never allocate the full-resolution bitmap.
+                    val bitmap = if (Build.VERSION.SDK_INT >= 28) ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, uri)) { decoder, info, _ ->
+                        val scale = minOf(1.0, 384.0 / maxOf(info.size.width, info.size.height))
+                        decoder.setTargetSize((info.size.width * scale).toInt().coerceAtLeast(1), (info.size.height * scale).toInt().coerceAtLeast(1))
+                        decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+                    } else {
+                        val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                        context.contentResolver.openInputStream(uri)!!.use { BitmapFactory.decodeStream(it, null, options) }
+                        check(options.outWidth > 0 && options.outHeight > 0)
+                        options.inJustDecodeBounds = false
+                        options.inSampleSize = 1
+                        while (maxOf(options.outWidth, options.outHeight).toLong() / (options.inSampleSize * 2L) >= 384) options.inSampleSize *= 2
+                        context.contentResolver.openInputStream(uri)!!.use { BitmapFactory.decodeStream(it, null, options) }
                     } ?: return@runCatching
-                    val scale = 96.0 / maxOf(bitmap.width, bitmap.height)
-                    val small = Bitmap.createScaledBitmap(bitmap, (bitmap.width * scale).toInt().coerceAtLeast(1), (bitmap.height * scale).toInt().coerceAtLeast(1), true)
-                    val bytes = ByteArrayOutputStream().apply { small.compress(Bitmap.CompressFormat.JPEG, 35, this) }.toByteArray()
-                    if (small !== bitmap) small.recycle()
-                    bitmap.recycle()
-                    check(bytes.size <= 12_000)
+                    val bytes = try { preview(bitmap) } finally { bitmap.recycle() }
                     found += buildJsonObject {
                         put("type", "photos.item"); put("id", id.toString())
                         put("name", sefirah.network.orion.HostedPhoneFrames.clean(cursor.getString(1) ?: "Photo.jpg", 180))
@@ -78,4 +85,21 @@ internal class HostedPhotos(private val context: Context, private val runtime: H
         return found
     }
 
+    /** Sharper grid previews without increasing the sealed frame or memory limits. */
+    internal fun preview(bitmap: Bitmap): ByteArray {
+        var edge = minOf(384, maxOf(bitmap.width, bitmap.height))
+        while (true) {
+            val scale = edge.toDouble() / maxOf(bitmap.width, bitmap.height)
+            val small = Bitmap.createScaledBitmap(bitmap, (bitmap.width * scale).toInt().coerceAtLeast(1),
+                (bitmap.height * scale).toInt().coerceAtLeast(1), true)
+            try {
+                for (quality in listOf(75, 65, 55)) {
+                    val bytes = ByteArrayOutputStream().apply { check(small.compress(Bitmap.CompressFormat.JPEG, quality, this)) }.toByteArray()
+                    if (bytes.size <= 12_000) return bytes
+                }
+            } finally { if (small !== bitmap) small.recycle() }
+            check(edge > 96)
+            edge = maxOf(96, edge * 3 / 4)
+        }
+    }
 }

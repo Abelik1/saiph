@@ -212,7 +212,7 @@ def _bounded_jpeg(image: bytes) -> bool:
                 return False
             height = int.from_bytes(image[offset + 3:offset + 5], "big")
             width = int.from_bytes(image[offset + 5:offset + 7], "big")
-            return 0 < width <= 128 and 0 < height <= 128
+            return 0 < width <= 384 and 0 < height <= 384
         offset += length
     return False
 

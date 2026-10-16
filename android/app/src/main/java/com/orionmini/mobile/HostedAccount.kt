@@ -62,7 +62,7 @@ class HostedAccount private constructor(private val context: Context) {
         val grant = exchange(response.createTokenExchangeRequest(), epoch)
         // Re-authenticate approved phones with the method that established their
         // account. Legacy profiles default to their original provider picker.
-        accept(grant, epoch, requireRefresh = false, google = response.request.additionalParameters["connection"] == "google-oauth2")
+        accept(grant, epoch, requireRefresh = prefs.getBoolean("refresh_tokens", false), google = response.request.additionalParameters["connection"] == "google-oauth2")
     }
     /** Consume only the originating browser attempt, before any network exchange. */
     @Synchronized internal fun consume(response: AuthorizationResponse): Int {
@@ -99,7 +99,7 @@ class HostedAccount private constructor(private val context: Context) {
             } else continuation.resume(response)
         }
     }
-    @Synchronized private fun accept(grant: TokenResponse, epoch: Int, requireRefresh: Boolean, google: Boolean? = null) {
+    @Synchronized internal fun accept(grant: TokenResponse, epoch: Int, requireRefresh: Boolean, google: Boolean? = null) {
         check(epoch == generation && prefs.getBoolean("enabled", false))
         val value = grant.accessToken ?: error("Sign-in did not return an access token.")
         check(value.length in 1..16384 && value.all { it.code in 33..126 } && grant.tokenType.equals("Bearer", true))
@@ -107,7 +107,7 @@ class HostedAccount private constructor(private val context: Context) {
         check(expiry in System.currentTimeMillis() + 1000..System.currentTimeMillis() + 86_400_000)
         if (prefs.getBoolean("refresh_tokens", false)) {
             val refresh = grant.refreshToken
-            check(!requireRefresh || refresh != null)
+            check(!requireRefresh || refresh != null) { "Sign-in did not return a persistent session. Check the native client's refresh-token settings." }
             if (refresh != null) {
                 check(refresh.length in 1..4096 && refresh.all { it.code in 33..126 })
                 if (!AndroidKeystore.hasKey(alias)) {

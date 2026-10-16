@@ -184,3 +184,23 @@ retire each legacy stylesheet as its count reaches zero.
 
 Use **Saiph Cloud** and **Self-hosted** for connection choices and people-facing
 service labels. Preserve the existing Hosted protocol, command and settings names.
+
+## Galleries and device preferences
+
+Photo tiles contain the image only. Keep the filename in the viewer and details.
+Place the actions menu over the image's top-right corner, visible on hover,
+keyboard focus and touch screens. Preserve accessible names and the context menu.
+Keep preview and original in the same fitted frame while loading; actual-size
+zoom is a separate action.
+
+Connections leads with the Cloud account and approved devices, then Cloud folder
+preferences. Keep self-hosted pairing and advanced fields in labelled disclosures;
+a connected computer does not need to show an empty pairing form every time.
+Devices uses the same preference cards, label scale and spacing for camera,
+microphone, remote controls and automatic locking. Keep permission consequences
+beside the controls that enable them.
+
+Present direct phone-camera viewing separately from optional webcam delivery to
+meeting apps. Viewing uses scrcpy; the current Windows webcam bridge uses OBS
+Virtual Camera. Keep OBS profiles, scene fields and installation details inside
+meeting-app disclosures. Do not start capture when opening or saving preferences.
