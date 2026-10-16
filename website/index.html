@@ -5,12 +5,12 @@
   <meta name="referrer" content="no-referrer">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Saiph: phone, laptop and desktop as one</title>
-  <meta name="description" content="Saiph brings clipboard, notifications, photos and files across your Android phone and Windows and Linux computers, without locking you into one company's devices. Saiph Hosted connects them for you from €3.99 a month, end-to-end encrypted. Or self-host it for free.">
+  <meta name="description" content="Clipboard, notifications and files across Android, Windows and Linux. Download Saiph. Hosted from €9.99/month, or self-host for free.">
   <meta name="theme-color" content="#0a0e13">
   <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
   <link rel="stylesheet" href="assets/site.css">
 </head>
-<body>
+<body class="landing">
 <a class="btn skip-link" href="#main">Skip to content</a>
 
 <header class="nav">
@@ -20,11 +20,12 @@
       Saiph
     </a>
     <nav class="nav-links" aria-label="Main">
-      <a class="hide-sm" href="#features">Features</a>
-      <a class="hide-sm" href="#download">Download</a>
-      <a href="self-host.html">Self-host</a>
-      <a href="hosted.html">Hosted</a>
-      <a data-link="github" href="#" aria-label="Source code on GitHub">GitHub</a>
+      <a class="hide-sm" href="#features">Demo</a>
+      <a class="download-nav" href="#download">Download</a>
+      <a class="hide-sm" href="self-host.html">Self-host</a>
+      <a class="hide-sm" href="hosted.html">Hosted</a>
+      <a class="hide-sm" data-link="github" href="#" aria-label="Source code on GitHub">GitHub</a>
+      <a class="account-nav" data-link="account" href="#" aria-label="Account: sign in or open your dashboard">Account</a>
     </nav>
   </div>
 </header>
@@ -32,17 +33,12 @@
 <main id="main">
   <section class="hero">
     <div class="wrap center">
-      <a class="pill pill-link" href="#pricing"><span class="dot"></span>Saiph Hosted is here &middot; Windows, Linux &amp; Android</a>
-      <h1>Your phone, laptop and desktop, <em>as one.</em></h1>
-      <p class="lede">Clipboard, notifications and files flow between your Android phone and your Windows and Linux computers. Like Apple's Continuity, without buying every device from one company.</p>
-      <div class="btn-row" style="margin-top:28px">
-        <a class="btn primary" href="#pricing">Get Saiph Hosted</a>
-        <a class="btn" href="self-host.html">Self-host it free</a>
-      </div>
+      <h1>Your devices. <em>Connected.</em></h1>
+      <p class="lede">Clipboard, notifications and files across Android, Windows and Linux.</p>
     </div>
   </section>
 
-  <section class="showcase" aria-labelledby="demo-title">
+  <section class="showcase" id="features" aria-labelledby="demo-title">
     <div class="wrap">
       <h2 id="demo-title" class="sr-only">Illustrated feature preview</h2>
       <div class="feature-tabs" role="tablist" aria-label="Feature demos">
@@ -77,141 +73,144 @@
     </div>
   </section>
 
-  <section class="section" id="why" aria-labelledby="why-title">
-    <div class="wrap center">
-      <span class="eyebrow">Why Saiph</span>
-      <h2 id="why-title">The seamless setup shouldn't need one brand.</h2>
-      <blockquote class="origin">
-        <p>&ldquo;A friend told me the Apple ecosystem can't be beaten, so I built one that works on everything.&rdquo;</p>
-        <cite>&mdash; Alexander, creator of Saiph</cite>
-      </blockquote>
-      <p class="lede">Copy on your phone, paste on your laptop. See your phone's notifications on the screen you're at. Send a photo across without a cable. Apple made this feel normal, but only if every device comes from Apple. Saiph brings the same everyday flow to Windows, Linux and Android, so your next phone or computer can be whatever suits you.</p>
-      <p class="muted trademark-note">Apple and Continuity are trademarks of Apple Inc. Saiph is an independent project, not affiliated with or endorsed by Apple.</p>
-    </div>
-  </section>
-
-  <section class="section alt" id="features" aria-labelledby="features-title">
-    <div class="wrap">
-      <h2 id="features-title" class="center">Everything your phone knows, on the screen you're using.</h2>
-      <div class="grid c3 feature-cards">
-        <button class="card" data-goto-scene="notifications">
-          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></div>
-          <h3>Notifications</h3>
-          <p class="muted">See and dismiss them on any screen. Reply when you self-host.</p>
-          <span class="feature-tags"><span class="tag ok">Self-hosted</span><span class="tag cyan">Hosted</span></span>
-        </button>
-        <button class="card" data-goto-scene="messages">
-          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
-          <h3>Texts</h3>
-          <p class="muted">Reply with a real keyboard, still your number.</p>
-          <span class="feature-tags"><span class="tag ok">Self-hosted</span><span class="tag">Coming to Hosted</span></span>
-        </button>
-        <button class="card" data-goto-scene="calls">
-          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/></svg></div>
-          <h3>Calls</h3>
-          <p class="muted">See who's calling and answer or decline. You talk on your phone.</p>
-          <span class="feature-tags"><span class="tag ok">Self-hosted</span><span class="tag">Coming to Hosted</span></span>
-        </button>
-        <button class="card" data-goto-scene="clipboard">
-          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg></div>
-          <h3>Clipboard</h3>
-          <p class="muted">Copy here, paste there. Images when you self-host.</p>
-          <span class="feature-tags"><span class="tag ok">Self-hosted</span><span class="tag cyan">Hosted</span></span>
-        </button>
-        <button class="card" data-goto-scene="files">
-          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></svg></div>
-          <h3>Photos &amp; files</h3>
-          <p class="muted">Send photos and files either way. Browse recent photos when you self-host.</p>
-          <span class="feature-tags"><span class="tag ok">Self-hosted</span><span class="tag cyan">Hosted</span></span>
-        </button>
-        <button class="card" data-goto-scene="webcam">
-          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 8-6 4 6 4V8z"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg></div>
-          <h3>Webcam</h3>
-          <p class="muted">Your phone camera in video calls. Needs USB or wireless debugging.</p>
-          <span class="feature-tags"><span class="tag ok">Self-hosted</span></span>
-        </button>
-      </div>
-      <p class="muted center feature-note">Texts and calls are coming to Hosted. Webcam works over USB or local Wi-Fi.</p>
-    </div>
-  </section>
-
-  <section class="section" id="download" aria-labelledby="dl-title">
+  <section class="landing-download" id="download" aria-labelledby="dl-title">
     <div class="wrap">
       <h2 id="dl-title">Download</h2>
-      <p class="muted" style="margin-bottom:28px"><span data-hosted-live hidden>Subscribe to Saiph Hosted, then download Saiph for your computer and phone from your account.</span><span data-hosted-soon>Releases are being prepared.</span> <span data-source-notice>The GitHub repository is private for now.</span></p>
-      <div class="grid c3">
-        <a class="card dl" data-download="windows" href="#">
+      <div class="download-buttons">
+        <a class="btn primary download-btn" data-download="windows" href="#">
           <div class="os">
             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 5.5 10.5 4.5v7H3zM11.5 4.3 21 3v8.5h-9.5zM3 12.5h7.5v7L3 18.5zM11.5 12.5H21V21l-9.5-1.3z"/></svg>
             <div><strong>Windows</strong><span>10 / 11 &middot; x64</span></div>
           </div>
           <span class="go">Download for Windows &rarr;</span>
         </a>
-        <a class="card dl" data-download="linux" href="#">
+        <a class="btn primary download-btn" data-download="linux" href="#">
           <div class="os">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="m6 9 4 3-4 3M12 15h6"/></svg>
             <div><strong>Linux</strong><span>x86_64 &middot; Ubuntu tested</span></div>
           </div>
           <span class="go">Download for Linux &rarr;</span>
         </a>
-        <a class="card dl" data-download="android" href="#">
+        <a class="btn primary download-btn" data-link="android-beta" rel="noreferrer" href="#">
           <div class="os">
             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 10h12v7.5a1.5 1.5 0 0 1-1.5 1.5H16v2.5a1.25 1.25 0 0 1-2.5 0V19h-3v2.5a1.25 1.25 0 0 1-2.5 0V19h-.5A1.5 1.5 0 0 1 6 17.5zM3.75 10A1.25 1.25 0 0 1 5 11.25v5a1.25 1.25 0 0 1-2.5 0v-5A1.25 1.25 0 0 1 3.75 10zm16.5 0a1.25 1.25 0 0 1 1.25 1.25v5a1.25 1.25 0 0 1-2.5 0v-5A1.25 1.25 0 0 1 20.25 10zM6.1 9a6 6 0 0 1 3.2-4.6l-1-1.6a.4.4 0 1 1 .7-.4l1 1.7a6 6 0 0 1 4 0l1-1.7a.4.4 0 1 1 .7.4l-1 1.6A6 6 0 0 1 17.9 9zM9.5 6.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5zm5 0a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5z"/></svg>
-            <div><strong>Android</strong><span>Phones &middot; .apk</span></div>
+            <div><strong>Android</strong><span>Beta &middot; automatic updates</span></div>
           </div>
-          <span class="go">Download for Android &rarr;</span>
+          <span class="go">Install via Firebase &rarr;</span>
         </a>
       </div>
-      <div class="callout info" data-android-beta hidden style="margin-top:22px"><strong>Android beta:</strong> open the invite on your phone. Google asks for your email, then installs it. <br><a class="btn" data-link="android-beta" rel="noreferrer" style="margin-top:12px">Join the Android beta</a></div>
-      <p class="muted" style="margin-top:18px;font-size:.92rem"><a href="downloads.html">Release status and checksums</a></p>
+      <p class="download-note muted" data-android-beta hidden>Android installs through Firebase. Google asks for your email.</p>
+      <div class="download-secondary">
+        <a data-download="android" href="#">Standalone Android APK</a>
+        <a href="downloads.html">All downloads &amp; checksums</a>
+      </div>
     </div>
   </section>
 
-  <section class="section alt" id="pricing" aria-labelledby="pricing-title">
+  <section class="landing-pricing" id="pricing" aria-labelledby="pricing-title">
     <div class="wrap">
-      <h2 id="pricing-title" class="center" style="margin-bottom:36px">Run it your way.</h2>
-      <div class="plans">
-        <div class="card plan">
-          <h3>Self-hosted</h3>
-          <div class="price">Free</div>
-          <ul class="checks">
-            <li>Every feature, including texts and calls</li>
-            <li>Raspberry Pi, home server or any Debian box</li>
-            <li>Synced Cloud folder on your storage</li>
-          </ul>
-          <a class="btn" href="self-host.html">Self-hosting guide</a>
+      <div class="pricing-summary">
+        <div>
+          <h2 id="pricing-title"><a href="hosted.html">Saiph Hosted</a></h2>
+          <p class="muted">No server to run. Cancel any time.</p>
         </div>
-        <div class="card plan featured">
-          <h3>Saiph Hosted <span class="tag cyan" data-hosted-status data-live-text="Beta &middot; available now">Coming soon</span></h3>
-          <div class="price" data-price>Early access <small>pricing at launch</small></div>
-          <p class="price-note" data-price-note hidden></p>
-          <ul class="checks">
-            <li>We run the connection: no server, no Tailscale</li>
-            <li>End-to-end encrypted: your devices hold the keys</li>
-            <li>Notifications, text clipboard, photos and files</li>
-            <li>Texts and calls on the way</li>
-            <li>Cancel any time</li>
-          </ul>
-          <a class="btn primary" data-link="subscribe" data-live-text="Subscribe to Saiph Hosted" href="#">Join the early-access list</a>
-          <a href="hosted.html" style="margin-top:12px;font-size:.92rem;text-align:center">How Hosted protects your data &rarr;</a>
+        <div>
+          <p class="price" data-price>Early access <small>pricing at launch</small></p>
+          <p class="price-note muted" data-price-note hidden></p>
         </div>
+        <a class="btn primary hosted-cta" data-link="subscribe" data-live-text="Get Saiph Hosted &rarr;" href="#">Early access coming soon</a>
       </div>
+      <p class="landing-details muted"><a href="self-host.html">Self-host for free</a> &middot; <a href="hosted.html">Features &amp; security</a></p>
     </div>
   </section>
 
-  <section class="section" id="security" aria-labelledby="sec-title">
-    <div class="wrap center">
-      <h2 id="sec-title">Your keys. Your devices.</h2>
-      <ul class="pillars">
-        <li>Keys stay on each device</li>
-        <li>Every request signed</li>
-        <li>Revoke a lost device in one click</li>
-      </ul>
-      <p class="muted" style="font-size:.92rem">Licensed <span data-license="core">AGPL-3.0</span> (desktop, Hub) and <span data-license="android">GPL-3.0</span> (Android). <span data-source-notice>The GitHub repository is private for now.</span></p>
-      <div class="btn-row" style="margin-top:20px">
-        <a class="btn" href="hosted.html#trust">Security model</a>
-        <a class="btn" data-link="github" href="#">GitHub</a>
+  <section class="landing-comparison" id="compare" aria-labelledby="compare-title">
+    <div class="wrap">
+      <h2 id="compare-title">See how Saiph compares.</h2>
+      <p class="muted comparison-intro">Everyday phone features, with Linux support and a free self-hosted option.</p>
+      <p class="comparison-scroll muted" id="compare-scroll">Scroll across to compare all three.</p>
+      <div class="table-wrap comparison-scroll-area" role="region" aria-label="Product comparison" aria-describedby="compare-scroll" tabindex="0">
+        <table class="comparison-table">
+          <caption class="sr-only">Current features of Apple Continuity, Microsoft Phone Link and Saiph. Saiph Hosted is a beta service; some features require self-hosting.</caption>
+          <colgroup><col><col><col><col class="saiph-column"></colgroup>
+          <thead>
+            <tr>
+              <th scope="col">What you need</th>
+              <th scope="col">Apple <span>Continuity</span></th>
+              <th scope="col">Microsoft <span>Phone Link</span></th>
+              <th scope="col" class="saiph-heading">Saiph <span>Hosted beta &amp; self-hosted</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">Computer support</th>
+              <td>Mac</td>
+              <td>Windows</td>
+              <td><strong>Windows &amp; Linux</strong></td>
+            </tr>
+            <tr>
+              <th scope="row">Phone support</th>
+              <td>iPhone</td>
+              <td>Android &amp; iPhone</td>
+              <td>Android</td>
+            </tr>
+            <tr>
+              <th scope="row">Phone notifications</th>
+              <td>iPhone Mirroring<sup>1</sup></td>
+              <td>Yes</td>
+              <td>View &amp; dismiss<small>Hosted replies not yet supported</small></td>
+            </tr>
+            <tr>
+              <th scope="row">Copy &amp; paste</th>
+              <td>Text &amp; images</td>
+              <td>Selected Android phones<sup>2</sup></td>
+              <td>Text<small>Hosted image sync not yet supported</small></td>
+            </tr>
+            <tr>
+              <th scope="row">Send photos &amp; files</th>
+              <td>AirDrop</td>
+              <td>Android on Windows 11<sup>2</sup></td>
+              <td>Both directions</td>
+            </tr>
+            <tr>
+              <th scope="row">Text from your computer</th>
+              <td>Yes</td>
+              <td>Yes</td>
+              <td>Yes, including Hosted<small>Enable on your phone</small></td>
+            </tr>
+            <tr>
+              <th scope="row">Answer &amp; decline calls</th>
+              <td>Yes</td>
+              <td>Yes</td>
+              <td>Yes, including Hosted<small>Enable on your phone</small></td>
+            </tr>
+            <tr>
+              <th scope="row">Call audio on computer</th>
+              <td>Yes</td>
+              <td>Yes, over Bluetooth</td>
+              <td class="comparison-limit">Not available<small>Talk on your phone</small></td>
+            </tr>
+            <tr>
+              <th scope="row">Run your own server</th>
+              <td>Not offered</td>
+              <td>Not offered</td>
+              <td><strong>Free self-hosted Hub</strong><small>No Saiph account needed</small></td>
+            </tr>
+          </tbody>
+        </table>
       </div>
+      <p class="comparison-note muted">Saiph is in beta. Texts and call controls require phone opt-in and Android permissions. Availability depends on device, OS version and region.</p>
+      <details class="comparison-sources">
+        <summary>Requirements &amp; sources <span>Checked 16 October 2026</span></summary>
+        <div>
+          <ol>
+            <li>Apple Continuity connects compatible Apple devices. Phone notifications use iPhone Mirroring, which Apple currently lists as unavailable in the EU. See <a href="https://support.apple.com/en-us/108046" rel="noreferrer">Apple feature requirements</a> and <a href="https://support.apple.com/guide/iphone/intro-to-continuity-iphf5fa30b66/ios" rel="noreferrer">Continuity and regional availability</a>.</li>
+            <li>Phone Link uses Windows; its Android and iPhone features differ. Cross-device clipboard works on selected Android models. File sharing requires Windows 11 and Android 10 or later; calling uses Bluetooth. See <a href="https://support.microsoft.com/en-us/windows/apps/phonelink/phone-link-requirements-and-setup" rel="noreferrer">Phone Link requirements</a>, <a href="https://support.microsoft.com/en-us/windows/apps/phonelink/seamlessly-transfer-content-between-your-devices" rel="noreferrer">clipboard and file sharing</a> and <a href="https://support.microsoft.com/en-us/windows/apps/make-and-receive-phone-calls-from-your-pc" rel="noreferrer">calls</a>.</li>
+          </ol>
+          <p>Saiph Hosted includes notification viewing/dismissal, text clipboard, sending photos/files, one-to-one SMS replies, new texts, and call controls. Turn on Texts and calls on the phone and grant its Android permissions. Notification replies, automatic image clipboard sync, MMS pictures and group replies are not yet supported on Hosted; they work with a self-hosted Hub. Call audio stays on the phone in both modes. These are beta features, with physical-device acceptance still pending. See <a href="hosted.html">Hosted features</a> and the <a href="self-host.html">self-hosting guide</a>.</p>
+          <p class="comparison-trademarks">Apple, Continuity and AirDrop are trademarks of Apple Inc. Microsoft and Phone Link are Microsoft trademarks. Saiph is independent and is not affiliated with or endorsed by either company.</p>
+        </div>
+      </details>
     </div>
   </section>
 </main>
@@ -219,11 +218,10 @@
 <footer>
   <div class="wrap">
     <div>
-      <strong style="color:var(--text)">Saiph</strong> &middot; &copy; <span data-year>2026</span> Alexander Belik<br>
-      <span style="font-size:.85rem" data-analytics-status>Analytics is disabled.</span>
+      <strong style="color:var(--text)">Saiph</strong> &middot; &copy; <span data-year>2026</span> Alexander Belik
     </div>
     <nav aria-label="Footer">
-      <a href="index.html#features">Features</a>
+      <a href="index.html#features">Demo</a>
       <a href="index.html#download">Download</a>
       <a href="self-host.html">Self-host</a>
       <a href="hosted.html">Hosted</a>

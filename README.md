@@ -48,7 +48,9 @@ Cancel any time; your access runs to the end of the period you paid for.
 **[Subscribe at usesaiph.com →](https://usesaiph.com/#pricing)**
 
 Saiph Hosted is a beta service: expect the odd bug and occasional downtime while
-it grows. Texts and calls are coming to it next.
+it grows. Texts and call controls require opting in on your phone and granting
+Android permissions. They are included in the beta builds; physical-device
+acceptance remains pending.
 
 What you get with Hosted:
 
@@ -70,8 +72,8 @@ What you get with Hosted:
 | **Notifications** — see and dismiss your phone's notifications on any computer | ✓ | ✓ (and reply) |
 | **Clipboard** — copy on one device, paste on another | ✓ text | ✓ text and images |
 | **Photos & files** — send them either way, without a cable | ✓ | ✓ and browse recent photos |
-| **Texts** — read and reply with a real keyboard, still from your number | Coming | ✓ |
-| **Calls** — see who's calling, answer or decline, dial from the computer | Coming | ✓ |
+| **Texts** — read and reply with a real keyboard, still from your number | ✓ beta, one-to-one | ✓ |
+| **Calls** — see who's calling, answer or decline, dial from the computer | ✓ beta, audio on phone | ✓ audio on phone |
 | **Webcam & microphone** — use your phone's camera in video calls | Over USB or local Wi-Fi | Over USB or local Wi-Fi |
 | **Phone controls** — find your phone, ringer mode, media, Do Not Disturb | | ✓ |
 | **Cloud folder** — a synced folder on storage you choose | | ✓ |

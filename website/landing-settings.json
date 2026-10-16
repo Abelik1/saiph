@@ -1,6 +1,10 @@
 {
   "sourceVisibility": "public",
   "githubUrl": "https://github.com/Abelik1/saiph",
+  "analytics": {
+    "enabled": true,
+    "scriptPath": "/_vercel/insights/script.js"
+  },
   "privacy": {
     "status": "approved",
     "controllerName": "Alexander Belik, operating as Abelik1",
