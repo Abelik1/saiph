@@ -35,12 +35,12 @@ running at home. Your devices encrypt content before it leaves them, and only
 the devices you approve can read it.
 
 <p align="center">
-  <a href="https://usesaiph.com/#pricing"><img src="docs/images/readme/plans.svg" alt="Plans: Saiph Hosted Monthly at €3.99 a month; Saiph Hosted Yearly at €36 a year, which saves 25%; and Self-hosted, free forever." width="100%"></a>
+  <a href="https://usesaiph.com/#pricing"><img src="docs/images/readme/plans.svg" alt="Plans: Saiph Hosted Monthly at €9.99 a month; Saiph Hosted Yearly at €89.99 a year, which saves about 25%; and Self-hosted, free forever." width="100%"></a>
 </p>
 
 | | Monthly | Yearly | Self-hosted |
 | --- | --- | --- | --- |
-| Price | **€3.99** / month | **€36** / year, €3 a month | **Free** |
+| Price | **€9.99** / month | **€89.99** / year, about €7.50 a month | **Free** |
 | You need | A Saiph account | A Saiph account | Your own Linux server or Raspberry Pi |
 
 Cancel any time; your access runs to the end of the period you paid for.
@@ -48,7 +48,9 @@ Cancel any time; your access runs to the end of the period you paid for.
 **[Subscribe at usesaiph.com →](https://usesaiph.com/#pricing)**
 
 Saiph Hosted is a beta service: expect the odd bug and occasional downtime while
-it grows. Texts and calls are coming to it next.
+it grows. Texts and call controls require opting in on your phone and granting
+Android permissions. They are included in the beta builds; physical-device
+acceptance remains pending.
 
 What you get with Hosted:
 
@@ -70,8 +72,8 @@ What you get with Hosted:
 | **Notifications** — see and dismiss your phone's notifications on any computer | ✓ | ✓ (and reply) |
 | **Clipboard** — copy on one device, paste on another | ✓ text | ✓ text and images |
 | **Photos & files** — send them either way, without a cable | ✓ | ✓ and browse recent photos |
-| **Texts** — read and reply with a real keyboard, still from your number | Coming | ✓ |
-| **Calls** — see who's calling, answer or decline, dial from the computer | Coming | ✓ |
+| **Texts** — read and reply with a real keyboard, still from your number | ✓ beta, one-to-one | ✓ |
+| **Calls** — see who's calling, answer or decline, dial from the computer | ✓ beta, audio on phone | ✓ audio on phone |
 | **Webcam & microphone** — use your phone's camera in video calls | Over USB or local Wi-Fi | Over USB or local Wi-Fi |
 | **Phone controls** — find your phone, ringer mode, media, Do Not Disturb | | ✓ |
 | **Cloud folder** — a synced folder on storage you choose | | ✓ |

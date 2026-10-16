@@ -41,7 +41,7 @@
   const enabled = ready && publicUrl(window.location.href) !== null && safeReferrer()
     && window.navigator.globalPrivacyControl !== true && window.navigator.doNotTrack !== "1";
   document.querySelectorAll("[data-analytics-status]").forEach((element) => {
-    element.textContent = enabled ? "Cookie-free pageview analytics is enabled." : "Analytics is disabled.";
+    element.textContent = enabled ? "Cookie-free pageview analytics is enabled." : "Pageview analytics is off for this visit.";
   });
   if (!enabled || window.saiphAnalyticsLoaded) return;
   window.saiphAnalyticsLoaded = true;

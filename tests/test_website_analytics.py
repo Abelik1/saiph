@@ -51,9 +51,9 @@ console.log(JSON.stringify({inserted, firstCount, queueLength: (window.vaq || []
     return json.loads(result.stdout)
 
 
-def test_analytics_is_off_in_defaults_and_landing_build(tmp_path):
+def test_analytics_is_off_in_defaults_and_unconfigured_preview_build(tmp_path):
     assert site.validate_settings({}, 'preview')['analytics']['enabled'] is False
-    for name in ('landing-settings.json', 'preview-settings.json', 'launch-settings.template.json'):
+    for name in ('preview-settings.json', 'launch-settings.template.json'):
         config = json.loads((ROOT / 'website' / name).read_text(encoding='utf-8'))
         assert site.validate_settings(config, 'preview')['analytics']['enabled'] is False
     output = tmp_path / 'site'
@@ -65,6 +65,13 @@ def test_analytics_is_off_in_defaults_and_landing_build(tmp_path):
             assert '<meta name="referrer" content="no-referrer">' in page
             assert page.index('assets/config.js') < page.index('assets/analytics.js')
     assert run_loader()['inserted'] == []
+
+
+def test_landing_settings_enable_public_pageviews_but_keep_local_previews_untracked():
+    config = json.loads((ROOT / 'website/landing-settings.json').read_text(encoding='utf-8'))
+    assert site.validate_settings(config, 'preview')['analytics']['enabled'] is True
+    assert run_loader(config, url=ORIGIN + '/')['firstCount'] == 1
+    assert run_loader(config, url='http://localhost:8099/')['inserted'] == []
 
 
 @pytest.mark.parametrize('value', [True, None, {}, {'enabled': True},
@@ -104,7 +111,9 @@ def test_activation_requires_approved_privacy_and_public_contact():
     ORIGIN + '/auth/callback?code=secret', ORIGIN + '/checkout/success',
     ORIGIN + '/users/synthetic@example.invalid', ORIGIN + '/terms', ORIGIN + '/%70rivacy.html'])
 def test_nonpublic_routes_hosts_and_local_previews_never_load_provider(url):
-    assert run_loader(settings(), url=url)['inserted'] == []
+    result = run_loader(settings(), url=url)
+    assert result['inserted'] == []
+    assert result['status'] == 'Pageview analytics is off for this visit.'
 
 
 @pytest.mark.parametrize('referrer', [ORIGIN + '/auth/callback', ORIGIN + '/?code=secret',

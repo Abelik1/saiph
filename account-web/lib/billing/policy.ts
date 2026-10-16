@@ -4,8 +4,8 @@ import {readAuthConfig} from "../policy.mjs";
 import {grantKey} from "./grant-push.mjs";
 export type PlanKey="monthly"|"yearly";
 export type Plan={key:PlanKey;priceId:string;amount:number;interval:"month"|"year"};
-/** Owner-approved prices (14 October 2026), in euro cents. Stripe prices must match exactly. */
-export const PLAN_TERMS:Record<PlanKey,{amount:number;interval:"month"|"year"}>={monthly:{amount:399,interval:"month"},yearly:{amount:3600,interval:"year"}};
+/** Owner-approved prices (16 October 2026), in euro cents. Stripe prices must match exactly. */
+export const PLAN_TERMS:Record<PlanKey,{amount:number;interval:"month"|"year"}>={monthly:{amount:999,interval:"month"},yearly:{amount:8999,interval:"year"}};
 export type BillingMode="owner-sandbox"|"live";
 export type BillingConfig = {mode:BillingMode; livemode:boolean; secretKey:string; webhookSecret:string; accountId:string; productId:string;
   plans:Record<PlanKey,Plan>; portalId:string; origin:string; ownerSubject:string; automaticTax:boolean;

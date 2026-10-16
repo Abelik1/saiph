@@ -34,7 +34,7 @@ function fixture({startedAgo=86400,status="active"}={}) {
     charges:{list:async(params)=>{calls.chargeQuery=params;return {has_more:false,data:charges};}},
     refunds:{create:async(params,options)=>{calls.refunds.push({params,options});
       const charge=charges.find(c=>c.id===params.charge);charge.amount_refunded+=params.amount;charge.refunded=charge.amount_refunded>=charge.amount;return {id:"re_"+params.charge};}},
-    prices:{retrieve:async(id)=>({id,active:true,livemode:false,currency:"eur",unit_amount:399,type:"recurring",recurring:{interval:"month",interval_count:1},product:{id:config.productId,active:true,livemode:false}})},
+    prices:{retrieve:async(id)=>({id,active:true,livemode:false,currency:"eur",unit_amount:999,type:"recurring",recurring:{interval:"month",interval_count:1},product:{id:config.productId,active:true,livemode:false}})},
     checkout:{sessions:{list:async()=>({has_more:false,data:[]}),create:async(params,options)=>{calls.checkout.push({params,options});
       return {...params,id:"cs_test_synthetic",livemode:false,url:"https://checkout.stripe.com/c/pay/cs_test_synthetic"};}}},
   };
