@@ -57,7 +57,7 @@ export function CameraSettings({
       <Disclosure summary="One-time camera setup" className="mb-4">
         <p className="m-0">
           The video goes straight from your phone to this computer over a USB
-          cable or your Wi‑Fi. It works with Saiph Hosted and without a server
+          cable or your Wi‑Fi. It works with Saiph Cloud and without a server
           or Tailscale. The phone needs Android 12 or later.
         </p>
         <ol className="m-0 grid list-none gap-4 p-0 [counter-reset:step]">

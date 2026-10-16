@@ -181,3 +181,6 @@ count, which may only go down; lower it when you move rules onto roles.
 
 Next steps: rebuild Settings and the setup guide from the components, then Cloud, then
 retire each legacy stylesheet as its count reaches zero.
+
+Use **Saiph Cloud** and **Self-hosted** for connection choices and people-facing
+service labels. Preserve the existing Hosted protocol, command and settings names.

@@ -198,11 +198,18 @@ status string changed. Keep comparison visible until its action completes;
 serialize actions, disable duplicate taps and show readable inline retry errors.
 Preserve partial identities and offer explicit recovery without replacing keys.
 
-Once signed in, Back exits setup; once approved, launch daily use. Subscription,
+At the top level, do not show an in-app Back arrow that exits the app. Show it
+only for nested screens, such as Settings or code comparison. Android system Back
+retains normal platform behavior. Once approved, launch daily use. Subscription,
 account and Hub switching belong in Settings. Returning from Settings returns to
 the current task. Keep a complete security-code comparison and native owner check.
 
-Show linked privacy and applicable Hosted terms on first use, with explicit
+Show linked privacy and applicable Cloud terms on first use, with explicit
 acknowledgment. Put detailed privacy and feature limits in that linked policy.
 Keep short permission context next to its opt-in; policy acknowledgment never
 enables texts, calls, permissions or anonymous usage sharing.
+
+Use **Cloud** and **Self-hosted** for connection choices. Keep technical Hosted
+identifiers, protocol names and saved settings unchanged. A failed local setup
+gets an explicit Restart setup action that preserves earlier key/trust files and
+account sign-in; it never silently repairs or resets an established checkpoint.

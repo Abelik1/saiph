@@ -475,7 +475,7 @@ class PhoneFeatures:
         devices=(phone.snapshot()['devices'] if phone else [])+(hosted() if hosted else [])
         return any(d['id']==device and capability in d.get('capabilities',[]) for d in devices)
     def command(self,device,kind,payload):
-        # Saiph Hosted phones take the same actions through sealed envelopes.
+        # Saiph Cloud phones take the same actions through sealed envelopes.
         hosted=getattr(self.workspace,'hosted_phone_command',None)
         result=hosted(device,kind,payload) if hosted else None
         if result is not None:return result

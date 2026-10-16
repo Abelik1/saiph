@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Native API authorization for the opt-in Saiph Hosted preview.
+"""Native API authorization for the opt-in Saiph Cloud preview.
 
 Uses the system browser and Authlib's OAuth2/PKCE implementation. Requests no
 OpenID scope and consumes no ID token. By default it requests no offline scope

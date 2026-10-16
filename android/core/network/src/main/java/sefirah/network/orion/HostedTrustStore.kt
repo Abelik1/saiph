@@ -55,7 +55,9 @@ class AndroidHostedTrustStore private constructor(private val database: File, pr
                 FileOutputStream(marker).use { it.write(MARKER.toByteArray(Charsets.US_ASCII)); it.fd.sync() }
                 SQLiteDatabase.openOrCreateDatabase(database, null).use { db ->
                     Os.chmod(database.absolutePath, 384)
-                    db.execSQL("PRAGMA journal_mode=WAL")
+                    // journal_mode returns a row: Android's execSQL rejects it.
+                    // Use the platform API so first enrollment can create its schema.
+                    check(db.enableWriteAheadLogging())
                     db.execSQL("CREATE TABLE identity(id INTEGER PRIMARY KEY CHECK(id=1),binding TEXT NOT NULL,version INTEGER NOT NULL,digest TEXT NOT NULL,signed_anchor TEXT)")
                     db.execSQL("CREATE TABLE used_devices(id TEXT PRIMARY KEY)")
                     db.execSQL("CREATE TABLE incoming(id TEXT PRIMARY KEY,header TEXT NOT NULL,ciphertext TEXT NOT NULL,digest TEXT NOT NULL,expires_at INTEGER NOT NULL)")

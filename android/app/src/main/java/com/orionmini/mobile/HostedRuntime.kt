@@ -330,13 +330,24 @@ class HostedRuntime private constructor(private val context: Context) {
             UsageAnalytics.count(context, "hosted_file_save")
         } finally { verified.delete() }
     }
+    /** Explicitly abandon a failed attempt, retaining its files and the account sign-in. */
+    suspend fun restartSetup() = mutex.withLock {
+        check(setupStage() == HostedSetup.Stage.RECOVERY)
+        HostedAccount.get(context).cancel()
+        invalidate()
+        clearIdentityIntent()
+        status = if (enabled()) "Scan your computer's QR code" else "Off"
+    }
+    private fun clearIdentityIntent() {
+        check(prefs.edit().remove("device_id").remove("root").remove("recipient").remove("seen_members").remove("texts_and_calls").remove("approval_verified").commit())
+        identityUnavailable = false; requestCode = ""; fingerprint = ""; lastEnrollmentAttempt = 0L
+        HostedSmsKnown.clearAll(context)
+    }
     fun retire() {
         check(!enabled()); HostedAccount.get(context).signOut(); invalidate()
         // Keystore keys and encrypted trust history stay available for explicit
         // recovery. A newly enrolled member gets a fresh unique device ID.
-        check(prefs.edit().remove("device_id").remove("root").remove("recipient").remove("seen_members").remove("texts_and_calls").remove("approval_verified").commit())
-        identityUnavailable = false; requestCode = ""; fingerprint = ""
-        HostedSmsKnown.clearAll(context)
+        clearIdentityIntent()
     }
 
     /**

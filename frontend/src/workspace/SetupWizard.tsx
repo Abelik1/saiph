@@ -107,7 +107,7 @@ export function SetupWizard({ state, client, close }: { state: State; client: Cl
     {step === "welcome" && <Card title="How do you want to connect your devices?" subtitle="You can change this later in Settings.">
       <div className="setup-choices">
         <button type="button" className={"setup-choice" + (mode === "hosted" ? " selected" : "")} disabled={hosted?.available === false} onClick={() => setMode("hosted")}>
-          <Cloud size={28} /><b>Saiph account</b><span>Sign in with your Saiph account. No server or network setup is needed.</span>
+          <Cloud size={28} /><b>Saiph Cloud</b><span>Sign in with your Saiph account. No server or network setup is needed.</span>
           {hosted?.available === false && <small>This build does not include Saiph accounts.</small>}</button>
         <button type="button" className={"setup-choice" + (mode === "hub" ? " selected" : "")} onClick={() => setMode("hub")}>
           <Server size={28} /><b>I self-host my own Hub</b><span>Only if you run a Saiph Hub on your own private network. You'll need an invitation from it.</span></button>
@@ -124,7 +124,7 @@ export function SetupWizard({ state, client, close }: { state: State; client: Cl
             {!signedIn && <HostedSignIn hosted={hosted} client={client} />}
             {signedIn && !hosted.identity && <><p>This computer becomes the device that approves your others. Keep it online now and then so approvals stay current.</p>
               <Action run={async () => { await client.call("hosted.setup_root"); setStep("phone"); }}>Set up this computer</Action>
-              <details><summary>Already use Saiph Hosted on another computer?</summary><HostedJoin client={client} waiting={false} /></details></>}
+              <details><summary>Already use Saiph Cloud on another computer?</summary><HostedJoin client={client} waiting={false} /></details></>}
             {signedIn && joining && <HostedJoin client={client} waiting />}
             {connected && <p role="status" className="setup-ok"><Check size={16} />Signed in and set up.</p>}
             {hosted.account?.error && <p role="alert">{hosted.account.error}</p>}

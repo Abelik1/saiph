@@ -14,7 +14,7 @@ from .models import utc_now
 from .storage import write_json
 from .user_presence import confirm as confirm_user
 
-# Opt-in Saiph Hosted preview. Every method refuses work unless the hosted
+# Opt-in Saiph Cloud preview. Every method refuses work unless the hosted
 # setting is on; with it off, self-hosted behaviour is unchanged.
 HOSTED_METHODS = frozenset({'hosted.configure', 'hosted.enable', 'hosted.sign_in', 'hosted.sign_out', 'hosted.setup_root',
                             'hosted.root_code', 'hosted.request.inspect', 'hosted.approve', 'hosted.revoke', 'hosted.forget',
@@ -38,7 +38,7 @@ class LinkOperations:
         controller = getattr(self, '_hosted', None)
         if controller is None:
             if not hosted_available():
-                raise ValueError('This build does not include Saiph Hosted.')
+                raise ValueError('This build does not include Saiph Cloud.')
             from .hosted_runtime import HostedController
             controller = self._hosted = HostedController(self)
         return controller
@@ -94,8 +94,8 @@ class LinkOperations:
 
     def _refuse_if_hosted(self):
         if self.hosted_blocks_self_hosted():
-            raise ValueError('This computer uses Saiph Hosted. A device uses either Saiph Hosted or a self-hosted Hub, '
-                             'never both. Turn off and forget Saiph Hosted first.')
+            raise ValueError('This computer uses Saiph Cloud. A device uses either Saiph Cloud or a self-hosted Hub, '
+                             'never both. Turn off and forget Saiph Cloud first.')
 
     def cloud_client(self):
         from .cloud_client import SeafileClient
