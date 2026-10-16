@@ -67,7 +67,7 @@
 .settings-content .columns {
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: 20px;
 }
 .settings-content .card {
   padding: 26px 28px;
@@ -202,6 +202,12 @@
 }
 .settings-content .columns > div {
   width: 100%;
+}
+.settings-content .columns > .card {
+  margin-bottom: 0;
+}
+.settings-content .general-preferences {
+  gap: 20px;
 }
 .settings-content label.check,
 .settings-content label.switch-row {

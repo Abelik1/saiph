@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useId, useState } from "react";
 import type { Client } from "./types";
-import { Action, Card, Form } from "./ui";
+import { Action, Form } from "./ui";
+import { PreferenceCard as Card } from "./PreferenceCard";
+import { Button } from "@/components/ui/button";
+import { Disclosure } from "@/components/ui/disclosure";
 
 type Config = {
   cloud?: { path?: string; enabled?: boolean; recordings?: boolean };
@@ -63,8 +66,7 @@ export function ContinuitySettings({
   );
   return (
     <Card
-      title="Cloud and continuity"
-      subtitle="These preferences belong to this computer."
+      title="Cloud settings"
     >
       <Form
         successMessage="Preferences saved."
@@ -142,6 +144,8 @@ export function ContinuitySettings({
             Transcribe finished Cloud recordings automatically
           </label>
         )}
+        <Disclosure summary="Phone and clipboard preferences">
+        <div className="grid gap-3">
         <label className="check">
           <input
             type="checkbox"
@@ -240,13 +244,14 @@ export function ContinuitySettings({
             />
           </label>
         </div>
-        <button>Save preferences</button>
+        </div>
+        <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
+          {platform === "linux" ? "Focus quiets Saiph. GNOME Do Not Disturb changes are shared with your phone."
+            : "Focus quiets Saiph. Configure Windows Do Not Disturb to quiet other apps; Saiph shares changes without switching it for you."}
+        </p>
+        </Disclosure>
+        <Button type="submit" className="justify-self-start">Save preferences</Button>
       </Form>
-      <p className="muted">
-        {platform === "linux"
-          ? "Saiph quiets its own notifications during Focus. Turning GNOME Do Not Disturb on or off is shared with your phone."
-          : "Windows quiets Saiph notifications during Focus. Set Windows automatic Do Not Disturb once to include other apps. Turning Windows Do Not Disturb on or off is shared with your phone; Saiph does not change Windows Do Not Disturb itself."}
-      </p>
       {workspace && (
         <>
           <div className="actions">

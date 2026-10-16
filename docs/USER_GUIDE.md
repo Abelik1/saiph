@@ -52,6 +52,27 @@ closes it.
 Choose **Use my own Hub instead** only if you manage your own server. Use its
 private invitation to connect this computer, then scan its phone pairing QR.
 
+## Android first connection
+
+On first use, review the linked privacy policy and Hosted terms, then choose **Agree and continue**. Usage sharing and Android permissions remain separate choices. The phone then opens one illustrated welcome screen. **Subscribe** opens Saiph's
+plans on the website. If you already have an account, **Continue with Google**
+opens Google sign-in directly for the bundled Auth0 service. Existing email or
+other-provider accounts can use **Other sign-in options** to keep their original
+account; using the same email with a different provider need not select the same
+Saiph account.
+
+After sign-in, open **Phone → Connect a phone** on your computer and tap
+**Scan QR code** on the phone. **Paste a code instead** remains available.
+Compare the complete security codes when asked, then approve the phone on the
+computer. Setup advances when approval arrives.
+
+**Self-host instead** opens Hub pairing. Its header Back arrow, Android Back
+gesture and **Back to Saiph** action return to the welcome screen. Leaving an
+unfinished Hub invitation cancels its pending setup; wait for an active pairing
+to finish before switching routes. After account sign-in, Back exits setup or returns from Settings to the current task; it does not return to the welcome menu. Approved phones open daily use. Account, subscription and connection controls live in Settings.
+
+If setup is interrupted, Saiph shows **Finish connecting this phone**. Retry the existing identity, or explicitly remove its local setup and sign in to scan again. Existing protected keys and trust history are kept; remove any corresponding approval on your main computer too. A saved device ID alone never completes setup.
+
 ## Self-hosting: pair your devices
 
 This section applies only if you chose **I self-host my own Hub**. Saiph account

@@ -78,9 +78,6 @@ describe("Your week", () => {
   it("asks before clearing the week", async () => {
     const call = vi.fn().mockResolvedValue({ enabled: true, actions: 3, busiest_day: null, screen: null, top: [], people: [] });
     render(<YourWeek enabled client={{ call } as unknown as Client} />);
-    const details = screen.getByText("Your week").closest("details")!;
-    details.open = true;
-    fireEvent(details, new Event("toggle"));
     fireEvent.click(await screen.findByRole("button", { name: "Clear this week" }));
     expect(call).not.toHaveBeenCalledWith("insights.clear");
     fireEvent.click(screen.getByRole("button", { name: "Clear" }));

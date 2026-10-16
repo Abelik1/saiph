@@ -160,6 +160,18 @@ class HostedSession(
         snapshot.checkpoint
     }
 
+    /** Prior approval for navigation after upgrade/offline sign-out only.
+     * Does not activate a roster or authorize any content or phone action. */
+    @Synchronized fun hasRetainedApproval(): Boolean = guarded {
+        val snapshot = store.snapshot()
+        val anchor = retainedAnchor(snapshot) ?: return@guarded false
+        val own = members(anchor)[deviceId] ?: return@guarded false
+        val matches = text(own["signing_key"]) == publicSigning(keys.signingPublic) &&
+            text(own["encryption_key"]) == HostedEnvelope.exportPublic(keys.recipient)
+        check(store.snapshot() == snapshot)
+        matches
+    }
+
     /** Persist at most 16 verified successors; historical pages never authorize content. */
     @Synchronized fun acceptPage(chain: JsonArray, final: Boolean) {
         invalidate()

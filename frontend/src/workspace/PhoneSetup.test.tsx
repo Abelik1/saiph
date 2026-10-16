@@ -28,8 +28,8 @@ describe("Phone setup", () => {
     expect(screen.queryByRole("textbox")).toBeNull();
     expect(screen.queryByRole("tab", { name: /Messages/ })).toBeNull();
     expect(bridge.call).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Sign in to Saiph" }));
-    await waitFor(() => expect(bridge.call).toHaveBeenCalledWith("hosted.sign_in"));
+    fireEvent.click(screen.getByRole("button", { name: "Continue with Google" }));
+    await waitFor(() => expect(bridge.call).toHaveBeenCalledWith("hosted.sign_in", { google: true }));
     expect(bridge.call).toHaveBeenCalledWith("hosted.enable", { enabled: true });
     expect(bridge.call).not.toHaveBeenCalledWith("hosted.setup_root");
   });

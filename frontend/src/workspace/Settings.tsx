@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from "react";
 import type { Client, State } from "./types";
-import { Action, Card, Form } from "./ui";
+import { Action, Form } from "./ui";
+import { PreferenceCard as Card } from "./PreferenceCard";
 import { ContinuitySettings } from "./ContinuitySettings";
 import { Updates } from "./Updates";
 import { CameraSettings } from "./CameraSettings";
@@ -25,15 +26,11 @@ export function WorkspaceModule({
   installed?: boolean;
 }) {
   return (
-    <Card title="Workspace" subtitle="Optional personal tools.">
-      <p>
-        Projects, transcripts, calendar, reminders and assistant tools live in
-        the separate Workspace edition.
-      </p>
+    <Card title="Workspace" subtitle="Optional projects, calendar and assistant tools.">
       <p className="muted">
         {installed
           ? "The Workspace edition is installed on this computer."
-          : "Saiph Link works on its own. Install the Workspace edition separately when a trusted installer is available."}
+          : "Available separately. Saiph Link works on its own."}
       </p>
     </Card>
   );
@@ -64,11 +61,11 @@ export function Settings({ state, client, openSetup }: { state: State; client: C
       )}
       <RetainedView active={tab === "General"}>
         {() => (
-          <div className="columns">
+          <div className="columns general-preferences">
             {connectPhone && !hasPhone && <Card title="Connect your phone" subtitle="Sign in, scan a QR code and approve your phone from the Phone tab.">
               <Button variant="default" onClick={connectPhone}>Connect a phone</Button>
             </Card>}
-            <div>
+            <div className="grid gap-5">
               <Card title="This computer">
                 <Form
                   successMessage="Computer preferences saved."
@@ -87,7 +84,7 @@ export function Settings({ state, client, openSetup }: { state: State; client: C
                       onChange={(event) => setName(event.target.value)}
                     />
                   </label>
-                  <button>Save this computer</button>
+                  <Button type="submit" className="justify-self-start">Save this computer</Button>
                 </Form>
               </Card>
             </div>
@@ -131,11 +128,11 @@ export function Settings({ state, client, openSetup }: { state: State; client: C
                 </Action>
               </div>
             </Card>
-            <div>
+            <div className="grid gap-5">
               <WorkspaceModule installed={state.modules?.workspace?.installed} />
               {openSetup && (
-                <Card title="Optional setup guide" subtitle="Choose features, check optional tools and review privacy preferences.">
-                  <button type="button" onClick={openSetup}>Run the setup guide</button>
+                <Card title="Setup guide" subtitle="Review features and preferences.">
+                  <div><Button variant="secondary" onClick={openSetup}>Run the setup guide</Button></div>
                 </Card>
               )}
               <YourWeekSettings enabled={state.insights?.enabled} client={client} />

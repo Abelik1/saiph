@@ -55,6 +55,34 @@ def config(refresh=True, client="synthetic-desktop"):
                              refresh_tokens=refresh)
 
 
+def test_provider_choice_reaches_attempt_without_changing_token_configuration():
+    configs = []
+    finished = Event()
+
+    class Attempt:
+        def __init__(self, value):
+            configs.append(value)
+        def begin(self):
+            return "https://synthetic.example/authorize"
+        def wait_grant(self):
+            finished.wait(3)
+            raise LoginError()
+        def close(self):
+            finished.set()
+
+    original = config(refresh=False)
+    account = HostedAccount(original, attempt_factory=Attempt)
+    account.begin_sign_in(google=True)
+    account.cancel_sign_in()
+    account._thread.join(3)
+    assert configs[0].google is True
+    assert (configs[0].issuer, configs[0].audience, configs[0].client_id) == (original.issuer, original.audience, original.client_id)
+    assert account.config == original and original.google is False
+    account.begin_sign_in(google=False)
+    account._thread.join(3)
+    assert configs[-1].google is False
+
+
 def test_encrypted_refresh_token_survives_restart_but_not_context_substitution(tmp_path):
     protection = Protection()
     vault = TokenVault(tmp_path / "tokens", config(), protection=protection)

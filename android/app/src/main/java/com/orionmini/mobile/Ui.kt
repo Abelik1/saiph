@@ -208,6 +208,21 @@ fun Context.connectionChoice(title: String, detail: String, action: String, prim
     addView(cardTitle(title)); addView(body(detail)); addView(buttonRow(button(action, primary, run = run)))
 }
 
+/** A secondary route, with a button's touch target and semantics but no competing surface. */
+fun Context.setupLink(label: String, back: Boolean = false, run: () -> Unit) = button(label, run = run).apply {
+    background = pressable(outline(0x00000000, 0x00000000, 999))
+    setTextColor(Palette.MUTED)
+    if (back) {
+        setCompoundDrawablesRelativeWithIntrinsicBounds(com.castle.sefirah.R.drawable.saiph_ic_back, 0, 0, 0)
+        androidx.core.widget.TextViewCompat.setCompoundDrawableTintList(this, ColorStateList.valueOf(Palette.MUTED)); compoundDrawablePadding = dp(8)
+    }
+}
+
+fun Context.setupProgress(step: Int) = text("${step + 1} of 3 · ${listOf("Account", "Scan", "Approve")[step]}", UiType.META, Palette.ON_TONAL).apply {
+    setPadding(dp(2), dp(12), dp(2), dp(4))
+    contentDescription = "Step ${step + 1} of 3: ${listOf("Account", "Scan", "Approve")[step]}"
+}
+
 /** A compact feature explanation, with a decorative icon and readable copy. */
 fun Context.featureRow(icon: Int, title: String, detail: String): LinearLayout = LinearLayout(this).apply {
     orientation = LinearLayout.HORIZONTAL; gravity = Gravity.TOP

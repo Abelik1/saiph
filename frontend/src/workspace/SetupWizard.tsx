@@ -113,7 +113,7 @@ export function SetupWizard({ state, client, close }: { state: State; client: Cl
           <Server size={28} /><b>I self-host my own Hub</b><span>Only if you run a Saiph Hub on your own private network. You'll need an invitation from it.</span></button>
       </div>
       {mode === "hosted" && hosted?.available && !hosted.configured && <p role="status">This build cannot connect to Saiph accounts. Download the current beta from your account page.</p>}
-      <div className="actions"><Action disabled={!mode || (mode === "hosted" && (!hosted?.configured || hosted.account?.status === "signing_in"))} run={chooseMode}>{mode === "hosted" && !signedIn ? "Sign in to Saiph" : "Continue"}</Action></div>
+      <div className="actions"><Action disabled={!mode || (mode === "hosted" && (!hosted?.configured || hosted.account?.status === "signing_in"))} run={chooseMode}>{mode === "hosted" && !signedIn ? "Continue with Google" : "Continue"}</Action></div>
     </Card>}
 
     {step === "connect" && <Card title={mode === "hosted" ? (signedIn ? "You're signed in" : "Sign in with your Saiph account") : "Pair with your Hub"}>
