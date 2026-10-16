@@ -79,6 +79,16 @@
         android:enableOnBackInvokedCallback="true"
         tools:ignore="UnusedAttribute">
         <activity android:name="com.orionmini.mobile.HostedActivity" android:exported="false" />
+        <!-- AppAuth's legacy custom-scheme filter is merged from its library.
+             Claim only the exact HTTPS callback, not ordinary website links. -->
+        <activity android:name="net.openid.appauth.RedirectUriReceiverActivity" android:exported="true">
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="usesaiph.com" android:path="/android/oauth2redirect" />
+            </intent-filter>
+        </activity>
         <service android:name="com.orionmini.mobile.HostedSyncService" android:exported="false" android:foregroundServiceType="dataSync" />
 
 

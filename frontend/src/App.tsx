@@ -317,7 +317,7 @@ function Screens({ providedClient }: { providedClient?: Client }) {
         </main>
         <footer className="app-footer flex items-center justify-between gap-4 border-t border-border bg-chrome px-8 text-[10.5px] tracking-[0.02em] text-muted-foreground">
           <span className="flex items-center gap-1.5"><span aria-hidden="true" className={"size-1.5 rounded-full " + status.tone} />{status.text}</span>
-          <span>Saiph</span>
+          <span aria-label="Installed Saiph version">Saiph {state.app_version || "development"}</span>
         </footer>
       </div>
       </CallBanner.Provider>

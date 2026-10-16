@@ -31,7 +31,7 @@ collection. Review controller/contact, retention, deletion, processor location a
 transfers, consent/withdrawal and access/security. No example notice is a legal
 approval. Keep collection disabled until those decisions are reviewed. The privacy link may point to the local draft notice while signup is disabled.
 
-Saiph Hosted subscriptions opened on 15 October 2026. `subscribeUrl` points to the
+Saiph Cloud subscriptions opened on 15 October 2026. `subscribeUrl` points to the
 account site's `/account` page, where people sign in and choose a plan; checkout
 never runs on these static pages. Set it together with `hostedPrice` (a euro
 amount such as `€9.99`), `hostedPeriod` and an optional short `hostedPriceNote`.
@@ -126,3 +126,7 @@ are prepared. Read [the legal review record](../docs/LEGAL_PRIVACY.md) and the p
 retention schedule before approving any public collection or paid service. The
 public contact and provider/retention facts remain unconfirmed. The draft pages
 and passing source checks do not establish legal or Stripe approval.
+
+## Native Android callback
+
+The static bundle includes `/.well-known/assetlinks.json` for the existing friends-beta certificate and `android/oauth2redirect.html`. The root `vercel.json` rewrites the exact extensionless callback internally, sets no-store/no-referrer and a hash-pinned script CSP. The fallback loads no assets or analytics and clears query/fragment from browser history. It never relays a code to a custom scheme. Keep callback headers and the script hash in sync; test the actual deployed response and Android domain association before distributing a build that requests HTTPS. The existing beta signer is not a production-signing assertion. Hosting still handles the incoming request; this static source does not establish provider log-retention behavior.

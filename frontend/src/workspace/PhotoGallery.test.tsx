@@ -30,6 +30,10 @@ const info: PhoneFeatureState = {
 };
 const phone = { id: "phone", online: true, capabilities: ["photos"] };
 describe("Original photo interactions", () => {
+  it("points Cloud users to the actual photo-sharing permission control", () => {
+    render(<Photos info={info} phone={{...phone, hosted: true, capabilities: []}} client={{call: vi.fn()} as unknown as Client} />);
+    expect(screen.getByText(/Files and photos → Allow photos/)).toBeVisible();
+  });
   it("keeps browsing lightweight and opens a modal with original-quality actions", async () => {
     const call = vi.fn().mockResolvedValue({
       url: "file:///original.jpg",

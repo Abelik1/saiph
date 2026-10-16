@@ -33,7 +33,7 @@ async function assertBinding(stripe:Stripe,config:BillingConfig,mapping:Mapping)
   assertCustomer(await stripe.customers.retrieve(mapping.customerId),config,mapping.subject);
 }
 /** Shown above Stripe's pay button (owner request, 15 October 2026). */
-export const BETA_CHECKOUT_NOTICE="Saiph Hosted is a beta service: expect bugs, missing features and occasional downtime, and features may change. "
+export const BETA_CHECKOUT_NOTICE="Saiph Cloud is a beta service: expect bugs, missing features and occasional downtime, and features may change. "
   +"You can withdraw within 14 days of subscribing for a full refund from your account page.";
 export async function checkout(stripe:Stripe,store:BillingStore,config:BillingConfig,subject:string,planKey:PlanKey) {
   const plan=config.plans[planKey];

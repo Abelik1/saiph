@@ -23,7 +23,8 @@ class HostedAccount private constructor(private val context: Context) {
         fun get(context: Context): HostedAccount = instance ?: synchronized(this) {
             instance ?: HostedAccount(context.applicationContext).also { instance = it }
         }
-        const val REDIRECT = "com.orionmini.mobile.hosted:/oauth2redirect"
+        const val REDIRECT = "https://usesaiph.com/android/oauth2redirect"
+        private const val LEGACY_REDIRECT = "com.orionmini.mobile.hosted:/oauth2redirect"
     }
     private val prefs get() = context.getSharedPreferences("orion_hosted", 0)
     private val tokenLock = Mutex()
@@ -51,24 +52,37 @@ class HostedAccount private constructor(private val context: Context) {
         val request = builder.build()
         check(request.codeVerifier != null && request.codeVerifierChallengeMethod == "S256")
         generation++ // A newer browser attempt supersedes any in-flight token exchange.
-        check(prefs.edit().putString("pending_state", request.state).putLong("pending_until", System.currentTimeMillis() + 300_000).commit())
+        check(prefs.edit().putString("pending_state", request.state)
+            .putString("pending_redirect", REDIRECT).putString("pending_pkce", request.codeVerifierChallenge)
+            .putLong("pending_until", System.currentTimeMillis() + 300_000).commit())
         return request
     }
     suspend fun complete(response: AuthorizationResponse) = tokenLock.withLock {
-        val epoch = synchronized(this) {
-            val expected = prefs.getString("pending_state", null)
-            val until = prefs.getLong("pending_until", 0)
-            check(prefs.getBoolean("enabled", false) && expected != null && expected == response.state && until > System.currentTimeMillis())
-            check(response.request.redirectUri.toString() == REDIRECT && response.request.clientId == prefs.getString("client_id", "") &&
-                response.request.configuration.tokenEndpoint == configuration().tokenEndpoint)
-            // A stale callback must not consume the state of a newer browser attempt.
-            check(prefs.edit().remove("pending_state").remove("pending_until").commit())
-            generation
-        }
+        val epoch = consume(response)
         val grant = exchange(response.createTokenExchangeRequest(), epoch)
         // Re-authenticate approved phones with the method that established their
         // account. Legacy profiles default to their original provider picker.
         accept(grant, epoch, requireRefresh = false, google = response.request.additionalParameters["connection"] == "google-oauth2")
+    }
+    /** Consume only the originating browser attempt, before any network exchange. */
+    @Synchronized internal fun consume(response: AuthorizationResponse): Int {
+        val expected = prefs.getString("pending_state", null)
+        val until = prefs.getLong("pending_until", 0)
+        check(prefs.getBoolean("enabled", false) && expected != null && expected == response.state && expected == response.request.state && !response.authorizationCode.isNullOrBlank() && until > System.currentTimeMillis())
+        // An in-flight login from the previous APK may still use the old
+        // scheme. New attempts are bound to HTTPS and their original PKCE.
+        val redirect = prefs.getString("pending_redirect", null) ?: LEGACY_REDIRECT
+        val challenge = prefs.getString("pending_pkce", null)
+        check(redirect in setOf(REDIRECT, LEGACY_REDIRECT) && response.request.redirectUri.toString() == redirect &&
+            response.request.clientId == prefs.getString("client_id", "") &&
+            response.request.configuration.authorizationEndpoint == configuration().authorizationEndpoint &&
+            response.request.configuration.tokenEndpoint == configuration().tokenEndpoint &&
+            response.request.codeVerifier != null && response.request.codeVerifierChallengeMethod == "S256" &&
+            CodeVerifierUtil.deriveCodeVerifierChallenge(response.request.codeVerifier!!) == response.request.codeVerifierChallenge &&
+            (challenge == response.request.codeVerifierChallenge || (challenge == null && redirect == LEGACY_REDIRECT)))
+        // A stale callback must not consume the state of a newer browser attempt.
+        clearPending()
+        return generation
     }
     private suspend fun exchange(request: TokenRequest, epoch: Int): TokenResponse = suspendCoroutine { continuation ->
         val service = AuthorizationService(context)
@@ -121,7 +135,8 @@ class HostedAccount private constructor(private val context: Context) {
         accept(exchange(request, epoch), epoch, requireRefresh = true)
         synchronized(this) { access!! }
     }
-    @Synchronized fun cancel() { generation++; prefs.edit().remove("pending_state").remove("pending_until").commit() }
+    private fun clearPending() { check(prefs.edit().remove("pending_state").remove("pending_until").remove("pending_redirect").remove("pending_pkce").commit()) }
+    @Synchronized fun cancel() { generation++; clearPending() }
     @Synchronized fun signOut() {
         cancel(); access = null; expires = 0
         check(prefs.edit().putBoolean("signed_out", true).commit())

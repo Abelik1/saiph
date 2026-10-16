@@ -32,7 +32,7 @@ import threading
 import time
 from pathlib import Path
 from urllib.parse import urlsplit
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from .clipboard import RecentClipboard
 from .hosted_approval import (
@@ -41,7 +41,7 @@ from .hosted_approval import (
 )
 from .hosted_crypto import EnvelopeError, canonical
 from .hosted_features import (
-    ANSWERS, CALL_COMMAND, CALL_DIAL, CALL_HANDLED, CALL_REFUSED, CALL_STATE, CLIPBOARD_TEXT, COMMAND_CAPABILITY,
+    PHOTOS_ITEM, PHOTOS_SYNC, PHOTO_REQUEST, PHOTO_ORIGINAL, ANSWERS, CALL_COMMAND, CALL_DIAL, CALL_HANDLED, CALL_REFUSED, CALL_STATE, CLIPBOARD_TEXT, COMMAND_CAPABILITY,
     DATA_CAPABILITY, FILE_OFFER, NOTIFICATION_REMOVE, NOTIFICATION_UPSERT, PHONE_CAPABILITIES, PHONE_DATA, SMS_OPEN,
     SMS_SEND, SMS_SYNC, FeatureError, clipboard_payload, dismiss_payload, kind, phone_command, read_clipboard,
     read_notification, read_phone_data, refused_request, subscribe_payload,
@@ -170,6 +170,7 @@ class HostedController:
         self.clipboard_sink = lambda mime, data: None
         self._outgoing_clipboard = None
         self._offers = {}
+        self._photos_asked = {}  # (device, photo) -> (request event, expiry); memory only.
         self._asked = {}  # (phone, request type) -> when this computer asked; memory only.
         self._seen = {}  # phone -> last authenticated event time; memory only.
         self._sync_requested = set()
@@ -357,6 +358,7 @@ class HostedController:
         self.session = self.transport = self.mailbox = self.root = self.info = self.signing = None
         self._offers.clear()
         self._asked.clear()
+        self._photos_asked.clear()
         self._subscribed.clear()
         self._notices.clear()
         self._outgoing_clipboard = None
@@ -869,6 +871,9 @@ class HostedController:
                 elif event in (NOTIFICATION_UPSERT, NOTIFICATION_REMOVE):
                     self._notification(envelope["header"]["source"], payload)
                     outcome = "succeeded"
+                elif event == PHOTO_ORIGINAL:
+                    self._photo_original(envelope, payload)
+                    outcome = "succeeded"
                 elif event in PHONE_DATA:
                     self._phone_data(envelope["header"]["source"], event_id, payload)
                     outcome = "succeeded"
@@ -1008,6 +1013,14 @@ class HostedController:
                 self.mailbox.stage(source, subscribe_payload(self.label()), ttl_seconds=300)
                 self._subscribed[source] = now
                 self._wake.set()
+            if "photos" not in body["capabilities"]:
+                for kind_ in ("photo", "thumbnail", "photo_intent"):
+                    for row in self.workspace.store.all("phone_" + kind_):
+                        if row.get("device_id") == source:
+                            if kind_ == "photo":
+                                self.workspace.store.delete("phone_photo_intent", self.workspace.phone_features._photo_key(source, row["photo_id"]))
+                            self.workspace.store.delete("phone_" + kind_, row["id"])
+                self._photos_asked = {key: value for key, value in self._photos_asked.items() if key[0] != source}
             if "sms" not in body["capabilities"]:
                 self._sync_requested.discard(source)
             elif source not in self._sync_requested and not any(
@@ -1041,9 +1054,35 @@ class HostedController:
             current = next((row for row in self.workspace.store.all("phone_call") if row.get("device_id") == source), {})
             if current.get("handled_by") is not None and current.get("state") != "ringing":
                 body = {**body, "handled": current.get("handled"), "handled_by": current["handled_by"]}
-        features.event({"id": event_id, "type": kind_, "payload": body, "source": source}, None)
+        features.event({"id": event_id, "type": "photos.index" if kind_ == PHOTOS_ITEM else kind_, "payload": body, "source": source}, None)
         if kind_ == CALL_STATE:
             self._call(body)
+
+    def _photo_original(self, envelope, payload):
+        from .hosted_files import _manifest, download_attachment
+        from .phone_features import safe_name
+        source = envelope["header"]["source"]
+        if type(payload) is not dict or set(payload) != {"type", "photo_id", "request", "file"}:
+            raise FeatureError()
+        photo = payload["photo_id"]
+        if type(photo) is not str or "photos" not in self._capabilities(source):
+            raise FeatureError()
+        asked = self._photos_asked.get((source, photo))
+        if asked is None or asked[0] != payload["request"] or asked[1] <= self.clock():
+            raise FeatureError()
+        manifest, _ = _manifest(self.session, envelope)
+        if not manifest["mime"].startswith("image/"):
+            raise FeatureError()
+        features = self.workspace.phone_features
+        if not any(row.get("device_id") == source and row.get("photo_id") == photo for row in self.workspace.store.all("phone_photo")):
+            raise FeatureError()
+        folder = self.workspace.root / "phone-originals"
+        folder.mkdir(parents=True, mode=0o700, exist_ok=True)
+        destination = (folder / (str(uuid4()) + "-" + safe_name(manifest["name"]))).absolute()
+        self._token_or_error()
+        saved = download_attachment(self.session, self.transport, envelope, destination)
+        self._photos_asked.pop((source, photo), None)
+        features.cloud_original(source, photo, saved, manifest)
 
     def label(self) -> str:
         """This computer's name as other computers see it in "Answered on ..."."""
@@ -1084,9 +1123,12 @@ class HostedController:
         store.delete("hosted_phone", device)
         self._seen.pop(device, None)
         self._sync_requested.discard(device)
-        for name in ("thread", "message", "call", "attachment"):
+        self._photos_asked = {key: value for key, value in self._photos_asked.items() if key[0] != device}
+        for name in ("thread", "message", "call", "attachment", "photo", "thumbnail", "photo_intent"):
             for row in store.all("phone_" + name):
                 if row.get("device_id") == device:
+                    if name == "photo":
+                        store.delete("phone_photo_intent", self.workspace.phone_features._photo_key(device, row["photo_id"]))
                     store.delete("phone_" + name, row["id"])
 
     def phones(self) -> list[dict]:
@@ -1145,6 +1187,9 @@ class HostedController:
                 payload = phone_command(kind_, body)
             except FeatureError:
                 raise HostedError("This request could not be sent. Check the number or shorten the message.") from None
+            if kind_ == PHOTO_REQUEST and not any(row.get("device_id") == device and row.get("photo_id") == payload["id"]
+                    for row in self.workspace.store.all("phone_photo")):
+                raise HostedError("That photo is no longer available.")
             if kind_ in (SMS_OPEN, SMS_SEND):
                 thread = next((row for row in self.workspace.store.all("phone_thread")
                                if row.get("device_id") == device and row.get("thread") == payload["thread"]), None)
@@ -1158,10 +1203,16 @@ class HostedController:
                     handled = call.get("handled_by")
                     raise HostedError(refusal_text({"reason": "handled", "handled": call.get("handled"), "by": handled})
                                       if handled is not None else "The call is no longer ringing.")
+            if kind_ == PHOTO_REQUEST:
+                self._photos_asked = {key: value for key, value in self._photos_asked.items() if value[1] > self.clock()}
+                if len(self._photos_asked) >= 100:
+                    raise HostedError("Photos are still loading. Try again shortly.")
             try:
                 event_id = self.mailbox.stage(device, payload, ttl_seconds=30 if kind_ == CALL_COMMAND else 60)
             except EnvelopeError:
                 raise HostedError("This request could not be sent. Shorten the message and try again.") from None
+            if kind_ == PHOTO_REQUEST:
+                self._photos_asked[(device, payload["id"])] = (event_id, self.clock() + 300)
             if kind_ in ANSWERS.values() or kind_ in (CALL_COMMAND, CALL_DIAL):
                 # Answers and refusals are accepted only for this computer's own recent request.
                 self._asked[(device, kind_)] = int(self.clock())

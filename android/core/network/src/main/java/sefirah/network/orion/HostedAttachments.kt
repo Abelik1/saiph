@@ -24,14 +24,15 @@ object HostedAttachments {
         while (true) { val count = input.read(buffer); if (count < 0) break; check(output.size() + count <= maximum); output.write(buffer, 0, count) }
         return output.toByteArray()
     }
-    fun send(session: HostedSession, transport: HostedHttpTransport, input: InputStream, filename: String, mime: String) = HostedSession.guarded {
+    fun send(session: HostedSession, transport: HostedHttpTransport, input: InputStream, filename: String, mime: String, target: String = session.root.deviceId, photo: String? = null, request: String? = null, authorize: () -> Unit = {}) = HostedSession.guarded {
+        authorize()
         StreamingAeadConfig.register()
         val source = bounded(input, LIMIT - 4096)
-        val checkpoint = session.pagingCheckpoint(); session.currentMembers()
+        val checkpoint = session.pagingCheckpoint(); session.currentMembers().also { check(target in it) }
         val binding = buildJsonObject {
             put("protocol_version", 1); put("deployment_id", session.root.deploymentId); put("id", UUID.randomUUID().toString())
             put("roster_version", checkpoint.version); put("roster_hash", checkpoint.digest); put("source", session.deviceId)
-            put("target", session.root.deviceId); put("expires_at", System.currentTimeMillis() / 1000 + 300)
+            put("target", target); put("expires_at", System.currentTimeMillis() / 1000 + 300)
         }
         val handle = KeysetHandle.generateNew(StreamingAeadKeyTemplates.AES256_GCM_HKDF_1MB)
         val primitive = handle.getPrimitive(RegistryConfiguration.get(), StreamingAead::class.java)
@@ -44,16 +45,22 @@ object HostedAttachments {
             put("ciphertext_size", encrypted.size); put("ciphertext_sha256", HostedSession.digest(encrypted))
             put("keyset", Base64.getEncoder().encodeToString(TinkProtoKeysetFormat.serializeKeyset(handle, InsecureSecretKeyAccess.get())))
         }
-        val envelope = session.encrypt(session.root.deviceId, payload, 300)
+        val wrapped = if (photo == null) payload else buildJsonObject {
+            check(Regex("[1-9][0-9]{0,15}").matches(photo) && request != null && UUID.fromString(request).toString() == request)
+            put("type", "photo.original"); put("photo_id", photo); put("request", request); put("file", payload)
+        }
+        val envelope = session.encrypt(target, wrapped, 300)
         val id = binding.getValue("id").jsonPrimitive.content
         val descriptor = buildJsonObject {
             for (key in listOf("id", "target", "roster_version", "roster_hash", "expires_at")) put(key, binding.getValue(key))
             put("size", encrypted.size); put("sha256", HostedSession.digest(encrypted))
         }
+        authorize()
         check(transport.allocateBlob(descriptor)["accepted"] == JsonPrimitive(true))
         var offset = 0
-        while (offset < encrypted.size) { val end = minOf(offset + 32768, encrypted.size); check(transport.uploadChunk(id, offset / 32768, encrypted.copyOfRange(offset, end))["accepted"] == JsonPrimitive(true)); offset = end }
+        while (offset < encrypted.size) { authorize(); val end = minOf(offset + 32768, encrypted.size); check(transport.uploadChunk(id, offset / 32768, encrypted.copyOfRange(offset, end))["accepted"] == JsonPrimitive(true)); offset = end }
         check(transport.completeBlob(id)["ready"] == JsonPrimitive(true))
+        authorize()
         check(transport.publishEnvelope(envelope)["accepted"] == JsonPrimitive(true))
     }
     fun receive(session: HostedSession, transport: HostedHttpTransport, envelope: JsonObject, privateFolder: File): File = HostedSession.guarded {

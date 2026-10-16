@@ -20,7 +20,7 @@ export default function Home() {
           </h1>
           <p className="lede">
             {beta ? "Sign in to activate your beta access, download the apps and connect your computer and Android phone. Saiph hosts the connection, so there is no server to run."
-              : "One place for your Saiph account and Hosted subscription, built around the same idea as Saiph: you stay in control."}
+              : "One place for your Saiph account and Cloud subscription, built around the same idea as Saiph: you stay in control."}
           </p>
           <div className="hero-links">
             <a href="https://usesaiph.com">What is Saiph? <Icon name="external" /></a>
@@ -53,7 +53,7 @@ export default function Home() {
       <section aria-labelledby="how-title">
         <div className="section-title">
           <h2 id="how-title">How it works</h2>
-          <span className="fine">{beta ? "Invite-only beta" : "Hosted is a design preview"}</span>
+          <span className="fine">{beta ? "Invite-only beta" : "Cloud is a design preview"}</span>
         </div>
         <ol className="steps">
           <li>
@@ -64,7 +64,7 @@ export default function Home() {
             <h3>{beta ? "Activate beta access" : "Choose a plan"}</h3>
             <p>
               {beta ? "Enter your invitation code on your account page. It gives you access without a subscription."
-                : "Hosted access is still being prepared. Any subscription here uses Stripe test mode."}
+                : "Cloud access is still being prepared. Any subscription here uses Stripe test mode."}
             </p>
           </li>
           <li>

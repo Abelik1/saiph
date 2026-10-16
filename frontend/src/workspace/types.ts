@@ -282,6 +282,7 @@ export type UsageState = {available: boolean; consent: "granted" | "declined" | 
 export type WeekSummary = {enabled: boolean; from?: string; to?: string; actions: number; days?: {date: string; actions: number}[]; busiest_day: string | null; screen: string | null;
   top: {feature: string; label: string; count: number}[]; people: {name: string; sent: number; received: number; total: number}[]};
 export type State = {
+  app_version?: string;
   hosted?: HostedState;
   usage?: UsageState;
   insights?: {enabled: boolean};

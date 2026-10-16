@@ -12,7 +12,7 @@ export const metadata: Metadata = {
     default: "Saiph account · Development",
     template: "%s · Saiph account",
   },
-  description: "Your Saiph account, beta access and Hosted subscription.",
+  description: "Your Saiph account, beta access and Cloud subscription.",
   robots: { index: false, follow: false },
 };
 
@@ -49,7 +49,7 @@ export default function Layout({
             <nav aria-label="Footer">
               <a href="https://usesaiph.com">usesaiph.com</a>
               <Link href="/privacy">Privacy</Link>
-              <a href="https://usesaiph.com/terms.html">Hosted terms (draft)</a>
+              <a href="https://usesaiph.com/terms.html">Cloud terms (draft)</a>
               <a href="https://usesaiph.com/refunds.html">Refunds (draft)</a>
               <a href="https://usesaiph.com/contact.html">Contact</a>
             </nav>

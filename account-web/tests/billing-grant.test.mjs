@@ -18,7 +18,7 @@ test("a renewing monthly subscription is granted through its period plus the ren
 
 test("a yearly subscription is granted a rolling window, never the whole year in one push", () => {
   assert.equal(grantUntil(row("active", { currentPeriodEnd: now + 365 * 86400 }), false, now), now + GRANT_ROLL_SECONDS);
-  assert.ok(GRANT_ROLL_SECONDS < 45 * 86400, "inside the Hosted service's horizon");
+  assert.ok(GRANT_ROLL_SECONDS < 45 * 86400, "inside the Cloud service's horizon");
 });
 
 test("scheduled cancellation ends exactly at the scheduled time", () => {
@@ -56,7 +56,7 @@ test("pushes happen when undelivered, when shortening, and when a rolling grant 
   assert.equal(needsPush({ dirty: false, pushedUntil: now - 1 }, 0, now), false, "already expired at the service");
 });
 
-test("the signed format matches the Hosted service's verifier (shared synthetic vector)", () => {
+test("the signed format matches the Cloud service's verifier (shared synthetic vector)", () => {
   // Mirrors hub/tests/test_hosted_billing.py; public key and signature only.
   const publicKey = createPublicKey({ key: { kty: "OKP", crv: "Ed25519", x: "6CcCelNP-UKWH3Wu9MYqSrEKEUHWx9i_N5VsLGNA4Ko" }, format: "jwk" });
   const body = '{"issuer":"https://synthetic.eu.auth0.com/","subject":"auth0|vector","grant":"stripe:sub_vector1","until":1800003600,"sequence":7,"livemode":false}';

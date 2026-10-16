@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="https://usesaiph.com"><b>Website</b></a> ·
-  <a href="https://usesaiph.com/#pricing"><b>Get Saiph Hosted</b></a> ·
+  <a href="https://usesaiph.com/#pricing"><b>Get Saiph Cloud</b></a> ·
   <a href="docs/ORION_SELF_HOSTED_SERVER.md">Self-host</a> ·
   <a href="docs/USER_GUIDE.md">User guide</a> ·
   <a href="docs/SECURITY_MODEL.md">Security model</a>
@@ -27,15 +27,15 @@ one company.
   <img src="docs/images/readme/desktop-messages.png" alt="The Saiph desktop app on the Phone page: sound and media controls, Do Not Disturb and notifications on the left, and a text conversation sent from the computer through the phone on the right." width="100%">
 </p>
 
-## Saiph Hosted is here
+## Saiph Cloud is here
 
-Sign in, install, and your devices are connected. **Saiph Hosted** runs the
+Sign in, install, and your devices are connected. **Saiph Cloud** runs the
 connection for you: no server, no Tailscale, no port forwarding, nothing to keep
 running at home. Your devices encrypt content before it leaves them, and only
 the devices you approve can read it.
 
 <p align="center">
-  <a href="https://usesaiph.com/#pricing"><img src="docs/images/readme/plans.svg" alt="Plans: Saiph Hosted Monthly at €3.99 a month; Saiph Hosted Yearly at €36 a year, which saves 25%; and Self-hosted, free forever." width="100%"></a>
+  <a href="https://usesaiph.com/#pricing"><img src="docs/images/readme/plans.svg" alt="Plans: Saiph Cloud Monthly at €3.99 a month; Saiph Cloud Yearly at €36 a year, which saves 25%; and Self-hosted, free forever." width="100%"></a>
 </p>
 
 | | Monthly | Yearly | Self-hosted |
@@ -47,12 +47,12 @@ Cancel any time; your access runs to the end of the period you paid for.
 
 **[Subscribe at usesaiph.com →](https://usesaiph.com/#pricing)**
 
-Saiph Hosted is a beta service: expect the odd bug and occasional downtime while
+Saiph Cloud is a beta service: expect the odd bug and occasional downtime while
 it grows. Texts and call controls require opting in on your phone and granting
 Android permissions. They are included in the beta builds; physical-device
 acceptance remains pending.
 
-What you get with Hosted:
+What you get with Cloud:
 
 - **Your devices hold the keys.** Content is sealed for your approved devices
   before it is relayed. Signing in or paying never unlocks it.
@@ -63,11 +63,11 @@ What you get with Hosted:
   metadata is visible to the service: your account, device public keys,
   connection times and message sizes. See the [security model](docs/SECURITY_MODEL.md).
 - **Your subscription funds the project.** Saiph is built independently, and
-  Hosted is how it stays that way. Self-hosting stays free.
+  Cloud is how it stays that way. Self-hosting stays free.
 
 ## What it does
 
-| | Saiph Hosted | Self-hosted Hub |
+| | Saiph Cloud | Self-hosted Hub |
 | --- | :---: | :---: |
 | **Notifications** — see and dismiss your phone's notifications on any computer | ✓ | ✓ (and reply) |
 | **Clipboard** — copy on one device, paste on another | ✓ text | ✓ text and images |
@@ -89,7 +89,7 @@ Some features depend on your Android version and phone manufacturer.
 
 ## Get started
 
-**With Saiph Hosted:**
+**With Saiph Cloud:**
 
 1. Subscribe at [usesaiph.com](https://usesaiph.com/#pricing) and download Saiph
    for your computer and phone from your account.
@@ -118,7 +118,7 @@ project fits your devices best.
 
 ## What's next
 
-- **Texts and calls on Hosted**, matching the self-hosted Hub.
+- **Texts and calls on Cloud**, matching the self-hosted Hub.
 - **Replacing Phone Link** on Windows, and offering the same on Linux, for any
   phone brand: MMS and group texts, phone apps in their own windows, phone
   storage in your file manager. See the [Phone Link replacement plan](docs/PHONE_LINK_PARITY.md).
@@ -126,7 +126,7 @@ project fits your devices best.
   keyboard, ring your computer from the phone, and lock the computer when your
   phone leaves.
 - **Signed installers** with a trusted publisher, and an independent security
-  review of Hosted.
+  review of Cloud.
 
 Current gaps and acceptance checks are tracked in
 [release status](docs/RELEASE_STATUS.md) and
@@ -139,7 +139,7 @@ supplied checksum), and there has been no independent security review yet.
 | Path | What's in it |
 | --- | --- |
 | [`src/`](src/), [`frontend/`](frontend/) | The desktop app: a Python service with a React interface ([design system](docs/DESKTOP_DESIGN_SYSTEM.md)) |
-| [`hub/`](hub/) | The Saiph Hub, for self-hosting, and the Hosted service |
+| [`hub/`](hub/) | The Saiph Hub, for self-hosting, and the Cloud service |
 | [`android/`](android/README.MD) | The Android app, a fork of [Sefirah Android](https://github.com/shrimqy/Sefirah-Android) with its GPL licence and upstream credits retained ([mobile design system](docs/MOBILE_DESIGN_SYSTEM.md)) |
 | [`sdk/`](sdk/) | A small Python client that lets your own scripts and tools report status to the desktop app ([plugins](docs/PLUGINS.md)) |
 | [`website/`](website/), [`account-web/`](account-web/) | usesaiph.com and the account site |
@@ -165,7 +165,7 @@ The native bundle is in `dist/Saiph/` (`dist/saiph/` on Linux), and its
 executable is `Saiph.exe` (`saiph`). Linux also needs the Qt/WebEngine system
 libraries. To preview the desktop interface on synthetic data, run
 `npm --prefix frontend run dev` and open `/preview.html`. The
-[testing guide](docs/TESTING.md) covers the desktop, Hub and Hosted suites.
+[testing guide](docs/TESTING.md) covers the desktop, Hub and Cloud suites.
 
 ## Contributing
 

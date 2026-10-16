@@ -15,7 +15,8 @@ from urllib.parse import parse_qsl, unquote, urlsplit
 
 FILES = ('index.html', 'self-host.html', 'hosted.html', 'downloads.html', 'waitlist.html', 'privacy.html',
          'account-privacy.html', 'terms.html', 'refunds.html', 'contact.html', 'assets/logo.svg',
-         'assets/site.css', 'assets/site.js', 'assets/stage.js', 'assets/analytics.js')
+         'assets/site.css', 'assets/site.js', 'assets/stage.js', 'assets/analytics.js',
+         '.well-known/assetlinks.json', 'android/oauth2redirect.html')
 PLATFORMS = ('windows', 'linux', 'android', 'server')
 FIELDS = {'sourceVisibility', 'githubUrl', 'releasesUrl', 'downloads', 'subscribeUrl', 'waitlistUrl',
           'androidBetaUrl', 'betaAccountUrl', 'waitlistPrivacyUrl', 'waitlistNotice', 'hostedPrice', 'hostedPeriod', 'hostedPriceNote', 'license', 'privacy', 'waitlist', 'release', 'analytics'}

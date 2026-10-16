@@ -35,7 +35,7 @@ export function BetaAccountView({access, billing, notice}: Props & {access: Acce
     <div className="page-head">
       <div>
         <p className="eyebrow">Your Saiph account</p>
-        <h1>{access?.entitled ? (paid ? "Welcome to Saiph Hosted." : "Welcome to the beta.") : billing ? "Get Saiph Hosted." : "Activate your beta access."}</h1>
+        <h1>{access?.entitled ? (paid ? "Welcome to Saiph Cloud." : "Welcome to the beta.") : billing ? "Get Saiph Cloud." : "Activate your beta access."}</h1>
         <p className="lede">Use this same account on your computer and phone.{access?.entitled ? "" : billing ? " Subscribe, or enter an invitation code." : " Your invitation gives you access without a subscription."}</p>
       </div>
       <SignOut />
@@ -47,7 +47,7 @@ export function BetaAccountView({access, billing, notice}: Props & {access: Acce
       <div className="split">
         <section className="card featured string-edge" aria-labelledby="beta-access-title">
           <div className="card-head">
-            <div><p className="eyebrow">Saiph Hosted</p><h2 id="beta-access-title">Hosted access active</h2></div>
+            <div><p className="eyebrow">Saiph Cloud</p><h2 id="beta-access-title">Cloud access active</h2></div>
             <span className="pill good">Active</span>
           </div>
           <dl className="facts">
@@ -86,7 +86,7 @@ export function BetaAccountView({access, billing, notice}: Props & {access: Acce
           <div><p className="eyebrow">Beta access</p><h2 id="beta-code-title">Enter your invitation code</h2></div>
           <span className="pill">Not active</span>
         </div>
-        <p>Your invitation contains a code that starts with SAIPH-. It activates Hosted access for this account; no payment is needed.</p>
+        <p>Your invitation contains a code that starts with SAIPH-. It activates Cloud access for this account; no payment is needed.</p>
         <form className="code-form" method="post" action="/api/beta/redeem">
           <label htmlFor="beta-code">Invitation code</label>
           <div className="code-row">
