@@ -52,6 +52,9 @@
   document.querySelectorAll('[data-link="releases"]').forEach((a) => link(a, cfg.releasesUrl, "Releases coming soon"));
   // With subscriptions open, installers for every platform are in the subscriber's account.
   const subscribeUrl = /^https:\/\/[a-z0-9.-]+\/account$/.test(cfg.subscribeUrl || "") ? cfg.subscribeUrl : "";
+  document.querySelectorAll('[data-link="account"]').forEach((a) => {
+    link(a, subscribeUrl || betaAccountUrl, "Account sign-in is not available yet");
+  });
   document.querySelectorAll("[data-download]").forEach((a) => {
     const fromAccount = (["windows", "linux", "android"].includes(a.dataset.download) && subscribeUrl)
       || (["windows", "linux"].includes(a.dataset.download) && betaAccountUrl);

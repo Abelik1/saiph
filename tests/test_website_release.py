@@ -47,13 +47,13 @@ def test_launch_needs_every_artifact_and_waitlist_privacy():
         site.validate_settings(config, 'launch')
 
 
-SUBSCRIBE = {'subscribeUrl': 'https://account.dev.usesaiph.com/account', 'hostedPrice': '€3.99'}
+SUBSCRIBE = {'subscribeUrl': 'https://account.dev.usesaiph.com/account', 'hostedPrice': '€9.99'}
 
 
-@pytest.mark.parametrize('settings', [{'subscribeUrl': 'https://payments.github.com/pay', 'hostedPrice': '€3.99'},
-    {'subscribeUrl': 'https://account.dev.usesaiph.com/account?plan=x', 'hostedPrice': '€3.99'},
-    {**SUBSCRIBE, 'hostedPrice': '5'}, {**SUBSCRIBE, 'hostedPrice': '€0'}, {'hostedPrice': '€3.99'},
-    {'subscribeUrl': SUBSCRIBE['subscribeUrl']}, {'hostedPriceNote': 'or €36 a year'},
+@pytest.mark.parametrize('settings', [{'subscribeUrl': 'https://payments.github.com/pay', 'hostedPrice': '€9.99'},
+    {'subscribeUrl': 'https://account.dev.usesaiph.com/account?plan=x', 'hostedPrice': '€9.99'},
+    {**SUBSCRIBE, 'hostedPrice': '5'}, {**SUBSCRIBE, 'hostedPrice': '€0'}, {'hostedPrice': '€9.99'},
+    {'subscribeUrl': SUBSCRIBE['subscribeUrl']}, {'hostedPriceNote': 'or €89.99 a year'},
     {**SUBSCRIBE, 'hostedPriceNote': 'x' * 81}, {'AUTH_TOKEN': 'private'}, {'license': {'core': 'MIT'}}])
 def test_bad_hosted_plan_settings_credentials_and_wrong_licences_fail(settings):
     with pytest.raises(ValueError):
@@ -246,12 +246,13 @@ function element() {
     appendChild() {}, insertAdjacentElement() {} };
 }
 const form = element(), details = element(), inactive = element(), contact = element(), subscribe = element();
-const beta = element(), betaBox = element(), status = element();
+const beta = element(), betaBox = element(), status = element(), account = element();
 const elements = {
   '[data-link="android-beta"]': [beta], '[data-android-beta]': [betaBox],
   '[data-link="waitlist"]': [form], '[data-waitlist-details]': [details],
   '[data-waitlist-inactive]': [inactive], '[data-privacy-contact]': [contact],
-  '[data-link="subscribe"]': [subscribe], '[data-hosted-status]': [status]
+  '[data-link="subscribe"]': [subscribe], '[data-hosted-status]': [status],
+  '[data-link="account"]': [account]
 };
 const document = { querySelectorAll: selector => elements[selector] || [],
   querySelector: () => null, createElement: element, createTextNode: text => ({textContent: text}) };
@@ -259,7 +260,8 @@ vm.runInNewContext(fs.readFileSync(process.argv[1], 'utf8'), {window: {ORION_SIT
 console.log(JSON.stringify({form: form.href || '', disabled: form.attributes['aria-disabled'],
   hidden: details.hidden, inactiveHidden: inactive.hidden, contact: contact.href || '',
   subscribe: subscribe.href || '', subscribeText: subscribe.textContent, subscribeDisabled: subscribe.attributes['aria-disabled'] || '',
-  hostedStatus: status.textContent, beta: beta.href || '', betaHidden: betaBox.hidden}));
+  hostedStatus: status.textContent, beta: beta.href || '', betaHidden: betaBox.hidden,
+  account: account.href || '', accountDisabled: account.attributes['aria-disabled'] || ''}));
 """
     result = subprocess.run([node, '-e', script, str(ROOT / 'website/assets/site.js')],
                             input=json.dumps(settings), text=True, capture_output=True, check=True)
@@ -359,8 +361,8 @@ def test_early_access_opens_beta_access_until_signup_or_payment_opens():
 
 
 def test_hosted_plan_settings_accept_the_account_page_and_euro_price():
-    config = site.validate_settings({**SUBSCRIBE, 'hostedPriceNote': 'or €36 a year'}, 'preview')
-    assert config['subscribeUrl'] == SUBSCRIBE['subscribeUrl'] and config['hostedPrice'] == '€3.99'
+    config = site.validate_settings({**SUBSCRIBE, 'hostedPriceNote': 'or €89.99 a year'}, 'preview')
+    assert config['subscribeUrl'] == SUBSCRIBE['subscribeUrl'] and config['hostedPrice'] == '€9.99'
 
 
 def test_open_subscriptions_link_to_the_account_and_show_hosted_as_available():
@@ -373,6 +375,19 @@ def test_open_subscriptions_link_to_the_account_and_show_hosted_as_available():
     # Subscriptions take precedence over the email list and invitation-only access.
     settings = {**launch_settings(), **SUBSCRIBE, 'betaAccountUrl': BETA_ACCOUNT}
     assert render_site_script(settings)['subscribe'] == SUBSCRIBE['subscribeUrl']
+
+
+@pytest.mark.parametrize('settings,expected', [
+    ({**SUBSCRIBE, 'betaAccountUrl': BETA_ACCOUNT}, BETA_ACCOUNT),
+    (SUBSCRIBE, SUBSCRIBE['subscribeUrl']),
+    ({'betaAccountUrl': BETA_ACCOUNT}, BETA_ACCOUNT),
+    ({}, ''),
+    ({'subscribeUrl': 'javascript:alert(1)', 'betaAccountUrl': 'http://localhost/account'}, ''),
+])
+def test_account_navigation_uses_available_account_access_or_stays_disabled(settings, expected):
+    result = render_site_script(settings)
+    assert result['account'] == expected
+    assert result['accountDisabled'] == ('' if expected else 'true')
 
 
 def test_reviewed_waitlist_still_comes_before_beta_access():

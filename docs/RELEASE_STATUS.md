@@ -158,6 +158,13 @@ public-data check passed. No native desktop
 installer or APK was assembled, installed or released; the Qt shell, a live
 account, an emulator and a physical phone were not used for these checks.
 Physical-device acceptance and independent security review remain pending.
+2026-10-16 landing release: compact home, prominent downloads and Hosted card,
+Account navigation, public-page analytics and sourced capability comparison.
+Hosted texts and call controls are included in the released beta source; the
+old "Coming" / "self-hosted only" labels were corrected. Physical acceptance
+remains pending. This publication retains current checkout prices; the requested
+price increase awaits a coordinated billing release. See the
+[release record and validation](WEBSITE_RELEASE_2026-10-16.md).
 
 2026-10-15 native desktop UI control (development tooling only): added a
 disposable Qt launcher and a Playwright controller for accessible snapshots,
