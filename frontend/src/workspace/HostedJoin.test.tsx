@@ -8,7 +8,7 @@ import type { Client, HostedState } from "./types";
 const client = (call: ReturnType<typeof vi.fn>) => ({ call } as unknown as Client);
 const request = { code: "orion-approve-v1:synthetic", fingerprint: "AAAA BBBB", root_fingerprint: "ROOT FULL", expires_in: 300 };
 
-describe("Joining Saiph Hosted as another computer", () => {
+describe("Joining Saiph Cloud as another computer", () => {
   it("checks the main computer's code, needs the fingerprint confirmed, then shows the request code", async () => {
     const call = vi.fn(async (method: string) =>
       method === "hosted.join.inspect" ? { device_id: "dev_main", fingerprint: "ROOT FULL" } : request);

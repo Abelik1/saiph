@@ -184,7 +184,7 @@ def test_join_refuses_an_invalid_code_or_an_existing_identity(tmp_path, monkeypa
     service = SyntheticService()
     main = computer(tmp_path, "main", service, monkeypatch, [])
     code = main.setup_root()["code"]
-    with pytest.raises(HostedError, match="already has a Saiph Hosted identity"):
+    with pytest.raises(HostedError, match="already has a Saiph Cloud identity"):
         main.inspect_join(code)  # An existing identity is never replaced.
     other = computer(tmp_path, "other", service, monkeypatch, [])
     with pytest.raises(HostedError, match="invalid or expired"):

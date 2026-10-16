@@ -87,6 +87,19 @@ def assert_no_partial(tmp_path):
     assert not list(tmp_path.glob(".orion-receive-*"))
 
 
+def test_gallery_original_wraps_the_existing_authenticated_streaming_manifest(pair, tmp_path):
+    sender, receiver, _ = pair
+    attachment, _ = prepared(pair, tmp_path, b"synthetic original", kind="photo", mime="image/jpeg")
+    relay = BlobRelay()
+    upload_attachment(relay, attachment)
+    manifest = receiver.authenticate(relay.envelope)
+    envelope = sender.encrypt(receiver.device, {"type": "photo.original", "photo_id": "41",
+                                              "request": str(__import__('uuid').uuid4()), "file": manifest}, ttl_seconds=300)
+    output = (tmp_path / "gallery-original.jpg").resolve()
+    assert download_attachment(receiver, relay, envelope, output).read_bytes() == b"synthetic original"
+    assert b"gallery-original" not in canonical(envelope)
+
+
 @pytest.mark.parametrize("content,kind", [(b"", "file"), (b"synthetic photo", "photo"), (b"synthetic image", "clipboard.image"),
                                           (b"PRIVATE-STREAM-" * 170_000, "file")], ids=["empty", "photo", "image", "multi-segment"])
 def test_actual_streaming_bytes_and_hidden_metadata(pair, tmp_path, content, kind):

@@ -54,7 +54,7 @@ private invitation to connect this computer, then scan its phone pairing QR.
 
 ## Android first connection
 
-On first use, review the linked privacy policy and Hosted terms, then choose **Agree and continue**. Usage sharing and Android permissions remain separate choices. The phone then opens one illustrated welcome screen. **Subscribe** opens Saiph's
+On first use, review the linked privacy policy and Cloud terms, then choose **Agree and continue**. Usage sharing and Android permissions remain separate choices. The phone then opens one illustrated welcome screen. **Subscribe** opens Saiph's
 plans on the website. If you already have an account, **Continue with Google**
 opens Google sign-in directly for the bundled Auth0 service. Existing email or
 other-provider accounts can use **Other sign-in options** to keep their original
@@ -177,7 +177,7 @@ preview does) and Android 10 or later.
 calls through upstream scrcpy, with OBS Studio's Virtual Camera on Windows or a
 v4l2loopback device on Linux. The video goes directly from the phone to the
 computer over USB or wireless debugging on the local network, so it works with
-Saiph Hosted and needs no Hub, Saiph pairing or Tailscale. It needs Android 12
+Saiph Cloud and needs no Hub, Saiph pairing or Tailscale. It needs Android 12
 or later and scrcpy 2.2 or later (scrcpy includes adb); installers do not bundle
 scrcpy, adb, OBS or v4l2loopback. Turn it on in Settings → Devices → Phone camera
 and follow **One-time camera setup**: Developer options and USB or Wireless
@@ -281,3 +281,11 @@ A disconnected phone shows saved content and explains which actions need a
 connection. Originals already cached on the computer can still be viewed, copied
 and saved offline. Failed conversation or original-photo loads offer a Retry
 action without discarding your draft or closing the viewer.
+
+## Phone photos and messages with Saiph Cloud
+
+After approving the phone, open **Files and photos → Allow photos** on it and grant Android access (all photos or your selected photos). The desktop **Phone → Photos** gallery shows up to 100 recent accessible photos. Open, copy or save an original on demand; transfers are limited to 20 MB. Stop sharing photos on the phone to stop new gallery transfers. Files explicitly saved on a computer remain there.
+
+For SMS conversations, turn on **Texts and calls** on the phone and grant Android's SMS/phone permissions. Open **Phone → Messages** on the desktop. Other apps' messages appear as notifications after notification access is allowed; this does not sync their full chat histories. Android restrictions, offline devices and device approval still apply.
+
+The desktop's bottom-right corner shows the installed package version. Source checkouts show a development version.

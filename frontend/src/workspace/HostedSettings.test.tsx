@@ -24,7 +24,7 @@ describe("Hosted preview settings", () => {
     expect(call).not.toHaveBeenCalledWith("hosted.sign_in", { google: true });
   });
   it("points a new tester to their invitation before signing in", () => { setup(off); expect(screen.getByText(/Activate your invitation code/)).toBeVisible(); });
-  it("requires deployment config and respects self-hosted pairing", () => { setup({...off, configured: false, self_hosted_paired: true}); expect(screen.queryByRole("button", {name: "Turn on Hosted"})).toBeNull(); expect(screen.getByText(/paired with a self-hosted Hub/)).toBeVisible(); });
+  it("requires deployment config and respects self-hosted pairing", () => { setup({...off, configured: false, self_hosted_paired: true}); expect(screen.queryByRole("button", {name: "Turn on Cloud"})).toBeNull(); expect(screen.getByText(/paired with a self-hosted Hub/)).toBeVisible(); });
   it("requires explicit full-fingerprint confirmation before approval", async () => {
     const call = setup(active, vi.fn().mockResolvedValue({device_id: "phone", fingerprint: "FULL FINGERPRINT", expires_at: 1900000000}));
     fireEvent.change(screen.getByLabelText("Device request code"), {target: {value: "orion-approve-v1:synthetic"}}); fireEvent.click(screen.getByRole("button", {name: "Check request"}));
@@ -58,5 +58,5 @@ describe("Hosted preview settings", () => {
     setup({...active, user_verification: "unavailable"});
     expect(screen.getByText(/Anyone using this computer while it is unlocked can add a device/)).toBeVisible();
   });
-  it("requires explicit retirement confirmation and does not show data while signed out", () => { setup({...active, enabled: false}); expect(screen.getByRole("button", {name: "Forget Hosted on this computer"})).toBeDisabled(); expect(screen.queryByRole("button", {name: "Choose file to send"})).toBeNull(); });
+  it("requires explicit retirement confirmation and does not show data while signed out", () => { setup({...active, enabled: false}); expect(screen.getByRole("button", {name: "Forget Cloud on this computer"})).toBeDisabled(); expect(screen.queryByRole("button", {name: "Choose file to send"})).toBeNull(); });
 });

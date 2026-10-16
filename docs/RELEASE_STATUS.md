@@ -1,4 +1,44 @@
+## 2026-10-16: verified Android callback and Cloud gallery update
+
+Android 0.9.5 uses `https://usesaiph.com/android/oauth2redirect` through AppAuth with an exact verified App Link filter; its existing custom scheme remains for pre-upgrade in-flight attempts. Pending state, redirect, PKCE challenge and endpoints are bound before code exchange. The static website includes the existing beta certificate association and a minimal no-analytics/no-store callback fallback which clears query/fragment from browser history. Auth0 allowlisted the callback at the owner's request; Google connection/branding is unchanged. Actual domain verification and final publication results belong in the private operations record.
+
+Cloud phones now offer an explicit Allow photos choice, separate from Texts and calls. With Android photo permission, up to 100 recent previews and their metadata travel in sealed envelopes to current subscribed computers. Original photos use the existing streaming-encrypted blob path only after an explicit open/copy/save request, bound to that request and recipient. The desktop reuses its existing Photos and Messages galleries; other apps' chat histories and MMS are not added. The bottom-right footer reads the installed distribution version. Visible app, account and website wording now uses Saiph Cloud; internal Hosted identifiers and routes remain compatible.
+
+Actual local checks: five native Android instrumentation tests passed (callback state/PKCE/replay/expiry, legacy in-flight compatibility, exact manifest routing, and real MediaStore/permission/opt-in bounded previews). Earlier source checks passed app JVM/lint with 0 errors and 240 existing warnings. Desktop regression checks passed 236 cases except the new wrapper test's initially wrong synthetic TTL, corrected and rerun in the 169-case passing file/phone suite. The final combined desktop/gallery run passed 238 cases. Native Qt control/navigation/form persistence and bottom-right development-version layout passed in a fresh isolated shell. Frontend 178 tests and production build passed. Account 79 tests and typecheck passed; build first hit a local Next telemetry config EXDEV error, then passed with telemetry disabled and isolated config. Website 183 checks passed after excluding the callback from analytics-loading expectations. Original logs retained. Final build receipts will record later checks separately.
+
+These are synthetic unit, emulator and native-shell checks, not physical-device acceptance, completed live Google login, independent review or trusted Windows signing. The existing friends-beta signing identity is preserved.
+
 # Current release preparation status
+
+2026-10-16 Cloud connection follow-up: user-facing service labels now say Cloud;
+technical Hosted identifiers and stored formats are unchanged. Android shows an
+in-app Back arrow only for nested Settings and security-code comparison screens.
+Primary retry/recovery sign-in selects Google; other providers remain explicit.
+
+An actual Android 14 emulator reproduced the enrollment failure in
+AndroidHostedTrustStore.create after protected key creation. The code executed
+the row-returning journal_mode PRAGMA through execSQL; the platform WAL API now
+enables journaling before creating the schema. A failed old setup can explicitly
+restart with a fresh device ID, preserving its earlier protected key/trust files
+and account sign-in. Established checkpoints are never silently reset or repaired.
+
+Checks: three Android instrumentation regressions passed with real Keystore and
+SQLite: key reload/enrollment, synthetic root-signed approval and encrypted
+exchange/inbox retention, failed-setup restart preservation and nested Back.
+Debug assembly, 14 app JVM tests, 103 network JVM tests (2 optional interop skips)
+and lint passed (0 errors, 240 warnings). Desktop targeted checks passed 152 tests
+with 3 platform skips; frontend 177 tests and its production build passed. The
+real Qt control/layout flows passed in an isolated profile. Initial attempts had
+a missing Python temporary-directory parent, sandbox denial of the npm cache and
+an unescaped SDK drive separator in ignored local.properties; these were fixed.
+
+A live anonymous native authorization probe returned HTTP 302 directly to Google.
+This is routing evidence, not completed sign-in. Auth0's extra authorization or
+impersonation-confirmation screen remains provider work: native custom schemes
+and desktop loopback callbacks can require it. Verified HTTPS callback setup,
+provider consent configuration and development-key branding are not fixed by
+the Google connection parameter. No live account/physical phone acceptance or
+independent security review is claimed by these checks.
 
 2026-10-16 Android connection recovery and desktop preferences follow-up:
 

@@ -86,7 +86,7 @@ class HostedActivity : ComponentActivity() {
         welcomePage = state?.getBoolean("welcomePage") ?: intent.getBooleanExtra(SHOW_WELCOME, false)
         intent.removeExtra(SHOW_WELCOME)
         loginState = state?.getString("loginState")
-        googleSignIn = state?.getBoolean("googleSignIn") ?: prefs.getBoolean("google_sign_in", false)
+        googleSignIn = state?.getBoolean("googleSignIn") ?: true
         pendingRoot = state?.getString("pendingRootCode")?.let { code -> state.getString("pendingRootFingerprint")?.let { PendingRoot(code, it) } }
         signingIn = state?.getBoolean("signingIn") == true && loginState != null &&
             loginState == prefs.getString("pending_state", null) &&
@@ -114,6 +114,7 @@ class HostedActivity : ComponentActivity() {
     override fun onDestroy() { authorizationService?.dispose(); authorizationService = null; super.onDestroy() }
     override fun onResume() {
         super.onResume()
+        runtime.photosRevision++
         if (runtime.enabled() && !sefirah.network.orion.OrionPause.paused(this)) ContextCompat.startForegroundService(this, Intent(this, HostedSyncService::class.java))
         lock.open(::lockedScreen, ::resumeUnlocked)
     }
@@ -146,7 +147,7 @@ class HostedActivity : ComponentActivity() {
         lock.confirm(reason, requireScreenLock, failure = ::message, success = run)
     private fun message(value: String) = Toast.makeText(this, value, Toast.LENGTH_LONG).show()
     /** AppAuth owns the browser round trip and verifies state and PKCE for either browser mode. */
-    private fun signIn(browserApp: Boolean = false, google: Boolean = prefs.getBoolean("google_sign_in", false)) {
+    private fun signIn(browserApp: Boolean = false, google: Boolean = true) {
         if (signingIn || busy) return
         if (account.signedIn()) { welcomePage = false; render(); return }
         welcomePage = false; googleSignIn = google; signingIn = true; loginState = null; loginError = ""; render()
@@ -186,7 +187,7 @@ class HostedActivity : ComponentActivity() {
             catch (failure: CancellationException) { throw failure }
             catch (_: Exception) {
                 actionError = when {
-                    runtime.setupStage() == HostedSetup.Stage.RECOVERY -> "Setup was interrupted. Retry, or restart setup below. Your existing keys have been kept."
+                    runtime.setupStage() == HostedSetup.Stage.RECOVERY -> "This setup could not finish. Restart setup to scan your computer again."
                     !account.signedIn() -> "Sign in again to continue. Your device approval has been kept."
                     else -> "Could not reach Saiph. Check your connection and try again."
                 }
@@ -221,7 +222,7 @@ class HostedActivity : ComponentActivity() {
             })
         })
     }
-    /** Header Back and the Android back gesture always take the same route. */
+    /** Only nested pages show an in-app Back arrow; Android owns leaving the activity. */
     private fun goBack() {
         if (busy) return
         when {
@@ -239,7 +240,7 @@ class HostedActivity : ComponentActivity() {
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
             setPadding(dp(10), dp(8), dp(10), dp(8)); minimumHeight = dp(64)
-            if (page != "welcome" || showingLock) addView(iconButton(com.castle.sefirah.R.drawable.saiph_ic_back, "Back", ::goBack))
+            if (!showingLock && (settingsPage || pendingRoot != null)) addView(iconButton(com.castle.sefirah.R.drawable.saiph_ic_back, "Back", ::goBack))
             addView(heading(title).apply { setPadding(dp(2), 0, dp(8), 0) },
                 LinearLayout.LayoutParams(0, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             if (!showingLock && !settingsPage && (prefs.contains("device_id") || account.signedIn())) {
@@ -289,6 +290,17 @@ class HostedActivity : ComponentActivity() {
         if (resources.configuration.fontScale > 1.3f) root.addView(artwork)
     }
     private fun granted(permission: String) = checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
+    private fun photoPermissions() = if (android.os.Build.VERSION.SDK_INT >= 34)
+        arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
+        else if (android.os.Build.VERSION.SDK_INT >= 33) arrayOf(Manifest.permission.READ_MEDIA_IMAGES)
+        else arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+    private fun allowPhotos() {
+        verified("Share recent photos with your approved computers") {
+            runtime.setPhotosShared(true)
+            requestPermissions(photoPermissions(), 48)
+            render()
+        }
+    }
     /** Off by default: approved computers may act on texts and calls only after the owner turns this on here. */
     private fun textsAndCalls() = group("Texts and calls") {
         addView(featureRow(sefirah.common.R.drawable.ic_chat, "Texts", "Read and reply to one-to-one texts, or start a conversation."))
@@ -314,7 +326,8 @@ class HostedActivity : ComponentActivity() {
     }
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 47 && !showingLock) render()
+        if (requestCode == 48) runtime.setPhotosShared(runtime.photosShared())
+        if (requestCode in listOf(47, 48) && !showingLock) render()
     }
     private fun field(label: String, value: String = "", into: LinearLayout = root): EditText {
         val labelView = text(label, UiType.BODY, Palette.MUTED).apply { setPadding(dp(2), dp(8), 0, dp(6)) }
@@ -389,7 +402,14 @@ class HostedActivity : ComponentActivity() {
             // Daily use first: files across, then texts and calls.
             shownOffers = runtime.offers.map { it.first }
             group("Files and photos") {
-                addView(featureRow(com.castle.sefirah.R.drawable.saiph_ic_photo, "Send to your computers", "Choose a file or photo from this phone."))
+                addView(featureRow(com.castle.sefirah.R.drawable.saiph_ic_photo, "Photo gallery", "Recent photos on your computers. You choose which photos Android allows."))
+                if (!runtime.photosShared()) actions(button("Allow photos", tone = Tone.TONAL) { allowPhotos() })
+                else {
+                    if (!sefirah.network.orion.OrionPermissions.read(this@HostedActivity).photos)
+                        actions(button("Allow photos", tone = Tone.TONAL) { requestPermissions(photoPermissions(), 48) })
+                    else actions(button("Choose photo access", tone = Tone.TONAL) { requestPermissions(photoPermissions(), 48) })
+                    actions(button("Stop sharing photos") { runtime.setPhotosShared(false); render() })
+                }
                 actions(button("Send a file or photo", true) { sendFile.launch(arrayOf("*/*")) })
                 addView(divider())
                 addView(cardTitle("Received files"))
@@ -490,7 +510,7 @@ class HostedActivity : ComponentActivity() {
                 .onFailure { message("Enable a browser to view Saiph plans.") }
         })
         dockActions(button(if (signingIn) "Waiting for sign-in…" else if (signedIn) "Continue setup" else "Continue with Google", primary = signedIn) { signIn(google = true) }.apply { isEnabled = !signingIn })
-        if (!enrolled) setupDock.addView(buttonRow(setupLink("Self-host instead") { useOwnHub() }.apply { isEnabled = !signingIn }))
+        if (!enrolled) setupDock.addView(buttonRow(setupLink("Self-hosted") { useOwnHub() }.apply { isEnabled = !signingIn }))
         if (!signedIn && !enrolled) root.addView(disclosure("Other sign-in options") {
             addView(body("Use your existing sign-in method to keep the same account."))
             actions(button("Use email or another provider", tone = Tone.TONAL) { signIn(google = false) }.apply { isEnabled = !signingIn })
@@ -500,7 +520,7 @@ class HostedActivity : ComponentActivity() {
             // Custom builds retain manual configuration outside the normal account flow.
             if (!runtime.hasPackagedDefaults()) {
                 root.addView(disclosure("Custom service (advanced)") {
-                    val origin = field("Hosted service address", prefs.getString("origin", "")!!, this)
+                    val origin = field("Cloud service address", prefs.getString("origin", "")!!, this)
                     val issuer = field("Sign-in issuer (HTTPS, ending in /)", prefs.getString("issuer", "")!!, this)
                     val audience = field("API audience", prefs.getString("audience", "")!!, this)
                     val client = field("Android native client ID", prefs.getString("client_id", "")!!, this)
@@ -536,12 +556,18 @@ class HostedActivity : ComponentActivity() {
     private fun recoveryScreen() {
         root.addView(card(strong = true).apply {
             addView(cardTitle("Finish connecting this phone"))
-            addView(body("Setup was interrupted. Your keys are kept; the phone is not connected yet."))
-            actions(button(if (account.signedIn()) "Retry connection" else "Sign in to continue", true) {
+            addView(body("The earlier setup could not finish. Start a new connection to your computer."))
+            actions(button("Restart setup", true) {
+                android.app.AlertDialog.Builder(this@HostedActivity).setTitle("Restart setup?")
+                    .setMessage("Your account stays signed in and the earlier keys are kept. Scan your computer's QR code again. If this phone already appears there, remove its old entry.")
+                    .setNegativeButton("Cancel", null).setPositiveButton("Restart") { _, _ ->
+                        verified("Restart connecting this phone") { action { runtime.restartSetup(); settingsPage = false } }
+                    }.show()
+            })
+            actions(button(if (account.signedIn()) "Retry connection" else "Continue with Google", tone = Tone.TONAL) {
                 if (!account.signedIn()) signIn() else action { runtime.freshRequest() }
             })
         })
-        retirementAction()
     }
     /** One job while the computer has not approved this phone yet: compare and approve there. */
     private fun waitingScreen() {
@@ -573,10 +599,10 @@ class HostedActivity : ComponentActivity() {
     private fun policyScreen() {
         root.addView(SetupArtwork(this, SetupArtwork.Scene.WELCOME))
         root.addView(heading("Before you start"))
-        root.addView(body("Review how Saiph handles your data. Hosted terms apply if you use Saiph Hosted."))
+        root.addView(body("Review how Saiph handles your data. Cloud terms apply if you use Saiph Cloud."))
         actionsOnRoot(button("Privacy policy", tone = Tone.TONAL) { openPolicy(AppPolicy.PRIVACY_URL) },
-            button("Hosted terms", tone = Tone.TONAL) { openPolicy(AppPolicy.TERMS_URL) })
-        root.addView(body("By continuing, you acknowledge the privacy policy and agree to the terms when using Hosted. Sharing usage statistics is a separate choice."))
+            button("Cloud terms", tone = Tone.TONAL) { openPolicy(AppPolicy.TERMS_URL) })
+        root.addView(body("By continuing, you acknowledge the privacy policy and agree to the terms when using Cloud. Sharing usage statistics is a separate choice."))
         dockActions(button("Agree and continue", true) { AppPolicy.acknowledge(this); render() })
         setupDock.addView(buttonRow(setupLink("Exit") { finish() }))
     }

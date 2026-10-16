@@ -68,7 +68,7 @@ def test_phone_data_accepts_exact_shapes_and_strips_the_type(payload):
     {"type": "calls.log", "calls": [{"number": "1", "name": "", "timestamp": 1, "duration": 3, "type": "missed"}] * 51},
     {"type": "phone.capabilities", "capabilities": ["sms", "sms"]},
     {"type": "phone.capabilities", "capabilities": ["sms-group"]},  # Group replies are outside Hosted.
-    {"type": "phone.capabilities", "capabilities": ["photos"]},
+    {"type": "phone.capabilities", "capabilities": ["unknown-gallery"]},
     {"type": "phone.capabilities", "capabilities": "sms"},
     {"type": "sms.send", "thread": 7, "text": "Actions are never phone data"},
     {"type": "clipboard.text", "text": "x", "sha256": "0" * 64},
@@ -139,7 +139,7 @@ def test_phone_commands_are_built_exactly_and_bounded():
     assert phone_command("contacts.search", {"query": "Syn"}) == {"type": "contacts.search", "query": "Syn"}
     assert phone_command("calls.log.request", {}) == {"type": "calls.log.request"}
     # Every capability-gated action has a capability, and the phone checks the same table.
-    assert set(hf.COMMAND_CAPABILITY) == {"sms.sync", "sms.open", "sms.send", "sms.compose", "call.command",
+    assert set(hf.COMMAND_CAPABILITY) == {"photo.request", "sms.sync", "sms.open", "sms.send", "sms.compose", "call.command",
                                           "call.dial", "contacts.search", "calls.log.request"}
 
 
@@ -303,6 +303,90 @@ def hosted(tmp_path, monkeypatch):
 
 def features(h):
     return h.profile.phone_features.snapshot()
+
+
+def test_encrypted_gallery_previews_sync_and_permission_revocation(hosted):
+    import base64
+    h = hosted
+    preview = "data:image/jpeg;base64," + base64.b64encode(b"\xff\xd8\xff\xc0\x00\x0b\x08\x00\x01\x00\x01\x01\x01\x11\x00\xff\xd9").decode()
+    photo = {"type": "photos.item", "id": "41", "name": "Synthetic.jpg", "timestamp": 1, "preview": preview}
+    h.send(photo)
+    assert features(h)["photos"] == []  # No advertised photo capability.
+    h.send({"type": "phone.capabilities", "capabilities": ["files", "photos"]})
+    h.send(photo)
+    assert features(h)["photos"][0]["preview"] == preview
+    assert features(h)["photos"][0]["photo_id"] == "41"
+    h.controller.phone_command(h.device, "photo.request", {"id": "41"})
+    assert any(value == {"type": "photo.request", "id": "41"} for value in h.received())
+    h.send({"type": "photos.sync", "ids": []})
+    assert features(h)["photos"] == []
+    h.send(photo)
+    h.send({"type": "phone.capabilities", "capabilities": ["files"]})
+    assert features(h)["photos"] == []
+    assert not h.controller._photos_asked
+
+
+@pytest.mark.parametrize("changes", [
+    {"id": "../private"}, {"id": "9007199254740992"}, {"preview": "https://evil.invalid/track"},
+    {"preview": "data:image/svg+xml;base64,PHN2Zz4="}, {"preview": "data:image/jpeg;base64,bad!"},
+    {"extra": "unrecognized"}, {"timestamp": -1},
+])
+def test_gallery_rejects_unbounded_ids_external_images_and_extra_fields(changes):
+    import base64
+    photo = {"type": "photos.item", "id": "41", "name": "Synthetic.jpg", "timestamp": 1,
+             "preview": "data:image/jpeg;base64," + base64.b64encode(b"\xff\xd8\xff\xc0\x00\x0b\x08\x00\x01\x00\x01\x01\x01\x11\x00\xff\xd9").decode()}
+    with pytest.raises(FeatureError):
+        read_phone_data({**photo, **changes})
+
+
+def test_gallery_original_rejects_unsolicited_or_mismatched_requests(hosted):
+    h = hosted
+    h.send({"type": "phone.capabilities", "capabilities": ["photos"]})
+    envelope = {"header": {"source": h.device}}
+    payload = {"type": "photo.original", "photo_id": "41", "request": str(uuid4()), "file": {}}
+    with pytest.raises(FeatureError):
+        h.controller._photo_original(envelope, payload)
+
+    h.controller._photos_asked[(h.device, "41")] = (str(uuid4()), time.time() + 300)
+    with pytest.raises(FeatureError):
+        h.controller._photo_original(envelope, payload)
+    h.controller._photos_asked[(h.device, "41")] = (payload["request"], time.time() - 1)
+    with pytest.raises(FeatureError):
+        h.controller._photo_original(envelope, payload)
+
+
+def test_gallery_original_crosses_the_real_sealed_mailbox_and_streaming_decryption(hosted, tmp_path, monkeypatch):
+    import base64
+    from test_hosted_files import BlobRelay
+    from orion_mini.hosted_files import prepare_attachment, upload_attachment
+    h = hosted
+    h.send({"type": "phone.capabilities", "capabilities": ["photos"]})
+    h.send({"type": "photos.item", "id": "41", "name": "Synthetic.jpg", "timestamp": 1,
+            "preview": "data:image/jpeg;base64," + base64.b64encode(b"\xff\xd8\xff\xc0\x00\x0b\x08\x00\x01\x00\x01\x01\x01\x11\x00\xff\xd9").decode()})
+    h.profile.hosted_phone_command = h.controller.phone_command
+    h.profile.phone_features.photo_request(h.device, "41", "prefetch")
+    request = h.controller._photos_asked[(h.device, "41")][0]
+    original = tmp_path / "synthetic-original.jpg"
+    original.write_bytes(b"synthetic original photo bytes")
+    encrypted = tmp_path / "gallery-encrypted"
+    encrypted.mkdir()
+    attachment = prepare_attachment(h.phone, h.root.device_id, original.resolve(), encrypted.resolve(), mime="image/jpeg")
+    relay = BlobRelay()
+    upload_attachment(relay, attachment)
+    manifest = h.controller.session.authenticate(relay.envelope)
+    monkeypatch.setattr(h.controller.transport, "download_blob_chunk", relay.download_blob_chunk)
+    wrapped = h.phone.encrypt(h.root.device_id, {"type": "photo.original", "photo_id": "41", "request": request,
+                                                "file": manifest}, ttl_seconds=300)
+    h.incoming.append(wrapped)
+    h.controller.step()
+    cached = h.profile.phone_features.photo_cached(h.device, "41")
+    assert cached is not None
+    assert __import__('pathlib').Path(cached['path']).read_bytes() == original.read_bytes()
+    assert (h.device, "41") not in h.controller._photos_asked
+    h.incoming.append(wrapped)
+    h.controller.step()
+    assert len(list((h.profile.root / 'phone-originals').iterdir())) == 1
+
 
 
 def test_capabilities_list_a_hosted_phone_and_ask_once_for_its_conversations(hosted):

@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.orionmini.mobile",
+      "sha256_cert_fingerprints": [
+        "D1:9D:59:43:BD:0E:E8:27:E2:C5:4F:30:6F:9C:10:EF:F3:7A:BC:FC:E9:B8:3B:F6:77:38:7C:52:3C:50:2B:54"
+      ]
+    }
+  }
+]

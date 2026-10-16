@@ -76,6 +76,13 @@ class HostedRuntime private constructor(private val context: Context) {
     internal fun setupStage() = HostedSetup.stage(prefs.contains("device_id"), identityUnavailable,
         prefs.getBoolean("approval_verified", false))
     /** The owner's opt-in for texts and calls on the root computer; off by default. */
+    @Volatile internal var photosRevision = 0
+    fun photosShared() = prefs.getBoolean("photos_shared", false)
+    fun setPhotosShared(value: Boolean) {
+        check(prefs.edit().putBoolean("photos_shared", value).commit())
+        photosRevision++
+        advertised = null
+    }
     fun textsAndCalls() = prefs.getBoolean("texts_and_calls", false)
     fun setTextsAndCalls(value: Boolean) {
         check(prefs.edit().putBoolean("texts_and_calls", value).commit())
@@ -203,9 +210,9 @@ class HostedRuntime private constructor(private val context: Context) {
     fun enqueuePhone(target: String, value: JsonObject, delivered: () -> Unit): Boolean {
         if (!enabled() || status != "Connected" || !HostedAccount.get(context).signedIn() || target !in subscribers()) return false
         val type = (value["type"] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: return false
-        if (!HostedPhoneFrames.mayPublish(type, OrionPermissions.read(context), textsAndCalls()) || type == HostedPhoneFrames.CAPABILITIES
+        if (!HostedPhoneFrames.mayPublish(type, OrionPermissions.read(context), textsAndCalls(), photosShared()) || type == HostedPhoneFrames.CAPABILITIES
             || !HostedPhoneFrames.fits(value)) return false
-        if (type.startsWith("sms.")) return texts.offer(Delivery(target, value, delivered))
+        if (type.startsWith("sms.") || type.startsWith("photos.")) return texts.offer(Delivery(target, value, delivered))
         if (type == "call.state") ringing = value["state"] == JsonPrimitive("ringing")
         return calls.offer(Delivery(target, value, delivered)).also { if (it) wake.trySend(Unit) }
     }
@@ -244,7 +251,7 @@ class HostedRuntime private constructor(private val context: Context) {
         subscriptions.keys.retainAll(members) // A revoked computer stops receiving at once.
         // Tell every approved device what this phone offers, on change and every two
         // minutes; computers answer with phone.subscribe. The roster has no device kinds.
-        val offered = HostedPhoneFrames.capabilities(OrionPermissions.read(context), textsAndCalls())
+        val offered = HostedPhoneFrames.capabilities(OrionPermissions.read(context), textsAndCalls(), photosShared())
         if (offered != advertised || System.currentTimeMillis() - advertisedAt > 120_000) {
             for (member in members) { gate(); transport!!.send(member, HostedPhoneFrames.capabilitiesPayload(offered)) }
             advertised = offered; advertisedAt = System.currentTimeMillis()
@@ -259,7 +266,12 @@ class HostedRuntime private constructor(private val context: Context) {
         // Each phone delivery names one computer, which must still be subscribed and approved.
         fun deliver(item: Delivery) {
             val type = item.payload.getValue("type").jsonPrimitive.content
-            if (item.target !in subscribers() || !HostedPhoneFrames.mayPublish(type, OrionPermissions.read(context), textsAndCalls())) return
+            if (item.target !in subscribers() || !HostedPhoneFrames.mayPublish(type, OrionPermissions.read(context), textsAndCalls(), photosShared())) return
+            if (type == "photos.item") {
+                val uri = android.content.ContentUris.withAppendedId(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                    item.payload.getValue("id").jsonPrimitive.content.toLong())
+                if (runCatching { context.contentResolver.openFileDescriptor(uri, "r")?.use { true } ?: false }.getOrDefault(false).not()) return
+            }
             gate(); transport!!.send(item.target, item.payload)
             runCatching(item.delivered)
         }
@@ -300,7 +312,7 @@ class HostedRuntime private constructor(private val context: Context) {
                 in HostedPhoneFrames.COMMAND_CAPABILITY -> {
                     val command = HostedPhoneFrames.command(payload)
                     // Texts and calls run at most once; reads (sync, open, search, history) may repeat.
-                    if (command != null && HostedPhoneFrames.allowed(type, source, subscribers().keys, OrionPermissions.read(context), textsAndCalls())
+                    if (command != null && HostedPhoneFrames.allowed(type, source, subscribers().keys, OrionPermissions.read(context), textsAndCalls(), photosShared())
                         && (!HostedPhoneFrames.isEffect(command) || receipts.claim("hosted:$id"))) runCatching { phone?.invoke(id, source, command) }
                 }
             }
@@ -317,6 +329,22 @@ class HostedRuntime private constructor(private val context: Context) {
         }
         UsageAnalytics.count(context, "hosted_file_send")
     }
+    suspend fun sendPhoto(request: String, target: String, photo: String) = mutex.withLock {
+        check(enabled() && HostedAccount.get(context).signedIn() && photosShared() && OrionPermissions.read(context).photos)
+        val current = open(); current.currentMembers()
+        check(target in subscribers())
+        val uri = android.content.ContentUris.withAppendedId(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, photo.toLong())
+        val name = context.contentResolver.query(uri, arrayOf(android.provider.MediaStore.Images.Media.DISPLAY_NAME), null, null, null)
+            ?.use { if (it.moveToFirst()) it.getString(0) else null } ?: "Photo.jpg"
+        context.contentResolver.openInputStream(uri)!!.use { input ->
+            HostedAttachments.send(current, transport!!, input, name.replace(Regex("[^A-Za-z0-9._ -]"), "_").take(180).trim(' ', '.').ifEmpty { "Photo.jpg" },
+                context.contentResolver.getType(uri) ?: "image/jpeg", target, photo, request) {
+                check(enabled() && HostedAccount.get(context).signedIn() && photosShared() && OrionPermissions.read(context).photos && target in subscribers())
+                current.currentMembers()
+                check(context.contentResolver.openFileDescriptor(uri, "r")?.use { true } == true)
+            }
+        }
+    }
     suspend fun saveFile(id: String, uri: Uri) = mutex.withLock {
         check(enabled() && HostedAccount.get(context).signedIn()); val current = open()
         val envelope = current.pendingIncoming().first { it.getValue("header").jsonObject.getValue("id").jsonPrimitive.content == id }
@@ -330,13 +358,24 @@ class HostedRuntime private constructor(private val context: Context) {
             UsageAnalytics.count(context, "hosted_file_save")
         } finally { verified.delete() }
     }
+    /** Explicitly abandon a failed attempt, retaining its files and the account sign-in. */
+    suspend fun restartSetup() = mutex.withLock {
+        check(setupStage() == HostedSetup.Stage.RECOVERY)
+        HostedAccount.get(context).cancel()
+        invalidate()
+        clearIdentityIntent()
+        status = if (enabled()) "Scan your computer's QR code" else "Off"
+    }
+    private fun clearIdentityIntent() {
+        check(prefs.edit().remove("device_id").remove("root").remove("recipient").remove("seen_members").remove("texts_and_calls").remove("photos_shared").remove("approval_verified").commit())
+        identityUnavailable = false; requestCode = ""; fingerprint = ""; lastEnrollmentAttempt = 0L
+        HostedSmsKnown.clearAll(context)
+    }
     fun retire() {
         check(!enabled()); HostedAccount.get(context).signOut(); invalidate()
         // Keystore keys and encrypted trust history stay available for explicit
         // recovery. A newly enrolled member gets a fresh unique device ID.
-        check(prefs.edit().remove("device_id").remove("root").remove("recipient").remove("seen_members").remove("texts_and_calls").remove("approval_verified").commit())
-        identityUnavailable = false; requestCode = ""; fingerprint = ""
-        HostedSmsKnown.clearAll(context)
+        clearIdentityIntent()
     }
 
     /**

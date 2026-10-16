@@ -239,7 +239,7 @@ class Camera:
 
         `device_id` is a phone paired through a self-hosted Hub. `serial` is a phone
         that has allowed this computer over USB or wireless debugging; that is how
-        Saiph Hosted and Hub-less computers reach the phone camera."""
+        Saiph Cloud and Hub-less computers reach the phone camera."""
         if (device_id is None) == (serial is None):raise ValueError('Choose one phone for the camera.')
         if type(preview) is not bool:raise ValueError('Choose whether to open a camera preview.')
         with self.lock:

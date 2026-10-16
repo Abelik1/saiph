@@ -206,7 +206,7 @@ class PhoneFeatures:
                     saved=self._save('photo',{**photo,'device_id':row['device_id']})
                     # Only a photo taken just now, never seen before, is offered; history is not.
                     if not seen and time.time()*1000-saved.get('timestamp',0)<NEW_PHOTO_SECONDS*1000:self.photo_new(saved)
-                self.start(config)
+                if any(not photo.get('preview') for photo in row['photos']):self.start(config)
             elif kind=='photos.sync':
                 for old in self.store.all('phone_photo'):
                     if old['device_id']==row['device_id'] and old['photo_id'] not in row['ids']:
@@ -387,6 +387,25 @@ class PhoneFeatures:
         return {**result,'saved':row['status']=='saved','existing':existing}
     def _file_id(self,path):
         return next((r['id'] for r in self.store.all('phone_file') if r.get('path')==str(path)),None)
+    def cloud_original(self,device,photo,path,manifest):
+        """Use the existing gallery save/copy behavior after authenticated decryption."""
+        with self.lock:
+            key=self._photo_key(device,photo)
+            previous=self.photo_cached(device,photo)
+            row={'id':key,'device_id':device,'photo_id':photo,'name':manifest['name'],'path':str(path),
+                 'size':manifest['size'],'sha256':manifest['sha256']}
+            self.store.save('phone_photo_original',row)
+            self.pending.pop(key,None)
+            try:intent=self.store.get('phone_photo_intent',key)
+            except ValueError:intent=None
+            if intent and intent['mode']=='save':self._save_cached(device,photo,row)
+            elif intent and intent['mode']=='copy':self._copy_original(device,photo)
+            self.store.delete('phone_photo_intent',key)
+            if previous and previous['path']!=str(path):
+                old=Path(previous['path'])
+                if old.parent.resolve()==(self.workspace.root/'phone-originals').resolve():old.unlink(missing_ok=True)
+        self.changed()
+
     def _save_cached(self,device,photo,cached):
         """Place a held original in Downloads → Orion, reusing an identical copy already there."""
         sha256=cached.get('sha256') or file_sha256(cached['path'])
@@ -475,7 +494,7 @@ class PhoneFeatures:
         devices=(phone.snapshot()['devices'] if phone else [])+(hosted() if hosted else [])
         return any(d['id']==device and capability in d.get('capabilities',[]) for d in devices)
     def command(self,device,kind,payload):
-        # Saiph Hosted phones take the same actions through sealed envelopes.
+        # Saiph Cloud phones take the same actions through sealed envelopes.
         hosted=getattr(self.workspace,'hosted_phone_command',None)
         result=hosted(device,kind,payload) if hosted else None
         if result is not None:return result

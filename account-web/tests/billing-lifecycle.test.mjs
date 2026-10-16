@@ -100,12 +100,12 @@ function provider() {
   return { stripe, calls, subscriptions, completeCheckout, foreignCustomer };
 }
 
-// Stand-in for the Hosted service: verifies the Ed25519 signature with the public
+// Stand-in for the Cloud service: verifies the Ed25519 signature with the public
 // key only and applies the same sequence rule as AccountRegistry.apply_paid_grant.
 const hub = { grants: new Map(), down: false };
 const grantPublic = createPublicKey(grantPrivate);
 async function hubFetch(url, init) {
-  if (hub.down) throw new Error("Hosted service unreachable");
+  if (hub.down) throw new Error("Cloud service unreachable");
   assert.equal(url, "https://api.saiph.test/v1/billing/grant");
   const match = /^t=(\d+),k=test-1,v1=([A-Za-z0-9_-]+)$/.exec(init.headers["Saiph-Billing-Signature"]);
   assert.ok(match && verify(null, Buffer.from(GRANT_CONTEXT + match[1] + "." + init.body), grantPublic, Buffer.from(match[2], "base64url")));
@@ -357,7 +357,7 @@ describe("billing lifecycle through HTTP handlers and isolated PostgreSQL", { sk
     assert.equal((await accountAction(browser("/api/billing/checkout"), "checkout", deps(fixture.stripe))).status, 503);
     assert.equal(fixture.calls.checkoutCreate, 0);
   });
-  test("Hosted grant follows purchase, renewal and cancellation from webhooks only", async () => {
+  test("Cloud grant follows purchase, renewal and cancellation from webhooks only", async () => {
     const fixture = provider();
     const { sub, session } = await purchased(fixture);
     assert.equal(hub.grants.size, 0, "checkout and its return grant nothing");
@@ -383,7 +383,7 @@ describe("billing lifecycle through HTTP handlers and isolated PostgreSQL", { sk
     assert.deepEqual(rows[0], { dirty: false, pushed_until: "0" });
   });
 
-  test("an unreachable Hosted service makes Stripe retry until the grant is delivered", async () => {
+  test("an unreachable Cloud service makes Stripe retry until the grant is delivered", async () => {
     const fixture = provider();
     const { sub } = await purchased(fixture);
     const created = subscriptionEvent("customer.subscription.created", sub, NOW);

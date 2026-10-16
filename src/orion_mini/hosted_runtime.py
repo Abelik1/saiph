@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Opt-in Saiph Hosted preview for the desktop. OFF by default.
+"""Opt-in Saiph Cloud preview for the desktop. OFF by default.
 
 With `settings["hosted"]["enabled"]` absent or false, nothing here touches the
 network, keys or clipboard, and self-hosted Link behaviour is unchanged.
@@ -32,7 +32,7 @@ import threading
 import time
 from pathlib import Path
 from urllib.parse import urlsplit
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from .clipboard import RecentClipboard
 from .hosted_approval import (
@@ -41,7 +41,7 @@ from .hosted_approval import (
 )
 from .hosted_crypto import EnvelopeError, canonical
 from .hosted_features import (
-    ANSWERS, CALL_COMMAND, CALL_DIAL, CALL_HANDLED, CALL_REFUSED, CALL_STATE, CLIPBOARD_TEXT, COMMAND_CAPABILITY,
+    PHOTOS_ITEM, PHOTOS_SYNC, PHOTO_REQUEST, PHOTO_ORIGINAL, ANSWERS, CALL_COMMAND, CALL_DIAL, CALL_HANDLED, CALL_REFUSED, CALL_STATE, CLIPBOARD_TEXT, COMMAND_CAPABILITY,
     DATA_CAPABILITY, FILE_OFFER, NOTIFICATION_REMOVE, NOTIFICATION_UPSERT, PHONE_CAPABILITIES, PHONE_DATA, SMS_OPEN,
     SMS_SEND, SMS_SYNC, FeatureError, clipboard_payload, dismiss_payload, kind, phone_command, read_clipboard,
     read_notification, read_phone_data, refused_request, subscribe_payload,
@@ -67,9 +67,9 @@ ROOT_ONLY = "Only your main computer can approve or remove devices."
 NO_ACCESS = ("This Saiph account has no beta access yet. Activate your invitation code on your Saiph "
              "account page with this same account, then try again.")
 EXCLUSIVE = ("This computer is paired with a self-hosted Hub. A device uses either a self-hosted Hub "
-             "or Saiph Hosted, never both.")
-HOSTED_ACTIVE = ("This computer uses Saiph Hosted. A device uses either Saiph Hosted or a self-hosted Hub, "
-                 "never both. Turn off and forget Saiph Hosted first.")
+             "or Saiph Cloud, never both.")
+HOSTED_ACTIVE = ("This computer uses Saiph Cloud. A device uses either Saiph Cloud or a self-hosted Hub, "
+                 "never both. Turn off and forget Saiph Cloud first.")
 CONFIG_KEYS = {"service_url", "issuer", "audience", "client_id", "refresh_tokens"}
 
 
@@ -78,7 +78,7 @@ class HostedError(ValueError):
 
 
 def _unreachable(error) -> str:
-    return NO_ACCESS if error.status == 403 else "Saiph Hosted is unreachable. Try again when you are online."
+    return NO_ACCESS if error.status == 403 else "Saiph Cloud is unreachable. Try again when you are online."
 
 
 def hosted_settings(settings) -> dict:
@@ -170,6 +170,7 @@ class HostedController:
         self.clipboard_sink = lambda mime, data: None
         self._outgoing_clipboard = None
         self._offers = {}
+        self._photos_asked = {}  # (device, photo) -> (request event, expiry); memory only.
         self._asked = {}  # (phone, request type) -> when this computer asked; memory only.
         self._seen = {}  # phone -> last authenticated event time; memory only.
         self._sync_requested = set()
@@ -231,7 +232,7 @@ class HostedController:
 
     def set_enabled(self, flag) -> dict:
         if type(flag) is not bool:
-            raise HostedError("Saiph Hosted is on or off.")
+            raise HostedError("Saiph Cloud is on or off.")
         with self.lock:
             if flag:
                 if self.self_hosted_paired():
@@ -259,13 +260,13 @@ class HostedController:
         automatically; root transfer is not implemented.
         """
         if confirm is not True:
-            raise HostedError("Confirm that this computer should stop using Saiph Hosted.")
+            raise HostedError("Confirm that this computer should stop using Saiph Cloud.")
         if self.enabled():
-            raise HostedError("Turn off Saiph Hosted first.")
-        confirm_user(self.workspace, "retire this computer's Saiph Hosted identity")
+            raise HostedError("Turn off Saiph Cloud first.")
+        confirm_user(self.workspace, "retire this computer's Saiph Cloud identity")
         with self.lock:
             if self.enabled():
-                raise HostedError("Turn off Saiph Hosted first.")
+                raise HostedError("Turn off Saiph Cloud first.")
             self._deactivate("off")
             if self.account is not None:
                 self.account.sign_out()
@@ -311,7 +312,7 @@ class HostedController:
 
     def _require_enabled(self):
         if not self.enabled():
-            raise HostedError("Turn on Saiph Hosted first.")
+            raise HostedError("Turn on Saiph Cloud first.")
         if self.self_hosted_paired():
             raise HostedError(EXCLUSIVE)
 
@@ -357,6 +358,7 @@ class HostedController:
         self.session = self.transport = self.mailbox = self.root = self.info = self.signing = None
         self._offers.clear()
         self._asked.clear()
+        self._photos_asked.clear()
         self._subscribed.clear()
         self._notices.clear()
         self._outgoing_clipboard = None
@@ -395,7 +397,7 @@ class HostedController:
         offset = getattr(self.transport, "server_offset", None)
         decision = assess(None, self.clock(), server_offset=offset)
         if decision.blocked:
-            raise HostedError("This computer's clock differs from Saiph Hosted by more than an hour. Correct the clock first.")
+            raise HostedError("This computer's clock differs from Saiph Cloud by more than an hour. Correct the clock first.")
         return decision.ttl_seconds
 
     def setup_root(self) -> dict:
@@ -447,7 +449,7 @@ class HostedController:
     def _pending(response, member):
         if (type(response) is not dict or set(response) != {"status", "expires_at"} or response["status"] != "pending"
                 or type(response["expires_at"]) is not int):
-            raise HostedError("Saiph Hosted returned an invalid device request.")
+            raise HostedError("Saiph Cloud returned an invalid device request.")
         return {**member, "expires_at": response["expires_at"]}
 
     def _token_or_error(self):
@@ -455,9 +457,9 @@ class HostedController:
             return self._token()
         except SignInRequired:
             self._deactivate("sign_in_required")
-            raise HostedError("Sign in to Saiph Hosted first.") from None
+            raise HostedError("Sign in to Saiph Cloud first.") from None
         except HostedUnavailable:
-            raise HostedError("Saiph Hosted is unreachable. Try again when you are online.") from None
+            raise HostedError("Saiph Cloud is unreachable. Try again when you are online.") from None
 
     def root_code(self) -> dict:
         """A fresh public root code as QR modules plus the full fingerprint."""
@@ -575,7 +577,7 @@ class HostedController:
             except (ApprovalError, EnvelopeError, TransportError):
                 raise HostedError("The device could not be approved. Ask it for a fresh request code.") from None
             if candidate["device"]["id"] not in members:
-                raise HostedError("Saiph Hosted has not accepted the approval yet. It will retry automatically.")
+                raise HostedError("Saiph Cloud has not accepted the approval yet. It will retry automatically.")
             self._set_label(candidate["device"]["id"], label.strip())
             self._watch_members()
         self.changed()
@@ -602,7 +604,7 @@ class HostedController:
             except (ApprovalError, EnvelopeError, TransportError):
                 raise HostedError("Revocation could not be confirmed. Saiph will refresh the device list when it reconnects.") from None
             if device_id in members:
-                raise HostedError("Saiph Hosted has not accepted the revocation yet. It will retry automatically.")
+                raise HostedError("Saiph Cloud has not accepted the revocation yet. It will retry automatically.")
             self._watch_members()
             labels = self._labels()
             labels.pop(device_id, None)
@@ -639,7 +641,7 @@ class HostedController:
         with self.lock:
             self._require_enabled()
             if self.identity.exists():
-                raise HostedError("This computer already has a Saiph Hosted identity.")
+                raise HostedError("This computer already has a Saiph Cloud identity.")
             try:
                 info = inspect_root_code(code)
             except ApprovalError:
@@ -658,7 +660,7 @@ class HostedController:
         with self.lock:
             self._require_enabled()
             if self.identity.exists():
-                raise HostedError("This computer already has a Saiph Hosted identity.")
+                raise HostedError("This computer already has a Saiph Cloud identity.")
             try:
                 root = trust_root_code(code, trusted_out_of_band=True)
             except ApprovalError:
@@ -705,7 +707,7 @@ class HostedController:
                 # The main computer approves exactly the pending request this computer submitted.
                 self._pending(self.transport.enroll(token, candidate), candidate["device"])
             except (ApprovalError, TransportError):
-                raise HostedError("The request could not be sent to Saiph Hosted. Try again shortly.") from None
+                raise HostedError("The request could not be sent to Saiph Cloud. Try again shortly.") from None
             try:
                 self.transport.offer_request(token, code)
             except TransportError:
@@ -828,7 +830,7 @@ class HostedController:
             except KeyStorageError:
                 self.status, self.error = "keys_unavailable", "This computer could not unlock its hosted keys. They were kept unchanged."
             except (ApprovalError, EnvelopeError, TransportError, HostedError):
-                self.status, self.error = "retrying", "Saiph Hosted is temporarily unavailable. Saiph will retry."
+                self.status, self.error = "retrying", "Saiph Cloud is temporarily unavailable. Saiph will retry."
             finally:
                 wait = self.decision.next_check_in if self.decision else 30
                 self.next_step_at = time.monotonic() + min(wait, 15)
@@ -868,6 +870,9 @@ class HostedController:
                     outcome = "succeeded"
                 elif event in (NOTIFICATION_UPSERT, NOTIFICATION_REMOVE):
                     self._notification(envelope["header"]["source"], payload)
+                    outcome = "succeeded"
+                elif event == PHOTO_ORIGINAL:
+                    self._photo_original(envelope, payload)
                     outcome = "succeeded"
                 elif event in PHONE_DATA:
                     self._phone_data(envelope["header"]["source"], event_id, payload)
@@ -1008,6 +1013,14 @@ class HostedController:
                 self.mailbox.stage(source, subscribe_payload(self.label()), ttl_seconds=300)
                 self._subscribed[source] = now
                 self._wake.set()
+            if "photos" not in body["capabilities"]:
+                for kind_ in ("photo", "thumbnail", "photo_intent"):
+                    for row in self.workspace.store.all("phone_" + kind_):
+                        if row.get("device_id") == source:
+                            if kind_ == "photo":
+                                self.workspace.store.delete("phone_photo_intent", self.workspace.phone_features._photo_key(source, row["photo_id"]))
+                            self.workspace.store.delete("phone_" + kind_, row["id"])
+                self._photos_asked = {key: value for key, value in self._photos_asked.items() if key[0] != source}
             if "sms" not in body["capabilities"]:
                 self._sync_requested.discard(source)
             elif source not in self._sync_requested and not any(
@@ -1041,9 +1054,35 @@ class HostedController:
             current = next((row for row in self.workspace.store.all("phone_call") if row.get("device_id") == source), {})
             if current.get("handled_by") is not None and current.get("state") != "ringing":
                 body = {**body, "handled": current.get("handled"), "handled_by": current["handled_by"]}
-        features.event({"id": event_id, "type": kind_, "payload": body, "source": source}, None)
+        features.event({"id": event_id, "type": "photos.index" if kind_ == PHOTOS_ITEM else kind_, "payload": body, "source": source}, None)
         if kind_ == CALL_STATE:
             self._call(body)
+
+    def _photo_original(self, envelope, payload):
+        from .hosted_files import _manifest, download_attachment
+        from .phone_features import safe_name
+        source = envelope["header"]["source"]
+        if type(payload) is not dict or set(payload) != {"type", "photo_id", "request", "file"}:
+            raise FeatureError()
+        photo = payload["photo_id"]
+        if type(photo) is not str or "photos" not in self._capabilities(source):
+            raise FeatureError()
+        asked = self._photos_asked.get((source, photo))
+        if asked is None or asked[0] != payload["request"] or asked[1] <= self.clock():
+            raise FeatureError()
+        manifest, _ = _manifest(self.session, envelope)
+        if not manifest["mime"].startswith("image/"):
+            raise FeatureError()
+        features = self.workspace.phone_features
+        if not any(row.get("device_id") == source and row.get("photo_id") == photo for row in self.workspace.store.all("phone_photo")):
+            raise FeatureError()
+        folder = self.workspace.root / "phone-originals"
+        folder.mkdir(parents=True, mode=0o700, exist_ok=True)
+        destination = (folder / (str(uuid4()) + "-" + safe_name(manifest["name"]))).absolute()
+        self._token_or_error()
+        saved = download_attachment(self.session, self.transport, envelope, destination)
+        self._photos_asked.pop((source, photo), None)
+        features.cloud_original(source, photo, saved, manifest)
 
     def label(self) -> str:
         """This computer's name as other computers see it in "Answered on ..."."""
@@ -1084,9 +1123,12 @@ class HostedController:
         store.delete("hosted_phone", device)
         self._seen.pop(device, None)
         self._sync_requested.discard(device)
-        for name in ("thread", "message", "call", "attachment"):
+        self._photos_asked = {key: value for key, value in self._photos_asked.items() if key[0] != device}
+        for name in ("thread", "message", "call", "attachment", "photo", "thumbnail", "photo_intent"):
             for row in store.all("phone_" + name):
                 if row.get("device_id") == device:
+                    if name == "photo":
+                        store.delete("phone_photo_intent", self.workspace.phone_features._photo_key(device, row["photo_id"]))
                     store.delete("phone_" + name, row["id"])
 
     def phones(self) -> list[dict]:
@@ -1145,6 +1187,9 @@ class HostedController:
                 payload = phone_command(kind_, body)
             except FeatureError:
                 raise HostedError("This request could not be sent. Check the number or shorten the message.") from None
+            if kind_ == PHOTO_REQUEST and not any(row.get("device_id") == device and row.get("photo_id") == payload["id"]
+                    for row in self.workspace.store.all("phone_photo")):
+                raise HostedError("That photo is no longer available.")
             if kind_ in (SMS_OPEN, SMS_SEND):
                 thread = next((row for row in self.workspace.store.all("phone_thread")
                                if row.get("device_id") == device and row.get("thread") == payload["thread"]), None)
@@ -1158,10 +1203,16 @@ class HostedController:
                     handled = call.get("handled_by")
                     raise HostedError(refusal_text({"reason": "handled", "handled": call.get("handled"), "by": handled})
                                       if handled is not None else "The call is no longer ringing.")
+            if kind_ == PHOTO_REQUEST:
+                self._photos_asked = {key: value for key, value in self._photos_asked.items() if value[1] > self.clock()}
+                if len(self._photos_asked) >= 100:
+                    raise HostedError("Photos are still loading. Try again shortly.")
             try:
                 event_id = self.mailbox.stage(device, payload, ttl_seconds=30 if kind_ == CALL_COMMAND else 60)
             except EnvelopeError:
                 raise HostedError("This request could not be sent. Shorten the message and try again.") from None
+            if kind_ == PHOTO_REQUEST:
+                self._photos_asked[(device, payload["id"])] = (event_id, self.clock() + 300)
             if kind_ in ANSWERS.values() or kind_ in (CALL_COMMAND, CALL_DIAL):
                 # Answers and refusals are accepted only for this computer's own recent request.
                 self._asked[(device, kind_)] = int(self.clock())
@@ -1245,7 +1296,7 @@ class HostedController:
                     try:
                         self.step()
                     except Exception:
-                        self.status, self.error = "retrying", "Saiph Hosted is temporarily unavailable. Saiph will retry."
+                        self.status, self.error = "retrying", "Saiph Cloud is temporarily unavailable. Saiph will retry."
                     self.next_poll_at = time.monotonic() + FAST_POLL_SECONDS
                 elif time.monotonic() >= self.next_poll_at:
                     self.next_poll_at = time.monotonic() + FAST_POLL_SECONDS

@@ -27,12 +27,12 @@ ACCESS_MARGIN_SECONDS = 60
 
 class SignInRequired(Exception):
     def __init__(self):
-        super().__init__("Sign in to Saiph Hosted again.")
+        super().__init__("Sign in to Saiph Cloud again.")
 
 
 class HostedUnavailable(Exception):
     def __init__(self):
-        super().__init__("Saiph Hosted is unreachable. Your session was kept.")
+        super().__init__("Saiph Cloud is unreachable. Your session was kept.")
 
 
 class TokenVault:

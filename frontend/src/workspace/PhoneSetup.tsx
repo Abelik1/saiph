@@ -136,7 +136,7 @@ export function PhoneSetup({ state, client, onApproved, onDone }: { state: State
           ? <p>Saiph account support is unavailable in this build.</p> : <Enrollment state={state} client={client} />}
         <div className="flex flex-wrap gap-3 border-t border-border pt-4">
           {mode === "hosted" ? !state.hosted?.identity && !state.hosted?.enabled && <Action variant="secondary" run={() => choose("hub")}>Use my own Hub instead</Action>
-            : !state.enrollment?.ready && state.hosted?.available !== false && <Action variant="secondary" run={() => choose("hosted")}>Use a Saiph account instead</Action>}
+            : !state.enrollment?.ready && state.hosted?.available !== false && <Action variant="secondary" run={() => choose("hosted")}>Use Saiph Cloud instead</Action>}
           <Action variant="tonal" run={() => client.call("setup.open", { link: "android" })}>Get the Android app</Action>
         </div>
       </CardContent>
