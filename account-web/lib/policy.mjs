@@ -26,6 +26,13 @@ export function isOwner(subject, ownerSubject) {
   return typeof subject === "string" && typeof ownerSubject === "string"
     && ownerSubject.length > 0 && subject === ownerSubject;
 }
+/** The only sign-in this site offers. Fixing the connection here sends people
+ * straight to Google's account chooser instead of the Auth0 login page; the
+ * proxy refuses login queries, so callers cannot pick another connection.
+ * @param {{audience: string} | null} beta */
+export function loginParameters(beta) {
+  return {scope: "openid profile email", connection: "google-oauth2", ...(beta ? {audience: beta.audience} : {})};
+}
 export const accountCookieName = "__Host-saiph_account";
 /** @param {string} name */
 export function isAccountCookie(name) {

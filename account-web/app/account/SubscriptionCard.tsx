@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type {Entitlement} from "../../lib/billing/entitlement.mjs";
 import type {BillingView} from "../../lib/billing/view";
-import {Icon} from "../ui";
+import {Icon, Notice} from "../ui";
 
 const standingText: Record<Entitlement["state"], string> = {
   none: "No subscription yet", active: "Active", ending: "Active, cancellation scheduled",
@@ -30,6 +30,9 @@ export default function SubscriptionCard({view}: {view: BillingView | "unavailab
     </div>
     {view === "unavailable" ? <p role="status">Subscription details are temporarily unavailable. Please try again shortly.</p> : <>
       <p>Your subscription keeps your computers and phone connected through Saiph Hosted. Your content stays end-to-end encrypted.</p>
+      <Notice tone="warn" title="Saiph Hosted is in beta.">
+        Expect bugs, missing features and occasional downtime, and features may change as we build it. You can withdraw within 14 days of subscribing for a full refund.
+      </Notice>
       {view.standing.state !== "none" && <dl className="facts">
         <div><dt>Status</dt><dd><span className={"pill " + standingTone[view.standing.state]}>{standingText[view.standing.state]}</span></dd></div>
         {view.standing.entitled && view.standing.until !== null && <div><dt>Access until</dt><dd>{day(view.standing.until)}</dd></div>}
@@ -66,6 +69,7 @@ export default function SubscriptionCard({view}: {view: BillingView | "unavailab
         </form>
         <span className="fine">Change plan, update your card or cancel, in Stripe.</span>
       </div>}
+      {view.hasCustomer && <p className="fine"><a href="/account/withdraw">Withdraw from contract here</a>: within 14 days of subscribing, with a full refund.</p>}
       <p className="fine after">{test ? "Test mode: use Stripe test card details only. No real money is charged." : "Cancel any time in Manage billing; access continues to the end of the paid period."}</p>
     </>}
     <div className="card-foot"><Icon name="lock" /><span>Paying gives your account Hosted access. You still approve devices on your own computer, and signing in never unlocks your content.</span></div>

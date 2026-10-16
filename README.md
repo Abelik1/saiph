@@ -21,7 +21,7 @@ one company.
 > A friend told me the Apple ecosystem can't be beaten, so I built one that works
 > on everything.
 >
-> — Alexander, creator of Saiph
+
 
 <p align="center">
   <img src="docs/images/readme/desktop-messages.png" alt="The Saiph desktop app on the Phone page: sound and media controls, Do Not Disturb and notifications on the left, and a text conversation sent from the computer through the phone on the right." width="100%">

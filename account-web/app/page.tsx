@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { getAuth0 } from "../lib/auth";
 import {readBetaConfig} from "../lib/beta-policy.mjs";
-import { Icon, Mark, Notice, Strings } from "./ui";
+import { GoogleMark, Icon, Mark, Notice, Strings } from "./ui";
 export const dynamic = "force-dynamic";
 
 export default function Home() {
@@ -36,8 +36,8 @@ export default function Home() {
               : "Sign in to view your account and your test subscription. This preview is open to its owner only."}
           </p>
           {configured ? (
-            <a className="button block" href="/auth/login">
-              Continue to sign in <Icon name="arrow" />
+            <a className="google-button" href="/auth/login">
+              <GoogleMark /> Continue with Google
             </a>
           ) : (
             <Notice tone="neutral" title="Sign-in is being set up">
