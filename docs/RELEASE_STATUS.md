@@ -1,3 +1,13 @@
+## 2026-10-16: verified Android callback and Cloud gallery update
+
+Android 0.9.5 uses `https://usesaiph.com/android/oauth2redirect` through AppAuth with an exact verified App Link filter; its existing custom scheme remains for pre-upgrade in-flight attempts. Pending state, redirect, PKCE challenge and endpoints are bound before code exchange. The static website includes the existing beta certificate association and a minimal no-analytics/no-store callback fallback which clears query/fragment from browser history. Auth0 allowlisted the callback at the owner's request; Google connection/branding is unchanged. Actual domain verification and final publication results belong in the private operations record.
+
+Cloud phones now offer an explicit Allow photos choice, separate from Texts and calls. With Android photo permission, up to 100 recent previews and their metadata travel in sealed envelopes to current subscribed computers. Original photos use the existing streaming-encrypted blob path only after an explicit open/copy/save request, bound to that request and recipient. The desktop reuses its existing Photos and Messages galleries; other apps' chat histories and MMS are not added. The bottom-right footer reads the installed distribution version. Visible app, account and website wording now uses Saiph Cloud; internal Hosted identifiers and routes remain compatible.
+
+Actual local checks: five native Android instrumentation tests passed (callback state/PKCE/replay/expiry, legacy in-flight compatibility, exact manifest routing, and real MediaStore/permission/opt-in bounded previews). Earlier source checks passed app JVM/lint with 0 errors and 240 existing warnings. Desktop regression checks passed 236 cases except the new wrapper test's initially wrong synthetic TTL, corrected and rerun in the 169-case passing file/phone suite. The final combined desktop/gallery run passed 238 cases. Native Qt control/navigation/form persistence and bottom-right development-version layout passed in a fresh isolated shell. Frontend 178 tests and production build passed. Account 79 tests and typecheck passed; build first hit a local Next telemetry config EXDEV error, then passed with telemetry disabled and isolated config. Website 183 checks passed after excluding the callback from analytics-loading expectations. Original logs retained. Final build receipts will record later checks separately.
+
+These are synthetic unit, emulator and native-shell checks, not physical-device acceptance, completed live Google login, independent review or trusted Windows signing. The existing friends-beta signing identity is preserved.
+
 # Current release preparation status
 
 2026-10-16 Cloud connection follow-up: user-facing service labels now say Cloud;

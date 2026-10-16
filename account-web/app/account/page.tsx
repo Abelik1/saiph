@@ -58,12 +58,12 @@ export default async function Account({ searchParams }: Props) {
       <dl className="facts overview" aria-label="Account status">
         <div><dt>Account</dt><dd><span className="pill good">Signed in</span><span className="fine">Auth0 session active</span></dd></div>
         <div><dt>Devices</dt><dd>Separate approval<span className="fine">Signing in does not pair your devices.</span></dd></div>
-        <div><dt>Hosted</dt><dd>Preview<span className="fine">Hosted access is managed by the Hosted service.</span></dd></div>
+        <div><dt>Cloud</dt><dd>Preview<span className="fine">Cloud access is managed by the Cloud service.</span></dd></div>
       </dl>
       <div className="after">
         {billing ? <SubscriptionCard view={billing} /> : (
           <section className="card" aria-labelledby="subscription-title">
-            <p className="eyebrow">Saiph Hosted subscription</p>
+            <p className="eyebrow">Saiph Cloud subscription</p>
             <h2 id="subscription-title">Subscriptions are not available yet.</h2>
             <p>Subscriptions open when billing configuration and storage are ready.</p>
           </section>

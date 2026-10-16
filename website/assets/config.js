@@ -13,7 +13,7 @@ window.ORION_SITE = {
     android: "", // e.g. ".../releases/download/v0.1.0/orion-android-0.1.0.apk"
     server: ""   // e.g. ".../releases/download/v0.1.0/orion-server-0.1.0.tar.gz"
   },
-  // Hosted plan. Leave subscribeUrl empty until billing is live (e.g. a Stripe Payment Link).
+  // Cloud plan. Leave subscribeUrl empty until billing is live (e.g. a Stripe Payment Link).
   // While it is empty, the button collects interest through waitlistUrl, or falls back to GitHub.
   subscribeUrl: "",
   waitlistUrl: "",  // Reviewed Tally URL with consent_version; empty until privacy/contact approval.

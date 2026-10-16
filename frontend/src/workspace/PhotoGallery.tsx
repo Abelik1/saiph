@@ -19,7 +19,7 @@ import type { Client } from "./types";
 import type { PhoneFeatureState, PhonePhoto, PhotoSave } from "./PhoneTabs";
 import { Action, Empty } from "./ui";
 
-type PhoneDevice = { id: string; online: boolean; capabilities: string[] };
+type PhoneDevice = { id: string; hosted?: boolean; online: boolean; capabilities: string[] };
 type Original = { url: string; width: number; height: number; size: number };
 function SavePhoto({
   photo,
@@ -457,8 +457,8 @@ export function Photos({
   if (!phone?.capabilities.includes("photos"))
     return (
       <Empty title="Photos permission">
-        Allow photos in Saiph on your phone. Your recent photos then appear
-        automatically.
+        {phone?.hosted ? "On your phone, open Files and photos → Allow photos. Your recent photos appear here after Android access is granted."
+          : "Allow photos in Saiph on your phone. Your recent photos then appear automatically."}
       </Empty>
     );
   const rows = info.photos

@@ -37,9 +37,9 @@ async function checkPage(session,active) {
   const response=await request("/account?checkout=returned&entitled=true",session);
   assert.equal(response.status,200);assert.match(response.headers.get("cache-control"),/no-store/);
   assert.equal(response.headers.get("referrer-policy"),"same-origin");
-  const html=await response.text();assert.match(html,active?/Hosted access active/:/Enter your invitation code/);
+  const html=await response.text();assert.match(html,active?/Cloud access active/:/Enter your invitation code/);
   for(const hidden of [code,"synthetic-token-","synthetic|friend",'action="/api/billing/checkout"']) assert.equal(html.includes(hidden),false,hidden);
-  assert.equal(html.includes("Hosted access active"),active);
+  assert.equal(html.includes("Cloud access active"),active);
 }
 try {
   let ready=false;let startupStatus;
@@ -57,7 +57,7 @@ try {
   assert.match(setupHtml,/You do not need a server or Tailscale/);
   for(const script of setupHtml.matchAll(/<script\b([^>]*)>/g)) assert.ok(script[1].includes('nonce="'+nonce+'"'),"Framework script missing the request nonce");
   assert.equal(first.headers.has("x-nonce"),false);
-  checks.push("public Hosted guide; unique CSP nonce applied to framework scripts");
+  checks.push("public Cloud guide; unique CSP nonce applied to framework scripts");
   const alias=await request("/account?checkout=returned",undefined,undefined,{host:"old-account.saiph.test"});
   assert.equal(alias.status,308);assert.equal(alias.headers.get("location"),origin+"/account?checkout=returned");
   const callbackAlias=await request("/auth/callback?code=must-not-forward&state=private",undefined,undefined,{host:"old-account.saiph.test"});

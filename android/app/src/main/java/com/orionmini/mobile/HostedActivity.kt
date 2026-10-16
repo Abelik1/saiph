@@ -114,6 +114,7 @@ class HostedActivity : ComponentActivity() {
     override fun onDestroy() { authorizationService?.dispose(); authorizationService = null; super.onDestroy() }
     override fun onResume() {
         super.onResume()
+        runtime.photosRevision++
         if (runtime.enabled() && !sefirah.network.orion.OrionPause.paused(this)) ContextCompat.startForegroundService(this, Intent(this, HostedSyncService::class.java))
         lock.open(::lockedScreen, ::resumeUnlocked)
     }
@@ -289,6 +290,17 @@ class HostedActivity : ComponentActivity() {
         if (resources.configuration.fontScale > 1.3f) root.addView(artwork)
     }
     private fun granted(permission: String) = checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
+    private fun photoPermissions() = if (android.os.Build.VERSION.SDK_INT >= 34)
+        arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
+        else if (android.os.Build.VERSION.SDK_INT >= 33) arrayOf(Manifest.permission.READ_MEDIA_IMAGES)
+        else arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+    private fun allowPhotos() {
+        verified("Share recent photos with your approved computers") {
+            runtime.setPhotosShared(true)
+            requestPermissions(photoPermissions(), 48)
+            render()
+        }
+    }
     /** Off by default: approved computers may act on texts and calls only after the owner turns this on here. */
     private fun textsAndCalls() = group("Texts and calls") {
         addView(featureRow(sefirah.common.R.drawable.ic_chat, "Texts", "Read and reply to one-to-one texts, or start a conversation."))
@@ -314,7 +326,8 @@ class HostedActivity : ComponentActivity() {
     }
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 47 && !showingLock) render()
+        if (requestCode == 48) runtime.setPhotosShared(runtime.photosShared())
+        if (requestCode in listOf(47, 48) && !showingLock) render()
     }
     private fun field(label: String, value: String = "", into: LinearLayout = root): EditText {
         val labelView = text(label, UiType.BODY, Palette.MUTED).apply { setPadding(dp(2), dp(8), 0, dp(6)) }
@@ -389,7 +402,14 @@ class HostedActivity : ComponentActivity() {
             // Daily use first: files across, then texts and calls.
             shownOffers = runtime.offers.map { it.first }
             group("Files and photos") {
-                addView(featureRow(com.castle.sefirah.R.drawable.saiph_ic_photo, "Send to your computers", "Choose a file or photo from this phone."))
+                addView(featureRow(com.castle.sefirah.R.drawable.saiph_ic_photo, "Photo gallery", "Recent photos on your computers. You choose which photos Android allows."))
+                if (!runtime.photosShared()) actions(button("Allow photos", tone = Tone.TONAL) { allowPhotos() })
+                else {
+                    if (!sefirah.network.orion.OrionPermissions.read(this@HostedActivity).photos)
+                        actions(button("Allow photos", tone = Tone.TONAL) { requestPermissions(photoPermissions(), 48) })
+                    else actions(button("Choose photo access", tone = Tone.TONAL) { requestPermissions(photoPermissions(), 48) })
+                    actions(button("Stop sharing photos") { runtime.setPhotosShared(false); render() })
+                }
                 actions(button("Send a file or photo", true) { sendFile.launch(arrayOf("*/*")) })
                 addView(divider())
                 addView(cardTitle("Received files"))

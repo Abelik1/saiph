@@ -336,7 +336,7 @@ export function Phone({
           {dismissError && <p className="inline-error m-0 px-4 pt-2 text-[12.5px]" role="alert">{dismissError}</p>}
           <div className="grid min-h-0 flex-1 content-start gap-2.5 overflow-y-auto p-4">
             <HubSuggestions state={state} client={client} />
-            {phone?.hosted ? <p className="m-0 text-[12.5px] leading-relaxed text-muted-foreground">With Saiph Cloud, your phone's notifications appear in Settings → Saiph Cloud.</p>
+            {phone?.hosted ? <p className="m-0 text-[12.5px] leading-relaxed text-muted-foreground">Phone notifications appear in Settings → Saiph Cloud.</p>
               : notices.length ? notices.map((row) => <Notification key={row.id} row={row} client={client} online={canAct} dismiss={() => dismiss([row.id])} />)
               : <div className="grid gap-1 py-6 text-center">
                   <h3 className="m-0 text-[14px] font-semibold">{!phone ? "Connect your phone" : !phone.online ? "Phone disconnected" : !canAct ? "Allow notifications" : "All clear"}</h3>

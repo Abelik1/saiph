@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { subscriptionSummary } from "../lib/billing/presentation.mjs";
 
-test("stored billing display uses test labels without granting Hosted access", () => {
+test("stored billing display uses test labels without granting Cloud access", () => {
   const summary = subscriptionSummary({
     status: "active",
     currentPeriodEnd: 1791676800,

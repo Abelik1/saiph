@@ -23,14 +23,14 @@ export default function SubscriptionCard({view}: {view: BillingView | "unavailab
   return <section className="card" aria-labelledby="subscription-title">
     <div className="card-head">
       <div>
-        <p className="eyebrow">Saiph Hosted subscription</p>
+        <p className="eyebrow">Saiph Cloud subscription</p>
         <h2 id="subscription-title">Use Saiph anywhere, with no server of your own.</h2>
       </div>
       {test && <span className="pill warn">Test mode</span>}
     </div>
     {view === "unavailable" ? <p role="status">Subscription details are temporarily unavailable. Please try again shortly.</p> : <>
-      <p>Your subscription keeps your computers and phone connected through Saiph Hosted. Your content stays end-to-end encrypted.</p>
-      <Notice tone="warn" title="Saiph Hosted is in beta.">
+      <p>Your subscription keeps your computers and phone connected through Saiph Cloud. Your content stays end-to-end encrypted.</p>
+      <Notice tone="warn" title="Saiph Cloud is in beta.">
         Expect bugs, missing features and occasional downtime, and features may change as we build it. You can withdraw within 14 days of subscribing for a full refund.
       </Notice>
       {view.standing.state !== "none" && <dl className="facts">
@@ -72,6 +72,6 @@ export default function SubscriptionCard({view}: {view: BillingView | "unavailab
       {view.hasCustomer && <p className="fine"><a href="/account/withdraw">Withdraw from contract here</a>: within 14 days of subscribing, with a full refund.</p>}
       <p className="fine after">{test ? "Test mode: use Stripe test card details only. No real money is charged." : "Cancel any time in Manage billing; access continues to the end of the paid period."}</p>
     </>}
-    <div className="card-foot"><Icon name="lock" /><span>Paying gives your account Hosted access. You still approve devices on your own computer, and signing in never unlocks your content.</span></div>
+    <div className="card-foot"><Icon name="lock" /><span>Paying gives your account Cloud access. You still approve devices on your own computer, and signing in never unlocks your content.</span></div>
   </section>;
 }

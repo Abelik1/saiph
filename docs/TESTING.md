@@ -149,3 +149,9 @@ roster, exchange encrypted content, retain inbox/checkpoint state, restart faile
 setup without losing old files or memory-only synthetic sign-in, and check that
 only nested screens show Back. It does not contact an account or operate a phone.
 Do not run this class in an owner profile. JVM crypto tests do not replace it.
+
+## Android callback and Cloud photo gallery regression
+
+In a fresh disposable emulator, run HostedCallbackInstrumentedTest and HostedPhotosInstrumentedTest. The first never exchanges a token: it validates pending state, PKCE, client/endpoints, replay/cancellation/expiry, legacy in-flight compatibility and compiled-manifest URI routing. The second writes/deletes one synthetic MediaStore image, grants only the test app photo permission, checks the separate opt-in and a bounded JPEG preview with preserved aspect ratio. It must not run on an owner phone/profile. Separately verify the distributed APK's exact signer against the live assetlinks.json and Android's actual domain verification result; never force a link approved to manufacture acceptance.
+
+The desktop synthetic gallery tests use real sealed envelopes and streaming encryption through an in-memory relay, check unrequested/stale original rejection and one saved copy per original. No live account, personal gallery or SMS is accessed.

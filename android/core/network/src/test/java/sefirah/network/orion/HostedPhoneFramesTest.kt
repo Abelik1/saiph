@@ -8,6 +8,21 @@ import sefirah.domain.model.*
 
 /** Synthetic numbers and texts only. Mirrors the desktop's tests/test_hosted_phone.py shapes. */
 class HostedPhoneFramesTest {
+    @Test fun galleryNeedsSeparateOptInPermissionAndSubscription() {
+        val access = FeatureAccess(photos = true)
+        assertFalse("photos" in HostedPhoneFrames.capabilities(access, false))
+        assertFalse("photos" in HostedPhoneFrames.capabilities(FeatureAccess(), false, true))
+        assertTrue("photos" in HostedPhoneFrames.capabilities(access, false, true))
+        assertTrue(HostedPhoneFrames.allowed("photo.request", "desk", setOf("desk"), access, false, true))
+        assertFalse(HostedPhoneFrames.allowed("photo.request", "stranger", setOf("desk"), access, false, true))
+        assertFalse(HostedPhoneFrames.allowed("photo.request", "desk", setOf("desk"), access, true, false))
+        assertFalse(HostedPhoneFrames.mayPublish("photos.item", access, true, false))
+        assertTrue(HostedPhoneFrames.mayPublish("photos.item", access, false, true))
+        assertEquals(HostedPhoneCommand.PhotoRequest("41"), parse("""{"type":"photo.request","id":"41"}"""))
+        for (value in listOf("../private", "0", "-1", "9007199254740992"))
+            assertNull(parse("""{"type":"photo.request","id":"$value"}"""))
+        assertNull(parse("""{"type":"photo.request","id":"41","path":"private"}"""))
+    }
     companion object {
         const val THREAD_WIRE = """{"message":{"addresses":["+15550100"],"body":"Synthetic hello","direction":"incoming","id":41,"subscription":1,"timestamp":1760000000000},"recipients":["+15550100"],"thread":7,"type":"sms.thread"}"""
         const val SEND_WIRE = """{"text":"On my way 😀","thread":7,"type":"sms.send"}"""

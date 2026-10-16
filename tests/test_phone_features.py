@@ -10,6 +10,25 @@ import threading
 from orion_mini import phone_features as f
 from orion_mini.storage import Store
 
+
+def test_cloud_gallery_original_uses_existing_prefetch_and_idempotent_save(tmp_path, monkeypatch):
+    monkeypatch.setattr(Path, 'home', lambda: tmp_path / 'home')
+    workspace=SimpleNamespace(root=tmp_path,store=Store(tmp_path))
+    features=f.PhoneFeatures(workspace)
+    folder=tmp_path/'phone-originals';folder.mkdir()
+    original=folder/'synthetic.jpg';original.write_bytes(b'synthetic-photo')
+    manifest={'name':'Synthetic.jpg','size':original.stat().st_size,'sha256':f.file_sha256(original)}
+    key=features._photo_key('phone','41')
+    workspace.store.save('phone_photo_intent',{'id':key,'mode':'prefetch'})
+    features.cloud_original('phone','41',original,manifest)
+    assert features.photo_cached('phone','41')['path']==str(original)
+    assert not (tmp_path/'home'/'Downloads').exists()
+    first=features.photo_request('phone','41','save')
+    second=features.photo_request('phone','41','save')
+    assert first['path']==second['path']
+    assert Path(first['path']).read_bytes()==b'synthetic-photo'
+    assert len(list((tmp_path/'home'/'Downloads'/'Orion').iterdir()))==1
+
 @pytest.mark.parametrize('name',['../../secret.txt','..\\secret.txt','CON','NUL.txt','<>:\\?*.txt',''])
 def test_untrusted_file_names_stay_in_download_directory(name):
     result=f.safe_name(name)

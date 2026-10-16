@@ -37,6 +37,8 @@ physical-device acceptance.
 """
 from __future__ import annotations
 
+import base64
+import binascii
 import hashlib
 import re
 
@@ -51,6 +53,10 @@ MAX_CLIPBOARD_TEXT_BYTES = 16_384
 _KEY = re.compile(r"[A-Za-z0-9._:|/+=@-]{1,256}")
 
 # Phone data, phone -> computer. Each type needs the capability named here.
+PHOTOS_ITEM = "photos.item"
+PHOTOS_SYNC = "photos.sync"
+PHOTO_REQUEST = "photo.request"
+PHOTO_ORIGINAL = "photo.original"
 PHONE_CAPABILITIES = "phone.capabilities"
 SMS_THREAD = "sms.thread"
 SMS_MESSAGES = "sms.messages"
@@ -61,7 +67,7 @@ CALL_HANDLED = "call.handled"  # First answer/decline won; sent to every subscri
 CALL_REFUSED = "call.refused"  # A later answer/decline, or a dial while busy; requester only.
 CONTACTS_RESULTS = "contacts.results"
 CALLS_LOG = "calls.log"
-DATA_CAPABILITY = {SMS_THREAD: "sms", SMS_MESSAGES: "sms", SMS_REMOVE: "sms", SMS_INDEX: "sms",
+DATA_CAPABILITY = {PHOTOS_ITEM: "photos", PHOTOS_SYNC: "photos", SMS_THREAD: "sms", SMS_MESSAGES: "sms", SMS_REMOVE: "sms", SMS_INDEX: "sms",
                    CALL_STATE: "calls", CALL_HANDLED: "calls", CONTACTS_RESULTS: "contacts", CALLS_LOG: "call-log"}
 PHONE_DATA = frozenset({PHONE_CAPABILITIES, CALL_REFUSED, *DATA_CAPABILITY})
 
@@ -80,13 +86,13 @@ CALL_COMMAND = "call.command"
 CALL_DIAL = "call.dial"
 CONTACTS_SEARCH = "contacts.search"
 CALLS_LOG_REQUEST = "calls.log.request"
-COMMAND_CAPABILITY = {SMS_SYNC: "sms", SMS_OPEN: "sms", SMS_SEND: "sms", SMS_COMPOSE: "sms",
+COMMAND_CAPABILITY = {PHOTO_REQUEST: "photos", SMS_SYNC: "sms", SMS_OPEN: "sms", SMS_SEND: "sms", SMS_COMPOSE: "sms",
                       CALL_COMMAND: "call-control", CALL_DIAL: "call-dial", CONTACTS_SEARCH: "contacts",
                       CALLS_LOG_REQUEST: "call-log"}
 # Private answers accepted only after this computer asked for them.
 ANSWERS = {CONTACTS_RESULTS: CONTACTS_SEARCH, CALLS_LOG: CALLS_LOG_REQUEST}
 # "files" is the existing encrypted file offer; the rest gate the types above.
-PHONE_CAPABILITY_NAMES = ("files", "sms", "calls", "call-control", "call-dial", "contacts", "call-log")
+PHONE_CAPABILITY_NAMES = ("files", "photos", "sms", "calls", "call-control", "call-dial", "contacts", "call-log")
 MAX_SMS_TEXT = 4096
 MAX_PHONE_PAYLOAD_BYTES = 20_000  # Below the sealed 24,000-byte plaintext limit.
 _MAX_ID = (1 << 53) - 1
@@ -190,6 +196,27 @@ def _message(value) -> dict:
             "direction": value["direction"], "subscription": _integer(value["subscription"], -1, 2**31 - 1)}
 
 
+def _bounded_jpeg(image: bytes) -> bool:
+    """Read the JPEG frame size without decoding or allocating a pixel buffer."""
+    offset = 2
+    while offset + 4 <= len(image):
+        if image[offset] != 255:
+            return False
+        marker = image[offset + 1]
+        offset += 2
+        length = int.from_bytes(image[offset:offset + 2], "big")
+        if length < 2 or offset + length > len(image):
+            return False
+        if marker in (0xC0, 0xC1, 0xC2):
+            if length < 8:
+                return False
+            height = int.from_bytes(image[offset + 3:offset + 5], "big")
+            width = int.from_bytes(image[offset + 5:offset + 7], "big")
+            return 0 < width <= 128 and 0 < height <= 128
+        offset += length
+    return False
+
+
 def read_phone_data(payload) -> tuple[str, dict]:
     """Return (type, body) for phone data; body uses the Link phone-feature shape."""
     kind_ = kind(payload)
@@ -200,6 +227,30 @@ def read_phone_data(payload) -> tuple[str, dict]:
                 or any(type(name) is not str or name not in PHONE_CAPABILITY_NAMES for name in names)):
             raise FeatureError()
         return kind_, {"capabilities": list(names)}
+    if kind_ == PHOTOS_ITEM:
+        _exact(payload, kind_, {"id", "name", "timestamp", "preview"})
+        photo_id = _text(payload["id"], 16, empty=False)
+        if not re.fullmatch(r"[1-9][0-9]{0,15}", photo_id) or int(photo_id) > _MAX_ID:
+            raise FeatureError()
+        preview = _text(payload["preview"], 16_023, empty=False)
+        if not preview.startswith("data:image/jpeg;base64,"):
+            raise FeatureError()
+        try:
+            image = base64.b64decode(preview.split(",", 1)[1], validate=True)
+        except (ValueError, binascii.Error):
+            raise FeatureError() from None
+        if not 4 <= len(image) <= 12_000 or not image.startswith(b"\xff\xd8") or not image.endswith(b"\xff\xd9") or not _bounded_jpeg(image):
+            raise FeatureError()
+        return kind_, {"photos": [{"id": photo_id, "name": _text(payload["name"], 180, empty=False),
+            "timestamp": _integer(payload["timestamp"], high=_MAX_TIMESTAMP), "preview": preview,
+            "thumbnail": {"sha256": hashlib.sha256(image).hexdigest()}}]}
+    if kind_ == PHOTOS_SYNC:
+        _exact(payload, kind_, {"ids"})
+        ids = payload["ids"]
+        if (type(ids) is not list or len(ids) > 100 or any(type(i) is not str or not re.fullmatch(r"[1-9][0-9]{0,15}", i)
+                or int(i) > _MAX_ID for i in ids) or len(set(ids)) != len(ids)):
+            raise FeatureError()
+        return kind_, {"ids": ids}
     if kind_ == SMS_THREAD:
         _exact(payload, kind_, {"thread", "recipients", "message"})
         return kind_, {"thread": _integer(payload["thread"]), "recipients": _addresses(payload["recipients"]),
@@ -301,7 +352,7 @@ def _sms_text(value):
     return text
 
 
-_COMMAND_KEYS = {SMS_SYNC: set(), CALLS_LOG_REQUEST: set(), SMS_OPEN: {"thread"}, SMS_SEND: {"thread", "text"},
+_COMMAND_KEYS = {PHOTO_REQUEST: {"id"}, SMS_SYNC: set(), CALLS_LOG_REQUEST: set(), SMS_OPEN: {"thread"}, SMS_SEND: {"thread", "text"},
                  SMS_COMPOSE: {"addresses", "text"}, CALL_COMMAND: {"operation"}, CALL_DIAL: {"number"},
                  CONTACTS_SEARCH: {"query"}}
 
@@ -319,6 +370,11 @@ def read_phone_command(payload) -> dict:
     if kind_ not in _COMMAND_KEYS:
         raise FeatureError()
     _exact(payload, kind_, _COMMAND_KEYS[kind_])
+    if kind_ == PHOTO_REQUEST:
+        photo_id = _text(payload["id"], 16, empty=False)
+        if not re.fullmatch(r"[1-9][0-9]{0,15}", photo_id) or int(photo_id) > _MAX_ID:
+            raise FeatureError()
+        return {"type": kind_, "id": photo_id}
     if kind_ in (SMS_SYNC, CALLS_LOG_REQUEST):
         return {"type": kind_}
     if kind_ == SMS_OPEN:

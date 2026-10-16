@@ -100,11 +100,11 @@
       row.insertAdjacentElement("afterend", notice);
     } else {
       const publicSource = cfg.githubUrl && cfg.sourceVisibility === "public";
-      link(a, publicSource ? cfg.githubUrl : "", "Hosted early access is not open yet");
+      link(a, publicSource ? cfg.githubUrl : "", "Cloud early access is not open yet");
       a.textContent = publicSource ? "Follow progress on GitHub" : "Early access coming soon";
     }
   });
-  // The Hosted plan's label says what is open now.
+  // The Cloud plan's label says what is open now.
   document.querySelectorAll("[data-hosted-status]").forEach((el) => {
     if (subscribeUrl) el.textContent = el.dataset.liveText || "Available now";
     else if (!waitlistReady && betaAccountUrl) el.textContent = el.dataset.betaText || "Invite-only beta";
@@ -156,7 +156,7 @@
   document.querySelectorAll('[data-link="processor-privacy"]').forEach((a) => link(a, waitlistReady ? waitlist.processorPrivacyUrl : "", "Provider information is not activated yet"));
   const release = cfg.release || {};
   const releaseReady = cfg.sourceVisibility === "public" && Boolean(cfg.releasesUrl) && Boolean(release.sourceCommit);
-  if (subscribeUrl && !releaseReady) fill("[data-release-status]", "Installers for Windows, Linux and Android are in your Saiph account. Subscribe to Saiph Hosted or activate an invitation code, then download them there. No compilation or personal server is required.");
+  if (subscribeUrl && !releaseReady) fill("[data-release-status]", "Installers for Windows, Linux and Android are in your Saiph account. Subscribe to Saiph Cloud or activate an invitation code, then download them there. No compilation or personal server is required.");
   else if (betaAccountUrl && !releaseReady) fill("[data-release-status]", "Beta installers are available from your Saiph account. Sign in and activate your invitation code. No compilation or personal server is required.");
   document.querySelectorAll("[data-release-details]").forEach((el) => { el.hidden = !releaseReady; });
   if (releaseReady) fill("[data-release-status]", "Downloads are pinned to " + release.tag + ". Read the release notes and verify your download before installing.");
