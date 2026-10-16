@@ -40,10 +40,13 @@ class HostedAccount private constructor(private val context: Context) {
         return AuthorizationServiceConfiguration(Uri.parse(issuer + "authorize"), Uri.parse(issuer + "oauth/token"))
     }
     @Synchronized fun signedIn() = !prefs.getBoolean("signed_out", false) && ((access != null && expires > System.currentTimeMillis() + 60_000) || (prefs.getBoolean("refresh_tokens", false) && file.baseFile.exists()))
-    @Synchronized fun request(): AuthorizationRequest {
+    @Synchronized fun request(google: Boolean = true): AuthorizationRequest {
         check(prefs.getBoolean("enabled", false))
+        // Route directly to Google for the bundled Auth0 flow. Auth0 still issues
+        // the Saiph token; state, PKCE, redirect and token validation stay unchanged.
+        val parameters = HostedSignIn.parameters(prefs.getString("issuer", "")!!, prefs.getString("audience", "")!!, google)
         val builder = AuthorizationRequest.Builder(configuration(), prefs.getString("client_id", "")!!, ResponseTypeValues.CODE, Uri.parse(REDIRECT))
-            .setAdditionalParameters(mapOf("audience" to prefs.getString("audience", "")!!))
+            .setAdditionalParameters(parameters)
         if (prefs.getBoolean("refresh_tokens", false)) builder.setScope("offline_access")
         val request = builder.build()
         check(request.codeVerifier != null && request.codeVerifierChallengeMethod == "S256")
@@ -63,7 +66,9 @@ class HostedAccount private constructor(private val context: Context) {
             generation
         }
         val grant = exchange(response.createTokenExchangeRequest(), epoch)
-        accept(grant, epoch, requireRefresh = false)
+        // Re-authenticate approved phones with the method that established their
+        // account. Legacy profiles default to their original provider picker.
+        accept(grant, epoch, requireRefresh = false, google = response.request.additionalParameters["connection"] == "google-oauth2")
     }
     private suspend fun exchange(request: TokenRequest, epoch: Int): TokenResponse = suspendCoroutine { continuation ->
         val service = AuthorizationService(context)
@@ -80,7 +85,7 @@ class HostedAccount private constructor(private val context: Context) {
             } else continuation.resume(response)
         }
     }
-    @Synchronized private fun accept(grant: TokenResponse, epoch: Int, requireRefresh: Boolean) {
+    @Synchronized private fun accept(grant: TokenResponse, epoch: Int, requireRefresh: Boolean, google: Boolean? = null) {
         check(epoch == generation && prefs.getBoolean("enabled", false))
         val value = grant.accessToken ?: error("Sign-in did not return an access token.")
         check(value.length in 1..16384 && value.all { it.code in 33..126 } && grant.tokenType.equals("Bearer", true))
@@ -100,7 +105,9 @@ class HostedAccount private constructor(private val context: Context) {
                 try { output.write(wrapped); file.finishWrite(output) } catch (failure: Exception) { file.failWrite(output); throw failure }
             } else { file.delete() }
         }
-        check(prefs.edit().putBoolean("signed_out", false).commit())
+        val saved = prefs.edit().putBoolean("signed_out", false)
+        if (google != null) saved.putBoolean("google_sign_in", google)
+        check(saved.commit())
         access = value; expires = expiry; error = ""
     }
     suspend fun token(): String = tokenLock.withLock {

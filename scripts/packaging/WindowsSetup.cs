@@ -119,8 +119,10 @@ public static class Setup {
                     if (done) {
                         removed = true; action.Text = "Close"; surface.Heading = "Saiph removed"; surface.Body = "Saiph removed. Your data is retained."; surface.Celebrate();
                     } else {
-                        surface.Heading = "Remove Saiph";
-                        status.Text = reason;
+                        surface.Heading = "Saiph could not be removed";
+                        surface.Body = reason;
+                        status.Text = "Your settings and data are retained.";
+                        action.Text = "Try again";
                     }
                     surface.AccessibleName = surface.Heading; surface.AccessibleDescription = surface.Body; surface.Invalidate();
                 });
@@ -145,9 +147,12 @@ public static class Setup {
         bool startupNow = false;
         try { using (var key = Registry.CurrentUser.OpenSubKey(RunKey)) startupNow = key != null && key.GetValue("OrionMini") != null; } catch { }
         var startup = WaveSurface.Option("Start Saiph when I sign in", 146, !upgrade || startupNow);
-        var sendTo = WaveSurface.Option("Add \"Saiph (phone)\" to the Send to menu in File Explorer", 178, !upgrade || File.Exists(SendToShortcut));
-        var launch = WaveSurface.Option("Open Saiph when setup finishes", 210, !noLaunch);
-        var location = new Label { Left = 46, Top = 252, Width = 548, Height = 44, Text = "Installs for your Windows account only, in " + destination,
+        var sendTo = WaveSurface.Option("Send files to your phone from a file's right-click menu", 178, !upgrade || File.Exists(SendToShortcut));
+        var sendToHelp = new Label { Left = 46, Top = 208, Width = 548, Height = 36,
+            Text = "Right-click a file → Show more options (Windows 11) → Send to → Saiph (phone)",
+            BackColor = WaveSurface.Card, ForeColor = WaveSurface.Muted, Font = new Font("Segoe UI", 9) };
+        var launch = WaveSurface.Option("Open Saiph when setup finishes", 248, !noLaunch);
+        var location = new Label { Left = 46, Top = 284, Width = 548, Height = 44, Text = "Installs for your Windows account only, in " + destination,
                                    BackColor = WaveSurface.Card, ForeColor = WaveSurface.Muted, Font = new Font("Segoe UI", 9) };
         status = new Label { Left = 24, Top = 362, Width = 340, Height = 48, Text = "Internal preview · publisher signing and clean-device acceptance pending.",
                              BackColor = WaveSurface.Footer, ForeColor = WaveSurface.Muted, Font = new Font("Segoe UI", 9) };
@@ -161,7 +166,7 @@ public static class Setup {
                 + " After setup, Saiph's guide helps you sign in and add your phone."
                 : page == 2 ? "Installing Saiph. This takes a moment." : page == 3 ? "Saiph is installed. Open it from the Start menu any time." : "";
             surface.ShowCard = page == 1; surface.Hero = page == 0;
-            startup.Visible = sendTo.Visible = launch.Visible = location.Visible = page == 1;
+            startup.Visible = sendTo.Visible = sendToHelp.Visible = launch.Visible = location.Visible = page == 1;
             back.Visible = page == 1; next.Enabled = page != 2;
             next.Text = page == 1 ? (upgrade ? "Update" : "Install") : page == 3 ? "Finish" : "Next";
             surface.AccessibleName = surface.Heading; surface.AccessibleDescription = surface.Body;
@@ -198,7 +203,7 @@ public static class Setup {
             worker.SetApartmentState(ApartmentState.STA);
             worker.Start();
         };
-        foreach (Control control in new Control[] { startup, sendTo, launch, location }) surface.Controls.Add(control);
+        foreach (Control control in new Control[] { startup, sendTo, sendToHelp, launch, location }) surface.Controls.Add(control);
         foreach (Control control in new Control[] { surface, status, back, next }) window.Controls.Add(control);
         show(); Application.Run(window);
     }
@@ -460,7 +465,40 @@ public static class Setup {
     static void Remove() {
         phase = "uninstall";
         var installation = Existing(); if (installation == null) throw new InvalidDataException();
-        var targets = OwnedExecutables(installation);
+        List<string> targets;
+        try { targets = OwnedExecutables(installation); }
+        catch (IOException failure) {
+            if ((failure.HResult & 0xffff) != 32 && (failure.HResult & 0xffff) != 33) throw;
+            throw new SetupBlocked("Saiph's files are in use. Quit Saiph from the system tray and close apps using its files, then try again.");
+        }
+        // Refuse before deleting any release files. A closed window can still
+        // leave Saiph running in the tray; inspect only executables we own.
+        foreach (var process in Process.GetProcesses()) using (process) {
+            string executable;
+            try { executable = process.MainModule.FileName; }
+            catch (System.ComponentModel.Win32Exception) { continue; }
+            catch (InvalidOperationException) { continue; }
+            if (targets.Any(target => String.Equals(target, executable, StringComparison.OrdinalIgnoreCase)))
+                throw new SetupBlocked("Saiph is still running. Right-click its icon in the system tray and choose Quit, then try again.");
+        }
+        // Check all releases first, including DLLs held by a process. This
+        // also covers callers that lock a file without running the main EXE.
+        foreach (string version in installation.versions) {
+            string release = Under(destination, "releases/" + version);
+            if (!Directory.Exists(release)) continue;
+            string manifestFile = Under(release, "package-manifest.json");
+            var manifest = Json.Deserialize<Package>(File.ReadAllText(manifestFile));
+            if (manifest.format != "orion-desktop-package" || manifest.version != version || manifest.files == null) throw new InvalidDataException();
+            foreach (var item in manifest.files) {
+                string path = Under(release, item.path);
+                if (!File.Exists(path)) continue;
+                try { using (File.Open(path, FileMode.Open, FileAccess.Read, FileShare.None)) { } }
+                catch (IOException failure) {
+                    if ((failure.HResult & 0xffff) != 32 && (failure.HResult & 0xffff) != 33) throw;
+                    throw new SetupBlocked("Saiph's files are in use. Quit Saiph from the system tray and close apps using its files, then try again.");
+                }
+            }
+        }
         var retained = new List<string>();
         foreach (string version in installation.versions) {
             string release = Under(destination, "releases/" + version);
@@ -618,7 +656,7 @@ sealed class WaveSurface : Control {
             g.DrawString(Body, bodyFont, muted, new RectangleF(29, 124, Hero ? 400 : 580, 90));
         if (Hero) { Glow(g, HeroX, HeroY, 90, Light, 40); Mark(g, HeroX - 68, HeroY - 68, 136, t); }
         if (ShowCard) {
-            using (var path = Rounded(new RectangleF(24, 124, 592, 184), 16))
+            using (var path = Rounded(new RectangleF(24, 124, 592, 208), 16))
             using (var fill = new SolidBrush(Card)) using (var edge = new Pen(Color.FromArgb(60, Light), 1f)) { g.FillPath(fill, path); g.DrawPath(edge, path); }
         }
         if (Progress >= 0) ProgressString(g, t);
@@ -696,6 +734,8 @@ public static class SetupMessages {
         return "The installation could not finish (step: " + phase + "). Your existing release and data were retained.";
     }
     public static string DescribeRemoval(Exception failure, string phase) {
+        if (failure is IOException && ((failure.HResult & 0xffff) == 32 || (failure.HResult & 0xffff) == 33))
+            return "Saiph's files are in use. Quit Saiph from the system tray and close apps using its files, then try again.";
         if (failure is SetupBlocked || failure is IOException && failure.Message == "Another Saiph installation is running.") return Describe(failure, phase);
         return "Saiph could not be removed (step: " + phase + "). Your settings and data were retained.";
     }

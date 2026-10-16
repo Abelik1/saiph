@@ -47,7 +47,7 @@ object SaiphControls {
     /** One line for the wide widgets. */
     fun status(state: State) = when (state) {
         State.PAUSED -> "Paused · nothing syncs"
-        State.HOSTED -> "On · Saiph Hosted"
+        State.HOSTED -> "On · Saiph account"
         State.NOT_SET_UP -> "Not set up yet"
         State.CONNECTED -> "On · connected"
         State.RECONNECTING -> "On · reconnecting"

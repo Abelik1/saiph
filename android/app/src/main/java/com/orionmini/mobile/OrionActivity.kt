@@ -48,7 +48,6 @@ class OrionActivity : ComponentActivity() {
     private var screen = "home"
     private var lastRender = ""
     private var pairingInProgress = false
-    private var hostedOpened = false  // Show account sign-in first, once per launch, so Back still works.
     private var devices: List<LinkDevice> = emptyList()
     private val prefs by lazy { getSharedPreferences("orion", MODE_PRIVATE) }
     private val lock = AppLock(this)
@@ -72,7 +71,6 @@ class OrionActivity : ComponentActivity() {
     }
     override fun onCreate(state: Bundle?) {
         super.onCreate(state); Api.migrateMesh(this)
-        hostedOpened = state?.getBoolean("hostedOpened") ?: false
         backupSettings = OrionBackupSettings(this) { if (screen == "advanced") advanced() }
         root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(4), dp(18), dp(28)) }
         scroll = ScrollView(this).apply { addView(root); isFillViewport = true }
@@ -107,6 +105,8 @@ class OrionActivity : ComponentActivity() {
         setContentView(shell)
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
+                if (showingLock) { finish(); return }
+                if (screen == "pair" && !prefs.contains("device_id")) { backToAccount(); return }
                 when (SetupNavigation.back(screen)) {
                     "home" -> leaveForHome()
                     "settings" -> settings()
@@ -115,10 +115,6 @@ class OrionActivity : ComponentActivity() {
             }
         })
         handleQr(intent)
-    }
-    override fun onSaveInstanceState(state: Bundle) {
-        state.putBoolean("hostedOpened", hostedOpened)
-        super.onSaveInstanceState(state)
     }
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent); setIntent(intent); handleQr(intent)
@@ -175,7 +171,8 @@ class OrionActivity : ComponentActivity() {
         // running from the last screen is stopped first, or it would carry on into the new one.
         if (screen != shownScreen) { shownScreen = screen; scroll.fling(0); scroll.scrollTo(0, 0); scroll.post { scroll.scrollTo(0, 0) } }
         val paired = prefs.contains("device_id")
-        if (paired && SetupNavigation.offersBack(screen, true)) header.addView(iconButton(R.drawable.saiph_ic_back, "Back") { goBack() })
+        if ((paired && SetupNavigation.offersBack(screen, true)) || (!paired && screen == "pair"))
+            header.addView(iconButton(R.drawable.saiph_ic_back, "Back") { goBack() })
         header.addView(heading(value).apply {
             letterSpacing = -0.02f; maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
             setPadding(if (header.childCount == 0) dp(8) else dp(2), 0, dp(8), 0)
@@ -186,7 +183,7 @@ class OrionActivity : ComponentActivity() {
         if (screen != "settings") header.addView(iconButton(R.drawable.saiph_ic_settings, "Settings") { settings() })
     }
     /** The header's back arrow goes where the system back gesture goes. */
-    private fun goBack() = when (SetupNavigation.back(screen)) {
+    private fun goBack() = if (screen == "pair" && !prefs.contains("device_id")) backToAccount() else when (SetupNavigation.back(screen)) {
         "home" -> leaveForHome()
         "settings" -> settings()
         else -> homeLoop()
@@ -196,24 +193,38 @@ class OrionActivity : ComponentActivity() {
         if (!prefs.getBoolean("setup_done", false)) prefs.edit().putBoolean("setup_deferred", true).apply()
         intent.removeExtra("setup"); intent.removeExtra("settings"); homeLoop()
     }
-    private fun openHosted() = startActivity(Intent(this, HostedActivity::class.java))
+    private fun openHosted(welcome: Boolean = false) = startActivity(Intent(this, HostedActivity::class.java)
+        .putExtra(HostedActivity.SHOW_WELCOME, welcome).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+    private fun backToAccount() {
+        if (pairingInProgress) { Toast.makeText(this, "Finishing pairing. Please wait.", Toast.LENGTH_SHORT).show(); return }
+        poll?.cancel()
+        prefs.edit().remove("self_host").remove("pending_enrollment").apply()
+        openHosted(welcome = true)
+        finish()
+    }
     private fun pairing() {
         screen = "pair"; poll?.cancel(); title("Saiph")
+        if (!AppPolicy.acknowledged(this)) {
+            root.addView(SetupArtwork(this, SetupArtwork.Scene.WELCOME))
+            root.addView(heading("Before you start"))
+            root.addView(body("Review how Saiph handles your data. Hosted terms apply if you use Saiph Hosted."))
+            root.addView(buttonRow(button("Privacy policy", tone = Tone.TONAL) { openSettings(Intent(Intent.ACTION_VIEW, Uri.parse(AppPolicy.PRIVACY_URL))) },
+                button("Hosted terms", tone = Tone.TONAL) { openSettings(Intent(Intent.ACTION_VIEW, Uri.parse(AppPolicy.TERMS_URL))) }))
+            root.addView(body("By continuing, you acknowledge the privacy policy and agree to the terms when using Hosted. Sharing usage statistics is a separate choice."))
+            root.addView(buttonRow(button("Agree and continue", true) { AppPolicy.acknowledge(this); pairing() },
+                button("Exit") { finish() }))
+            return
+        }
         val invite = pendingEnrollment()
         // A Saiph account is the default. Server invitations and Tailscale appear only
         // after the owner says they self-host, or opens an invitation from their server.
         if (invite == null && !prefs.getBoolean("self_host", false)) {
-            val hostedOn = HostedRuntime.get(this).enabled()
-            if (!hostedOpened) { hostedOpened = true; openHosted(); return }
-            root.addView(heading("Your devices, in tune.").apply { setPadding(dp(2), dp(16), 0, dp(8)) })
-            root.addView(body("Choose how to connect your phone.").apply { setPadding(dp(2), 0, 0, dp(24)) })
-            root.addView(connectionChoice("Use your Saiph account", "Sign in with the same account as your computer. Saiph takes care of the connection.",
-                if (hostedOn) "Open Saiph" else "Sign in to Saiph", primary = true) { openHosted() })
-            root.addView(connectionChoice("Use your own Hub", "Connect through a Saiph Hub you manage on your own network.", "Connect to my Hub") {
-                prefs.edit().putBoolean("self_host", true).apply(); pairing()
-            })
+            // HostedActivity owns the single welcome/sign-in screen. Do not leave
+            // another copy underneath it for Back or browser cancellation.
+            openHosted(); finish()
             return
         }
+        if (invite == null) root.addView(SetupArtwork(this, SetupArtwork.Scene.HUB))
         root.addView(section("Connect to your Hub"))
         if (invite != null) {
             root.addView(card().apply {
@@ -253,7 +264,7 @@ class OrionActivity : ComponentActivity() {
             addView(buttonRow(button("Scan pairing QR", true) { startActivity(Intent(this@OrionActivity, OrionQrActivity::class.java)) }))
             addView(buttonRow(button("Open invitation file") { enrollmentFile.launch(arrayOf("*/*")) }))
         })
-        root.addView(buttonRow(button("Use a Saiph account instead") { prefs.edit().remove("self_host").apply(); pairing() }))
+        root.addView(buttonRow(setupLink("Back to Saiph", back = true) { backToAccount() }))
     }
     private fun offerInvitation(invite: Enrollment) {
         if (prefs.contains("device_id") || pairingInProgress) return
@@ -588,7 +599,7 @@ class OrionActivity : ComponentActivity() {
         UsageAnalytics.opened(this, "advanced")
         root.addView(card().apply {
             addView(text("Hub: ${runCatching { Api.base(this@OrionActivity) }.getOrDefault("Invalid saved configuration")}\nDevice: ${prefs.getString("device_id", "Unpaired")}\n${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})", UiType.META, Palette.MUTED))
-            addView(buttonRow(button("Saiph Hosted preview", tone = Tone.TONAL) { startActivity(Intent(this@OrionActivity, HostedActivity::class.java)) }))
+            addView(buttonRow(button("Saiph account", tone = Tone.TONAL) { startActivity(Intent(this@OrionActivity, HostedActivity::class.java)) }))
         })
         root.addView(section("Tailscale"))
         root.addView(card().apply {

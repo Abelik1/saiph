@@ -315,11 +315,16 @@ class HostedController:
         if self.self_hosted_paired():
             raise HostedError(EXCLUSIVE)
 
-    def sign_in(self) -> dict:
+    def sign_in(self, google=False) -> dict:
+        if type(google) is not bool:
+            raise HostedError("Choose a sign-in method.")
         with self.lock:
             self._require_enabled()
             account = self._account()
-        account.begin_sign_in()
+        if google:
+            account.begin_sign_in(google=True)
+        else:
+            account.begin_sign_in()
         self.changed()
         return {"started": True}
 

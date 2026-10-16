@@ -212,6 +212,67 @@ while(!File.Exists(args[3])) Thread.Sleep(20); mutex.ReleaseMutex(); }
         release_lock.write_text('release')
         holder.wait(timeout=10)
     assert run(installer('0.1.0-preview.2')) == 0
+    # A file held by a running app must block removal before any other file
+    # or installation marker is changed. Exercise the real native stub.
+    file_holder = tmp_path / 'hold-file.cs'
+    file_holder.write_text('''using System.IO; using System.Threading;
+class HoldFile { static void Main(string[] args) {
+using (File.Open(args[0], FileMode.Open, FileAccess.Read, FileShare.None)) {
+File.WriteAllText(args[1], "ready");
+while (!File.Exists(args[2])) Thread.Sleep(20);
+}}}''')
+    file_holder_exe = tmp_path / 'hold-file.exe'
+    subprocess.run([str(compiler), '/nologo', '/out:' + str(file_holder_exe), str(file_holder)], check=True, capture_output=True)
+    file_ready, file_release = tmp_path / 'file-ready', tmp_path / 'file-release'
+    release_root = install / 'releases/0.1.0-preview.2'
+    release_before = {path.relative_to(release_root).as_posix(): path.read_bytes() for path in release_root.rglob('*') if path.is_file()}
+    marker_before = (install / 'orion-install.json').read_bytes()
+    file_process = subprocess.Popen([str(file_holder_exe), str(release_root / 'app/Saiph.exe'), str(file_ready), str(file_release)])
+    try:
+        deadline = time.monotonic() + 10
+        while not file_ready.exists():
+            assert file_process.poll() is None and time.monotonic() < deadline
+            time.sleep(.02)
+        blocked = subprocess.run([str(stub), '--silent', '--isolated', '--no-launch', '--destination', str(install), '--uninstall'], capture_output=True, timeout=30)
+        assert blocked.returncode != 0
+        # Silent mode prints a phase and exception type; the GUI displays the
+        # actionable SetupBlocked message in its main body.
+        assert b'SetupBlocked' in blocked.stderr
+        assert (install / 'orion-install.json').read_bytes() == marker_before
+    finally:
+        file_release.write_text('release')
+        file_process.wait(timeout=10)
+    assert {path.relative_to(release_root).as_posix(): path.read_bytes() for path in release_root.rglob('*') if path.is_file()} == release_before
+    # Also exercise an executing, manifest-owned EXE, rather than only a lock.
+    running_source = tmp_path / 'running-app.cs'
+    running_source.write_text('''using System.IO; using System.Threading;
+class RunningApp { static void Main(string[] args) {
+File.WriteAllText(args[0], "ready"); while (!File.Exists(args[1])) Thread.Sleep(20);
+}}''')
+    running_exe = release_root / 'app/Saiph.exe'
+    subprocess.run([str(compiler), '/nologo', '/out:' + str(running_exe), str(running_source)], check=True, capture_output=True)
+    manifest_file = release_root / 'package-manifest.json'
+    active_manifest = json.loads(manifest_file.read_text())
+    for item in active_manifest['files']:
+        if item['path'] == 'app/Saiph.exe':
+            item.update(bytes=running_exe.stat().st_size, sha256=packaging.digest(running_exe))
+    manifest_file.write_text(json.dumps(active_manifest))
+    app_ready, app_release = tmp_path / 'app-ready', tmp_path / 'app-release'
+    running = subprocess.Popen([str(running_exe), str(app_ready), str(app_release)])
+    try:
+        deadline = time.monotonic() + 10
+        while not app_ready.exists():
+            assert running.poll() is None and time.monotonic() < deadline
+            time.sleep(.02)
+        blocked = subprocess.run([str(stub), '--silent', '--isolated', '--no-launch', '--destination', str(install), '--uninstall'], capture_output=True, timeout=30)
+        assert blocked.returncode != 0 and b'SetupBlocked' in blocked.stderr
+        assert running.poll() is None
+        assert (install / 'orion-install.json').read_bytes() == marker_before
+    finally:
+        app_release.write_text('release')
+        running.wait(timeout=10)
+    for name in ['app/Saiph.exe', 'package-manifest.json']:
+        (release_root / name).write_bytes(release_before[name])
     assert {path.name: path.read_bytes() for path in owner.iterdir()} == owner_before
     before = (install / 'orion-install.json').read_bytes()
     assert run(installer('0.1.0-preview.3', corrupt=True)) != 0

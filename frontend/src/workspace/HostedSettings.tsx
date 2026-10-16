@@ -66,7 +66,7 @@ export function HostedRootCode({hosted, client, autoShow = false, compact = fals
 /** Approve a device's signed request after the owner compares its full fingerprint.
  * Devices that signed in offer their request through the service, so it appears here by
  * itself; the code is verified on this computer and pasting stays as a fallback. */
-export function HostedApproveDevice({hosted, client, onApproved}: {hosted: HostedState; client: Client; onApproved?: () => void}) {
+export function HostedApproveDevice({hosted, client, onApproved}: {hosted: HostedState; client: Client; onApproved?: (label: string) => void}) {
   const id = useId();
   const revision = useRef(0);
   const [code, setCode] = useState("");
@@ -91,7 +91,7 @@ export function HostedApproveDevice({hosted, client, onApproved}: {hosted: Hoste
         <Button variant="tonal" onClick={() => review(item)}>Review and approve</Button>
       </div>)}
     </div> : <p className="muted" aria-live="polite">Waiting for your device… After it signs in and checks this computer's code, it appears here.</p>)}
-    {request && <Form className="[&_fieldset]:grid [&_fieldset]:gap-4" submit={async () => {const current = revision.current; await client.call("hosted.approve", {code, label, confirmed}); if (revision.current === current) { reset(); onApproved?.(); }}}>
+    {request && <Form className="[&_fieldset]:grid [&_fieldset]:gap-4" submit={async () => {const current = revision.current; await client.call("hosted.approve", {code, label, confirmed}); if (revision.current === current) { const approved = label; reset(); onApproved?.(approved); }}}>
       <p>Compare every group of this security code with the one on the device you are adding:</p>
       <code className="block break-words rounded-field border border-border bg-field p-3 text-sm">{request.fingerprint}</code>
       <Field label="Device name" htmlFor={id + "-name"} className="[&_label]:text-sm"><Input id={id + "-name"} value={label} maxLength={40} required placeholder="For example: My phone" onChange={event => setLabel(event.target.value)} /></Field>

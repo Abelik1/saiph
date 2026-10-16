@@ -29,24 +29,49 @@ wizard, with one task on each screen:
    Saiph on another computer?** to join it instead.
 3. Open Saiph on your phone, sign in with the same account and scan the QR shown
    in the desktop's Phone tab. Compare every group of the computer's security
-   code when the phone asks. Choose **Continue to approval** on the desktop.
+   code when the phone asks. The desktop moves on to approval by itself once
+   the phone has scanned; **Continue to approval** is there if it does not.
 4. The phone's request appears on the approval screen. Choose **Review and approve**,
    compare every group of its security code with the phone, give it a name and
    approve it. **Back to scanning** returns to the QR if needed and clears any
-   previous comparison. The normal Phone page appears when the phone connects.
+   previous comparison. The desktop then waits for the phone to connect, tells
+   you when it has, and **Done** opens the normal Phone page.
 
 The security codes are fingerprints of the devices' encryption keys. Sign-in
 finds your account; the comparisons check which devices you are trusting.
 **Can't scan? Copy a code instead** and **My device hasn't appeared** contain
 manual fallbacks. They still require the full security-code checks.
 
-Add another phone from **Phone → Connect a phone**. Settings → General also has
-a **Connect a phone** shortcut to this flow. The **Optional setup guide** in
-that section covers feature choices, optional tools and privacy preferences;
-it does not interrupt first connection. Its **Set up later** action closes it.
+Add another phone from **Phone → Connect a phone**. Until a phone is connected,
+Settings → General also has a **Connect a phone** shortcut to this flow. The
+**Optional setup guide** in that section covers feature choices, optional tools
+and privacy preferences; on a connected computer it starts at the feature
+choices, and it does not interrupt first connection. Its **Set up later** action
+closes it.
 
 Choose **Use my own Hub instead** only if you manage your own server. Use its
 private invitation to connect this computer, then scan its phone pairing QR.
+
+## Android first connection
+
+On first use, review the linked privacy policy and Hosted terms, then choose **Agree and continue**. Usage sharing and Android permissions remain separate choices. The phone then opens one illustrated welcome screen. **Subscribe** opens Saiph's
+plans on the website. If you already have an account, **Continue with Google**
+opens Google sign-in directly for the bundled Auth0 service. Existing email or
+other-provider accounts can use **Other sign-in options** to keep their original
+account; using the same email with a different provider need not select the same
+Saiph account.
+
+After sign-in, open **Phone → Connect a phone** on your computer and tap
+**Scan QR code** on the phone. **Paste a code instead** remains available.
+Compare the complete security codes when asked, then approve the phone on the
+computer. Setup advances when approval arrives.
+
+**Self-host instead** opens Hub pairing. Its header Back arrow, Android Back
+gesture and **Back to Saiph** action return to the welcome screen. Leaving an
+unfinished Hub invitation cancels its pending setup; wait for an active pairing
+to finish before switching routes. After account sign-in, Back exits setup or returns from Settings to the current task; it does not return to the welcome menu. Approved phones open daily use. Account, subscription and connection controls live in Settings.
+
+If setup is interrupted, Saiph shows **Finish connecting this phone**. Retry the existing identity, or explicitly remove its local setup and sign in to scan again. Existing protected keys and trust history are kept; remove any corresponding approval on your main computer too. A saved device ID alone never completes setup.
 
 ## Self-hosting: pair your devices
 

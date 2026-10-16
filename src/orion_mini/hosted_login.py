@@ -76,6 +76,7 @@ class HostedLoginConfig:
     client_id: str
     callback_port: int = 49172
     refresh_tokens: bool = False
+    google: bool = False
 
     def __post_init__(self) -> None:
         issuer = urlsplit(self.issuer)
@@ -89,6 +90,7 @@ class HostedLoginConfig:
             or self.audience == self.client_id
             or type(self.callback_port) is not int or not 1024 <= self.callback_port <= 65535
             or type(self.refresh_tokens) is not bool
+            or type(self.google) is not bool
         ):
             raise ValueError("Fixed HTTPS issuer, API audience and public native client ID are required")
 
@@ -213,6 +215,8 @@ class LoginAttempt:
                 audience=self.config.audience,
                 nonce=self._nonce,
                 response_mode="query",
+                **({"connection": "google-oauth2"} if self.config.google
+                   and urlsplit(self.config.issuer).hostname.endswith(".auth0.com") else {}),
             )
             if state != self._state:
                 raise LoginError()

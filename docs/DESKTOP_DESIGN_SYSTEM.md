@@ -82,12 +82,17 @@ and privacy preferences.
 
 - Use a wizard with one task per screen and a visible Account → Computer → Scan
   → Approve progress indicator. Sign-in and explicit main-computer setup advance
-  when their native state changes. Show the QR automatically on Scan;
-  **Continue to approval** opens device discovery and full-code confirmation.
-  **Back to scanning** clears the previous request and comparison. Move keyboard
-  focus to the heading when navigating Scan and Approve, and show completion
-  only after approval succeeds.
-  Move to the normal Phone page when the phone connects.
+  when their native state changes. Show the QR automatically on Scan and watch
+  for the phone's request there: the wizard moves to Approve by itself when a
+  new request appears, with **Continue to approval** as the manual fallback.
+  **Back to scanning** clears the previous request and comparison, and requests
+  already on the list then wait for an explicit Continue. Move keyboard focus to
+  the heading when navigating Scan and Approve, and show completion only after
+  approval succeeds. Keep the completion screen until the phone actually
+  connects, say so when it does, and leave the Phone page to a Done action.
+- Settings → General shows its **Connect a phone** shortcut only while no phone
+  is connected; afterwards adding a phone lives in the Phone tab's header. The
+  optional guide starts at its feature choices on a connected computer.
 - Reuse `HostedPhoneSetup` in `PhoneSetup.tsx` for Phone, the add-phone dialog
   and the optional guide. Keep account settings focused on managing the account.
 - Describe fingerprints as **security codes** in the normal flow. Label the

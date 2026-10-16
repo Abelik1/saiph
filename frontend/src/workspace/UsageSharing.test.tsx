@@ -47,11 +47,8 @@ describe("Anonymous usage agreement", () => {
   it("is a setup step that records the choice and moves on", async () => {
     const call = vi.fn().mockResolvedValue({});
     render(<SetupWizard state={state(ask, true)} client={{ call } as unknown as Client} close={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: /self-host my own Hub/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    // This computer is already paired, so the guide opens at the feature choices.
     expect(await screen.findByRole("list", { name: "Setup steps" })).toHaveTextContent("Usage statistics");
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    fireEvent.click(screen.getByRole("button", { name: "Skip for now" }));
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     await screen.findByText(/Only needed for some features/);
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
@@ -62,8 +59,6 @@ describe("Anonymous usage agreement", () => {
 
   it("skips the setup step in builds that cannot send", async () => {
     render(<SetupWizard state={state({ ...ask, available: false }, true)} client={{ call: vi.fn().mockResolvedValue({}) } as unknown as Client} close={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: /self-host my own Hub/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     expect(await screen.findByRole("list", { name: "Setup steps" })).not.toHaveTextContent("Usage statistics");
   });
 
