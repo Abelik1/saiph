@@ -122,7 +122,8 @@ class HostedKeyStorageInstrumentedTest {
         val database = File(folder, "trust.sqlite3")
         SQLiteDatabase.openOrCreateDatabase(database, null).use { it.version = 1 }
         val root = buildJsonObject { put("deployment", deployment); put("id", "dev_" + "1".repeat(32)); put("signing", Security.publicKeyB64()); put("encryption", HostedEnvelope.exportPublic(HostedEnvelope.generateRecipient())) }
-        prefs.edit().putString("device_id", device).putString("root", root.toString()).putString("recipient", recipient).commit()
+        prefs.edit().putString("device_id", device).putString("root", root.toString()).putString("recipient", recipient)
+            .putBoolean("sharing_setup_complete", true).putInt("sharing_setup_step", 3).commit()
         try {
             try { runtime.freshRequest(); fail("Incomplete trust store must not be trusted") } catch (_: HostedSessionException) { }
             assertEquals(HostedSetup.Stage.RECOVERY, runtime.setupStage())
@@ -130,6 +131,8 @@ class HostedKeyStorageInstrumentedTest {
             runtime.restartSetup()
             assertEquals(HostedSetup.Stage.SCAN, runtime.setupStage())
             assertFalse(prefs.contains("device_id"))
+            assertFalse(prefs.getBoolean("sharing_setup_complete", false))
+            assertFalse(prefs.contains("sharing_setup_step"))
             assertTrue(account.signedIn())
             assertEquals(recipient, HostedEnvelope.exportPublic(keys.load(recipient).recipient))
             assertArrayEquals(previous, database.readBytes())

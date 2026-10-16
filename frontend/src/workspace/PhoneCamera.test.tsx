@@ -79,7 +79,7 @@ describe("Phone camera", () => {
       link: { camera: { facing: "back", quality: "1080p", rotation: "90" } },
     });
   });
-  it("explains setup only in Advanced and saves bounded local preferences", async () => {
+  it("keeps setup in Devices and saves camera preferences without starting capture", async () => {
     const call = vi.fn().mockResolvedValue({});
     render(
       <CameraSettings
@@ -89,6 +89,7 @@ describe("Phone camera", () => {
       />,
     );
     expect(call).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByText("Meeting-app configuration", {selector:"summary span"}));
     fireEvent.change(screen.getByLabelText("Linux loopback device"), {
       target: { value: "/dev/video10" },
     });
@@ -100,11 +101,8 @@ describe("Phone camera", () => {
         link: { camera: { v4l2_sink: "/dev/video10" } },
       }),
     );
-    fireEvent.click(
-      screen.getByRole("button", {
-        name: "Open the upstream camera setup guide",
-      }),
-    );
+    fireEvent.click(screen.getByText("Phone camera setup", {selector:"summary span"}));
+    fireEvent.click(screen.getByRole("button", { name: "Open camera setup guide" }));
     await waitFor(() => expect(call).toHaveBeenCalledWith("camera.help"));
     expect(call).not.toHaveBeenCalledWith("camera.start", expect.anything());
   });
@@ -114,6 +112,8 @@ describe("Phone camera", () => {
       client: { call: vi.fn() } as unknown as Client,
     };
     const view = render(<CameraSettings {...props} platform="linux" />);
+    expect(screen.getByLabelText("Linux loopback device")).not.toBeVisible();
+    fireEvent.click(screen.getByText("Meeting-app configuration", {selector:"summary span"}));
     expect(screen.getByLabelText("Linux loopback device")).toBeVisible();
     expect(screen.queryByLabelText("OBS profile")).toBeNull();
     view.rerender(<CameraSettings {...props} platform="windows" />);
@@ -218,6 +218,12 @@ describe("Phone camera without a self-hosted Hub", () => {
     fireEvent.click(screen.getByRole("button", { name: "Close camera preview" }));
     await waitFor(() => expect(call).toHaveBeenCalledWith("camera.stop"));
   });
+  it("can open the phone camera directly even when the meeting webcam is already configured", async () => {
+    const call = vi.fn().mockResolvedValue({});
+    render(<PhoneCamera camera={{...ready, can_preview:true}} deviceId="phone" client={{call} as unknown as Client} />);
+    fireEvent.click(screen.getByRole("button", {name:"Open camera preview"}));
+    await waitFor(() => expect(call).toHaveBeenCalledWith("camera.start", {device_id:"phone", preview:true}));
+  });
   it("explains the one-time phone and OS setup without a Hub", () => {
     const props = {
       settings: { link: { camera: {} } } as Settings,
@@ -228,10 +234,10 @@ describe("Phone camera without a self-hosted Hub", () => {
       screen.getByText(/works with Saiph Cloud and without a server or Tailscale/),
     ).toBeInTheDocument();
     expect(screen.getByText(/tap Build number seven times/)).toBeInTheDocument();
-    expect(screen.getByText(/Set up OBS Studio once/)).toBeInTheDocument();
+    expect(screen.getByText(/Install OBS Studio/)).toBeInTheDocument();
     expect(screen.queryByText(/v4l2loopback-dkms/)).toBeNull();
     view.rerender(<CameraSettings {...props} platform="linux" />);
     expect(screen.getByText(/v4l2loopback-dkms/)).toBeInTheDocument();
-    expect(screen.queryByText(/Set up OBS Studio once/)).toBeNull();
+    expect(screen.queryByText(/Install OBS Studio/)).toBeNull();
   });
 });

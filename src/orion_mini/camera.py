@@ -196,7 +196,7 @@ class Camera:
                 self.stop(); self.error = 'Phone camera stopped. Start it again when you are ready.'
             can_preview = self._config().get('enabled',True) is not False and self._scrcpy(self._config())[0] is not None
             if running and self.mode=='preview':
-                ready = 'The camera preview window is open. Use it to set up OBS, then choose Close camera preview.'
+                ready = 'Your phone camera is open in its own window.'
             elif running:
                 ready = 'Camera processes are running; select the camera in your meeting app.'
             else:

@@ -34,14 +34,27 @@ function hostedState(device: Partial<typeof hostedPhone> | null = {}): State {
 const client = (call = vi.fn().mockResolvedValue({ queued: true })) => ({ call, subscribe: () => () => {} }) as unknown as Client;
 
 describe("Saiph Cloud phone on the Phone page", () => {
-  it("lists an approved hosted phone and points notifications to Hosted settings", () => {
+  it("lists an approved Cloud phone and explains notification access on the Phone page", () => {
     render(<Phone state={hostedState()} client={client()} />);
     expect(screen.getByRole("heading", { name: "Synthetic phone" })).toBeVisible();
     expect(screen.getByText("Online")).toBeVisible();
-    expect(screen.getByText(/notifications appear in Settings → Saiph Cloud/)).toBeVisible();
+    expect(screen.getByText(/tap Allow notifications in Saiph/)).toBeVisible();
     // The Link clipboard helper hint does not apply to a hosted phone.
     expect(screen.queryByText(/Clipboard isn't shared/)).toBeNull();
     expect(screen.getByText("Synthetic SMS", { selector: "p" })).toBeVisible();
+  });
+  it("shows Cloud notifications for the selected phone and dismisses through the native Cloud handler", async () => {
+    const call = vi.fn().mockResolvedValue({queued: true});
+    const state = hostedState();
+    state.hosted!.notifications = [
+      {id:"notice-one", device_id:"dev_hosted", app:"Synthetic app", title:"A reminder", text:"Synthetic notification"},
+      {id:"notice-other", device_id:"another-phone", app:"Other app", title:"Other phone", text:"Different device"},
+    ];
+    render(<Phone state={state} client={client(call)} />);
+    expect(screen.getByText("Synthetic notification")).toBeVisible();
+    expect(screen.queryByText("Different device")).toBeNull();
+    fireEvent.click(screen.getByRole("button", {name:"Dismiss A reminder"}));
+    await waitFor(() => expect(call).toHaveBeenCalledWith("hosted.notification.dismiss", {id:"notice-one"}));
   });
   it("finds a Saiph Cloud phone for the webcam over USB or Wi-Fi, never by its Hosted id", async () => {
     const call = vi.fn().mockResolvedValue({ adb: true, devices: [] });
@@ -85,10 +98,15 @@ describe("Saiph Cloud phone on the Phone page", () => {
   it("hides actions the hosted phone does not offer and explains its own switch", () => {
     const limited = { ...hostedPhone, capabilities: ["files"] };
     render(<PhoneTabs features={features} phone={limited} client={client()} />);
-    expect(screen.getByText(/Turn on Texts and calls in Saiph Cloud on your phone and allow SMS/)).toBeVisible();
+    expect(screen.getByText(/On your phone, tap Allow texts and calls in Saiph and allow SMS/)).toBeVisible();
     openTab("Calls");
-    expect(screen.getByText(/Turn on Texts and calls in Saiph Cloud on your phone and allow phone access/)).toBeVisible();
+    expect(screen.getByText(/On your phone, tap Allow texts and calls in Saiph and allow phone access/)).toBeVisible();
     expect(screen.queryByRole("button", { name: "Answer" })).toBeNull();
+  });
+  it("explains missing Cloud permissions even when the heartbeat is stale", () => {
+    render(<PhoneTabs features={features} phone={{ ...hostedPhone, online: false, capabilities: ["files"] }} client={client()} />);
+    expect(screen.getByText(/tap Allow texts and calls/)).toBeVisible();
+    expect(screen.queryByText(/Reconnect Synthetic phone/)).toBeNull();
   });
   it("stops offering answer once another computer handled the call and says which", () => {
     const handled = { ...features, calls: [{ ...features.calls[0], state: "active" as const, handled: "answer" as const, handled_by: "Synthetic laptop" }] };

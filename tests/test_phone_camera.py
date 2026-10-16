@@ -237,7 +237,7 @@ def test_windows_preview_opens_only_the_scrcpy_window_for_obs_setup(tools):
     with pytest.raises(ValueError, match='one-time phone camera setup'):
         instance.start(serial='SYNTHUSB01')
     status = instance.start(serial='SYNTHUSB01', preview=True)
-    assert status['running'] is True and status['mode'] == 'preview' and 'preview window' in status['message']
+    assert status['running'] is True and status['mode'] == 'preview' and 'own window' in status['message']
     (process,) = started
     assert process.argv[-2:] == ['--window-title', camera_module.WINDOW_TITLE]
     assert not any('obs' in str(part).lower() for part in process.argv)

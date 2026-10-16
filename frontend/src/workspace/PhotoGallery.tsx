@@ -457,7 +457,7 @@ export function Photos({
   if (!phone?.capabilities.includes("photos"))
     return (
       <Empty title="Photos permission">
-        {phone?.hosted ? "On your phone, open Files and photos → Allow photos. Your recent photos appear here after Android access is granted."
+        {phone?.hosted ? "On your phone, tap Allow photo gallery. Your recent photos appear here after Android access is granted."
           : "Allow photos in Saiph on your phone. Your recent photos then appear automatically."}
       </Empty>
     );
@@ -474,7 +474,7 @@ export function Photos({
     <>
       <p className="muted">
         {phone.online
-          ? "Recent photos from your phone. Open a photo to view, copy or save the original."
+          ? `${rows.length} recent ${rows.length === 1 ? "photo" : "photos"}`
           : "Showing saved previews. Originals already loaded on this computer are available offline; reconnect your phone to download others."}
       </p>
       {status && <p role="status">{status}</p>}
@@ -531,9 +531,8 @@ export function Photos({
                 <Maximize2 size={18} />
               </span>
             </button>
-            <div className="photo-caption">
-              <small title={photo.name}>{photo.name}</small>
               <button
+                className="photo-tile-menu"
                 aria-label={"Actions for " + photo.name}
                 aria-haspopup="menu"
                 onClick={(event) => {
@@ -547,7 +546,6 @@ export function Photos({
               >
                 <MoreHorizontal size={18} />
               </button>
-            </div>
           </article>
         ))}
       </div>

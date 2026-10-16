@@ -339,6 +339,19 @@ def test_gallery_rejects_unbounded_ids_external_images_and_extra_fields(changes)
         read_phone_data({**photo, **changes})
 
 
+@pytest.mark.parametrize("width,height,accepted", [(96, 48, True), (384, 192, True), (192, 384, True), (385, 192, False), (192, 385, False), (0, 1, False)])
+def test_gallery_preview_dimension_limit_retains_legacy_and_accepts_sharper_thumbnails(width, height, accepted):
+    import base64
+    image = b"\xff\xd8\xff\xc0\x00\x0b\x08" + height.to_bytes(2, "big") + width.to_bytes(2, "big") + b"\x01\x01\x11\x00\xff\xd9"
+    payload = {"type": "photos.item", "id": "41", "name": "Synthetic.jpg", "timestamp": 1,
+               "preview": "data:image/jpeg;base64," + base64.b64encode(image).decode()}
+    if accepted:
+        read_phone_data(payload)
+    else:
+        with pytest.raises(FeatureError):
+            read_phone_data(payload)
+
+
 def test_gallery_original_rejects_unsolicited_or_mismatched_requests(hosted):
     h = hosted
     h.send({"type": "phone.capabilities", "capabilities": ["photos"]})

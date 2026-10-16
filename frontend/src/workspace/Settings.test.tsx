@@ -29,7 +29,7 @@ describe("Settings navigation and feedback", () => {
     general.focus();
     fireEvent.keyDown(general, { key: "ArrowDown" });
     expect(screen.getByRole("tab", { name: "Connections" })).toHaveFocus();
-    expect(screen.getByLabelText("Saiph Hub address")).toBeVisible();
+    expect(screen.getByText("This computer is paired.")).toBeVisible();
     fireEvent.click(screen.getByRole("tab", { name: "General" }));
     expect(screen.getByLabelText("Computer name")).toHaveValue("My studio");
   });
@@ -69,6 +69,7 @@ describe("Settings navigation and feedback", () => {
     fireEvent.click(screen.getByLabelText("Use Cloud folders"));
     expect(screen.getByText(/Unsaved changes/)).toBeVisible();
     fireEvent.click(screen.getByRole("tab", { name: "Devices" }));
+    fireEvent.click(screen.getByText("Meeting-app configuration", {selector:"summary span"}));
     fireEvent.change(screen.getByLabelText("Linux loopback device"), {
       target: { value: "/dev/video12" },
     });

@@ -1,3 +1,68 @@
+## 2026-10-16: sharing reliability and desktop settings (source changes)
+
+Approved phones automatically get a three-step sharing setup for photos,
+notifications and texts/calls. Android consent and native owner verification
+remain required. Activity Result permission requests have an explicit Settings
+fallback after denial or when access is already granted. Selected photos can be
+reselected. Permission state refreshes on return; locked screens stay protected,
+and optional usage consent waits until sharing setup is complete. Recovery resets
+the sharing wizard while retaining device keys and trust history. An expired
+account has an explicit sign-in screen that retains computer approval.
+
+Packaged Cloud profiles request Keystore-protected rotating refresh sessions.
+Existing deployment migration requires every public configuration field to match;
+custom deployments retain their choice. Transient refresh failures retry without
+discarding the saved account or subscriptions. Before distributing this APK, the
+operator must enable API offline access, the native refresh grant and refresh
+token rotation. That provider configuration and live account acceptance remain
+pending. Existing installs need one new sign-in to obtain a refresh session.
+
+Photo previews use bounded image decoding, up to 384 pixels and 12,000 JPEG bytes,
+with adaptive compression inside the existing sealed-frame budget. Originals
+retain their on-demand encrypted transfer. Desktop viewers fit previews and
+originals in the same frame. Gallery tiles have no filename captions; their
+actions overlay the top-right corner and remain keyboard accessible. Cloud
+notifications appear on the Phone page, filtered to the selected phone.
+Connections and Devices share consistent preference cards and spacing. Pairing
+and advanced fields are collapsed when appropriate. Direct phone-camera viewing
+uses scrcpy; OBS configuration is optional Windows meeting-app setup. Saving
+preferences never starts camera or microphone capture.
+
+Local checks on Windows with isolated profiles and caches:
+
+- Python 3.12: targeted Cloud/gallery suite, 197 passed; subsequent gallery
+  boundary suite, 111 passed; camera suite, 31 passed. These commands overlap;
+  their counts must not be added together.
+- Node 24: final frontend suite, 181 passed. TypeScript/Vite build and lint on
+  changed views passed. The existing large-chunk warning remains. The React
+  checklist was applied to the changed components.
+- JDK 22 / independent Android debug: 18 app JVM tests passed. Network results
+  contain 106 tests, 2 optional fixture skips and no failures. Debug APK and
+  instrumentation builds succeeded. Lint: 0 errors, 244 warnings.
+- Agent-owned Android 34 emulator: 12 native tests passed, covering real Keystore
+  refresh storage/rotation and account recreation, exact callback binding and
+  pre-upgrade browser-result routing,
+  SQLite/key recovery, root navigation, actual permission denial/Settings
+  fallback, and bounded MediaStore previews. Synthetic grants never contacted an
+  identity provider. This is not physical-phone or live-account acceptance.
+- Real Qt shell and native bridge, controlled using `scripts/desktop-ui.py` and
+  `.cjs`: gallery hover/menu placement, fitted preview-to-original loading, zoom,
+  Connections/Devices navigation, hidden OBS configuration, native camera
+  preference saves and folder-button alignment passed. Screenshots were
+  inspected. No live camera, microphone or owner app was started.
+- Public-data identifier check and `git diff --check` passed. The identifier
+  check is not a full credential or history audit.
+
+Initial checks exposed sandbox TEMP virtualization, platform-specific permission
+control identifiers, MediaStore returning an undersized cached thumbnail, and
+old camera-label/visibility expectations. Isolated TEMP, accessible button
+matching, bounded image decoding and updated interaction expectations resolved
+those checks. A later emulator System UI ANR interrupted one run; after the
+system recovered, all 12 native cases passed again. The release builder also
+caught the version-specific JVM fixture, which now expects Android 0.9.6. No
+publisher-signed release, Firebase/server upload, physical
+acceptance or independent security review is claimed here.
+
 ## 2026-10-16: verified Android callback and Cloud gallery update
 
 Android 0.9.5 uses `https://usesaiph.com/android/oauth2redirect` through AppAuth with an exact verified App Link filter; its existing custom scheme remains for pre-upgrade in-flight attempts. Pending state, redirect, PKCE challenge and endpoints are bound before code exchange. The static website includes the existing beta certificate association and a minimal no-analytics/no-store callback fallback which clears query/fragment from browser history. Auth0 allowlisted the callback at the owner's request; Google connection/branding is unchanged. Actual domain verification and final publication results belong in the private operations record.

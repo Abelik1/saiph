@@ -94,7 +94,6 @@ class HostedRuntime private constructor(private val context: Context) {
         context.assets.open("hosted-defaults.json").use { it.read() != -1 }
     }.getOrDefault(false)
     fun applyPackagedDefaults() {
-        if (prefs.contains("origin") || prefs.contains("device_id") || enabled()) return
         val raw = try { context.assets.open("hosted-defaults.json").use { it.readBytes() } }
             catch (_: java.io.FileNotFoundException) { return }
         check(raw.size <= 4096)
@@ -103,7 +102,16 @@ class HostedRuntime private constructor(private val context: Context) {
         fun field(name: String) = value.getValue(name).jsonPrimitive.let { check(it.isString); it.content }
         val client = field("android_client_id")
         check(client.matches(Regex("[A-Za-z0-9_-]{8,128}")) && client != field("desktop_client_id"))
-        configure(field("service_url"), field("issuer"), field("audience"), client, false)
+        if (prefs.contains("origin") || prefs.contains("device_id") || enabled()) {
+            // Migrate only this build's deployment. Never change a custom issuer,
+            // approved identity or an explicitly signed-out account.
+            if (prefs.getString("origin", "") == field("service_url").trimEnd('/') &&
+                prefs.getString("issuer", "") == field("issuer") &&
+                prefs.getString("audience", "") == field("audience") && prefs.getString("client_id", "") == client)
+                check(prefs.edit().putBoolean("refresh_tokens", true).commit())
+            return
+        }
+        configure(field("service_url"), field("issuer"), field("audience"), client, true)
     }
     @Synchronized fun invalidate() {
         generation++; session?.invalidate(); session = null; transport = null
@@ -222,7 +230,14 @@ class HostedRuntime private constructor(private val context: Context) {
         val epoch = generation
         fun gate() { check(epoch == generation && enabled() && HostedAccount.get(context).signedIn()) }
         val current = try { open() } catch (_: Exception) { identityUnavailable = true; status = "Connection setup needs recovery"; return@withLock }
-        val token = try { HostedAccount.get(context).token() } catch (_: Exception) { invalidate(); return@withLock }
+        val token = try { HostedAccount.get(context).token() }
+        catch (failure: kotlinx.coroutines.CancellationException) { throw failure }
+        catch (_: Exception) {
+            // A network outage while rotating a token does not sign the owner out
+            // or discard subscriptions. Nothing is sent until token() succeeds.
+            if (!HostedAccount.get(context).signedIn()) invalidate() else status = "Reconnecting…"
+            return@withLock
+        }
         try { transport!!.refreshTrust(token) } catch (_: Exception) {
             // A transient submit/offer failure must not strand a signed-in phone.
             // Reuse the same pinned identity; never re-enroll a previously approved
@@ -367,7 +382,8 @@ class HostedRuntime private constructor(private val context: Context) {
         status = if (enabled()) "Scan your computer's QR code" else "Off"
     }
     private fun clearIdentityIntent() {
-        check(prefs.edit().remove("device_id").remove("root").remove("recipient").remove("seen_members").remove("texts_and_calls").remove("photos_shared").remove("approval_verified").commit())
+        check(prefs.edit().remove("device_id").remove("root").remove("recipient").remove("seen_members").remove("texts_and_calls").remove("photos_shared").remove("approval_verified")
+            .remove("sharing_setup_step").remove("sharing_setup_complete").commit())
         identityUnavailable = false; requestCode = ""; fingerprint = ""; lastEnrollmentAttempt = 0L
         HostedSmsKnown.clearAll(context)
     }

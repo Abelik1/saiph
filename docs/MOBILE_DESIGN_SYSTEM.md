@@ -9,8 +9,9 @@ these rules to new mobile screens and when updating older screens.
 ## Screen structure
 
 - Give each screen one clear purpose. Daily use leads with useful actions and
-  current state. Account management, sharing permissions, connection controls
-  and device details belong in Settings, reachable from the header.
+  current state. Show permission actions beside their features. Account
+  management, detailed permission settings, connection controls and device
+  details belong in Settings, reachable from the header.
 - When connecting to the desktop, point to its Phone tab and the connection
   screen shown there. Use the same scan-and-approve flow for first setup and
   additional phones; do not require searching through account settings.
@@ -208,6 +209,23 @@ Show linked privacy and applicable Cloud terms on first use, with explicit
 acknowledgment. Put detailed privacy and feature limits in that linked policy.
 Keep short permission context next to its opt-in; policy acknowledgment never
 enables texts, calls, permissions or anonymous usage sharing.
+
+Offer sharing setup automatically after device approval: photos, notifications,
+then texts and calls. Give each step one named Allow action and a Not now route.
+Keep those controls visible beside the same features in daily use. Never grant
+permissions or enable sharing merely because setup was opened. Keep owner
+verification before enabling photos or texts/calls.
+
+Permission buttons must always give a visible result. Use Android's current
+runtime permission flow, reselect permitted photos when supported, and open app
+settings when access is already granted or Android cannot ask again. Recheck
+permission state after returning; do not redraw underneath a permission prompt.
+Use specific labels such as Allow photo gallery and Allow texts and calls.
+
+Keep sign-in across normal app restarts with a protected rotating session.
+Connection retries and temporary offline states must not look like sign-out or
+erase device approval. Gallery previews should fill their viewer while the
+original loads, preserve aspect ratio, and keep the same frame after loading.
 
 Use **Cloud** and **Self-hosted** for connection choices. Keep technical Hosted
 identifiers, protocol names and saved settings unchanged. A failed local setup

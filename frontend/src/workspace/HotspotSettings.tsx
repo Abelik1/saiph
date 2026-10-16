@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from "react";
 import type { Client, HotspotStatus } from "./types";
-import { Action, Card, Form } from "./ui";
+import { Action, Form } from "./ui";
+import { PreferenceCard as Card } from "./PreferenceCard";
+import { Button } from "@/components/ui/button";
 
 /** Uses a Wi-Fi network the computer already saved; passwords stay with the operating system. */
 export function HotspotSettings({ hotspot, client }: { hotspot?: HotspotStatus; client: Client }) {
@@ -15,11 +17,11 @@ export function HotspotSettings({ hotspot, client }: { hotspot?: HotspotStatus; 
       <Form submit={() => client.call("settings.save", { link: { hotspot: { profile, auto } } })}>
         <label>Phone hotspot network<select value={profile} onChange={event => setProfile(event.target.value)}><option value="">Choose a saved Wi-Fi network</option>{choices.map(name => <option key={name} value={name}>{name}</option>)}</select></label>
         <label className="check"><input type="checkbox" checked={auto} disabled={!profile} onChange={event => setAuto(event.target.checked)} />Reconnect automatically when this computer has no network</label>
-        <button disabled={!profile}>Save hotspot</button>
+        <Button type="submit" variant="secondary" disabled={!profile} className="justify-self-start">Save hotspot</Button>
       </Form>
       {hotspot.profile && <Action run={() => client.call("hotspot.connect")}>Connect to {hotspot.profile}</Action>}
       {hotspot.error && <p className="inline-error">{hotspot.error}</p>}
-      <p className="muted">Android doesn't let apps switch the hotspot on. Use Hotspot settings in the Saiph phone app, or your phone's quick settings.</p>
+      <p>Turn on the hotspot using your phone's quick settings.</p>
     </>}
   </Card>;
 }

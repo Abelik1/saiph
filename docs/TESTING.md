@@ -152,6 +152,18 @@ Do not run this class in an owner profile. JVM crypto tests do not replace it.
 
 ## Android callback and Cloud photo gallery regression
 
-In a fresh disposable emulator, run HostedCallbackInstrumentedTest and HostedPhotosInstrumentedTest. The first never exchanges a token: it validates pending state, PKCE, client/endpoints, replay/cancellation/expiry, legacy in-flight compatibility and compiled-manifest URI routing. The second writes/deletes one synthetic MediaStore image, grants only the test app photo permission, checks the separate opt-in and a bounded JPEG preview with preserved aspect ratio. It must not run on an owner phone/profile. Separately verify the distributed APK's exact signer against the live assetlinks.json and Android's actual domain verification result; never force a link approved to manufacture acceptance.
+In a fresh disposable emulator, run HostedCallbackInstrumentedTest and HostedPhotosInstrumentedTest. The first never exchanges a token: it validates pending state, PKCE, client/endpoints, replay/cancellation/expiry, legacy in-flight compatibility, restored pre-upgrade activity-result routing and compiled-manifest URI routing. The second writes/deletes one synthetic MediaStore image, grants only the test app photo permission, checks the separate opt-in and a bounded JPEG preview with preserved aspect ratio. It must not run on an owner phone/profile. Separately verify the distributed APK's exact signer against the live assetlinks.json and Android's actual domain verification result; never force a link approved to manufacture acceptance.
 
 The desktop synthetic gallery tests use real sealed envelopes and streaming encryption through an in-memory relay, check unrequested/stale original rejection and one saved copy per original. No live account, personal gallery or SMS is accessed.
+
+
+For the sharing follow-up, also run HostedAccountInstrumentedTest and
+HostedPermissionsInstrumentedTest in that disposable emulator. The first accepts
+only synthetic grants and tests actual Keystore refresh wrapping, rotation and
+account recreation. The second uses real Android permission dialogs to deny photo
+access and verifies the Settings fallback; it never enables gallery sharing.
+The permission-dialog matcher assumes the test emulator uses English. Keep the
+existing activity-result launcher registration order when adding launchers:
+Android retains the old generated keys during an APK update with browser sign-in
+open. The callback regression restores that old launch key using a cancelled
+result, so it never contacts an identity provider.

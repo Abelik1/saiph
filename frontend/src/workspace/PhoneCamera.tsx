@@ -83,11 +83,11 @@ export function PhoneCamera({
       <Item size="flush">
         <ItemMedia><Video /></ItemMedia>
         <ItemContent>
-          <ItemTitle className="flex items-center gap-2">Webcam {camera?.running && <Badge tone="good">Live</Badge>}</ItemTitle>
+          <ItemTitle className="flex items-center gap-2">Phone camera {camera?.running && <Badge tone="good">Live</Badge>}</ItemTitle>
           <ItemDescription role="status">
             {camera?.running
               ? camera.mode === "preview"
-                ? "The preview window is open. Use it to set up OBS, then close it."
+                ? "Your phone camera is open in its own window."
                 : `${camera.facing === "back" ? "Rear" : "Front"} camera · ${camera.quality || "720p"}. Check the picture in your meeting app.`
               : !target
                 ? phones === null
@@ -95,7 +95,7 @@ export function PhoneCamera({
                   : "Connect your phone to start the camera."
                 : camera?.available
                   ? "Your camera starts only when you choose to use it."
-                  : "Set up the camera once in Settings."}
+                  : camera?.can_preview ? "Open your camera directly. Meeting-app sharing needs optional setup." : "Set up the camera once in Settings."}
           </ItemDescription>
         </ItemContent>
       </Item>
@@ -137,14 +137,14 @@ export function PhoneCamera({
           </Action>
         ) : (
           <>
-            <Action variant="tonal" size="sm" disabled={!target || !camera?.available} run={() => start()}>
-              Use phone as webcam
-            </Action>
-            {!camera?.available && camera?.can_preview && (
-              <Action variant="secondary" size="sm" disabled={!target} run={() => start(true)}>
+            {camera?.can_preview && (
+              <Action variant="tonal" size="sm" disabled={!target} run={() => start(true)}>
                 Open camera preview
               </Action>
             )}
+            <Action variant="secondary" size="sm" disabled={!target || !camera?.available} run={() => start()}>
+              Use phone as webcam
+            </Action>
           </>
         )}
         {!camera?.running && (

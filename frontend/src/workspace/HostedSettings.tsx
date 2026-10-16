@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useId, useRef, useState } from "react";
 import type { Client, HostedConfig, HostedState } from "./types";
-import { Action, Card, Form } from "./ui";
+import { Action, Form } from "./ui";
+import { PreferenceCard as Card } from "./PreferenceCard";
 import { validQr } from "./PairingQr";
 import { HostedJoin } from "./HostedJoin";
 import { HostedSignIn } from "./HostedSignIn";
@@ -10,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Disclosure } from "@/components/ui/disclosure";
 import { Field, Label } from "@/components/ui/field";
 import { Input, Textarea } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 
 type RootCode = {code: string; fingerprint: string; modules: string[]; expires_at: string; expires_in: number};
 type Request = {device_id: string; fingerprint: string; expires_at: number};
@@ -120,8 +122,8 @@ export function HostedSettings({hosted, client}: {hosted?: HostedState; client: 
   const enabled = hosted?.enabled === true;
   const signedIn = enabled && hosted?.account?.status === "signed_in";
   const active = enabled && signedIn && !!hosted?.roster;
-  return <Card title="Saiph Cloud" subtitle="Your phone and computers, connected through Saiph Cloud.">
-    <p role="status">{statuses[hosted?.status || "off"] || "Starting"}</p>
+  return <Card title="Saiph Cloud" subtitle="Your account and approved devices.">
+    <p role="status"><Badge tone={active ? "good" : enabled ? "attention" : "quiet"}>{statuses[hosted?.status || "off"] || "Starting"}</Badge></p>
     {!hosted?.available ? <p>This build does not include Cloud support.</p> : <>
       {hosted.identity && <Disclosure summary="Connection details">{isMember
         ? <p className="muted">This computer joined your account as another computer. Your main computer approves and removes devices and renews approvals; keep it online at least every 12 hours.</p>
@@ -136,7 +138,7 @@ export function HostedSettings({hosted, client}: {hosted?: HostedState; client: 
         : !signedIn && hosted.configured && <HostedSignIn hosted={hosted} client={client} />}
       {hosted.account?.error && <p role="alert">{hosted.account.error}</p>}
       {enabled && <>
-        {signedIn && <><p>Signed in</p><Action run={() => client.call("hosted.sign_out")}>Sign out</Action></>}
+        {signedIn && <div className="flex flex-wrap items-center gap-3"><Action variant="tonal" run={() => client.call("hosted.sign_out")}>Sign out</Action></div>}
         {signedIn && !isMember && (connectPhone ? <Button variant="tonal" onClick={connectPhone}>Connect a phone</Button> : <HostedRootCode hosted={hosted} client={client} />)}
         {signedIn && !hosted.identity && <details><summary>Join as another computer</summary><HostedJoin client={client} waiting={false} /></details>}
         {signedIn && isMember && hosted.status === "awaiting_approval" && <HostedJoin client={client} waiting />}
