@@ -60,21 +60,6 @@ class HostedActivity : ComponentActivity() {
     private var authorizationService: AuthorizationService? = null
     private var permissionRequest = ""
     private var returningFromSettings = false
-    private val sharingPermissions = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
-        val requested = permissionRequest
-        permissionRequest = ""
-        runtime.photosRevision++
-        runtime.wake.trySend(Unit)
-        if (showingLock || AppLock.locked(this)) return@registerForActivityResult
-        render()
-        val access = sefirah.network.orion.OrionPermissions.read(this)
-        if ((requested == "photos" && !access.photos) || (requested == "phone" && PHONE_PERMISSIONS.any { !granted(it) })) {
-            android.app.AlertDialog.Builder(this).setTitle("Finish in Android Settings")
-                .setMessage(if (requested == "photos") "Photo access is still off. You can allow selected photos or your photo library in Saiph's permissions."
-                    else "Some text or call permissions are still off. Open Saiph's permissions to allow them. Android may restrict these on sideloaded apps.")
-                .setNegativeButton("Not now", null).setPositiveButton("Open permissions") { _, _ -> openAppPermissions() }.show()
-        }
-    }
     private val login = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         signingIn = false
         loginState = null
@@ -95,6 +80,23 @@ class HostedActivity : ComponentActivity() {
     private val sendFile =registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if (uri != null) action { runtime.sendFile(uri) } }
     private val saveFile = registerForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
         if (uri != null && saving.isNotEmpty()) { val id = saving; saving = ""; action { runtime.saveFile(id, uri) } }
+    }
+    // Append launchers after the existing ones: Android persists their generated keys
+    // across activity recreation and an APK update during browser sign-in.
+    private val sharingPermissions = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        val requested = permissionRequest
+        permissionRequest = ""
+        runtime.photosRevision++
+        runtime.wake.trySend(Unit)
+        if (showingLock || AppLock.locked(this)) return@registerForActivityResult
+        render()
+        val access = sefirah.network.orion.OrionPermissions.read(this)
+        if ((requested == "photos" && !access.photos) || (requested == "phone" && PHONE_PERMISSIONS.any { !granted(it) })) {
+            android.app.AlertDialog.Builder(this).setTitle("Finish in Android Settings")
+                .setMessage(if (requested == "photos") "Photo access is still off. You can allow selected photos or your photo library in Saiph's permissions."
+                    else "Some text or call permissions are still off. Open Saiph's permissions to allow them. Android may restrict these on sideloaded apps.")
+                .setNegativeButton("Not now", null).setPositiveButton("Open permissions") { _, _ -> openAppPermissions() }.show()
+        }
     }
     override fun onCreate(state: Bundle?) {
         super.onCreate(state); lock.protectWindow()

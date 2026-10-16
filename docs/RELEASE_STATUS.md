@@ -39,8 +39,9 @@ Local checks on Windows with isolated profiles and caches:
 - JDK 22 / independent Android debug: 18 app JVM tests passed. Network results
   contain 106 tests, 2 optional fixture skips and no failures. Debug APK and
   instrumentation builds succeeded. Lint: 0 errors, 244 warnings.
-- Agent-owned Android 34 emulator: 11 native tests passed, covering real Keystore
-  refresh storage/rotation and account recreation, exact callback binding,
+- Agent-owned Android 34 emulator: 12 native tests passed, covering real Keystore
+  refresh storage/rotation and account recreation, exact callback binding and
+  pre-upgrade browser-result routing,
   SQLite/key recovery, root navigation, actual permission denial/Settings
   fallback, and bounded MediaStore previews. Synthetic grants never contacted an
   identity provider. This is not physical-phone or live-account acceptance.
@@ -56,7 +57,10 @@ Initial checks exposed sandbox TEMP virtualization, platform-specific permission
 control identifiers, MediaStore returning an undersized cached thumbnail, and
 old camera-label/visibility expectations. Isolated TEMP, accessible button
 matching, bounded image decoding and updated interaction expectations resolved
-those checks. No publisher-signed release, Firebase/server upload, physical
+those checks. A later emulator System UI ANR interrupted one run; after the
+system recovered, all 12 native cases passed again. The release builder also
+caught the version-specific JVM fixture, which now expects Android 0.9.6. No
+publisher-signed release, Firebase/server upload, physical
 acceptance or independent security review is claimed here.
 
 ## 2026-10-16: verified Android callback and Cloud gallery update
