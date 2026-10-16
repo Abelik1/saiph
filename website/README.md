@@ -2,7 +2,8 @@
 
 Static product source. The product and operations repositories are private;
 source publication, downloads and Hosted availability are separate launch gates.
-Vercel pageview analytics is prepared but disabled by default. No email collector
+Vercel pageview analytics is enabled in `landing-settings.json`; local previews
+remain untracked. No email collector
 or payment integration is active here. See [analytics activation](ANALYTICS.md).
 
 Build a checked local preview from this worktree (Python 3.12):
@@ -33,12 +34,15 @@ approval. Keep collection disabled until those decisions are reviewed. The priva
 Saiph Hosted subscriptions opened on 15 October 2026. `subscribeUrl` points to the
 account site's `/account` page, where people sign in and choose a plan; checkout
 never runs on these static pages. Set it together with `hostedPrice` (a euro
-amount such as `€3.99`), `hostedPeriod` and an optional short `hostedPriceNote`.
+amount such as `€9.99`), `hostedPeriod` and an optional short `hostedPriceNote`.
 The builder rejects any other subscription link, a price without a link, or a
 link without a price. With the link empty the pages fall back to beta access or
 the email list. Keep claims aligned with
 [the security model](../docs/SECURITY_MODEL.md): Hosted is a beta service without
-an independent security review yet, and texts and calls are still coming to it.
+an independent security review yet. Texts and call controls are included in the
+released beta builds and require phone opt-in and Android permissions; physical
+acceptance remains pending. Notification replies and automatic image clipboard
+sync are still Hosted implementation gaps, not separate subscription tiers.
 
 The trader's postal address is required on the contact page but is not kept in
 Git. The hosting project sets `SAIPH_TRADER_ADDRESS` (one plain line, for example
@@ -53,6 +57,12 @@ hosting runtime pin merely to consume a website-only commit.
 ## Informational landing page
 
 `landing-settings.json` links the public product repository and sends Subscribe buttons to the account site. It enables no release downloads or waitlist collection. Publishing these static pages does not publish either Git repository or launch Hosted. Use the builder in preview mode for this informational deployment; full launch validation remains stricter.
+
+The comparison below downloads and pricing uses Apple's and Microsoft's linked
+support documentation, checked 16 October 2026. Recheck those sources before
+changing its claims. Saiph entries follow the current feature split in the root
+README and Hosted page; implementation-only additions are excluded. Keep the
+Hosted implementation gaps and the phone-only call-audio limit visible.
 
 
 ## Release downloads, waitlist and privacy
@@ -103,7 +113,8 @@ python -m pytest tests/test_website_release.py tests/test_website_downloads.py t
 Set `androidBetaUrl` to the Firebase App Distribution invite link for the outside
 tester group (`https://appdistribution.firebase.dev/i/...`; create it in the Firebase
 console under App Distribution > Invite links). The home and downloads pages then
-show a "Join the Android beta" callout; with the field empty the callout stays hidden.
+use Firebase as the primary Android install button; with the field empty the
+button stays disabled. The standalone APK is a secondary link.
 The builder accepts only that link shape. The invite page is Google's: it collects the
 tester's email, and the privacy page says so. Remove the link or disable it in the
 console to close beta signups.
