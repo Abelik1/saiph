@@ -35,12 +35,12 @@ running at home. Your devices encrypt content before it leaves them, and only
 the devices you approve can read it.
 
 <p align="center">
-  <a href="https://usesaiph.com/#pricing"><img src="docs/images/readme/plans.svg" alt="Plans: Saiph Hosted Monthly at €3.99 a month; Saiph Hosted Yearly at €36 a year, which saves 25%; and Self-hosted, free forever." width="100%"></a>
+  <a href="https://usesaiph.com/#pricing"><img src="docs/images/readme/plans.svg" alt="Plans: Saiph Hosted Monthly at €9.99 a month; Saiph Hosted Yearly at €89.99 a year, which saves about 25%; and Self-hosted, free forever." width="100%"></a>
 </p>
 
 | | Monthly | Yearly | Self-hosted |
 | --- | --- | --- | --- |
-| Price | **€3.99** / month | **€36** / year, €3 a month | **Free** |
+| Price | **€9.99** / month | **€89.99** / year, about €7.50 a month | **Free** |
 | You need | A Saiph account | A Saiph account | Your own Linux server or Raspberry Pi |
 
 Cancel any time; your access runs to the end of the period you paid for.

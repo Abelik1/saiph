@@ -29,9 +29,12 @@ two, so a paying customer got no Hosted access.
 4. Beta codes, admin grants and account suspension are unchanged and work
    alongside paid grants. A push can only change its own `paid` row.
 
-Prices (owner decision, 14 October): **€3.99 per month or €36 per year**, one
+Prices (owner decision, 16 October 2026): **€9.99 per month or €89.99 per year**, one
 Stripe product with two recurring EUR prices. The code refuses a configured
-price whose amount or interval differs.
+price whose amount or interval differs. Before releasing this change, operations
+must create the €9.99/month and €89.99/year recurring prices and update the protected
+price IDs and billing portal configuration. Existing subscriptions are not
+migrated by this source change; refunds continue to use actual paid charges.
 
 ## Trust boundary
 
@@ -161,7 +164,7 @@ both test suites checks that the two implementations agree.
 One page for beta and paid users (`app/account`): current Hosted access from the
 service and whether it comes from a subscription or a beta invitation; the
 subscription state and renewal or end date from stored webhook observations;
-**€3.99 / month** and **€36 / year** buttons when there is no current
+**€9.99 / month** and **€89.99 / year** buttons when there is no current
 subscription; **Manage billing** (Stripe customer portal) once a customer exists;
 and the beta code form. After returning from checkout the page says Stripe is
 confirming the payment; it never treats the return as payment.
@@ -177,7 +180,7 @@ Auth0 and `DATABASE_URL` values:
 | `STRIPE_SECRET_KEY` | restricted key, `rk_test_…` or `rk_live_…` to match the mode |
 | `STRIPE_WEBHOOK_SECRET` | the endpoint's `whsec_…` |
 | `STRIPE_EXPECTED_ACCOUNT_ID`, `STRIPE_PRODUCT_ID`, `STRIPE_PORTAL_CONFIGURATION_ID` | as before |
-| `STRIPE_PRICE_ID` / `STRIPE_YEARLY_PRICE_ID` | the €3.99 monthly and €36 yearly prices |
+| `STRIPE_PRICE_ID` / `STRIPE_YEARLY_PRICE_ID` | the €9.99 monthly and €89.99 yearly prices |
 | `SAIPH_HOSTED_API_URL` | Hosted service origin (already set for beta access) |
 | `SAIPH_BILLING_GRANT_KEY` / `SAIPH_BILLING_GRANT_KEY_ID` | from `npm run billing:keygen <id> <new file>` |
 | `CRON_SECRET` | 32+ random URL-safe characters for the daily refresh |
