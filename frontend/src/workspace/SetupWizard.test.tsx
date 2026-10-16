@@ -113,7 +113,7 @@ describe("Setup guide", () => {
     const fresh = { ...hubState(false), hosted: { available: true, enabled: true, status: "setup", identity: false, configured: true, account } } as unknown as State;
     const { rerender } = render(<SetupWizard state={fresh} client={{ call } as unknown as Client} close={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    expect(await screen.findByText("Already use Saiph Hosted on another computer?")).toBeInTheDocument();
+    expect(await screen.findByText("Already use Saiph Cloud on another computer?")).toBeInTheDocument();
     expect(screen.getByLabelText("Main computer's code")).toBeInTheDocument();
     const waiting = { ...fresh, hosted: { ...fresh.hosted!, identity: true, role: "member", status: "awaiting_approval" } } as State;
     rerender(<SetupWizard state={waiting} client={{ call } as unknown as Client} close={vi.fn()} />);

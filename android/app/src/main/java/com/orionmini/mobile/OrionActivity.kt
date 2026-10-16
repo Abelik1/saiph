@@ -207,10 +207,10 @@ class OrionActivity : ComponentActivity() {
         if (!AppPolicy.acknowledged(this)) {
             root.addView(SetupArtwork(this, SetupArtwork.Scene.WELCOME))
             root.addView(heading("Before you start"))
-            root.addView(body("Review how Saiph handles your data. Hosted terms apply if you use Saiph Hosted."))
+            root.addView(body("Review how Saiph handles your data. Cloud terms apply if you use Saiph Cloud."))
             root.addView(buttonRow(button("Privacy policy", tone = Tone.TONAL) { openSettings(Intent(Intent.ACTION_VIEW, Uri.parse(AppPolicy.PRIVACY_URL))) },
-                button("Hosted terms", tone = Tone.TONAL) { openSettings(Intent(Intent.ACTION_VIEW, Uri.parse(AppPolicy.TERMS_URL))) }))
-            root.addView(body("By continuing, you acknowledge the privacy policy and agree to the terms when using Hosted. Sharing usage statistics is a separate choice."))
+                button("Cloud terms", tone = Tone.TONAL) { openSettings(Intent(Intent.ACTION_VIEW, Uri.parse(AppPolicy.TERMS_URL))) }))
+            root.addView(body("By continuing, you acknowledge the privacy policy and agree to the terms when using Cloud. Sharing usage statistics is a separate choice."))
             root.addView(buttonRow(button("Agree and continue", true) { AppPolicy.acknowledge(this); pairing() },
                 button("Exit") { finish() }))
             return

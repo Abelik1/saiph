@@ -1,5 +1,35 @@
 # Current release preparation status
 
+2026-10-16 Cloud connection follow-up: user-facing service labels now say Cloud;
+technical Hosted identifiers and stored formats are unchanged. Android shows an
+in-app Back arrow only for nested Settings and security-code comparison screens.
+Primary retry/recovery sign-in selects Google; other providers remain explicit.
+
+An actual Android 14 emulator reproduced the enrollment failure in
+AndroidHostedTrustStore.create after protected key creation. The code executed
+the row-returning journal_mode PRAGMA through execSQL; the platform WAL API now
+enables journaling before creating the schema. A failed old setup can explicitly
+restart with a fresh device ID, preserving its earlier protected key/trust files
+and account sign-in. Established checkpoints are never silently reset or repaired.
+
+Checks: three Android instrumentation regressions passed with real Keystore and
+SQLite: key reload/enrollment, synthetic root-signed approval and encrypted
+exchange/inbox retention, failed-setup restart preservation and nested Back.
+Debug assembly, 14 app JVM tests, 103 network JVM tests (2 optional interop skips)
+and lint passed (0 errors, 240 warnings). Desktop targeted checks passed 152 tests
+with 3 platform skips; frontend 177 tests and its production build passed. The
+real Qt control/layout flows passed in an isolated profile. Initial attempts had
+a missing Python temporary-directory parent, sandbox denial of the npm cache and
+an unescaped SDK drive separator in ignored local.properties; these were fixed.
+
+A live anonymous native authorization probe returned HTTP 302 directly to Google.
+This is routing evidence, not completed sign-in. Auth0's extra authorization or
+impersonation-confirmation screen remains provider work: native custom schemes
+and desktop loopback callbacks can require it. Verified HTTPS callback setup,
+provider consent configuration and development-key branding are not fixed by
+the Google connection parameter. No live account/physical phone acceptance or
+independent security review is claimed by these checks.
+
 2026-10-16 Android connection recovery and desktop preferences follow-up:
 
 Android distinguishes saved identity intent, interrupted setup, pending approval

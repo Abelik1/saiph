@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Opt-in Saiph Hosted preview for the desktop. OFF by default.
+"""Opt-in Saiph Cloud preview for the desktop. OFF by default.
 
 With `settings["hosted"]["enabled"]` absent or false, nothing here touches the
 network, keys or clipboard, and self-hosted Link behaviour is unchanged.
@@ -67,9 +67,9 @@ ROOT_ONLY = "Only your main computer can approve or remove devices."
 NO_ACCESS = ("This Saiph account has no beta access yet. Activate your invitation code on your Saiph "
              "account page with this same account, then try again.")
 EXCLUSIVE = ("This computer is paired with a self-hosted Hub. A device uses either a self-hosted Hub "
-             "or Saiph Hosted, never both.")
-HOSTED_ACTIVE = ("This computer uses Saiph Hosted. A device uses either Saiph Hosted or a self-hosted Hub, "
-                 "never both. Turn off and forget Saiph Hosted first.")
+             "or Saiph Cloud, never both.")
+HOSTED_ACTIVE = ("This computer uses Saiph Cloud. A device uses either Saiph Cloud or a self-hosted Hub, "
+                 "never both. Turn off and forget Saiph Cloud first.")
 CONFIG_KEYS = {"service_url", "issuer", "audience", "client_id", "refresh_tokens"}
 
 
@@ -78,7 +78,7 @@ class HostedError(ValueError):
 
 
 def _unreachable(error) -> str:
-    return NO_ACCESS if error.status == 403 else "Saiph Hosted is unreachable. Try again when you are online."
+    return NO_ACCESS if error.status == 403 else "Saiph Cloud is unreachable. Try again when you are online."
 
 
 def hosted_settings(settings) -> dict:
@@ -231,7 +231,7 @@ class HostedController:
 
     def set_enabled(self, flag) -> dict:
         if type(flag) is not bool:
-            raise HostedError("Saiph Hosted is on or off.")
+            raise HostedError("Saiph Cloud is on or off.")
         with self.lock:
             if flag:
                 if self.self_hosted_paired():
@@ -259,13 +259,13 @@ class HostedController:
         automatically; root transfer is not implemented.
         """
         if confirm is not True:
-            raise HostedError("Confirm that this computer should stop using Saiph Hosted.")
+            raise HostedError("Confirm that this computer should stop using Saiph Cloud.")
         if self.enabled():
-            raise HostedError("Turn off Saiph Hosted first.")
-        confirm_user(self.workspace, "retire this computer's Saiph Hosted identity")
+            raise HostedError("Turn off Saiph Cloud first.")
+        confirm_user(self.workspace, "retire this computer's Saiph Cloud identity")
         with self.lock:
             if self.enabled():
-                raise HostedError("Turn off Saiph Hosted first.")
+                raise HostedError("Turn off Saiph Cloud first.")
             self._deactivate("off")
             if self.account is not None:
                 self.account.sign_out()
@@ -311,7 +311,7 @@ class HostedController:
 
     def _require_enabled(self):
         if not self.enabled():
-            raise HostedError("Turn on Saiph Hosted first.")
+            raise HostedError("Turn on Saiph Cloud first.")
         if self.self_hosted_paired():
             raise HostedError(EXCLUSIVE)
 
@@ -395,7 +395,7 @@ class HostedController:
         offset = getattr(self.transport, "server_offset", None)
         decision = assess(None, self.clock(), server_offset=offset)
         if decision.blocked:
-            raise HostedError("This computer's clock differs from Saiph Hosted by more than an hour. Correct the clock first.")
+            raise HostedError("This computer's clock differs from Saiph Cloud by more than an hour. Correct the clock first.")
         return decision.ttl_seconds
 
     def setup_root(self) -> dict:
@@ -447,7 +447,7 @@ class HostedController:
     def _pending(response, member):
         if (type(response) is not dict or set(response) != {"status", "expires_at"} or response["status"] != "pending"
                 or type(response["expires_at"]) is not int):
-            raise HostedError("Saiph Hosted returned an invalid device request.")
+            raise HostedError("Saiph Cloud returned an invalid device request.")
         return {**member, "expires_at": response["expires_at"]}
 
     def _token_or_error(self):
@@ -455,9 +455,9 @@ class HostedController:
             return self._token()
         except SignInRequired:
             self._deactivate("sign_in_required")
-            raise HostedError("Sign in to Saiph Hosted first.") from None
+            raise HostedError("Sign in to Saiph Cloud first.") from None
         except HostedUnavailable:
-            raise HostedError("Saiph Hosted is unreachable. Try again when you are online.") from None
+            raise HostedError("Saiph Cloud is unreachable. Try again when you are online.") from None
 
     def root_code(self) -> dict:
         """A fresh public root code as QR modules plus the full fingerprint."""
@@ -575,7 +575,7 @@ class HostedController:
             except (ApprovalError, EnvelopeError, TransportError):
                 raise HostedError("The device could not be approved. Ask it for a fresh request code.") from None
             if candidate["device"]["id"] not in members:
-                raise HostedError("Saiph Hosted has not accepted the approval yet. It will retry automatically.")
+                raise HostedError("Saiph Cloud has not accepted the approval yet. It will retry automatically.")
             self._set_label(candidate["device"]["id"], label.strip())
             self._watch_members()
         self.changed()
@@ -602,7 +602,7 @@ class HostedController:
             except (ApprovalError, EnvelopeError, TransportError):
                 raise HostedError("Revocation could not be confirmed. Saiph will refresh the device list when it reconnects.") from None
             if device_id in members:
-                raise HostedError("Saiph Hosted has not accepted the revocation yet. It will retry automatically.")
+                raise HostedError("Saiph Cloud has not accepted the revocation yet. It will retry automatically.")
             self._watch_members()
             labels = self._labels()
             labels.pop(device_id, None)
@@ -639,7 +639,7 @@ class HostedController:
         with self.lock:
             self._require_enabled()
             if self.identity.exists():
-                raise HostedError("This computer already has a Saiph Hosted identity.")
+                raise HostedError("This computer already has a Saiph Cloud identity.")
             try:
                 info = inspect_root_code(code)
             except ApprovalError:
@@ -658,7 +658,7 @@ class HostedController:
         with self.lock:
             self._require_enabled()
             if self.identity.exists():
-                raise HostedError("This computer already has a Saiph Hosted identity.")
+                raise HostedError("This computer already has a Saiph Cloud identity.")
             try:
                 root = trust_root_code(code, trusted_out_of_band=True)
             except ApprovalError:
@@ -705,7 +705,7 @@ class HostedController:
                 # The main computer approves exactly the pending request this computer submitted.
                 self._pending(self.transport.enroll(token, candidate), candidate["device"])
             except (ApprovalError, TransportError):
-                raise HostedError("The request could not be sent to Saiph Hosted. Try again shortly.") from None
+                raise HostedError("The request could not be sent to Saiph Cloud. Try again shortly.") from None
             try:
                 self.transport.offer_request(token, code)
             except TransportError:
@@ -828,7 +828,7 @@ class HostedController:
             except KeyStorageError:
                 self.status, self.error = "keys_unavailable", "This computer could not unlock its hosted keys. They were kept unchanged."
             except (ApprovalError, EnvelopeError, TransportError, HostedError):
-                self.status, self.error = "retrying", "Saiph Hosted is temporarily unavailable. Saiph will retry."
+                self.status, self.error = "retrying", "Saiph Cloud is temporarily unavailable. Saiph will retry."
             finally:
                 wait = self.decision.next_check_in if self.decision else 30
                 self.next_step_at = time.monotonic() + min(wait, 15)
@@ -1245,7 +1245,7 @@ class HostedController:
                     try:
                         self.step()
                     except Exception:
-                        self.status, self.error = "retrying", "Saiph Hosted is temporarily unavailable. Saiph will retry."
+                        self.status, self.error = "retrying", "Saiph Cloud is temporarily unavailable. Saiph will retry."
                     self.next_poll_at = time.monotonic() + FAST_POLL_SECONDS
                 elif time.monotonic() >= self.next_poll_at:
                     self.next_poll_at = time.monotonic() + FAST_POLL_SECONDS

@@ -240,7 +240,7 @@ class DesktopBridge(QObject):
             elif method in {"hosted.setup_root", "hosted.approve", "hosted.revoke", "hosted.sign_out", "hosted.file.save", "hosted.root_code", "hosted.configure", "hosted.forget", "hosted.enable", "hosted.request.inspect", "hosted.sign_in", "hosted.notification.dismiss", "hosted.join.inspect", "hosted.join", "hosted.join.request", "hosted.requests"}:
                 self.background(request_id, lambda: self.window.workspace.dispatch(method, args)); return
             elif method == "hosted.file.choose":
-                path, _ = QFileDialog.getOpenFileName(self.window, "Send a file with Saiph Hosted")
+                path, _ = QFileDialog.getOpenFileName(self.window, "Send a file with Saiph Cloud")
                 if path:
                     self.background(request_id, lambda: self.window.workspace.dispatch("hosted.file.send", {"target": args.get("target"), "path": path})); return
                 result = {"cancelled": True}

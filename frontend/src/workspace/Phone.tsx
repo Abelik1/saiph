@@ -154,7 +154,7 @@ export function Phone({
   active?: boolean;
 }) {
   const info = state.phone;
-  // Link phones report their battery; Saiph Hosted phones are marked by the computer.
+  // Link phones report their battery; Saiph Cloud phones are marked by the computer.
   const phones =
     info?.devices.filter((d) => d.capabilities.includes("battery") || d.hosted) || [];
   const hostedOn = state.hosted?.enabled === true;
@@ -307,11 +307,11 @@ export function Phone({
         {phone && !phone.online && <p className="m-0 rounded-[12px] border border-border bg-card/90 px-4 py-3 text-[12.5px] leading-relaxed text-muted-foreground" role="status">
           {phone.last_seen_at ? `Last seen ${new Date(phone.last_seen_at).toLocaleString()}. ` : ""}
           {phone.hosted
-            ? "Open Saiph on your phone and check that Saiph Hosted is connected. Saved content remains available."
+            ? "Open Saiph on your phone and check that Saiph Cloud is connected. Saved content remains available."
             : "Open Saiph on your phone and check that both devices can reach your server. Saved content remains available."}</p>}
         {!phone && hostedOn && <p className="m-0 rounded-[12px] border border-border bg-card/90 px-4 py-3 text-[12.5px] leading-relaxed text-muted-foreground" role="status">
-          With Saiph Hosted, your approved phone appears here when it connects with an up-to-date Saiph app.
-          To see texts and calls, turn on Texts and calls in Saiph Hosted on the phone.</p>}
+          With Saiph Cloud, your approved phone appears here when it connects with an up-to-date Saiph app.
+          To see texts and calls, turn on Texts and calls in Saiph Cloud on the phone.</p>}
         {/* The phone shares its clipboard only while Saiph's helper runs; this computer starts it with adb. */}
         {phone?.online && !phone.hosted && state.settings?.link?.clipboard !== false && !phone.capabilities.includes("clipboard") && <ClipboardNotice phone={phone} />}
         {(cameraLive || microphoneLive) && <Card className="string-edge shrink-0 gap-0 border-secondary-border py-0" aria-label="Capturing now">
@@ -336,7 +336,7 @@ export function Phone({
           {dismissError && <p className="inline-error m-0 px-4 pt-2 text-[12.5px]" role="alert">{dismissError}</p>}
           <div className="grid min-h-0 flex-1 content-start gap-2.5 overflow-y-auto p-4">
             <HubSuggestions state={state} client={client} />
-            {phone?.hosted ? <p className="m-0 text-[12.5px] leading-relaxed text-muted-foreground">With Saiph Hosted, your phone's notifications appear in Settings → Saiph Hosted.</p>
+            {phone?.hosted ? <p className="m-0 text-[12.5px] leading-relaxed text-muted-foreground">With Saiph Cloud, your phone's notifications appear in Settings → Saiph Cloud.</p>
               : notices.length ? notices.map((row) => <Notification key={row.id} row={row} client={client} online={canAct} dismiss={() => dismiss([row.id])} />)
               : <div className="grid gap-1 py-6 text-center">
                   <h3 className="m-0 text-[14px] font-semibold">{!phone ? "Connect your phone" : !phone.online ? "Phone disconnected" : !canAct ? "Allow notifications" : "All clear"}</h3>

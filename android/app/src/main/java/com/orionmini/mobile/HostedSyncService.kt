@@ -28,10 +28,10 @@ class HostedSyncService : Service() {
         super.onCreate()
         if (!runtime.enabled()) { stopSelf(); return }
         val manager = getSystemService(NotificationManager::class.java)
-        manager.createNotificationChannel(NotificationChannel("orion_hosted", "Saiph Hosted preview", NotificationManager.IMPORTANCE_LOW))
+        manager.createNotificationChannel(NotificationChannel("orion_hosted", "Saiph Cloud preview", NotificationManager.IMPORTANCE_LOW))
         val open = PendingIntent.getActivity(this, 43, Intent(this, HostedActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
         fun notice() = NotificationCompat.Builder(this, "orion_hosted").setSmallIcon(android.R.drawable.ic_menu_share)
-            .setContentTitle("Saiph Hosted preview").setContentText(runtime.status).setContentIntent(open).setOngoing(true).setOnlyAlertOnce(true).build()
+            .setContentTitle("Saiph Cloud preview").setContentText(runtime.status).setContentIntent(open).setOngoing(true).setOnlyAlertOnce(true).build()
         startForeground(43, notice())
         ownsHooks = true
         sender = runtime::enqueue
