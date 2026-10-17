@@ -201,6 +201,17 @@ class DesktopBridge(QObject):
                     chosen = {'folder': folder, 'libraries': list(args['libraries'])}
                     self.background(request_id, lambda: self.window.workspace.dispatch(method, chosen)); return
                 result = {'cancelled': True}
+            elif method == 'camera.session':
+                if set(args) != {'preview'} or type(args['preview']) is not bool:
+                    raise ValueError('Choose a camera session.')
+                self.background(request_id,lambda:self.window.workspace.camera.start_local(args['preview']));return
+            elif method == 'camera.cancel_invite':
+                if set(args) != {'session'} or not isinstance(args['session'],str) or len(args['session']) != 32:
+                    raise ValueError('Choose a camera invitation.')
+                self.background(request_id,lambda:self.window.workspace.camera.local.cancel_invite(args['session']));return
+            elif method == 'camera.frame':
+                if args:raise ValueError('Unknown camera action.')
+                result=self.window.workspace.camera.local.latest()
             elif method == 'camera.start':
                 # A self-hosted paired phone (device_id) or a phone allowed over USB/wireless debugging (serial).
                 if not isinstance(args, dict) or set(args) - {'device_id', 'serial', 'preview'} or len(set(args) & {'device_id', 'serial'}) != 1 \

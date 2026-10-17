@@ -246,7 +246,7 @@ export function Phone({
   const cloudNotices = (state.hosted?.notifications || []).filter((n) => n.device_id === phone?.id);
   const noticeCount = phone?.hosted ? cloudNotices.length : notices.length;
 
-  const camera = state.settings?.link?.camera?.enabled !== false;
+  const camera = Boolean(state.camera);
   const microphone = state.settings?.link?.microphone?.enabled === true || state.microphone?.running;
   // While the phone's camera or microphone is capturing it stays in plain sight; otherwise it waits in the device bar.
   const cameraLive = camera && Boolean(state.camera?.running);
@@ -304,6 +304,9 @@ export function Phone({
       <p className="m-0 text-muted-foreground">Open Saiph on your phone and scan a pairing QR from this computer.</p>
       <div><Button variant="default" onClick={() => addDevice(true)}><QrCode />Connect a phone</Button></div>
     </Card>}
+    {cameraLive && state.camera?.local_state === "live" && <Card className="string-edge w-full max-w-[760px] shrink-0 gap-0 self-start border-secondary-border py-0" aria-label="Live phone camera">
+      <PhoneCamera camera={state.camera} config={state.settings?.link?.camera} client={client} />
+    </Card>}
     <div className="grid min-h-0 flex-1 grid-cols-[300px_minmax(0,1fr)] gap-5 max-[1100px]:grid-cols-[272px_minmax(0,1fr)]">
       <aside className="flex min-h-0 flex-col gap-4" aria-label="Phone status and notifications">
         {phone && !phone.online && <p className="m-0 rounded-[12px] border border-border bg-card/90 px-4 py-3 text-[12.5px] leading-relaxed text-muted-foreground" role="status">
@@ -316,9 +319,9 @@ export function Phone({
           To see texts and calls, turn on Texts and calls in Saiph Cloud on the phone.</p>}
         {/* The phone shares its clipboard only while Saiph's helper runs; this computer starts it with adb. */}
         {phone?.online && !phone.hosted && state.settings?.link?.clipboard !== false && !phone.capabilities.includes("clipboard") && <ClipboardNotice phone={phone} />}
-        {(cameraLive || microphoneLive) && <Card className="string-edge shrink-0 gap-0 border-secondary-border py-0" aria-label="Capturing now">
-          {cameraLive && <PhoneCamera camera={state.camera} config={state.settings?.link?.camera} deviceId={phone?.online && !phone.hosted ? phone.id : undefined} client={client} />}
-          {cameraLive && microphoneLive && <Separator />}
+        {((cameraLive && state.camera?.local_state !== "live") || microphoneLive) && <Card className="string-edge shrink-0 gap-0 border-secondary-border py-0" aria-label="Capturing now">
+          {cameraLive && state.camera?.local_state !== "live" && <PhoneCamera camera={state.camera} config={state.settings?.link?.camera} deviceId={phone?.online && !phone.hosted ? phone.id : undefined} client={client} />}
+          {cameraLive && state.camera?.local_state !== "live" && microphoneLive && <Separator />}
           {microphoneLive && <PhoneMicrophone microphone={state.microphone} deviceId={phone?.online && !phone.hosted ? phone.id : undefined} deviceName={phones.find(row=>row.id===state.microphone?.device_id)?.name} client={client} />}
         </Card>}
         {quick && <Card className="shrink-0 gap-4 p-4" aria-label="Quick controls">

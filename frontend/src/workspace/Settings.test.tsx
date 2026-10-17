@@ -69,6 +69,8 @@ describe("Settings navigation and feedback", () => {
     fireEvent.click(screen.getByLabelText("Use Cloud folders"));
     expect(screen.getByText(/Unsaved changes/)).toBeVisible();
     fireEvent.click(screen.getByRole("tab", { name: "Devices" }));
+    fireEvent.click(screen.getByText("Legacy USB camera tools (advanced)", {selector:"summary span"}));
+    await screen.findByText("Meeting-app configuration", {selector:"summary span"});
     fireEvent.click(screen.getByText("Meeting-app configuration", {selector:"summary span"}));
     fireEvent.change(screen.getByLabelText("Linux loopback device"), {
       target: { value: "/dev/video12" },

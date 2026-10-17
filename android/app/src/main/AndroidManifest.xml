@@ -191,6 +191,7 @@
         </receiver>
 
         <activity android:name="com.orionmini.mobile.OrionQrActivity" android:exported="false" />
+        <activity android:name="com.orionmini.mobile.PhoneCameraActivity" android:exported="false" />
         <activity android:name="com.orionmini.mobile.OrionCaptureActivity" android:exported="false" />
         <activity android:name="com.orionmini.mobile.OrionRemoteActivity" android:exported="false" />
         <activity android:name="com.orionmini.mobile.OrionSketchActivity" android:exported="false" />

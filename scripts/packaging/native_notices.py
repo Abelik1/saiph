@@ -174,6 +174,26 @@ def collect(bundle, destination):
         try: versions[name] = importlib.metadata.version(name)
         except importlib.metadata.PackageNotFoundError: pass
     native_origin_records(binaries)
+    camera_root = bundle / '_internal/camera'
+    camera_receipt = None
+    if camera_root.exists():
+        camera_receipt = json.loads((camera_root / 'camera-build.json').read_text(encoding='utf-8'))
+        expected = {'SaiphCamera64.dll', 'SaiphCamera32.dll', 'LICENSE.UnityCapture.txt'}
+        if (camera_receipt.get('format') != 'saiph-camera-build' or camera_receipt.get('schema') != 1
+                or camera_receipt.get('upstreamCommit') != '3ed54c325e0ad71afcf4f246c07e5e17b3d7f2d2'
+                or set(camera_receipt.get('files', {})) != expected):
+            raise ValueError('Bundled camera component lacks an exact build receipt')
+        for leaf in expected:
+            source = camera_root / leaf
+            if not source.is_file() or digest(source) != camera_receipt['files'][leaf]:
+                raise ValueError('Bundled camera component differs from its build receipt')
+        for item in binaries:
+            if item['path'] in {'_internal/camera/SaiphCamera64.dll', '_internal/camera/SaiphCamera32.dll'}:
+                item['project_generated'] = True
+        target = destination / 'saiph-camera'
+        target.mkdir(exist_ok=True)
+        shutil.copyfile(camera_root / 'LICENSE.UnityCapture.txt', target / 'LICENSE.UnityCapture.txt')
+        shutil.copyfile(camera_root / 'camera-build.json', target / 'camera-build.json')
     qt = versions.get('PySide6_Essentials')
     if qt and not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', qt):
         raise ValueError('Qt source provenance requires an exact stable package version')
@@ -200,6 +220,7 @@ def collect(bundle, destination):
         'format': 'orion-native-provenance', 'schema': 1,
         'build_environment_versions': versions,
         'native_files': binaries,
+        'bundled_camera_build': camera_receipt,
         'unmatched_native_files': [item['path'] for item in binaries if not (
             item['wheel_record_matches'] or item['build_interpreter_matches'] or item['project_generated'])],
         'origin_scope': 'Exact installed wheel RECORD and build-interpreter byte matches; these do not independently verify wheel downloads, build options, platform grants or replacement acceptance. The project launcher is generated output, not an upstream wheel.',

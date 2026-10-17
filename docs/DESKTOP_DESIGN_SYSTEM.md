@@ -200,7 +200,9 @@ Devices uses the same preference cards, label scale and spacing for camera,
 microphone, remote controls and automatic locking. Keep permission consequences
 beside the controls that enable them.
 
-Present direct phone-camera viewing separately from optional webcam delivery to
-meeting apps. Viewing uses scrcpy; the current Windows webcam bridge uses OBS
-Virtual Camera. Keep OBS profiles, scene fields and installation details inside
+Present phone-camera preview and meeting-app webcam use as Saiph features. The
+Windows build bundles the Saiph Camera backend; normal setup never asks users to
+download or configure another app. Keep the camera QR private and short-lived,
+show live video at a useful width, and keep Stop visible. Legacy OBS profiles,
+scene fields and installation details belong inside
 meeting-app disclosures. Do not start capture when opening or saving preferences.

@@ -1,173 +1,91 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useId, useState } from "react";
-import { Settings2, Video } from "lucide-react";
-import type { CameraConfig, CameraStatus, Client, DebugPhone } from "./types";
+import { useEffect, useRef, useState } from "react";
+import { Video } from "lucide-react";
+import type { CameraConfig, CameraStatus, Client } from "./types";
 import { Action } from "./ui";
-import { SettingsShortcut } from "./Navigation";
-import { WirelessDebugging } from "./WirelessDebugging";
-import { Disclosure } from "@/components/ui/disclosure";
+import { QrImage, validQr, type PairingQrCode } from "./PairingQr";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Field } from "@/components/ui/field";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "@/components/ui/item";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-function Choice<T extends string>({ label, value, options, onChange }: { label: string; value: T; options: [T, string][]; onChange: (value: T) => void }) {
-  const id = useId();
-  return <Field label={label} htmlFor={id}>
-    <Select value={value} onValueChange={(next) => onChange(next as T)}>
-      <SelectTrigger id={id} size="sm"><SelectValue /></SelectTrigger>
-      <SelectContent>{options.map(([option, text]) => <SelectItem key={option} value={option}>{text}</SelectItem>)}</SelectContent>
-    </Select>
-  </Field>;
-}
+type CameraCode = PairingQrCode & { session: string };
 
-const connection = (phone: DebugPhone) =>
-  phone.connection === "wifi" ? "Wi‑Fi" : "USB cable";
-
-/**
- * `deviceId` is a phone paired through a self-hosted Hub. Without one (Saiph
- * Hosted, or no Hub) the camera uses a phone that has allowed this computer
- * over USB or wireless debugging; the video never leaves the cable or Wi‑Fi.
- */
-export function PhoneCamera({
-  camera,
-  config,
-  deviceId,
-  client,
-}: {
-  camera?: CameraStatus;
-  config?: CameraConfig;
-  deviceId?: string;
-  client: Client;
+export function PhoneCamera({ camera, config, client }: {
+  camera?: CameraStatus; config?: CameraConfig; deviceId?: string; client: Client;
 }) {
-  const [facing, setFacing] = useState<NonNullable<CameraConfig["facing"]>>(
-    config?.facing || "front",
-  );
-  const [quality, setQuality] = useState<NonNullable<CameraConfig["quality"]>>(
-    config?.quality || "720p",
-  );
-  const [rotation, setRotation] = useState<
-    NonNullable<CameraConfig["rotation"]>
-  >(config?.rotation || "0");
-  const [phones, setPhones] = useState<DebugPhone[] | null>(null);
-  const [adbFound, setAdbFound] = useState(true);
-  const [serial, setSerial] = useState("");
-  const ready = (phones || []).filter((phone) => phone.state === "ready");
-  const chosen = ready.find((phone) => phone.serial === serial) || ready[0];
-  const target = deviceId
-    ? { device_id: deviceId }
-    : chosen
-      ? { serial: chosen.serial }
-      : undefined;
-  const find = async () => {
-    const found = await client.call<{ adb: boolean; devices: DebugPhone[] }>(
-      "camera.devices",
-    );
-    setAdbFound(found.adb);
-    setPhones(found.devices);
-  };
-  const start = async (preview = false) => {
-    await client.call("settings.save", {
-      link: { camera: { facing, quality, rotation } },
-    });
-    await client.call(
-      "camera.start",
-      preview ? { ...target, preview: true } : target,
-    );
-  };
-  const waiting = (phones || []).filter((phone) => phone.state !== "ready");
-  return (
-    <div className="grid gap-3 p-4">
-      <Item size="flush">
-        <ItemMedia><Video /></ItemMedia>
-        <ItemContent>
-          <ItemTitle className="flex items-center gap-2">Phone camera {camera?.running && <Badge tone="good">Live</Badge>}</ItemTitle>
-          <ItemDescription role="status">
-            {camera?.running
-              ? camera.mode === "preview"
-                ? "Your phone camera is open in its own window."
-                : `${camera.facing === "back" ? "Rear" : "Front"} camera · ${camera.quality || "720p"}. Check the picture in your meeting app.`
-              : !target
-                ? phones === null
-                  ? "Find your phone to start the camera."
-                  : "Connect your phone to start the camera."
-                : camera?.available
-                  ? "Your camera starts only when you choose to use it."
-                  : camera?.can_preview ? "Open your camera directly. Meeting-app sharing needs optional setup." : "Set up the camera once in Settings."}
-          </ItemDescription>
-        </ItemContent>
-      </Item>
-      {!deviceId && !camera?.running && (
-        // Without a Hub-paired phone, use one that allowed this computer over USB or Wi-Fi debugging.
-        <div className="grid gap-2.5 pl-12 text-[12.5px] leading-relaxed text-muted-foreground">
-          <p className="m-0">Connect your phone with a USB cable, or over Wi‑Fi with wireless debugging, then find it here.</p>
-          <div><Action variant="tonal" size="sm" run={find}>{phones ? "Find again" : "Find my phone"}</Action></div>
-          {phones && ready.length > 1 && chosen && (
-            <Choice label="Phone for the camera" value={chosen.serial} onChange={setSerial}
-              options={ready.map((phone) => [phone.serial, `${phone.model} · ${connection(phone)}`] as [string, string])} />
-          )}
-          {phones && ready.length === 1 && chosen && <p className="m-0">Using {chosen.model} · {connection(chosen)}</p>}
-          {phones && !ready.length && !waiting.length && (
-            <p className="m-0" role="status">
-              {adbFound
-                ? "No phone found. Check the cable and that USB debugging is on, or connect over Wi‑Fi below."
-                : "adb was not found. Install scrcpy, which includes adb; Settings → Devices explains how."}
-            </p>
-          )}
-          {waiting.map((phone) => (
-            <p className="m-0" role="status" key={phone.serial}>
-              {phone.state === "unauthorized"
-                ? `Unlock ${phone.model} and tap Allow on the debugging prompt, then choose Find again.`
-                : phone.state === "no_permission"
-                  ? `This computer cannot open ${phone.model} over USB yet. On Linux, install your distribution's android-udev rules and reconnect the cable.`
-                  : `${phone.model} is offline for debugging. Unlock it and reconnect.`}
-            </p>
-          ))}
-          <Disclosure summary="Connect over Wi‑Fi">
-            <WirelessDebugging client={client} onConnected={find} />
-          </Disclosure>
-        </div>
-      )}
-      <ItemActions className="flex-wrap pl-12">
-        {camera?.running ? (
-          <Action variant="destructive" size="sm" run={() => client.call("camera.stop")}>
-            {camera.mode === "preview" ? "Close camera preview" : "Stop phone camera"}
-          </Action>
-        ) : (
-          <>
-            {camera?.can_preview && (
-              <Action variant="tonal" size="sm" disabled={!target} run={() => start(true)}>
-                Open camera preview
-              </Action>
-            )}
-            <Action variant="secondary" size="sm" disabled={!target || !camera?.available} run={() => start()}>
-              Use phone as webcam
-            </Action>
-          </>
-        )}
-        {!camera?.running && (
-          // The options belong to this button, so they open beside it. They are saved when the camera starts.
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="ghost" size="icon-sm" aria-label="Camera options" title="Camera options"><Settings2 /></Button>
-            </PopoverTrigger>
-            <PopoverContent>
-              <b className="text-[13px] font-semibold">Camera options</b>
-              <Choice label="Phone camera" value={facing} onChange={setFacing} options={[["front", "Front camera"], ["back", "Rear camera"]]} />
-              <Choice label="Video quality" value={quality} onChange={setQuality} options={[["720p", "720p · 30 fps"], ["1080p", "1080p · 30 fps"]]} />
-              <Choice label="Picture rotation" value={rotation} onChange={setRotation} options={(["0", "90", "180", "270"] as const).map((value) => [value, value + "°"])} />
-              <small className="text-[12px] text-muted-foreground">Used the next time you start the webcam.</small>
-            </PopoverContent>
-          </Popover>
-        )}
-        {!camera?.available && (
-          <SettingsShortcut target="Devices">
-            Set up phone camera
-          </SettingsShortcut>
-        )}
-      </ItemActions>
-    </div>
-  );
+  const [code, setCode] = useState<CameraCode | null>(null);
+  const [image, setImage] = useState<string | null>(null);
+  const [remaining, setRemaining] = useState(120);
+  const invitation = useRef<string | null>(null);
+  const observedSession = useRef(false);
+  const live = camera?.local_state === "live";
+  const legacyLive = Boolean(camera?.running && !live);
+  const waiting = camera?.local_state === "waiting" || camera?.local_state === "connecting";
+  useEffect(() => () => {
+    if (invitation.current) void client.call("camera.cancel_invite", { session: invitation.current }).catch(() => {});
+  }, [client]);
+  useEffect(() => {
+    if (live || waiting) observedSession.current = true;
+    if (live || (!waiting && observedSession.current)) {
+      invitation.current = null; setCode(null);
+      if (!live) observedSession.current = false;
+    }
+  }, [live, waiting]);
+  useEffect(() => {
+    if (!code) return;
+    const tick = () => setRemaining(Math.max(0, Math.ceil((Date.parse(code.expires_at) - Date.now()) / 1000)));
+    tick(); const timer = window.setInterval(tick, 1000);
+    return () => window.clearInterval(timer);
+  }, [code]);
+  useEffect(() => {
+    if (!live) { setImage(null); return; }
+    let cancelled = false;
+    let timer: number;
+    const poll = async () => {
+      try {
+        const frame = await client.call<{ image: string | null }>("camera.frame");
+        if (!cancelled) setImage(typeof frame.image === "string" && frame.image.length <= 150000
+          && frame.image.startsWith("data:image/jpeg;base64,") ? frame.image : null);
+      } catch { if (!cancelled) setImage(null); }
+      if (!cancelled) timer = window.setTimeout(poll, 250);
+    };
+    void poll();
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [client, live]);
+  async function start(preview: boolean) {
+    observedSession.current = false;
+    if (config?.enabled === false) await client.call("settings.save", { link: { camera: { enabled: true } } });
+    const next = await client.call<CameraCode>("camera.session", { preview });
+    if (!validQr(next) || !/^[a-f0-9]{32}$/.test(next.session)) throw new Error("The camera code could not be displayed.");
+    invitation.current = next.session;
+    setRemaining(120); setCode(next);
+  }
+  async function stop() {
+    await client.call("camera.stop"); invitation.current = null; observedSession.current = false; setCode(null); setImage(null);
+  }
+  return <div className="grid gap-4 p-4" aria-label="Phone camera">
+    <Item className="p-0">
+      <ItemMedia><Video /></ItemMedia>
+      <ItemContent>
+        <ItemTitle>Phone camera {(live || legacyLive) && <Badge tone="good">Live</Badge>}</ItemTitle>
+        <ItemDescription>{legacyLive ? "Your phone camera is running." : live ? camera?.local_preview ? "Camera preview · audio is off." : "Choose Saiph Camera in your meeting app."
+          : "Use your phone as a webcam. Keep both devices on the same Wi-Fi."}</ItemDescription>
+      </ItemContent>
+    </Item>
+    {code && !live && <div className="grid justify-items-center gap-3">
+      {remaining > 0 ? <>
+        <QrImage modules={code.modules} label="Camera session QR code" width={240} />
+        <p className="m-0 text-center text-sm">On your phone: Saiph → Use phone as webcam → Scan computer's camera code.</p>
+        <small className="text-muted-foreground" role="timer">Works once · expires in {remaining}s. Keep this code private.</small>
+      </> : <p role="status">Camera code expired. Close it and start a new session.</p>}
+    </div>}
+    {live && image && <img src={image} alt="Live phone camera preview" className="aspect-video w-full rounded-lg bg-field object-contain" />}
+    {!code && !live && camera?.local_message && <p role="status" className="m-0 text-sm text-muted-foreground">{camera.local_message}</p>}
+    <ItemActions className="flex-wrap justify-start">
+      {live || legacyLive || code || waiting ? <Action variant="destructive" run={stop}>{live || legacyLive ? "Stop camera" : "Close camera code"}</Action> : <>
+        <Action disabled={!camera?.integrated_available} run={() => start(false)}>Use phone as webcam</Action>
+        <Action variant="tonal" run={() => start(true)}>Preview camera</Action>
+      </>}
+    </ItemActions>
+    {!camera?.integrated_available && !code && !live && <small className="text-muted-foreground">The integrated webcam needs the Windows Saiph build. Preview works without it.</small>}
+  </div>;
 }
