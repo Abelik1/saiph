@@ -1,3 +1,18 @@
+## 2026-10-17: owner-installed update and Firebase preparation
+
+The owner requested updating their installed Windows app and distributing the
+Android changes through the existing Firebase channel. Planned versions are
+Windows 0.1.0-beta.12/build 12 and Android 0.9.7/code 3575000, preserving existing
+application IDs, data paths and signing identity. This authorization covers the
+local update and Firebase distribution; it does not establish physical camera,
+meeting-app, publisher-signing or independent review results. Actual build,
+installation and upload receipts belong in the private operations record.
+
+Before Firebase distribution, verify that the existing Auth0 API permits offline
+access and the Android native client issues rotating refresh tokens: packaged
+Android sign-in requires a persistent grant. No completed provider change or
+publication is inferred from this preparation entry.
+
 ## 2026-10-17: integrated phone camera (development)
 
 Android now has an explicit foreground CameraX session: scan the computer's
