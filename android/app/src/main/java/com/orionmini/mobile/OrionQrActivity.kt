@@ -16,6 +16,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 class OrionQrActivity : ComponentActivity() {
     private val scanned = AtomicBoolean(false)
     private val hostedRoot by lazy { intent.getBooleanExtra(HOSTED_ROOT, false) }
+    private val cameraSession by lazy { intent.getBooleanExtra(CAMERA_SESSION, false) }
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
         if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED)
@@ -24,7 +25,11 @@ class OrionQrActivity : ComponentActivity() {
     }
     private fun camera() = setContent {
         CameraPreview({ qr ->
-            if (hostedRoot) {
+            if (cameraSession) {
+                if (runCatching { CameraOffer.parse(qr) }.isSuccess && scanned.compareAndSet(false, true)) runOnUiThread {
+                    setResult(Activity.RESULT_OK, Intent().putExtra(CAMERA_CODE, qr)); finish()
+                }
+            } else if (hostedRoot) {
                 // Only a well-formed, signed and unexpired root code returns; the caller
                 // still requires full fingerprint comparison before any trust is pinned.
                 if (runCatching { HostedApprovalCodes.inspect(qr) }.isSuccess && scanned.compareAndSet(false, true)) runOnUiThread {
@@ -42,7 +47,10 @@ class OrionQrActivity : ComponentActivity() {
     }
     companion object {
         private const val HOSTED_ROOT = "hosted_root"
+        private const val CAMERA_SESSION = "camera_session"
+        const val CAMERA_CODE = "camera_code"
         const val HOSTED_ROOT_CODE = "hosted_root_code"
         fun hostedRoot(context: Context) = Intent(context, OrionQrActivity::class.java).putExtra(HOSTED_ROOT, true)
+        fun cameraSession(context: Context) = Intent(context, OrionQrActivity::class.java).putExtra(CAMERA_SESSION, true)
     }
 }

@@ -440,6 +440,7 @@ public static class Setup {
     static void Integrate(string release, bool first, List<string> targets) {
         // Check again immediately before integration, including on rollback.
         PreflightIntegration(targets);
+        UnregisterOwnedCameras(Existing()); // A new release registers its bundled camera on first use.
         string exe = ReleaseExecutable(release); string icon = Path.Combine(release, "app", "_internal", "assets", "orion-mini-icon.ico");
         string menu = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "Saiph"); Directory.CreateDirectory(menu);
         Shortcut.Create(MenuShortcut, exe, icon, "OrionMini.Desktop");
@@ -499,6 +500,7 @@ public static class Setup {
                 }
             }
         }
+        if (!isolated) UnregisterOwnedCameras(installation);
         var retained = new List<string>();
         foreach (string version in installation.versions) {
             string release = Under(destination, "releases/" + version);
@@ -539,6 +541,41 @@ public static class Setup {
         File.WriteAllText(Marker, Json.Serialize(installation));
         if (File.Exists(Marker + ".previous")) File.Delete(Marker + ".previous");
         // Uninstall.exe may be the running file. Retain the small stub; never delete outside owned releases.
+    }
+
+    static void UnregisterOwnedCameras(Installation installation) {
+        if (installation == null) return;
+        var owned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (string version in installation.versions) {
+            string release = Under(destination, "releases/" + version);
+            string manifestPath = Under(release, "package-manifest.json");
+            if (!File.Exists(manifestPath)) continue;
+            var manifest = Json.Deserialize<Package>(File.ReadAllText(manifestPath));
+            if (manifest.format != "orion-desktop-package" || manifest.schema != 1 || manifest.version != version || manifest.files == null) throw new InvalidDataException();
+            foreach (string name in new[] { "app/_internal/camera/SaiphCamera64.dll", "app/_internal/camera/SaiphCamera32.dll" }) {
+                var entry = manifest.files.SingleOrDefault(item => item.path == name);
+                string file = Under(release, name);
+                if (entry != null && Hash.IsMatch(entry.sha256) && File.Exists(file) && new FileInfo(file).Length == entry.bytes && SHA(file) == entry.sha256) owned.Add(file);
+            }
+        }
+        foreach (var view in new[] { RegistryView.Registry64, RegistryView.Registry32 }) using (var root = RegistryKey.OpenBaseKey(RegistryHive.CurrentUser, view)) {
+            string suffix = view == RegistryView.Registry64 ? "40" : "42";
+            string properties = view == RegistryView.Registry64 ? "41" : "43";
+            string camera = "{D9B25791-5540-48BE-842C-C73BF85403" + suffix + "}";
+            string prefix = "Software\\Classes\\CLSID\\";
+            string registered;
+            using (var server = root.OpenSubKey(prefix + camera + "\\InprocServer32")) registered = server == null ? null : server.GetValue("") as string;
+            if (registered == null || !owned.Contains(registered)) continue;
+            string instance = "Software\\Classes\\CLSID\\{860BB310-5D01-11D0-BD3B-00A0C911CE86}\\Instance\\" + camera;
+            using (var device = root.OpenSubKey(instance)) {
+                if (device != null && String.Equals(device.GetValue("DevicePath") as string, "saiph:camera:" + camera, StringComparison.OrdinalIgnoreCase))
+                    root.DeleteSubKeyTree(instance, false);
+            }
+            root.DeleteSubKeyTree(prefix + camera, false);
+            string propertyClass = "{D9B25791-5540-48BE-842C-C73BF85403" + properties + "}";
+            using (var server = root.OpenSubKey(prefix + propertyClass + "\\InprocServer32")) registered = server == null ? null : server.GetValue("") as string;
+            if (registered != null && owned.Contains(registered)) root.DeleteSubKeyTree(prefix + propertyClass, false);
+        }
     }
 }
 

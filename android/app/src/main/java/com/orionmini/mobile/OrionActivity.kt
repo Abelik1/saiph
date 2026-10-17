@@ -431,6 +431,9 @@ class OrionActivity : ComponentActivity() {
             })
         } else if (state != "Online") root.addView(text(state, UiType.META, Palette.MUTED).apply { setPadding(dp(4), 0, 0, dp(4)) })
         devicesSection()
+        root.addView(buttonRow(button("Use phone as webcam", tone = Tone.TONAL) {
+            startActivity(Intent(this, PhoneCameraActivity::class.java))
+        }))
         val all = items?.let { a -> (0 until a.length()).map(a::getJSONObject) }.orEmpty()
         val new = all.filter { it.getString("status") == "new" }
         root.addView(section(if (new.isEmpty()) "Needs you" else "Needs you · ${new.size}"))

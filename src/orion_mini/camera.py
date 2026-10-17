@@ -128,6 +128,19 @@ class Camera:
         self.capture_options = {}
         self.monitor_stop = None
         self._version_cache = None
+        from .camera_session import CameraSession
+        from .camera_native import NativeCameraSink
+        self.local = CameraSession(NativeCameraSink)
+
+    def start_local(self, preview=False):
+        if type(preview) is not bool:
+            raise ValueError('Choose whether to preview your camera.')
+        if self._config().get('enabled', True) is False:
+            raise ValueError('Turn on Phone camera in Settings → Devices first.')
+        with self.lock:
+            if self.processes:
+                raise ValueError('Stop the current camera first.')
+            return self.local.start(preview)
 
     def _check_session(self):
         if not self.processes:return
@@ -201,8 +214,14 @@ class Camera:
                 ready = 'Camera processes are running; select the camera in your meeting app.'
             else:
                 ready = 'Ready to start the phone camera.'
-            return {'available':prepared is not None,'running':running,'verified':False,
-                    'mode':(self.mode if running else prepared['mode'] if prepared else 'unavailable'),
+            from .camera_native import available as native_available
+            local = self.local.status()
+            local_active = local['running'] or local['waiting']
+            return {'available':prepared is not None,'running':running or local['running'],'verified':False,
+                    'integrated_available': native_available(), 'local_state': local['state'],
+                    'local_message': local['message'], 'local_preview': local['preview'],
+                    'local_preview_available': self._config().get('enabled',True) is not False,
+                    'mode':('windows-saiph' if local_active else self.mode if running else prepared['mode'] if prepared else 'unavailable'),
                     'device_id':self.device_id if running else None,
                     'serial':self.serial if running else None,
                     'can_preview':can_preview,
@@ -245,6 +264,8 @@ class Camera:
         with self.lock:
             if self._config().get('enabled',True) is False:
                 self.stop();raise ValueError('Phone camera is switched off in Settings.')
+            if self.local.status()['state'] != 'idle':
+                raise ValueError('Stop the current phone camera first.')
             if self.processes:
                 if all(process.poll() is None for process in self.processes):
                     if (device_id,serial)!=(self.device_id,None if self.device_id else self.serial) or (self.mode=='preview')!=preview:
@@ -301,6 +322,7 @@ class Camera:
                 self.stop();raise ValueError('Phone camera could not start. Check Settings → Devices.') from None
 
     def stop(self):
+        self.local.stop()
         with self.lock:
             if self.monitor_stop is not None:self.monitor_stop.set()
             for process in reversed(self.processes):

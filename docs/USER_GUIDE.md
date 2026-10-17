@@ -173,22 +173,20 @@ one in its own window through scrcpy; Pin adds it to the Start menu or the
 applications menu. It needs authorised wireless or USB debugging (as the phone
 preview does) and Android 10 or later.
 
-**Phone as a webcam (optional):** the phone camera appears as a webcam in video
-calls through upstream scrcpy, with OBS Studio's Virtual Camera on Windows or a
-v4l2loopback device on Linux. The video goes directly from the phone to the
-computer over USB or wireless debugging on the local network, so it works with
-Saiph Cloud and needs no Hub, Saiph pairing or Tailscale. It needs Android 12
-or later and scrcpy 2.2 or later (scrcpy includes adb); installers do not bundle
-scrcpy, adb, OBS or v4l2loopback. Turn it on in Settings → Devices → Phone camera
-and follow **One-time camera setup**: Developer options and USB or Wireless
-debugging on the phone, then the OBS scene (Windows, using **Open camera
-preview** to create the window capture) or the loopback device (Linux). For
-Wi-Fi, **Connect over Wi-Fi** accepts the phone's pairing address and six-digit
-code once, then the address shown on the Wireless debugging screen each time it
-changes; only private or link-local network addresses are accepted. Without a
-self-hosted paired phone, **Find my phone** on the Phone page lists phones that
-have allowed this computer and **Use phone as webcam** starts the chosen one.
-Physical-device acceptance is pending.
+**Phone as a webcam (optional):** Windows Saiph includes the webcam component.
+Keep both devices on the same Wi-Fi, then choose **Phone → Webcam → Use phone as
+webcam** on the computer. On Android, choose **Use phone as webcam → Scan
+computer's camera code**, choose your front or rear camera and tap **Start
+camera**. Verify the phone's owner and allow Android camera access. Select
+**Saiph Camera** in your meeting app. No separate camera app or debugging setup
+is needed for this path. Video travels directly through a pinned encrypted local
+session; audio is off and video is not recorded. Leaving the phone camera screen,
+locking the phone, disconnecting or choosing Stop ends sharing. Each session
+lasts at most 30 minutes. **Preview camera** works without a virtual webcam.
+The current implementation is limited to private IPv4 Wi-Fi/LAN, bounded 720p
+frames and up to 15 fps; physical-phone and meeting-app acceptance remain pending.
+Legacy scrcpy/OBS or Linux loopback settings are retained under Settings → Devices
+→ **Legacy USB camera tools (advanced)**. See [camera details](PHONE_CAMERA.md).
 
 **Pause Saiph on the phone:** add the Saiph widget to your home screen to see
 whether Saiph is on and connected, and to pause or resume it with one tap.

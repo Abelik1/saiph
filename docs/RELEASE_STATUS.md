@@ -1,3 +1,76 @@
+## 2026-10-17: owner-installed update and Firebase preparation
+
+The owner requested updating their installed Windows app and distributing the
+Android changes through the existing Firebase channel. Planned versions are
+Windows 0.1.0-beta.12/build 12 and Android 0.9.7/code 3575000, preserving existing
+application IDs, data paths and signing identity. This authorization covers the
+local update and Firebase distribution; it does not establish physical camera,
+meeting-app, publisher-signing or independent review results. Actual build,
+installation and upload receipts belong in the private operations record.
+
+Before Firebase distribution, verify that the existing Auth0 API permits offline
+access and the Android native client issues rotating refresh tokens: packaged
+Android sign-in requires a persistent grant. No completed provider change or
+publication is inferred from this preparation entry.
+
+## 2026-10-17: integrated phone camera (development)
+
+Android now has an explicit foreground CameraX session: scan the computer's
+short-lived camera code, choose front/rear, verify the phone's owner, grant
+camera access and start. Leaving the camera activity ends capture. The desktop
+shows a fitted live preview and Stop. Camera and pairing codes are distinct;
+this local session never changes roster trust or account keys. No audio is
+captured and no video is saved. Both devices must share a private IPv4 LAN/Wi-Fi;
+720p at up to 15 fps is the current target. Remote relay and USB-only camera
+transport are not implemented. See [camera design and setup](PHONE_CAMERA.md).
+
+Windows builds include Saiph Camera x64/x86 components derived from pinned
+UnityCapture source, retaining upstream notices, source hashes and separate
+Saiph class/IPC identities. Per-user registration is handled on first use;
+installer upgrade/removal clears only package-hash-proven owned registrations.
+Normal camera setup contains no OBS, scrcpy or additional-app installation.
+Existing USB/OBS/loopback preferences remain in an advanced legacy disclosure.
+Preview is available without the Windows virtual-camera component.
+
+Actual isolated local checks:
+
+- Frontend: 187 tests passed; TypeScript/Vite production build and changed-view
+  lint passed. The existing large-chunk warning remains. The React checklist
+  was applied to the camera views, polling cleanup, controls and shared QR.
+- Python 3.12: affected camera, native-origin, installer and website suites:
+  179 passed, 1 platform skip. This includes actual loopback TLS, wrong-secret
+  rejection, single-use/replay checks, bounded JPEG parsing and explicit stop.
+- Independent Android debug app and instrumentation APK assembly, 21 app JVM
+  cases and lint passed (0 errors, 248 warnings).
+- A new native Android 34 test passed with generated emulator cameras, exact
+  certificate rejection, a paused approval-result lifecycle, CameraX frame
+  transmission and release on leaving the screen. Real Qt/native bridge preview
+  fitting and session cleanup passed against those frames. The final synthetic
+  receiver recorded 126 bounded frames and closed. No physical camera/phone or
+  account was used; the test invokes the controller and does not prove biometric
+  acceptance. The disposable app/profile, emulator and Qt session were stopped.
+- Both compiled Windows architectures passed an actual in-process DirectShow
+  streaming graph, per-user registration redirected into a disposable registry
+  subtree, camera-name enumeration, frame IPC, bounds and stop blanking. No
+  system camera was installed on the owner's PC.
+- A local Windows native review build and installer audit passed with both DLLs,
+  upstream licence and matching source/hash receipt included. This is an unsigned
+  development package; final post-commit artifact receipts are separate.
+
+Initial checks exposed stale third-party UI expectations, a component prop type,
+stop ordering, an emulator without cameras, a mismatched test-only debug signer,
+test-runner permission revocation and paused ActivityScenario cleanup. These were
+corrected and rerun. The first screenshot checks raced the deliberately short
+capture interval; a longer synthetic interval passed DOM size/cleanup assertions.
+The screenshot captured the already-stopped page, so it is not live-video visual
+acceptance. One Python TLS handshake failed during concurrent builds; the final
+complete rerun passed. Original logs remain in the ignored feature checkout.
+
+Global Windows registration/installation/upgrade and Zoom/Teams/browser acceptance,
+physical-phone performance, publisher signing and independent security/licensing
+review remain pending. No Firebase upload, production deployment or public camera
+release is claimed. The previous persistent-session Auth0 prerequisite remains.
+
 ## 2026-10-16: sharing reliability and desktop settings (source changes)
 
 Approved phones automatically get a three-step sharing setup for photos,

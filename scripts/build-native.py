@@ -129,6 +129,18 @@ def main():
                    'PySide6.QtDataVisualization', 'PySide6.QtVirtualKeyboard'):
         command += ['--exclude-module', module]
     data = [(str(frontend_output),'frontend/dist'),(str(root / 'assets'),'assets'), (str(profile_path), '.'), (str(release_path), '.')]
+    project_native_inputs = {}
+    if os.name == 'nt':
+        # Built from pinned corresponding source; never collect an installed
+        # third-party camera or broaden the ambient native DLL search roots.
+        camera = root / args.workpath / 'camera-native'
+        subprocess.run([sys.executable, str(root / 'native/camera/build.py'), '--output', str(camera)], cwd=root, check=True)
+        for leaf in ('SaiphCamera64.dll', 'SaiphCamera32.dll'):
+            source = camera / leaf
+            command += ['--add-binary', str(source) + os.pathsep + 'camera']
+            project_native_inputs['camera/' + leaf] = source
+        for leaf in ('LICENSE.UnityCapture.txt', 'camera-build.json'):
+            data.append((str(camera / leaf), 'camera'))
     if hosted_configuration is not None:
         defaults = profile_path.with_name('hosted-defaults.json')
         defaults.write_text(json.dumps(hosted_configuration, sort_keys=True) + '\n', encoding='utf-8')
@@ -157,7 +169,7 @@ def main():
     if os.name == 'nt':
         from native_origins import audit_analysis
         origins = audit_analysis(root / args.workpath / name / 'Analysis-00.toc',
-                                 root / args.distpath / name, trusted_native_roots)
+                                 root / args.distpath / name, trusted_native_roots, project_native_inputs)
         (profile_path.parent / 'native-build-origins.json').write_text(json.dumps(origins, indent=2) + '\n', encoding='utf-8')
     if sys.platform == 'linux':
         materialize_internal_links(root / args.distpath / name)

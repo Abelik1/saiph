@@ -56,13 +56,14 @@ describe("Saiph Cloud phone on the Phone page", () => {
     fireEvent.click(screen.getByRole("button", {name:"Dismiss A reminder"}));
     await waitFor(() => expect(call).toHaveBeenCalledWith("hosted.notification.dismiss", {id:"notice-one"}));
   });
-  it("finds a Saiph Cloud phone for the webcam over USB or Wi-Fi, never by its Hosted id", async () => {
+  it("opens integrated camera setup without debugging or using a Cloud id as an ADB serial", async () => {
     const call = vi.fn().mockResolvedValue({ adb: true, devices: [] });
-    const state = { ...hostedState(), camera: { available: true, running: false } } as unknown as State;
+    const state = { ...hostedState(), camera: { available: true, running: false, integrated_available: true } } as unknown as State;
     render(<Phone state={state} client={client(call)} />);
     fireEvent.click(screen.getByRole("button", { name: "Webcam" }));
-    expect(await screen.findByRole("button", { name: "Find my phone" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Use phone as webcam" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Find my phone" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Use phone as webcam" })).toBeEnabled();
+    expect(call).not.toHaveBeenCalledWith("camera.devices");
   });
   it("shows connection setup before a hosted phone has joined", () => {
     render(<Phone state={hostedState(null)} client={client()} />);

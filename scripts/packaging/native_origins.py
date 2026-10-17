@@ -45,7 +45,7 @@ def native_entries(value):
                 yield from native_entries(child)
 
 
-def audit_analysis(analysis, bundle, trusted_roots):
+def audit_analysis(analysis, bundle, trusted_roots, project_inputs=None):
     """Reject ambient native inputs and changed/extra collected native files."""
     bundle = Path(bundle).resolve(strict=True)
     roots = [Path(root).resolve(strict=True) for root in trusted_roots if Path(root).is_dir()]
@@ -62,7 +62,9 @@ def audit_analysis(analysis, bundle, trusted_roots):
                 or any(part in ('', '.', '..') for part in relative.split('/'))):
             raise ValueError('Unsafe native bundle path')
         source = Path(source_name).resolve(strict=True)
-        if not source.is_file() or not any(source.is_relative_to(root) for root in roots):
+        project = (project_inputs or {}).get(relative)
+        project_match = project is not None and source == Path(project).resolve(strict=True)
+        if not source.is_file() or not (project_match or any(source.is_relative_to(root) for root in roots)):
             raise ValueError('Native dependency originates outside trusted build roots: ' + relative)
         target = bundle / '_internal' / relative
         if (target.is_symlink() or not target.resolve(strict=True).is_relative_to(bundle)

@@ -231,3 +231,9 @@ Use **Cloud** and **Self-hosted** for connection choices. Keep technical Hosted
 identifiers, protocol names and saved settings unchanged. A failed local setup
 gets an explicit Restart setup action that preserves earlier key/trust files and
 account sign-in; it never silently repairs or resets an established checkpoint.
+
+Camera sessions use a short-lived code from the computer and a visible Start
+camera action on the phone. Native owner verification and Android camera access
+remain explicit. The camera screen stays visible with Stop; leaving it ends
+capture. Keep third-party implementation names out of this normal flow. Never
+request microphone access as part of camera setup or resume capture implicitly.

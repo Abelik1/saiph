@@ -502,6 +502,12 @@ class HostedActivity : ComponentActivity() {
                 }
             }
             textsAndCalls()
+            group("Phone camera") {
+                addView(body("Use your phone as a webcam on the same Wi-Fi."))
+                actions(button("Use phone as webcam", tone = Tone.TONAL) {
+                    startActivity(Intent(this@HostedActivity, PhoneCameraActivity::class.java))
+                })
+            }
             group("Phone notifications") {
                 val allowed = sefirah.network.orion.OrionPermissions.read(this@HostedActivity).notifications
                 addView(body(if (allowed) "Notification sharing is allowed." else "Allow notifications to see them on your computer."))

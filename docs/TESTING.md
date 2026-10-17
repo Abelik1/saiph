@@ -37,6 +37,15 @@ isolated fixture or successful unit suite does not establish those results.
 
 ## Desktop UI control
 
+Integrated camera checks and their separate Windows/Android acceptance scope are
+documented in [PHONE_CAMERA.md](PHONE_CAMERA.md#verification-and-limits). Run
+`python -m pytest tests/test_camera_session.py tests/test_phone_camera.py tests/test_native_origins.py tests/test_desktop_distribution.py -q`
+with isolated temporary folders. These use synthetic JPEG frames and loopback TLS;
+the native Windows test redirects camera registration into a disposable registry
+subtree rather than installing a system camera. Android's camera instrumentation
+requires a fresh synthetic local invitation provisioned by the emulator harness;
+without one it deliberately skips, which must not be reported as camera acceptance.
+
 Agents can drive the real Qt desktop directly: switch tabs, click buttons, type
 into forms, use keyboard shortcuts and capture screenshots. Use these tools for
 routine desktop testing instead of asking the user to click or enter details.
