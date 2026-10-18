@@ -48,7 +48,7 @@
   <text x="1240" y="62" text-anchor="end" font-size="16" fill="#6e7c99">End-to-end encrypted · cancel any time</text>
   <rect x="40" y="96" width="384" height="330" rx="18" fill="#0a1222" fill-opacity=".92" stroke="#16233d"/>
   <text x="72" y="148" font-size="22" font-weight="650" fill="#e8edf7">Monthly</text>
-  <text x="72" y="214" font-size="52" font-weight="750" letter-spacing="-1.5" fill="#e8edf7">€3.99<tspan font-size="20" font-weight="500" letter-spacing="0" fill="#9aa8c4" dx="8">/ month</tspan></text>
+  <text x="72" y="214" font-size="52" font-weight="750" letter-spacing="-1.5" fill="#e8edf7">€9.99<tspan font-size="20" font-weight="500" letter-spacing="0" fill="#9aa8c4" dx="8">/ month</tspan></text>
   <path d="M73 260 l6 6 l11 -12" fill="none" stroke="#2bd4f0" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
   <text x="100" y="266" font-size="17" fill="#9aa8c4">No server or network setup</text>
   <path d="M73 294 l6 6 l11 -12" fill="none" stroke="#2bd4f0" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
@@ -60,10 +60,10 @@
   <rect x="448" y="96" width="384" height="330" rx="18" fill="#0a1222" fill-opacity=".92" stroke="url(#btn)" stroke-width="2"/>
   <text x="480" y="148" font-size="22" font-weight="650" fill="#e8edf7">Yearly</text>
   <rect x="717.2" y="126" width="83" height="30" rx="15" fill="#2bd4f0" fill-opacity=".14" stroke="#2bd4f0" stroke-opacity=".45"/>
-  <text x="759" y="146" text-anchor="middle" font-size="14" font-weight="650" fill="#2bd4f0">Save 25%</text>
-  <text x="480" y="214" font-size="52" font-weight="750" letter-spacing="-1.5" fill="#e8edf7">€36<tspan font-size="20" font-weight="500" letter-spacing="0" fill="#9aa8c4" dx="8">/ year</tspan></text>
+  <text x="759" y="146" text-anchor="middle" font-size="14" font-weight="650" fill="#2bd4f0">Save about 25%</text>
+  <text x="480" y="214" font-size="52" font-weight="750" letter-spacing="-1.5" fill="#e8edf7">€89.99<tspan font-size="20" font-weight="500" letter-spacing="0" fill="#9aa8c4" dx="8">/ year</tspan></text>
   <path d="M481 260 l6 6 l11 -12" fill="none" stroke="#2bd4f0" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-  <text x="508" y="266" font-size="17" fill="#9aa8c4">Works out at €3 a month</text>
+  <text x="508" y="266" font-size="17" fill="#9aa8c4">Works out at about €7.50 a month</text>
   <path d="M481 294 l6 6 l11 -12" fill="none" stroke="#2bd4f0" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
   <text x="508" y="300" font-size="17" fill="#9aa8c4">Everything in Monthly</text>
   <path d="M481 328 l6 6 l11 -12" fill="none" stroke="#2bd4f0" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>

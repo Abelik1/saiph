@@ -45,7 +45,7 @@ export default function SubscriptionCard({view}: {view: BillingView | "unavailab
       {view.canSubscribe && <div className="plans">
         <div className="plan">
           <h3>Monthly</h3>
-          <p className="price">€3.99 <span>/ month</span></p>
+          <p className="price">€9.99 <span>/ month</span></p>
           <p>Cancel any time.</p>
           <form method="post" action="/api/billing/checkout">
             <input type="hidden" name="plan" value="monthly" />
@@ -53,10 +53,10 @@ export default function SubscriptionCard({view}: {view: BillingView | "unavailab
           </form>
         </div>
         <div className="plan recommended">
-          <span className="pill info plain">Save 25%</span>
+          <span className="pill info plain">Save about 25%</span>
           <h3>Yearly</h3>
-          <p className="price">€36 <span>/ year</span></p>
-          <p>Works out at €3 a month.</p>
+          <p className="price">€89.99 <span>/ year</span></p>
+          <p>Works out at about €7.50 a month.</p>
           <form method="post" action="/api/billing/checkout">
             <input type="hidden" name="plan" value="yearly" />
             <button className="block" type="submit">Choose yearly</button>

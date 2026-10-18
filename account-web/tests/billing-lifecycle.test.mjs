@@ -51,7 +51,7 @@ function provider() {
   let sequence = 0;
   const stripe = {
     webhooks: sdk.webhooks,
-    prices: { retrieve: async (id) => ({ id, active: true, livemode: false, currency: "eur", unit_amount: id === config.plans.yearly.priceId ? 3600 : 399,
+    prices: { retrieve: async (id) => ({ id, active: true, livemode: false, currency: "eur", unit_amount: id === config.plans.yearly.priceId ? 8999 : 999,
       type: "recurring", recurring: { interval: id === config.plans.yearly.priceId ? "year" : "month", interval_count: 1 }, product: { id: config.productId, active: true, livemode: false } }) },
     customers: {
       create: async (params, options) => {

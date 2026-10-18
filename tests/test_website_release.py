@@ -367,7 +367,7 @@ def test_hosted_plan_settings_accept_the_account_page_and_euro_price():
 
 def test_open_subscriptions_link_to_the_account_and_show_hosted_as_available():
     settings = json.loads((ROOT / 'website/landing-settings.json').read_text(encoding='utf-8'))
-    assert settings['subscribeUrl'] == BETA_ACCOUNT and settings['hostedPrice'] == '€3.99'
+    assert settings['subscribeUrl'] == BETA_ACCOUNT and settings['hostedPrice'] == '€9.99'
     site.validate_settings(settings, 'preview')
     result = render_site_script(settings)
     assert result['subscribe'] == BETA_ACCOUNT and result['subscribeDisabled'] == ''

@@ -15,7 +15,7 @@ const env={SAIPH_BILLING_MODE:"owner-sandbox",AUTH0_DOMAIN:"synthetic.us.auth0.c
 const config=readBillingConfig(env);assert.ok(config);
 const monthly=config.plans.monthly.priceId, yearly=config.plans.yearly.priceId;
 const metadata={saiph_billing:"owner-sandbox-v1",saiph_subject_ref:subjectReference(config.ownerSubject),saiph_account:config.accountId};
-const prices={[monthly]:{unit_amount:399,interval:"month"},[yearly]:{unit_amount:3600,interval:"year"}};
+const prices={[monthly]:{unit_amount:999,interval:"month"},[yearly]:{unit_amount:8999,interval:"year"}};
 function fixture() {
  let mapping=null;let queue=Promise.resolve();const calls={customer:[],checkout:[],expire:[],portal:[],retrieveSubscription:0,apply:0,disputes:0,pushes:[]};
  let sessions=[];let subscriptions=[];let lineItemPrice=monthly;const candidates=[];
@@ -62,7 +62,7 @@ test("billing requires explicit mode and every server-only prerequisite; live/un
  assert.equal(readBillingConfig({...env,CRON_SECRET:"short"}),null);
  assert.equal(readBillingConfig({...env,CRON_SECRET:undefined}).cronSecret,null,"refresh optional");
  assert.equal(config.grant.issuer,"https://synthetic.us.auth0.com/");
- assert.deepEqual([config.plans.monthly.amount,config.plans.monthly.interval,config.plans.yearly.amount,config.plans.yearly.interval],[399,"month",3600,"year"]);
+ assert.deepEqual([config.plans.monthly.amount,config.plans.monthly.interval,config.plans.yearly.amount,config.plans.yearly.interval],[999,"month",8999,"year"]);
 });
 test("live mode needs live restricted keys and is never mixed with test keys",()=>{
  const live=readBillingConfig({...env,SAIPH_BILLING_MODE:"live",STRIPE_SECRET_KEY:"rk_live_synthetic123"});
@@ -135,6 +135,10 @@ test("price amount, interval, mode and customer binding are checked before check
  for(const change of [{livemode:true},{unit_amount:100},{recurring:{interval:"year",interval_count:1}},{currency:"usd"}]) {
   const f=fixture();const original=f.stripe.prices.retrieve;f.stripe.prices.retrieve=async(id)=>({...await original(id),...change});
   await assert.rejects(checkout(f.stripe,f.store,config,config.ownerSubject,"monthly"));assert.equal(f.calls.customer.length,0);
+ }
+ for(const [plan,oldAmount] of [["monthly",399],["yearly",3600]]) {
+  const f=fixture();const original=f.stripe.prices.retrieve;f.stripe.prices.retrieve=async(id)=>({...await original(id),unit_amount:oldAmount});
+  await assert.rejects(checkout(f.stripe,f.store,config,config.ownerSubject,plan));assert.equal(f.calls.checkout.length,0,"old prices must not create checkout sessions");
  }
  const g=fixture();g.customer.metadata={...metadata,saiph_subject_ref:"other"};assert.equal((await accountAction(request(),"checkout",g.deps)).status,503);assert.equal(g.calls.checkout.length,0);
 });
