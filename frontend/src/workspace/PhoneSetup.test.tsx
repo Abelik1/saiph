@@ -28,8 +28,8 @@ describe("Phone setup", () => {
     expect(screen.queryByRole("textbox")).toBeNull();
     expect(screen.queryByRole("tab", { name: /Messages/ })).toBeNull();
     expect(bridge.call).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Sign in to Saiph" }));
-    await waitFor(() => expect(bridge.call).toHaveBeenCalledWith("hosted.sign_in"));
+    fireEvent.click(screen.getByRole("button", { name: "Continue with Google" }));
+    await waitFor(() => expect(bridge.call).toHaveBeenCalledWith("hosted.sign_in", { google: true }));
     expect(bridge.call).toHaveBeenCalledWith("hosted.enable", { enabled: true });
     expect(bridge.call).not.toHaveBeenCalledWith("hosted.setup_root");
   });
@@ -42,18 +42,21 @@ describe("Phone setup", () => {
     fireEvent.click(screen.getByRole("button", { name: "Set up this computer" }));
     await waitFor(() => expect(bridge.call).toHaveBeenCalledWith("hosted.setup_root"));
   });
-  it("shows the QR automatically, discovers requests and keeps full-code approval explicit", async () => {
-    const call = vi.fn(async (method: string) => method === "hosted.root_code" ? rootCode : method === "hosted.requests" ? { requests: [offered] } : {});
+  it("shows the QR automatically, moves on when the phone's request arrives and keeps full-code approval explicit", async () => {
+    let requests: typeof offered[] = [];
+    const call = vi.fn(async (method: string) => method === "hosted.root_code" ? rootCode : method === "hosted.requests" ? { requests } : {});
     const bridge = client(call);
     const initial = state(true);
     const view = render(<Phone state={initial} client={bridge} />);
-    expect(await screen.findByRole("img", { name: "Hosted root approval QR code" })).toBeVisible();
+    expect(await screen.findByRole("img", { name: "Cloud computer approval QR code" })).toBeVisible();
     expect(screen.getByText(rootCode.fingerprint)).toBeVisible();
     expect(screen.queryByLabelText("Device request code")).toBeNull();
-    expect(call).not.toHaveBeenCalledWith("hosted.requests");
-    fireEvent.click(screen.getByRole("button", { name: "Continue to approval" }));
-    expect(screen.queryByRole("img", { name: "Hosted root approval QR code" })).toBeNull();
-    expect(screen.getByRole("heading", { name: "Approve your phone" })).toHaveFocus();
+    await waitFor(() => expect(call).toHaveBeenCalledWith("hosted.requests"));
+    expect(screen.getByRole("heading", { name: "Scan on your phone" })).toBeVisible();
+    // The phone scans: its request appears and the wizard advances without a click.
+    requests = [offered];
+    expect(await screen.findByRole("heading", { name: "Approve your phone" }, { timeout: 6000 })).toHaveFocus();
+    expect(screen.queryByRole("img", { name: "Cloud computer approval QR code" })).toBeNull();
     fireEvent.click(await screen.findByRole("button", { name: "Review and approve" }));
     expect(screen.getByText(offered.fingerprint)).toBeVisible();
     fireEvent.change(screen.getByLabelText("Device name"), { target: { value: "My phone" } });
@@ -62,29 +65,43 @@ describe("Phone setup", () => {
     fireEvent.click(screen.getByLabelText("Every group matches my device"));
     fireEvent.click(screen.getByRole("button", { name: "Approve device" }));
     await waitFor(() => expect(call).toHaveBeenCalledWith("hosted.approve", { code: offered.code, label: "My phone", confirmed: true }));
-    view.rerender(<Phone state={{ ...initial, phone: { ...initial.phone!, devices: [{ id: offered.device_id, name: "My phone", hosted: true, online: true, last_seen_at: null, capabilities: ["files"] }] } }} client={bridge} />);
-    expect(screen.queryByRole("img", { name: "Hosted root approval QR code" })).toBeNull();
+    // Approval is not connection: the wizard waits, says when the phone connects, and leaves on Done.
+    expect(await screen.findByRole("heading", { name: "Phone approved" })).toBeVisible();
+    expect(screen.getByText("Waiting for your phone to connect…")).toBeVisible();
+    const connected = { ...initial, phone: { ...initial.phone!, devices: [{ id: offered.device_id, name: "My phone", hosted: true, online: true, last_seen_at: null, capabilities: ["files"] }] } };
+    view.rerender(<Phone state={connected} client={bridge} />);
+    expect(screen.getByRole("heading", { name: "Phone connected" })).toBeVisible();
+    expect(screen.getByRole("status")).toHaveTextContent("My phone is connected");
+    expect(screen.queryByRole("heading", { name: "My phone" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    expect(screen.queryByRole("img", { name: "Cloud computer approval QR code" })).toBeNull();
     expect(screen.getByRole("heading", { name: "My phone" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Connect a phone" })).toBeVisible();
-  });
-  it("clears a previous comparison when returning to scanning", async () => {
+    expect(screen.queryByLabelText("Quick controls")).toBeNull();
+  }, 10000);
+  it("clears a previous comparison when returning to scanning and waits there for a new request", async () => {
     const call = vi.fn(async (method: string) => method === "hosted.root_code" ? rootCode : { requests: [offered] });
     render(<PhoneSetup state={state(true)} client={client(call)} />);
-    await screen.findByRole("img", { name: "Hosted root approval QR code" });
-    fireEvent.click(screen.getByRole("button", { name: "Continue to approval" }));
+    // The request is already waiting, so the wizard goes straight to Approve.
+    await screen.findByRole("heading", { name: "Approve your phone" });
     fireEvent.click(await screen.findByRole("button", { name: "Review and approve" }));
     fireEvent.change(screen.getByLabelText("Device name"), { target: { value: "My phone" } });
     fireEvent.click(screen.getByLabelText("Every group matches my device"));
     expect(screen.getByRole("button", { name: "Approve device" })).toBeEnabled();
     fireEvent.click(screen.getByRole("button", { name: "Back to scanning" }));
-    expect(await screen.findByRole("img", { name: "Hosted root approval QR code" })).toBeVisible();
+    expect(await screen.findByRole("img", { name: "Cloud computer approval QR code" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Scan on your phone" })).toHaveFocus();
+    // The same pending request does not pull the owner straight back to Approve.
+    const polls = () => call.mock.calls.filter(([method]) => method === "hosted.requests").length;
+    const before = polls();
+    await waitFor(() => expect(polls()).toBeGreaterThan(before), { timeout: 6000 });
+    expect(screen.getByRole("heading", { name: "Scan on your phone" })).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Continue to approval" }));
     fireEvent.click(await screen.findByRole("button", { name: "Review and approve" }));
     expect(screen.getByRole("button", { name: "Approve device" })).toBeDisabled();
     expect(screen.getByLabelText("Device name")).toHaveValue("");
     expect(call).not.toHaveBeenCalledWith("hosted.approve", expect.anything());
-  });
+  }, 10000);
   it("only completes the wizard after successful approval and lets the dialog finish", async () => {
     let resolve!: () => void;
     const approval = new Promise<void>(done => { resolve = done; });
@@ -138,5 +155,16 @@ describe("Phone setup", () => {
     fireEvent.click(screen.getByRole("button", { name: "Connect a phone" }));
     expect(screen.getByRole("heading", { name: "Connect your phone" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Phone" })).toHaveAttribute("aria-current", "page");
+  });
+  it("drops the Settings shortcut once a phone is connected", async () => {
+    const value = state(true);
+    value.phone = { ...value.phone!, devices: [{ id: offered.device_id, name: "My phone", hosted: true, online: true, last_seen_at: null, capabilities: ["files"] }] };
+    const call = vi.fn(async (method: string) => method === "state" ? value : {});
+    render(<App providedClient={client(call)} />);
+    await screen.findByRole("heading", { name: "My phone" });
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    expect(screen.getByRole("heading", { name: "This computer" })).toBeVisible();
+    expect(screen.queryByRole("heading", { name: "Connect your phone" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Connect a phone" })).toBeNull();
   });
 });

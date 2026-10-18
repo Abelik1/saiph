@@ -33,7 +33,7 @@ module.exports = async ({ page, expect, session }) => {
   const ownHub = page.getByRole("button", { name: "Use my own Hub instead", exact: true });
   if (await ownHub.count()) await ownHub.click();
   await expect(page.getByRole("button", { name: "Open server invitation", exact: true })).toBeVisible();
-  const account = page.getByRole("button", { name: "Use a Saiph account instead", exact: true });
+  const account = page.getByRole("button", { name: "Use Saiph Cloud instead", exact: true });
   if (await account.count()) {
     await account.click();
     await expect(page.getByRole("heading", { name: "Phone connection", exact: true })).toBeVisible();

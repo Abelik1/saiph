@@ -1,5 +1,203 @@
+## 2026-10-16: verified Android callback and Cloud gallery update
+
+Android 0.9.5 uses `https://usesaiph.com/android/oauth2redirect` through AppAuth with an exact verified App Link filter; its existing custom scheme remains for pre-upgrade in-flight attempts. Pending state, redirect, PKCE challenge and endpoints are bound before code exchange. The static website includes the existing beta certificate association and a minimal no-analytics/no-store callback fallback which clears query/fragment from browser history. Auth0 allowlisted the callback at the owner's request; Google connection/branding is unchanged. Actual domain verification and final publication results belong in the private operations record.
+
+Cloud phones now offer an explicit Allow photos choice, separate from Texts and calls. With Android photo permission, up to 100 recent previews and their metadata travel in sealed envelopes to current subscribed computers. Original photos use the existing streaming-encrypted blob path only after an explicit open/copy/save request, bound to that request and recipient. The desktop reuses its existing Photos and Messages galleries; other apps' chat histories and MMS are not added. The bottom-right footer reads the installed distribution version. Visible app, account and website wording now uses Saiph Cloud; internal Hosted identifiers and routes remain compatible.
+
+Actual local checks: five native Android instrumentation tests passed (callback state/PKCE/replay/expiry, legacy in-flight compatibility, exact manifest routing, and real MediaStore/permission/opt-in bounded previews). Earlier source checks passed app JVM/lint with 0 errors and 240 existing warnings. Desktop regression checks passed 236 cases except the new wrapper test's initially wrong synthetic TTL, corrected and rerun in the 169-case passing file/phone suite. The final combined desktop/gallery run passed 238 cases. Native Qt control/navigation/form persistence and bottom-right development-version layout passed in a fresh isolated shell. Frontend 178 tests and production build passed. Account 79 tests and typecheck passed; build first hit a local Next telemetry config EXDEV error, then passed with telemetry disabled and isolated config. Website 183 checks passed after excluding the callback from analytics-loading expectations. Original logs retained. Final build receipts will record later checks separately.
+
+These are synthetic unit, emulator and native-shell checks, not physical-device acceptance, completed live Google login, independent review or trusted Windows signing. The existing friends-beta signing identity is preserved.
+
 # Current release preparation status
 
+2026-10-16 Cloud connection follow-up: user-facing service labels now say Cloud;
+technical Hosted identifiers and stored formats are unchanged. Android shows an
+in-app Back arrow only for nested Settings and security-code comparison screens.
+Primary retry/recovery sign-in selects Google; other providers remain explicit.
+
+An actual Android 14 emulator reproduced the enrollment failure in
+AndroidHostedTrustStore.create after protected key creation. The code executed
+the row-returning journal_mode PRAGMA through execSQL; the platform WAL API now
+enables journaling before creating the schema. A failed old setup can explicitly
+restart with a fresh device ID, preserving its earlier protected key/trust files
+and account sign-in. Established checkpoints are never silently reset or repaired.
+
+Checks: three Android instrumentation regressions passed with real Keystore and
+SQLite: key reload/enrollment, synthetic root-signed approval and encrypted
+exchange/inbox retention, failed-setup restart preservation and nested Back.
+Debug assembly, 14 app JVM tests, 103 network JVM tests (2 optional interop skips)
+and lint passed (0 errors, 240 warnings). Desktop targeted checks passed 152 tests
+with 3 platform skips; frontend 177 tests and its production build passed. The
+real Qt control/layout flows passed in an isolated profile. Initial attempts had
+a missing Python temporary-directory parent, sandbox denial of the npm cache and
+an unescaped SDK drive separator in ignored local.properties; these were fixed.
+
+A live anonymous native authorization probe returned HTTP 302 directly to Google.
+This is routing evidence, not completed sign-in. Auth0's extra authorization or
+impersonation-confirmation screen remains provider work: native custom schemes
+and desktop loopback callbacks can require it. Verified HTTPS callback setup,
+provider consent configuration and development-key branding are not fixed by
+the Google connection parameter. No live account/physical phone acceptance or
+independent security review is claimed by these checks.
+
+2026-10-16 Android connection recovery and desktop preferences follow-up:
+
+Android distinguishes saved identity intent, interrupted setup, pending approval
+and prior verified approval. A saved device ID or a status string cannot open
+daily use. Comparison stays visible until its action finishes; duplicate actions
+are refused, failures appear inline and interrupted setup has an explicit recovery
+route that retains protected keys and trust history. Pending requests retry the
+same identity at most every 30 seconds. Previously approved devices are not
+automatically re-enrolled. Existing installs can restore their navigation state
+from a verified saved root-signed roster containing their exact public keys;
+this never activates an expired roster or authorizes content.
+
+After sign-in, Back exits setup instead of opening the welcome menu. Approved
+phones open daily use; account, subscription, permission and connection controls
+live in Settings. First-use privacy acknowledgment is separate from usage consent
+and feature permissions, including the self-hosted invitation route. Detailed
+text/call privacy and limits now live at `account-privacy.html#app`, with short
+scope and audio descriptions beside the phone opt-in. Publish that updated notice
+alongside the Android update; this work did not deploy it.
+
+Desktop sign-in offers Google directly through the Auth0 connection parameter,
+with an explicit fallback for existing email/provider accounts and unchanged
+custom issuers. No Auth0 tenant, Google credentials or consent branding was
+changed. The installer refuses removal of a running owned executable or locked
+release files before deleting files, and displays the reason in its main panel.
+The Explorer option explains the right-click / Send to path. Cloud and General
+preferences use consistent spacing and shorter copy; Your week is a visible
+local summary with seven daily counts, rather than a collapsed disclosure.
+
+Checks on Windows with isolated profiles and caches:
+
+- Python 3.12: targeted hosted login/session/runtime, account boundary, insights,
+  native distribution and website release tests passed: **227 passed / 4 skipped**.
+  The skips cover platform-specific checks; these are not physical acceptance.
+  The native installer fixture also executes a synthetic owned app and holds a
+  release file open, checking that refusal preserves the installation marker and
+  files. After the options-surface adjustment, distribution tests passed again:
+  **11 passed / 1 skipped**.
+- Node 24: `npm run test:unit -- --maxWorkers=2` passed **177 tests**;
+  `npm run build` and targeted `npm run lint` passed. The existing large-chunk
+  build warning remains. The React skill checklist was applied to changed views.
+- `scripts/build-native.py --profile link --version 0.1.0-ui-review.1`, run from
+  an isolated source/dependency copy with separate work/dist/cache paths, built
+  the Windows native bundle and passed its native input-origin audit. It is an
+  unsigned local review build, not a release or clean-machine acceptance result.
+- The real Qt shell was driven using `scripts/desktop-ui.py` and `.cjs` in a new
+  isolated session. Both `desktop_control_smoke.cjs` and the new
+  `desktop_layout_smoke.cjs` passed: navigation, native settings persistence,
+  Cloud path save, seven-day chart from a synthetic local SQLite fixture, summary
+  on/off and deletion of local counts. Screenshots were inspected; no page errors.
+  The first session stopped at its configured timeout; a final fresh session
+  passed both flows again and was stopped through the controller. No installed
+  owner app was used.
+- A temporary Robolectric 4.14.1 / API 35 UI harness passed **13 checks**, including
+  an actual enrollment failure on a JVM without Android Keystore, retention of
+  identity intent on retry, readable recovery, account/approval separation,
+  first-use policy choice, daily-use navigation and sign-in parameters. It used
+  synthetic memory tokens and keys and did not start live services. The harness
+  dependency and source were removed from the isolated product build afterward.
+- Product Android checks use JDK 22, isolated SDK preferences, Gradle home and
+  source tree, Firebase/push disabled, independent mode and version code 1:
+  `:app:assembleDebug :app:testDebugUnitTest :core:network:testDebugUnitTest
+  :restic-android:testDebugUnitTest :app:lintDebug --no-configuration-cache
+  --no-daemon --max-workers=2`. The debug APK built successfully; **14 app,
+  103 network and 47 restic JVM tests passed**, with 2 optional Python/Kotlin
+  interoperability tests skipped because no fixture was supplied. Lint reported
+  **0 errors / 239 warnings**. Existing pinned restic native libraries were reused
+  from the earlier isolated Android check; they were not rebuilt or accepted on
+  a phone by these checks.
+- `scripts/public-release/check-public-data.py` passed its limited reviewed-token
+  check; `git diff --check` passed. Neither is a complete credentials audit.
+
+Initial check attempts included a wrong pytest file path, missing isolated Hub
+dependencies, temporary-directory setup errors and a native source-copy build
+without its frontend dependencies. These were corrected. The added installer
+regression first exposed the early ownership-hash file-lock error; it now maps
+to the visible quit/retry message. A Windows path separator error in the new
+fixture was also corrected before the passing rerun.
+
+No physical phone, installed-app upgrade/uninstall, live Google/account handoff,
+production service, publisher signing or independent security review was tested
+or operated. The debug APK uses an isolated development signing profile and is
+not an update artifact for an existing publisher-signed installation.
+
+2026-10-16 Android visual onboarding (source changes only): first install now
+opens one illustrated welcome screen with Subscribe, Continue with Google and
+a quiet Self-host instead route. The launcher no longer leaves a second sign-in
+page beneath it. Plans open on the public website; prices and checkout are not
+duplicated in the APK. Account → Scan → Approve steps use shared vector artwork,
+short instructions and reachable welcome/scan action docks. Illustrations animate
+only while visible and respect disabled system animations; enlarged text puts
+the task ahead of decorative artwork. Paste-code and Hub-invitation options remain.
+Hub setup has a Back arrow and an arrow-labelled Back to Saiph action; header
+and Android Back agree. Activity reuse and rotation retain the intended route.
+
+The normal Auth0 authorization request passes `connection=google-oauth2` to skip
+the intermediary provider picker. Existing email/provider accounts retain Other
+sign-in options, custom non-Auth0 issuers retain their original parameters, and
+approved phones reuse the sign-in method recorded with their last accepted grant.
+State, PKCE, redirect/audience validation, full security-code comparison, native
+owner verification, pairing formats and identities remain intact. Auth0's Google
+connection must be enabled for the native client; Google credentials and consent
+branding (including any development-key branding) are private service operations
+and were not changed here. No live provider handoff was tested.
+
+Windows / JDK 22 / Android SDK 37.0, isolated source tree, Gradle home and temporary
+profile: `:app:compileDebugKotlin :app:testDebugUnitTest :app:lintDebug` passed with
+`-PorionFirebase=false -PorionIndependent=true -PorionPush=false
+-PorionVersionCode=1 --no-configuration-cache --no-daemon --max-workers=2`.
+11 JVM tests passed; lint reported 0 errors / 234 warnings. A separate temporary
+Robolectric 4.14.1 / API 35 native-layout harness passed 10 checks: welcome/plan
+intent, 320 dp and doubled text, Scan/Back/Continue without another sign-in,
+approval code/identity retention, reused welcome and rotation, AppAuth request
+state/PKCE/redirect/audience, accepted-provider preference and stale-grant refusal,
+explicit Hub switching, Hub Back handler and locked navigation. Native renders
+were inspected. The Hub handler check bypassed Hilt startup and does not establish
+a full live Hub Activity/mesh flow. The harness and its dependencies were removed
+from the isolated copy before final product checks; its SSH service-loader
+exclusion applies only to the temporary UI harness. Existing generated restic
+libraries were reused. `git diff --check` and the public-data check passed,
+including new source files. No distributable APK was assembled, signed, installed
+or released; no emulator, physical phone, account, browser or service was used.
+Live Google sign-in, provider branding and physical acceptance remain pending.
+
+2026-10-15 UX review follow-up (source changes only). Desktop: the Phone tab's
+connection wizard watches for the phone's request on the Scan step and moves to
+Approve by itself, with Continue to approval kept as a fallback and Back to
+scanning holding on requests already seen; after approval it waits for the phone
+to connect, names it when it does, and leaves the Phone page to Done. An empty
+quick-controls card no longer renders for a Hosted phone, Settings → General
+shows its Connect a phone shortcut only until a phone is connected, and the
+optional guide starts at Choose features on a connected computer. Android: the
+account-or-Hub choice appears once (the self-hosted home screen), the account
+sign-in screen offers self-hosting as one secondary action, the connection
+screen offers Sign out before approval, disclosures are quiet text rows with a
+chevron, Hosted Settings run Account → Sharing permissions → Connection → This
+phone → Security, the computer security-code comparison is an in-app themed
+screen (grouped monospace code, Cancel, Every group matches through owner
+verification, kept across rotation), received files redraw by themselves, and
+people-facing copy says "Saiph account". Pairing, identities, permission
+opt-in, explicit approval and owner verification paths are unchanged.
+
+Windows / Node 24, isolated caches: frontend `vitest run` passed 177 tests
+(four wizard tests rewritten or added), `tsc --noEmit` and oxlint on the changed
+files passed. The Vite onboarding preview (`/onboarding.html`, synthetic client)
+was walked through sign-in → set up → Scan auto-advance → Back to scanning hold
+→ Approve → waiting → connected → Done → Phone page → Settings → guide at
+Choose features, with no page errors from the final code. Windows / JDK 22,
+SDK 37.0, isolated Gradle home: `:app:compileDebugKotlin :app:testDebugUnitTest
+:app:lintDebug` passed with `-PorionFirebase=false -PorionIndependent=true
+-PorionVersionCode=1 --no-configuration-cache --no-daemon`; 8 JVM tests passed
+(`SaiphPaletteTest` included) and lint reported 0 errors, 232 warnings. The
+only compiler warnings on the changed files are the pre-existing parameter-name
+and deprecated-permission-callback notes. `git diff --check` and the
+public-data check passed. No native desktop
+installer or APK was assembled, installed or released; the Qt shell, a live
+account, an emulator and a physical phone were not used for these checks.
+Physical-device acceptance and independent security review remain pending.
 2026-10-16 landing release: compact home, prominent downloads and Hosted card,
 Account navigation, public-page analytics and sourced capability comparison.
 Hosted texts and call controls are included in the released beta source; the

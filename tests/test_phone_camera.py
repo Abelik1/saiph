@@ -88,7 +88,7 @@ def tools(tmp_path, monkeypatch):
 
 
 def hosted_workspace(**camera):
-    """Saiph Hosted / no Hub: the self-hosted phone roster is empty."""
+    """Saiph Cloud / no Hub: the self-hosted phone roster is empty."""
     return SimpleNamespace(settings={'link': {'camera': {'enabled': True, **camera}}},
                            phone=SimpleNamespace(snapshot=lambda: {'devices': [], 'status': 'Unpaired'}))
 

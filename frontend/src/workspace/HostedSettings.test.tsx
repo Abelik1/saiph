@@ -12,19 +12,19 @@ describe("Hosted preview settings", () => {
     expect(screen.getByRole("status")).toHaveTextContent("Off"); expect(call).not.toHaveBeenCalled();
     expect(screen.queryByText("Deployment settings")).toBeNull();
     expect(screen.queryByRole("textbox")).toBeNull();
-    fireEvent.click(screen.getByRole("button", {name: "Sign in to Saiph"}));
-    await waitFor(() => expect(call).toHaveBeenCalledWith("hosted.sign_in"));
+    fireEvent.click(screen.getByRole("button", {name: "Continue with Google"}));
+    await waitFor(() => expect(call).toHaveBeenCalledWith("hosted.sign_in", { google: true }));
     expect(call.mock.calls.map(([method]) => method)).toEqual(["hosted.enable", "hosted.sign_in"]);
   });
   it("turns Hosted back on without reopening the browser when the account is still signed in", async () => {
     const call = setup({...off, identity: true, account: {status: "signed_in", refresh_tokens: false, error: ""}});
     expect(screen.queryByText(/New to the beta/)).toBeNull();
-    fireEvent.click(screen.getByRole("button", {name: "Sign in to Saiph"}));
+    fireEvent.click(screen.getByRole("button", {name: "Continue with Google"}));
     await waitFor(() => expect(call).toHaveBeenCalledWith("hosted.enable", {enabled: true}));
-    expect(call).not.toHaveBeenCalledWith("hosted.sign_in");
+    expect(call).not.toHaveBeenCalledWith("hosted.sign_in", { google: true });
   });
   it("points a new tester to their invitation before signing in", () => { setup(off); expect(screen.getByText(/Activate your invitation code/)).toBeVisible(); });
-  it("requires deployment config and respects self-hosted pairing", () => { setup({...off, configured: false, self_hosted_paired: true}); expect(screen.queryByRole("button", {name: "Turn on Hosted"})).toBeNull(); expect(screen.getByText(/paired with a self-hosted Hub/)).toBeVisible(); });
+  it("requires deployment config and respects self-hosted pairing", () => { setup({...off, configured: false, self_hosted_paired: true}); expect(screen.queryByRole("button", {name: "Turn on Cloud"})).toBeNull(); expect(screen.getByText(/paired with a self-hosted Hub/)).toBeVisible(); });
   it("requires explicit full-fingerprint confirmation before approval", async () => {
     const call = setup(active, vi.fn().mockResolvedValue({device_id: "phone", fingerprint: "FULL FINGERPRINT", expires_at: 1900000000}));
     fireEvent.change(screen.getByLabelText("Device request code"), {target: {value: "orion-approve-v1:synthetic"}}); fireEvent.click(screen.getByRole("button", {name: "Check request"}));
@@ -58,5 +58,5 @@ describe("Hosted preview settings", () => {
     setup({...active, user_verification: "unavailable"});
     expect(screen.getByText(/Anyone using this computer while it is unlocked can add a device/)).toBeVisible();
   });
-  it("requires explicit retirement confirmation and does not show data while signed out", () => { setup({...active, enabled: false}); expect(screen.getByRole("button", {name: "Forget Hosted on this computer"})).toBeDisabled(); expect(screen.queryByRole("button", {name: "Choose file to send"})).toBeNull(); });
+  it("requires explicit retirement confirmation and does not show data while signed out", () => { setup({...active, enabled: false}); expect(screen.getByRole("button", {name: "Forget Cloud on this computer"})).toBeDisabled(); expect(screen.queryByRole("button", {name: "Choose file to send"})).toBeNull(); });
 });

@@ -177,6 +177,13 @@ def upload_attachment(transport, prepared: PreparedAttachment):
 
 def _manifest(session, envelope):
     payload = session.authenticate(envelope)
+    if payload.get("type") == "photo.original":
+        if (set(payload) != {"type", "photo_id", "request", "file"} or type(payload["photo_id"]) is not str
+                or not re.fullmatch(r"[1-9][0-9]{0,15}", payload["photo_id"]) or int(payload["photo_id"]) > (1 << 53) - 1
+                or type(payload["request"]) is not str or str(UUID(payload["request"])) != payload["request"]
+                or type(payload["file"]) is not dict):
+            raise AttachmentError()
+        payload = payload["file"]
     expected = {"type", "kind", "name", "mime", "size", "sha256", "blob", "ciphertext_size", "ciphertext_sha256", "keyset"}
     if (set(payload) != expected or payload["type"] != "file.encrypted" or payload["kind"] not in ("file", "photo", "clipboard.image")
             or type(payload["size"]) is not int or not 0 <= payload["size"] <= MAX_CIPHERTEXT - 4096

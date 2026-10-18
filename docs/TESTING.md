@@ -78,6 +78,9 @@ node scripts/desktop-ui.cjs --session build/desktop-ui/my-test/session.json stop
 node scripts/desktop-ui.cjs --session build/desktop-ui/my-test/session.json run --script tests/packaging/desktop_control_smoke.cjs
 ```
 
+For Cloud settings and the visible weekly summary, also run
+`node scripts/desktop-ui.cjs --session <session.json> run --script tests/packaging/desktop_layout_smoke.cjs`. This saves an isolated Cloud path, checks native persistence, and toggles the local summary. It does not open Explorer, install file sync or contact an account service.
+
 The smoke flow navigates Settings, saves a synthetic name through the real native
 bridge, checks the written profile, returns to Phone, exercises available setup
 choices and captures screenshots/results under the session's `evidence/` folder.
@@ -136,3 +139,19 @@ Public CI also scans source/history with gitleaks and audits Python/frontend
 dependencies. Review findings and fix affected dependencies; never suppress an
 entire file because it contains one synthetic fixture. Signing and final source
 metadata are covered in [RELEASING.md](RELEASING.md).
+
+## Android protected connection regression
+
+On a fresh disposable emulator, run HostedKeyStorageInstrumentedTest through
+AndroidJUnitRunner. It uses actual Android Keystore and SQLite to create/reload a
+protected recipient, build an enrollment request, verify a synthetic signed root
+roster, exchange encrypted content, retain inbox/checkpoint state, restart failed
+setup without losing old files or memory-only synthetic sign-in, and check that
+only nested screens show Back. It does not contact an account or operate a phone.
+Do not run this class in an owner profile. JVM crypto tests do not replace it.
+
+## Android callback and Cloud photo gallery regression
+
+In a fresh disposable emulator, run HostedCallbackInstrumentedTest and HostedPhotosInstrumentedTest. The first never exchanges a token: it validates pending state, PKCE, client/endpoints, replay/cancellation/expiry, legacy in-flight compatibility and compiled-manifest URI routing. The second writes/deletes one synthetic MediaStore image, grants only the test app photo permission, checks the separate opt-in and a bounded JPEG preview with preserved aspect ratio. It must not run on an owner phone/profile. Separately verify the distributed APK's exact signer against the live assetlinks.json and Android's actual domain verification result; never force a link approved to manufacture acceptance.
+
+The desktop synthetic gallery tests use real sealed envelopes and streaming encryption through an in-memory relay, check unrequested/stale original rejection and one saved copy per original. No live account, personal gallery or SMS is accessed.

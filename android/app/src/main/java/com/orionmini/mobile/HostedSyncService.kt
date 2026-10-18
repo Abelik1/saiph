@@ -24,14 +24,15 @@ class HostedSyncService : Service() {
     private var ownsHooks = false
     private var sender: ((String, kotlinx.serialization.json.JsonObject) -> Boolean)? = null
     private val runtime by lazy { HostedRuntime.get(this) }
+    private val photos by lazy { HostedPhotos(this, runtime) }
     override fun onCreate() {
         super.onCreate()
         if (!runtime.enabled()) { stopSelf(); return }
         val manager = getSystemService(NotificationManager::class.java)
-        manager.createNotificationChannel(NotificationChannel("orion_hosted", "Saiph Hosted preview", NotificationManager.IMPORTANCE_LOW))
+        manager.createNotificationChannel(NotificationChannel("orion_hosted", "Saiph Cloud preview", NotificationManager.IMPORTANCE_LOW))
         val open = PendingIntent.getActivity(this, 43, Intent(this, HostedActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
         fun notice() = NotificationCompat.Builder(this, "orion_hosted").setSmallIcon(android.R.drawable.ic_menu_share)
-            .setContentTitle("Saiph Hosted preview").setContentText(runtime.status).setContentIntent(open).setOngoing(true).setOnlyAlertOnce(true).build()
+            .setContentTitle("Saiph Cloud preview").setContentText(runtime.status).setContentIntent(open).setOngoing(true).setOnlyAlertOnce(true).build()
         startForeground(43, notice())
         ownsHooks = true
         sender = runtime::enqueue
@@ -41,8 +42,10 @@ class HostedSyncService : Service() {
         runtime.dismiss = { key -> if (runtime.enabled() && notifications.isAvailable()) notifications.removeNotification(key) }
         // The runtime has checked the sender, the owner's switch and the permission.
         runtime.phone = { id, source, command ->
-            phone.execute(id, source, runtime.label(source), command, { target, payload -> runtime.enqueuePhone(target, payload) {} },
-                { runtime.subscribers().keys })
+            if (command is sefirah.network.orion.HostedPhoneCommand.PhotoRequest)
+                scope.launch { runCatching { runtime.sendPhoto(id, source, command.id) } }
+            else phone.execute(id, source, runtime.label(source), command, { target, payload -> runtime.enqueuePhone(target, payload) {} },
+                    { runtime.subscribers().keys })
         }
         scope.launch {
             notifications.enable(""); clipboard.enable("")
@@ -52,6 +55,7 @@ class HostedSyncService : Service() {
                 if (runtime.status == "Connected" && !connected) notifications.sendActiveNotifications("")
                 connected = runtime.status == "Connected"
                 runCatching { phone.refresh(runtime.textsAndCalls(), connected, runtime.subscribers().keys) }
+                runCatching { photos.refresh(connected) }
                 manager.notify(43, notice())
                 // A ringing call is checked every two seconds; a text backlog continues shortly.
                 withTimeoutOrNull(if (runtime.ringing) 2000L else if (runtime.textBacklog()) 1000L else 5000L) { runtime.wake.receive() }

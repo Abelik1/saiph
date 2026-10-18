@@ -63,6 +63,10 @@ def test_analytics_is_off_in_defaults_and_unconfigured_preview_build(tmp_path):
         if name.endswith('.html'):
             page = (output / name).read_text(encoding='utf-8')
             assert '<meta name="referrer" content="no-referrer">' in page
+            if name == 'android/oauth2redirect.html':
+                assert 'assets/analytics.js' not in page
+                assert 'assets/config.js' not in page
+                continue
             assert page.index('assets/config.js') < page.index('assets/analytics.js')
     assert run_loader()['inserted'] == []
 

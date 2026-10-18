@@ -68,6 +68,22 @@ def callback(attempt, **changes):
     return CALLBACK_PATH + "?" + urlencode(params)
 
 
+@pytest.mark.parametrize("issuer,google,connection", [
+    ("https://synthetic.eu.auth0.com/", True, ["google-oauth2"]),
+    ("https://synthetic.eu.auth0.com/", False, None),
+    ("https://synthetic.example/", True, None),
+    ("https://synthetic.auth0.com.example/", True, None),
+])
+def test_google_route_keeps_pkce_and_audience_without_affecting_custom_issuers(config, issuer, google, connection):
+    from dataclasses import replace
+    with LoginAttempt(replace(config, issuer=issuer, google=google), browser_opener=lambda url: True) as attempt:
+        params = parse_qs(urlsplit(attempt.begin()).query)
+        assert params.get("connection") == connection
+        assert params["audience"] == [config.audience]
+        assert params["code_challenge_method"] == ["S256"]
+        assert params["state"] == [attempt._state]
+
+
 def get(url, headers=None):
     try:
         response = urlopen(Request(url, headers=headers or {}), timeout=3)

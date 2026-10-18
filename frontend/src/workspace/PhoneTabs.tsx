@@ -27,9 +27,9 @@ export type PhoneFeatureState = { threads: SmsThread[]; messages: SmsMessage[]; 
   attachments?: { device_id: string; thread: number; message: number; parts: { part: number; mime: string; name: string }[] }[];
   attachment_files?: { id: string; device_id: string; thread: number; message: number; part: number; name: string; mime: string; size: number; preview?: string; ready: boolean }[] };
 type PhoneDevice = { id: string; name: string; online: boolean; capabilities: string[]; hosted?: boolean; call_notice?: string | null };
-/** Saiph Hosted phones also need the phone's own Texts and calls switch. */
+/** Saiph Cloud phones also need the phone's own Texts and calls switch. */
 const hostedPermission = (permission: string, result: string) =>
-  `Turn on Texts and calls in Saiph Hosted on your phone and allow ${permission} to ${result}.`;
+  `Turn on Texts and calls in Saiph Cloud on your phone and allow ${permission} to ${result}.`;
 const noFeatures: PhoneFeatureState = { threads: [], messages: [], calls: [], photos: [], files: [] };
 
 /** A heading for a tab, with its main action on the right. */
@@ -324,7 +324,7 @@ function Messages({
             <small role="status" className="text-[12px] text-status-on">Reply queued for your phone.</small>
           )}
           {!replyable && (
-            <small className="text-[12px] text-muted-foreground">{phone.hosted ? "Group replies stay in your phone's messaging app with Saiph Hosted."
+            <small className="text-[12px] text-muted-foreground">{phone.hosted ? "Group replies stay in your phone's messaging app with Saiph Cloud."
               : "Group replies stay in your phone's messaging app. Update Saiph on your phone to reply here."}</small>
           )}
           {replyable && thread.recipients.length > 1 && <small className="text-[12px] text-muted-foreground">Group replies are sent as MMS.</small>}

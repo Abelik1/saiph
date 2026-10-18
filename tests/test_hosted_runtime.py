@@ -67,6 +67,17 @@ def test_enabling_requires_configuration_and_refuses_self_hosted_pairing(tmp_pat
     assert not controller.blocks_self_hosted()
 
 
+def test_sign_in_selects_google_explicitly_and_keeps_legacy_route(tmp_path, monkeypatch):
+    calls = []
+    controller = HostedController(workspace(tmp_path, {"hosted": {**CONFIG, "enabled": True}}))
+    monkeypatch.setattr(controller, "_account", lambda: SimpleNamespace(begin_sign_in=lambda **options: calls.append(options)))
+    controller.sign_in(google=True)
+    controller.sign_in()
+    assert calls == [{"google": True}, {}]
+    with pytest.raises(HostedError):
+        controller.sign_in(google="true")
+
+
 @pytest.mark.parametrize("url", ["http://synthetic.example", "https://user:pass@synthetic.example",
     "https://synthetic.example/private", "https://synthetic.example?token=synthetic",
     "https://synthetic.example/#private", "https://synthetic.example\\private"])

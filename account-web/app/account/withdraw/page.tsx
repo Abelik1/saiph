@@ -39,7 +39,7 @@ export default async function Withdraw({ searchParams }: { searchParams: Promise
   return <>
     <div className="page-head">
       <div>
-        <p className="eyebrow">Saiph Hosted subscription</p>
+        <p className="eyebrow">Saiph Cloud subscription</p>
         <h1>{status !== "unavailable" && status.state === "withdrawn" ? (status.complete ? "Withdrawal received." : "Withdrawal received, still processing.") : "Withdraw from contract."}</h1>
         <p className="lede">Within 14 days of subscribing you can withdraw without giving a reason and get a full refund.</p>
       </div>
@@ -64,17 +64,17 @@ export default async function Withdraw({ searchParams }: { searchParams: Promise
       <dl className="facts">
         <div><dt>Received</dt><dd>{when(status.at, true)}</dd></div>
         <div><dt>Refunded</dt><dd>{money(status.refunded, status.currency)} to your original payment method</dd></div>
-        <div><dt>Hosted access</dt><dd>Ended</dd></div>
+        <div><dt>Cloud access</dt><dd>Ended</dd></div>
       </dl>
       <p className="fine">Refunds usually reach your card within 5–10 business days. Keep this page or Stripe's refund email as your confirmation. Your devices and their data on your own computers are not affected.</p>
     </section> : status.state === "eligible" ? <section className="card" aria-labelledby="withdraw-title">
-      <h2 id="withdraw-title">Withdraw from your Saiph Hosted subscription</h2>
+      <h2 id="withdraw-title">Withdraw from your Saiph Cloud subscription</h2>
       <dl className="facts">
         <div><dt>Subscribed</dt><dd>{when(status.startedAt)}</dd></div>
         <div><dt>You can withdraw until</dt><dd>{when(status.deadline, true)}</dd></div>
         <div><dt>Refund</dt><dd>{money(status.refund, status.currency)}, in full</dd></div>
       </dl>
-      <p>Confirming ends your subscription and your Hosted access straight away, and refunds everything you paid for it to your original payment method. You can subscribe again later.</p>
+      <p>Confirming ends your subscription and your Cloud access straight away, and refunds everything you paid for it to your original payment method. You can subscribe again later.</p>
       <form method="post" action="/api/billing/withdraw" className="actions">
         <input type="hidden" name="confirm" value="withdraw" />
         <button type="submit">Confirm withdrawal</button>
@@ -86,7 +86,7 @@ export default async function Withdraw({ searchParams }: { searchParams: Promise
       <div className="actions"><a className="button" href="/account">Back to your account</a></div>
     </section> : <section className="card">
       <h2>There is no subscription to withdraw from.</h2>
-      <p>This account has no Saiph Hosted subscription within its first 14 days.</p>
+      <p>This account has no Saiph Cloud subscription within its first 14 days.</p>
       <div className="actions"><a className="button" href="/account">Back to your account</a></div>
     </section>}
   </>;

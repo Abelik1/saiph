@@ -154,7 +154,7 @@ export function Phone({
   active?: boolean;
 }) {
   const info = state.phone;
-  // Link phones report their battery; Saiph Hosted phones are marked by the computer.
+  // Link phones report their battery; Saiph Cloud phones are marked by the computer.
   const phones =
     info?.devices.filter((d) => d.capabilities.includes("battery") || d.hosted) || [];
   const hostedOn = state.hosted?.enabled === true;
@@ -177,6 +177,7 @@ export function Phone({
   const [pairing, setPairing] = useState<{ qr: PairingQrCode; shownAt: number; known: string[] | null; hub: string } | null>(null);
   const [pairingNotice, setPairingNotice] = useState("");
   const [adding, setAdding] = useState(false);
+  const [finishingSetup, setFinishingSetup] = useState(false);
   const handledSetup = useRef(0);
   useEffect(() => {
     if (handledSetup.current !== phoneSetupRequest) {
@@ -185,7 +186,7 @@ export function Phone({
     }
   }, [phoneSetupRequest, hasPhone]);
   useEffect(() => {
-    if (!active) { setAdding(false); setPairing(null); }
+    if (!active) { setAdding(false); setPairing(null); setFinishingSetup(false); }
   }, [active]);
   if (pairing && (!hub?.paired || pairing.hub !== hubIdentity || (info &&
       (pairing.known === null || info.devices.some((d) => !pairing.known?.includes(d.id)))))) {
@@ -248,8 +249,10 @@ export function Phone({
   // While the phone's camera or microphone is capturing it stays in plain sight; otherwise it waits in the device bar.
   const cameraLive = camera && Boolean(state.camera?.running);
   const microphoneLive = Boolean(state.microphone?.running);
-  const quick = phone && (phone.capabilities.includes("ringer") || state.phone_features?.media?.some((row) => row.device_id === phone.id && row.sessions.length) || state.dnd?.enabled);
-  if (!phone && !hub?.paired) return active ? <PhoneSetup state={state} client={client} /> : null;
+  // Only what the quick controls can actually show: a Hosted phone has no ringer, media or shared Do Not Disturb yet.
+  const quick = phone && (phone.capabilities.includes("ringer") || state.phone_features?.media?.some((row) => row.device_id === phone.id && row.sessions.length) || (state.dnd?.enabled && hub?.paired));
+  // The wizard stays after approval so the owner sees the phone connect before the page changes under them.
+  if ((!phone && !hub?.paired) || finishingSetup) return active ? <PhoneSetup state={state} client={client} onApproved={() => setFinishingSetup(true)} onDone={() => setFinishingSetup(false)} /> : null;
   return <div className="flex min-h-[560px] flex-col gap-5 lg:h-[calc(100dvh-168px)]">
     <header className="flex flex-wrap items-center gap-x-5 gap-y-3" aria-label="Device">
       <span aria-hidden="true" className="flex h-[52px] w-8 shrink-0 items-center justify-center rounded-[9px] border border-secondary-border text-wave-2 [background-image:linear-gradient(155deg,color-mix(in_srgb,var(--wave-1)_24%,var(--card)),var(--card)_65%,color-mix(in_srgb,var(--wave-3)_22%,var(--card)))] [&_svg]:size-4"><Smartphone strokeWidth={1.5} /></span>
@@ -275,7 +278,7 @@ export function Phone({
               <DialogTitle>{hub?.paired ? "Add a device" : "Connect a phone"}</DialogTitle>
               <DialogDescription>{hub?.paired ? "Pair another phone or computer with this one." : "Sign in on your phone, scan the code and approve it here."}</DialogDescription>
             </DialogHeader>
-            {!hub?.paired ? state.hosted && <HostedPhoneSetup hosted={state.hosted} client={client} onDone={() => setAdding(false)} /> : <>
+            {!hub?.paired ? state.hosted && <HostedPhoneSetup hosted={state.hosted} client={client} phones={info?.devices} onDone={() => setAdding(false)} /> : <>
             {pairing && <PairingQr qr={pairing.qr} shownAt={pairing.shownAt} onExpire={expirePairing} onClose={() => setPairing(null)} />}
             <div className="grid gap-3" role="group" aria-label="Add a device">
                   {pairingNotice && <p className="m-0 rounded-[10px] bg-muted px-3 py-2.5 text-[13px]" role="status">{pairingNotice}</p>}
@@ -304,11 +307,11 @@ export function Phone({
         {phone && !phone.online && <p className="m-0 rounded-[12px] border border-border bg-card/90 px-4 py-3 text-[12.5px] leading-relaxed text-muted-foreground" role="status">
           {phone.last_seen_at ? `Last seen ${new Date(phone.last_seen_at).toLocaleString()}. ` : ""}
           {phone.hosted
-            ? "Open Saiph on your phone and check that Saiph Hosted is connected. Saved content remains available."
+            ? "Open Saiph on your phone and check that Saiph Cloud is connected. Saved content remains available."
             : "Open Saiph on your phone and check that both devices can reach your server. Saved content remains available."}</p>}
         {!phone && hostedOn && <p className="m-0 rounded-[12px] border border-border bg-card/90 px-4 py-3 text-[12.5px] leading-relaxed text-muted-foreground" role="status">
-          With Saiph Hosted, your approved phone appears here when it connects with an up-to-date Saiph app.
-          To see texts and calls, turn on Texts and calls in Saiph Hosted on the phone.</p>}
+          With Saiph Cloud, your approved phone appears here when it connects with an up-to-date Saiph app.
+          To see texts and calls, turn on Texts and calls in Saiph Cloud on the phone.</p>}
         {/* The phone shares its clipboard only while Saiph's helper runs; this computer starts it with adb. */}
         {phone?.online && !phone.hosted && state.settings?.link?.clipboard !== false && !phone.capabilities.includes("clipboard") && <ClipboardNotice phone={phone} />}
         {(cameraLive || microphoneLive) && <Card className="string-edge shrink-0 gap-0 border-secondary-border py-0" aria-label="Capturing now">
@@ -333,7 +336,7 @@ export function Phone({
           {dismissError && <p className="inline-error m-0 px-4 pt-2 text-[12.5px]" role="alert">{dismissError}</p>}
           <div className="grid min-h-0 flex-1 content-start gap-2.5 overflow-y-auto p-4">
             <HubSuggestions state={state} client={client} />
-            {phone?.hosted ? <p className="m-0 text-[12.5px] leading-relaxed text-muted-foreground">With Saiph Hosted, your phone's notifications appear in Settings → Saiph Hosted.</p>
+            {phone?.hosted ? <p className="m-0 text-[12.5px] leading-relaxed text-muted-foreground">Phone notifications appear in Settings → Saiph Cloud.</p>
               : notices.length ? notices.map((row) => <Notification key={row.id} row={row} client={client} online={canAct} dismiss={() => dismiss([row.id])} />)
               : <div className="grid gap-1 py-6 text-center">
                   <h3 className="m-0 text-[14px] font-semibold">{!phone ? "Connect your phone" : !phone.online ? "Phone disconnected" : !canAct ? "Allow notifications" : "All clear"}</h3>

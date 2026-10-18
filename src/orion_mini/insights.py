@@ -107,6 +107,7 @@ class Insights:
             "enabled": True,
             "from": days[-1], "to": days[0],
             "actions": sum(actions.values()),
+            "days": [{"date": day, "actions": per_day.get(day, 0)} for day in reversed(days)],
             "top": [{"feature": name, "label": FEATURES[name], "count": value}
                     for name, value in sorted(actions.items(), key=lambda item: (-item[1], item[0]))[:6]],
             "screen": max(screens.items(), key=lambda item: (item[1], item[0]))[0] if screens else None,

@@ -117,6 +117,7 @@ class HostedPhoneBridge @Inject constructor(private val context: Context, privat
                 send: (String, JsonObject) -> Boolean, everyone: () -> Collection<String>) {
         val unique = UUID.fromString(id).leastSignificantBits and Long.MAX_VALUE
         when (command) {
+            is HostedPhoneCommand.PhotoRequest -> Unit // Handled by the app's encrypted gallery transport.
             HostedPhoneCommand.SmsSync -> {
                 // The full list goes only to the computer that asked.
                 HostedSmsKnown(context, source).clear()

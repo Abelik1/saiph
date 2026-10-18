@@ -2,7 +2,7 @@
 """Phones this computer may debug over USB or Android wireless debugging.
 
 The phone camera uses this when the phone is not reachable through a self-hosted
-Hub, for example with Saiph Hosted. It needs no Hub, Saiph pairing or Tailscale:
+Hub, for example with Saiph Cloud. It needs no Hub, Saiph pairing or Tailscale:
 Android itself asks the phone's owner to allow this computer (the USB debugging
 prompt, or a one-time wireless debugging pairing code). Listing, pairing and
 connecting never start anything on the phone; capture starts only from an

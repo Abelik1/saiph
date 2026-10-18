@@ -6,7 +6,7 @@ import { PhoneTabs, type PhoneFeatureState } from "./PhoneTabs";
 import type { Client, State } from "./types";
 import { openTab } from "../test-helpers";
 
-// Synthetic Saiph Hosted phone: no battery capability, marked hosted by the computer.
+// Synthetic Saiph Cloud phone: no battery capability, marked hosted by the computer.
 const hostedPhone = {
   id: "dev_hosted",
   name: "Synthetic phone",
@@ -33,17 +33,17 @@ function hostedState(device: Partial<typeof hostedPhone> | null = {}): State {
 }
 const client = (call = vi.fn().mockResolvedValue({ queued: true })) => ({ call, subscribe: () => () => {} }) as unknown as Client;
 
-describe("Saiph Hosted phone on the Phone page", () => {
+describe("Saiph Cloud phone on the Phone page", () => {
   it("lists an approved hosted phone and points notifications to Hosted settings", () => {
     render(<Phone state={hostedState()} client={client()} />);
     expect(screen.getByRole("heading", { name: "Synthetic phone" })).toBeVisible();
     expect(screen.getByText("Online")).toBeVisible();
-    expect(screen.getByText(/notifications appear in Settings → Saiph Hosted/)).toBeVisible();
+    expect(screen.getByText(/notifications appear in Settings → Saiph Cloud/)).toBeVisible();
     // The Link clipboard helper hint does not apply to a hosted phone.
     expect(screen.queryByText(/Clipboard isn't shared/)).toBeNull();
     expect(screen.getByText("Synthetic SMS", { selector: "p" })).toBeVisible();
   });
-  it("finds a Saiph Hosted phone for the webcam over USB or Wi-Fi, never by its Hosted id", async () => {
+  it("finds a Saiph Cloud phone for the webcam over USB or Wi-Fi, never by its Hosted id", async () => {
     const call = vi.fn().mockResolvedValue({ adb: true, devices: [] });
     const state = { ...hostedState(), camera: { available: true, running: false } } as unknown as State;
     render(<Phone state={state} client={client(call)} />);
@@ -56,9 +56,9 @@ describe("Saiph Hosted phone on the Phone page", () => {
     expect(screen.getByRole("heading", { name: "Connect your phone" })).toBeVisible();
     expect(screen.queryByRole("tab", { name: /Messages/ })).toBeNull();
   });
-  it("keeps saved texts while offline and names Saiph Hosted as the connection", () => {
+  it("keeps saved texts while offline and names Saiph Cloud as the connection", () => {
     render(<Phone state={hostedState({ online: false })} client={client()} />);
-    expect(screen.getByText(/check that Saiph Hosted is connected/)).toBeVisible();
+    expect(screen.getByText(/check that Saiph Cloud is connected/)).toBeVisible();
     expect(screen.getByText("Synthetic SMS", { selector: "p" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
   });
@@ -85,9 +85,9 @@ describe("Saiph Hosted phone on the Phone page", () => {
   it("hides actions the hosted phone does not offer and explains its own switch", () => {
     const limited = { ...hostedPhone, capabilities: ["files"] };
     render(<PhoneTabs features={features} phone={limited} client={client()} />);
-    expect(screen.getByText(/Turn on Texts and calls in Saiph Hosted on your phone and allow SMS/)).toBeVisible();
+    expect(screen.getByText(/Turn on Texts and calls in Saiph Cloud on your phone and allow SMS/)).toBeVisible();
     openTab("Calls");
-    expect(screen.getByText(/Turn on Texts and calls in Saiph Hosted on your phone and allow phone access/)).toBeVisible();
+    expect(screen.getByText(/Turn on Texts and calls in Saiph Cloud on your phone and allow phone access/)).toBeVisible();
     expect(screen.queryByRole("button", { name: "Answer" })).toBeNull();
   });
   it("stops offering answer once another computer handled the call and says which", () => {
@@ -110,7 +110,7 @@ describe("Saiph Hosted phone on the Phone page", () => {
   it("keeps group threads on the phone without suggesting an update", () => {
     const group = { ...features, threads: [{ ...features.threads[0], recipients: ["+15550100", "+15550101"] }] };
     render(<PhoneTabs features={group} phone={hostedPhone} client={client()} />);
-    expect(screen.getByText("Group replies stay in your phone's messaging app with Saiph Hosted.")).toBeVisible();
+    expect(screen.getByText("Group replies stay in your phone's messaging app with Saiph Cloud.")).toBeVisible();
     expect(screen.getByLabelText("SMS reply")).toBeDisabled();
   });
 });

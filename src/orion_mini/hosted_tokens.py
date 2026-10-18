@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import threading
 import time
+from dataclasses import replace
 from pathlib import Path
 
 from .hosted_crypto import canonical
@@ -26,12 +27,12 @@ ACCESS_MARGIN_SECONDS = 60
 
 class SignInRequired(Exception):
     def __init__(self):
-        super().__init__("Sign in to Saiph Hosted again.")
+        super().__init__("Sign in to Saiph Cloud again.")
 
 
 class HostedUnavailable(Exception):
     def __init__(self):
-        super().__init__("Saiph Hosted is unreachable. Your session was kept.")
+        super().__init__("Saiph Cloud is unreachable. Your session was kept.")
 
 
 class TokenVault:
@@ -117,12 +118,14 @@ class HostedAccount:
         with self._lock:
             return {"status": self.status, "refresh_tokens": self.config.refresh_tokens, "error": self.error}
 
-    def begin_sign_in(self) -> str:
+    def begin_sign_in(self, *, google: bool | None = None) -> str:
         """Open the system browser; the exchange completes on a worker thread."""
         with self._lock:
             if self._attempt is not None:
                 raise ValueError("Sign-in is already open in your browser.")
-            attempt = self._attempt_factory(self.config)
+            if google is not None and type(google) is not bool:
+                raise ValueError("Choose a sign-in method.")
+            attempt = self._attempt_factory(self.config if google is None else replace(self.config, google=google))
             self._attempt = attempt
             self.error = ""
         try:

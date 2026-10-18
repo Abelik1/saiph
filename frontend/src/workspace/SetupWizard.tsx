@@ -42,11 +42,19 @@ function phoneOf(state: State) {
   return state.phone?.devices.find((d) => d.capabilities.includes("battery"));
 }
 
+function alreadyConnected(state: State, mode: Mode | null) {
+  if (mode === "hub") return Boolean(state.settings?.hub?.paired);
+  const hosted = state.hosted;
+  return Boolean(mode === "hosted" && hosted?.identity && hosted.enabled && hosted.account?.status === "signed_in"
+    && !(hosted.role === "member" && hosted.status === "awaiting_approval"));
+}
+
 /** First-run setup: connect, add a phone, choose features and optional tools. */
 export function SetupWizard({ state, client, close }: { state: State; client: Client; close: () => void }) {
-  const [step, setStep] = useState<Step>("welcome");
   // A Saiph account is the default; your own Hub is only for people who self-host.
   const [mode, setMode] = useState<Mode | null>(state.setup?.mode || (state.hosted?.available === false ? null : "hosted"));
+  // A computer that is already connected starts at the optional choices; connection lives in the Phone tab.
+  const [step, setStep] = useState<Step>(() => alreadyConnected(state, mode) ? "features" : "welcome");
   const link = state.settings?.link as Record<string, unknown> | undefined;
   const [choices, setChoices] = useState<Record<string, boolean>>(() => Object.fromEntries(features.map((f) =>
     [f.key, f.key === "remote" ? (link?.remote as { enabled?: boolean } | undefined)?.enabled === true
@@ -99,13 +107,13 @@ export function SetupWizard({ state, client, close }: { state: State; client: Cl
     {step === "welcome" && <Card title="How do you want to connect your devices?" subtitle="You can change this later in Settings.">
       <div className="setup-choices">
         <button type="button" className={"setup-choice" + (mode === "hosted" ? " selected" : "")} disabled={hosted?.available === false} onClick={() => setMode("hosted")}>
-          <Cloud size={28} /><b>Saiph account</b><span>Sign in with your Saiph account. No server or network setup is needed.</span>
+          <Cloud size={28} /><b>Saiph Cloud</b><span>Sign in with your Saiph account. No server or network setup is needed.</span>
           {hosted?.available === false && <small>This build does not include Saiph accounts.</small>}</button>
         <button type="button" className={"setup-choice" + (mode === "hub" ? " selected" : "")} onClick={() => setMode("hub")}>
           <Server size={28} /><b>I self-host my own Hub</b><span>Only if you run a Saiph Hub on your own private network. You'll need an invitation from it.</span></button>
       </div>
       {mode === "hosted" && hosted?.available && !hosted.configured && <p role="status">This build cannot connect to Saiph accounts. Download the current beta from your account page.</p>}
-      <div className="actions"><Action disabled={!mode || (mode === "hosted" && (!hosted?.configured || hosted.account?.status === "signing_in"))} run={chooseMode}>{mode === "hosted" && !signedIn ? "Sign in to Saiph" : "Continue"}</Action></div>
+      <div className="actions"><Action disabled={!mode || (mode === "hosted" && (!hosted?.configured || hosted.account?.status === "signing_in"))} run={chooseMode}>{mode === "hosted" && !signedIn ? "Continue with Google" : "Continue"}</Action></div>
     </Card>}
 
     {step === "connect" && <Card title={mode === "hosted" ? (signedIn ? "You're signed in" : "Sign in with your Saiph account") : "Pair with your Hub"}>
@@ -116,7 +124,7 @@ export function SetupWizard({ state, client, close }: { state: State; client: Cl
             {!signedIn && <HostedSignIn hosted={hosted} client={client} />}
             {signedIn && !hosted.identity && <><p>This computer becomes the device that approves your others. Keep it online now and then so approvals stay current.</p>
               <Action run={async () => { await client.call("hosted.setup_root"); setStep("phone"); }}>Set up this computer</Action>
-              <details><summary>Already use Saiph Hosted on another computer?</summary><HostedJoin client={client} waiting={false} /></details></>}
+              <details><summary>Already use Saiph Cloud on another computer?</summary><HostedJoin client={client} waiting={false} /></details></>}
             {signedIn && joining && <HostedJoin client={client} waiting />}
             {connected && <p role="status" className="setup-ok"><Check size={16} />Signed in and set up.</p>}
             {hosted.account?.error && <p role="alert">{hosted.account.error}</p>}

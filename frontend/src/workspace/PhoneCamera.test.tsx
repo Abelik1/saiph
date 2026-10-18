@@ -225,7 +225,7 @@ describe("Phone camera without a self-hosted Hub", () => {
     };
     const view = render(<CameraSettings {...props} platform="windows" />);
     expect(
-      screen.getByText(/works with Saiph Hosted and without a server or Tailscale/),
+      screen.getByText(/works with Saiph Cloud and without a server or Tailscale/),
     ).toBeInTheDocument();
     expect(screen.getByText(/tap Build number seven times/)).toBeInTheDocument();
     expect(screen.getByText(/Set up OBS Studio once/)).toBeInTheDocument();

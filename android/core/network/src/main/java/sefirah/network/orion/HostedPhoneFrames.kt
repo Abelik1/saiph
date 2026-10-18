@@ -6,6 +6,7 @@ import sefirah.domain.model.*
 
 /** A phone action from the root computer, after exact-shape validation. */
 sealed interface HostedPhoneCommand {
+    data class PhotoRequest(val id: String) : HostedPhoneCommand
     data object SmsSync : HostedPhoneCommand
     data class SmsOpen(val thread: Long) : HostedPhoneCommand
     data class SmsSend(val thread: Long, val text: String) : HostedPhoneCommand
@@ -37,16 +38,17 @@ object HostedPhoneFrames {
     const val SUBSCRIBE = "phone.subscribe"
     /** A subscription lasts this long; computers renew it with each capabilities heartbeat. */
     const val SUBSCRIPTION_MILLIS = 600_000L
-    val COMMAND_CAPABILITY = mapOf("sms.sync" to "sms", "sms.open" to "sms", "sms.send" to "sms", "sms.compose" to "sms",
+    val COMMAND_CAPABILITY = mapOf("photo.request" to "photos", "sms.sync" to "sms", "sms.open" to "sms", "sms.send" to "sms", "sms.compose" to "sms",
         "call.command" to "call-control", "call.dial" to "call-dial", "contacts.search" to "contacts", "calls.log.request" to "call-log")
-    val DATA_CAPABILITY = mapOf("sms.thread" to "sms", "sms.messages" to "sms", "sms.remove" to "sms", "sms.index" to "sms",
+    val DATA_CAPABILITY = mapOf("photos.item" to "photos", "photos.sync" to "photos", "sms.thread" to "sms", "sms.messages" to "sms", "sms.remove" to "sms", "sms.index" to "sms",
         "call.state" to "calls", "call.handled" to "calls", "contacts.results" to "contacts", "calls.log" to "call-log")
     /** Sent only to the computer whose answer, decline or dial was overtaken. */
     const val REFUSED = "call.refused"
 
     /** "files" is the existing encrypted file offer; the rest need the owner's switch. */
-    fun capabilities(access: FeatureAccess, textsAndCalls: Boolean): List<String> = buildList {
+    fun capabilities(access: FeatureAccess, textsAndCalls: Boolean, photos: Boolean = false): List<String> = buildList {
         add("files")
+        if (photos && access.photos) add("photos")
         if (!textsAndCalls) return@buildList
         if (access.sms) add("sms")
         if (access.calls) add("calls")
@@ -61,16 +63,16 @@ object HostedPhoneFrames {
     }
 
     /** Publication gate, rechecked when queued and again just before sending. */
-    fun mayPublish(type: String, access: FeatureAccess, textsAndCalls: Boolean): Boolean {
-        val offered = capabilities(access, textsAndCalls)
+    fun mayPublish(type: String, access: FeatureAccess, textsAndCalls: Boolean, photos: Boolean = false): Boolean {
+        val offered = capabilities(access, textsAndCalls, photos)
         return type == CAPABILITIES || (type == REFUSED && ("call-control" in offered || "call-dial" in offered)) ||
             DATA_CAPABILITY[type]?.let { it in offered } == true
     }
 
     /** Any subscribed approved computer may cause a phone action, and only one the owner allowed. */
-    fun allowed(type: String, source: String, subscribers: Set<String>, access: FeatureAccess, textsAndCalls: Boolean): Boolean {
+    fun allowed(type: String, source: String, subscribers: Set<String>, access: FeatureAccess, textsAndCalls: Boolean, photos: Boolean = false): Boolean {
         val capability = COMMAND_CAPABILITY[type] ?: return false
-        return source in subscribers && capability in capabilities(access, textsAndCalls)
+        return source in subscribers && capability in capabilities(access, textsAndCalls, photos)
     }
 
     /** A computer's display name, one printable line of up to 40 characters; null if malformed. */
@@ -223,6 +225,7 @@ object HostedPhoneFrames {
         val type = text(payload, "type")
         fun keys(vararg names: String) = require(payload.keys == setOf("type", *names))
         when (type) {
+            "photo.request" -> { keys("id"); text(payload, "id").takeIf { Regex("[1-9][0-9]{0,15}").matches(it) && it.toLong() <= MAX_SAFE }?.let(HostedPhoneCommand::PhotoRequest) }
             "sms.sync" -> { keys(); HostedPhoneCommand.SmsSync }
             "calls.log.request" -> { keys(); HostedPhoneCommand.CallsLog }
             "sms.open" -> { keys("thread"); HostedPhoneCommand.SmsOpen(number(payload, "thread")) }

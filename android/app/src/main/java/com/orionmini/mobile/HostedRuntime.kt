@@ -33,6 +33,7 @@ class HostedRuntime private constructor(private val context: Context) {
     @Volatile private var generation = 0
     private var session: HostedSession? = null
     private var transport: HostedHttpTransport? = null
+    private var lastEnrollmentAttempt = 0L
     private val outgoing = ArrayBlockingQueue<JsonObject>(64)
     // Phone data for one subscribed computer each: call state and answers first,
     // then conversation sync, which is bulk and lower priority than everything else.
@@ -70,7 +71,18 @@ class HostedRuntime private constructor(private val context: Context) {
     var clipboard: ((String) -> Unit)? = null
     var dismiss: ((String) -> Unit)? = null
     fun enabled() = prefs.getBoolean("enabled", false)
+    @Volatile private var identityUnavailable = false
+    /** Navigation only. Sending still requires a fresh, verified roster in HostedSession. */
+    internal fun setupStage() = HostedSetup.stage(prefs.contains("device_id"), identityUnavailable,
+        prefs.getBoolean("approval_verified", false))
     /** The owner's opt-in for texts and calls on the root computer; off by default. */
+    @Volatile internal var photosRevision = 0
+    fun photosShared() = prefs.getBoolean("photos_shared", false)
+    fun setPhotosShared(value: Boolean) {
+        check(prefs.edit().putBoolean("photos_shared", value).commit())
+        photosRevision++
+        advertised = null
+    }
     fun textsAndCalls() = prefs.getBoolean("texts_and_calls", false)
     fun setTextsAndCalls(value: Boolean) {
         check(prefs.edit().putBoolean("texts_and_calls", value).commit())
@@ -126,8 +138,13 @@ class HostedRuntime private constructor(private val context: Context) {
         val id = prefs.getString("device_id", "")!!
         val keys = HostedRecipientKeys.forDeployment(context, root.deploymentId, id).load(prefs.getString("recipient", "")!!)
         val opened = HostedSession(root, id, keys, AndroidHostedTrustStore.openExisting(context, root.deploymentId, id))
+        // Existing installs predate the UI marker. Restore it only from a
+        // verified saved root signature that includes this exact key pair.
+        if (!prefs.getBoolean("approval_verified", false) && opened.hasRetainedApproval())
+            check(prefs.edit().putBoolean("approval_verified", true).commit())
         session = opened; transport = HostedHttpTransport.create(prefs.getString("origin", "")!!, opened)
         fingerprint = HostedApprovalCodes.deviceFingerprint(opened.enrollment().getValue("device").jsonObject)
+        identityUnavailable = false
         return opened
     }
     suspend fun enroll(code: String, comparison: String) = mutex.withLock {
@@ -140,6 +157,7 @@ class HostedRuntime private constructor(private val context: Context) {
         check(prefs.edit().putString("device_id", id).putString("root", buildJsonObject {
             put("deployment", root.deploymentId); put("id", root.deviceId); put("signing", root.signingPublic); put("encryption", root.encryptionPublic)
         }.toString()).commit())
+        identityUnavailable = true
         Security.ensureKey()
         val keys = HostedRecipientKeys.forDeployment(context, root.deploymentId, id).create()
         check(prefs.edit().putString("recipient", HostedEnvelope.exportPublic(keys.recipient)).commit())
@@ -147,14 +165,23 @@ class HostedRuntime private constructor(private val context: Context) {
         session = current; transport = HostedHttpTransport.create(prefs.getString("origin", "")!!, current)
         requestCode = HostedApprovalCodes.request(current)
         fingerprint = HostedApprovalCodes.deviceFingerprint(current.enrollment().getValue("device").jsonObject)
+        identityUnavailable = false
+        status = "Waiting for root approval"
+        lastEnrollmentAttempt = android.os.SystemClock.elapsedRealtime()
         transport!!.submitEnrollment(token)
         offer(token)
         UsageAnalytics.count(context, "hosted_enrolled")
         status = "Waiting for root approval"
     }
     suspend fun freshRequest() = mutex.withLock {
-        check(enabled()); val token = HostedAccount.get(context).token(); val current = open()
-        requestCode = HostedApprovalCodes.request(current); transport!!.submitEnrollment(token); offer(token)
+        check(enabled()); val token = HostedAccount.get(context).token()
+        val current = try { open() } catch (failure: Exception) {
+            identityUnavailable = true; status = "Connection setup needs recovery"; throw failure
+        }
+        requestCode = HostedApprovalCodes.request(current)
+        identityUnavailable = false
+        lastEnrollmentAttempt = android.os.SystemClock.elapsedRealtime()
+        transport!!.submitEnrollment(token); offer(token)
     }
     /** Best effort: an older service has no offered requests, and the code can still be shared. */
     private fun offer(token: String) { runCatching { transport!!.offerRequest(token, requestCode) } }
@@ -183,29 +210,48 @@ class HostedRuntime private constructor(private val context: Context) {
     fun enqueuePhone(target: String, value: JsonObject, delivered: () -> Unit): Boolean {
         if (!enabled() || status != "Connected" || !HostedAccount.get(context).signedIn() || target !in subscribers()) return false
         val type = (value["type"] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: return false
-        if (!HostedPhoneFrames.mayPublish(type, OrionPermissions.read(context), textsAndCalls()) || type == HostedPhoneFrames.CAPABILITIES
+        if (!HostedPhoneFrames.mayPublish(type, OrionPermissions.read(context), textsAndCalls(), photosShared()) || type == HostedPhoneFrames.CAPABILITIES
             || !HostedPhoneFrames.fits(value)) return false
-        if (type.startsWith("sms.")) return texts.offer(Delivery(target, value, delivered))
+        if (type.startsWith("sms.") || type.startsWith("photos.")) return texts.offer(Delivery(target, value, delivered))
         if (type == "call.state") ringing = value["state"] == JsonPrimitive("ringing")
         return calls.offer(Delivery(target, value, delivered)).also { if (it) wake.trySend(Unit) }
     }
     suspend fun step() = mutex.withLock {
         if (!enabled()) { invalidate(); return@withLock }
         if (!prefs.contains("device_id")) { status = "Scan or paste the root code"; return@withLock }
-        val token = try { HostedAccount.get(context).token() } catch (_: Exception) { invalidate(); return@withLock }
         val epoch = generation
         fun gate() { check(epoch == generation && enabled() && HostedAccount.get(context).signedIn()) }
-        val current = try { open() } catch (_: Exception) { status = "Protected identity unavailable; keys were kept"; return@withLock }
+        val current = try { open() } catch (_: Exception) { identityUnavailable = true; status = "Connection setup needs recovery"; return@withLock }
+        val token = try { HostedAccount.get(context).token() } catch (_: Exception) { invalidate(); return@withLock }
         try { transport!!.refreshTrust(token) } catch (_: Exception) {
+            // A transient submit/offer failure must not strand a signed-in phone.
+            // Reuse the same pinned identity; never re-enroll a previously approved
+            // device or treat an enrollment response as approval.
+            val now = android.os.SystemClock.elapsedRealtime()
+            if (HostedSetup.retryEnrollment(prefs.getBoolean("approval_verified", false), lastEnrollmentAttempt, now)) {
+                lastEnrollmentAttempt = now
+                runCatching {
+                    gate()
+                    requestCode = HostedApprovalCodes.request(current)
+                    gate(); transport!!.submitEnrollment(token)
+                    gate(); offer(token)
+                }
+            }
             outgoing.clear(); offers = emptyList(); status = "Waiting for root approval or renewal"; return@withLock
         }
-        gate(); status = "Connected"
+        gate()
+        // Only a successfully verified roster can complete setup. A local ID or an
+        // account token is never evidence that this phone has been approved.
+        current.currentMembers()
+        identityUnavailable = false
+        check(prefs.edit().putBoolean("approval_verified", true).commit())
+        status = "Connected"
         runCatching { watchMembers(current) }
         members = current.currentMembers().keys - current.deviceId
         subscriptions.keys.retainAll(members) // A revoked computer stops receiving at once.
         // Tell every approved device what this phone offers, on change and every two
         // minutes; computers answer with phone.subscribe. The roster has no device kinds.
-        val offered = HostedPhoneFrames.capabilities(OrionPermissions.read(context), textsAndCalls())
+        val offered = HostedPhoneFrames.capabilities(OrionPermissions.read(context), textsAndCalls(), photosShared())
         if (offered != advertised || System.currentTimeMillis() - advertisedAt > 120_000) {
             for (member in members) { gate(); transport!!.send(member, HostedPhoneFrames.capabilitiesPayload(offered)) }
             advertised = offered; advertisedAt = System.currentTimeMillis()
@@ -220,7 +266,12 @@ class HostedRuntime private constructor(private val context: Context) {
         // Each phone delivery names one computer, which must still be subscribed and approved.
         fun deliver(item: Delivery) {
             val type = item.payload.getValue("type").jsonPrimitive.content
-            if (item.target !in subscribers() || !HostedPhoneFrames.mayPublish(type, OrionPermissions.read(context), textsAndCalls())) return
+            if (item.target !in subscribers() || !HostedPhoneFrames.mayPublish(type, OrionPermissions.read(context), textsAndCalls(), photosShared())) return
+            if (type == "photos.item") {
+                val uri = android.content.ContentUris.withAppendedId(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                    item.payload.getValue("id").jsonPrimitive.content.toLong())
+                if (runCatching { context.contentResolver.openFileDescriptor(uri, "r")?.use { true } ?: false }.getOrDefault(false).not()) return
+            }
             gate(); transport!!.send(item.target, item.payload)
             runCatching(item.delivered)
         }
@@ -261,7 +312,7 @@ class HostedRuntime private constructor(private val context: Context) {
                 in HostedPhoneFrames.COMMAND_CAPABILITY -> {
                     val command = HostedPhoneFrames.command(payload)
                     // Texts and calls run at most once; reads (sync, open, search, history) may repeat.
-                    if (command != null && HostedPhoneFrames.allowed(type, source, subscribers().keys, OrionPermissions.read(context), textsAndCalls())
+                    if (command != null && HostedPhoneFrames.allowed(type, source, subscribers().keys, OrionPermissions.read(context), textsAndCalls(), photosShared())
                         && (!HostedPhoneFrames.isEffect(command) || receipts.claim("hosted:$id"))) runCatching { phone?.invoke(id, source, command) }
                 }
             }
@@ -278,6 +329,22 @@ class HostedRuntime private constructor(private val context: Context) {
         }
         UsageAnalytics.count(context, "hosted_file_send")
     }
+    suspend fun sendPhoto(request: String, target: String, photo: String) = mutex.withLock {
+        check(enabled() && HostedAccount.get(context).signedIn() && photosShared() && OrionPermissions.read(context).photos)
+        val current = open(); current.currentMembers()
+        check(target in subscribers())
+        val uri = android.content.ContentUris.withAppendedId(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, photo.toLong())
+        val name = context.contentResolver.query(uri, arrayOf(android.provider.MediaStore.Images.Media.DISPLAY_NAME), null, null, null)
+            ?.use { if (it.moveToFirst()) it.getString(0) else null } ?: "Photo.jpg"
+        context.contentResolver.openInputStream(uri)!!.use { input ->
+            HostedAttachments.send(current, transport!!, input, name.replace(Regex("[^A-Za-z0-9._ -]"), "_").take(180).trim(' ', '.').ifEmpty { "Photo.jpg" },
+                context.contentResolver.getType(uri) ?: "image/jpeg", target, photo, request) {
+                check(enabled() && HostedAccount.get(context).signedIn() && photosShared() && OrionPermissions.read(context).photos && target in subscribers())
+                current.currentMembers()
+                check(context.contentResolver.openFileDescriptor(uri, "r")?.use { true } == true)
+            }
+        }
+    }
     suspend fun saveFile(id: String, uri: Uri) = mutex.withLock {
         check(enabled() && HostedAccount.get(context).signedIn()); val current = open()
         val envelope = current.pendingIncoming().first { it.getValue("header").jsonObject.getValue("id").jsonPrimitive.content == id }
@@ -291,12 +358,24 @@ class HostedRuntime private constructor(private val context: Context) {
             UsageAnalytics.count(context, "hosted_file_save")
         } finally { verified.delete() }
     }
+    /** Explicitly abandon a failed attempt, retaining its files and the account sign-in. */
+    suspend fun restartSetup() = mutex.withLock {
+        check(setupStage() == HostedSetup.Stage.RECOVERY)
+        HostedAccount.get(context).cancel()
+        invalidate()
+        clearIdentityIntent()
+        status = if (enabled()) "Scan your computer's QR code" else "Off"
+    }
+    private fun clearIdentityIntent() {
+        check(prefs.edit().remove("device_id").remove("root").remove("recipient").remove("seen_members").remove("texts_and_calls").remove("photos_shared").remove("approval_verified").commit())
+        identityUnavailable = false; requestCode = ""; fingerprint = ""; lastEnrollmentAttempt = 0L
+        HostedSmsKnown.clearAll(context)
+    }
     fun retire() {
         check(!enabled()); HostedAccount.get(context).signOut(); invalidate()
         // Keystore keys and encrypted trust history stay available for explicit
         // recovery. A newly enrolled member gets a fresh unique device ID.
-        prefs.edit().remove("device_id").remove("root").remove("recipient").remove("seen_members").remove("texts_and_calls").commit()
-        HostedSmsKnown.clearAll(context)
+        clearIdentityIntent()
     }
 
     /**

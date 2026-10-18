@@ -15,7 +15,7 @@ type RootCode = {code: string; fingerprint: string; modules: string[]; expires_a
 type Request = {device_id: string; fingerprint: string; expires_at: number};
 type Offered = Request & {code: string};
 const emptyConfig: HostedConfig = {service_url: "", issuer: "", audience: "", client_id: "", refresh_tokens: false};
-const statuses: Record<string, string> = {off: "Off", starting: "Starting", setup: "Set up this computer", active: "Connected", signed_out: "Signed out", sign_in_required: "Sign in again", offline: "Offline; reconnecting", renewal_pending: "Waiting to renew device approvals", retrying: "Reconnecting", clock: "Check this computer's clock", keys_unavailable: "Hosted keys could not be unlocked", awaiting_approval: "Waiting for your main computer to approve this computer", removed: "Removed by your main computer"};
+const statuses: Record<string, string> = {off: "Off", starting: "Starting", setup: "Set up this computer", active: "Connected", signed_out: "Signed out", sign_in_required: "Sign in again", offline: "Offline; reconnecting", renewal_pending: "Waiting to renew device approvals", retrying: "Reconnecting", clock: "Check this computer's clock", keys_unavailable: "Cloud keys could not be unlocked", awaiting_approval: "Waiting for your main computer to approve this computer", removed: "Removed by your main computer"};
 
 /** Tells the person whether approving or removing devices needs their face, fingerprint or PIN. */
 export function VerificationNote({value}: {value?: string}) {
@@ -47,7 +47,7 @@ export function HostedRootCode({hosted, client, autoShow = false, compact = fals
   }, [autoShow, hosted.identity, client]);
   return <div className="grid min-w-0 gap-3 text-sm leading-relaxed [&_p]:m-0">
     {root && <div className={compact ? "grid items-start gap-4 sm:grid-cols-[264px_minmax(0,1fr)]" : undefined}>
-      <svg className={(compact ? "" : "my-3 ") + "h-auto w-full max-w-[264px] rounded-field"} role="img" aria-label="Hosted root approval QR code" viewBox={`0 0 ${root.modules.length} ${root.modules.length}`} width="264" height="264" shapeRendering="crispEdges"><rect width="100%" height="100%" fill="white" /><path fill="black" d={root.modules.map((row, y) => [...row].map((cell, x) => cell === "1" ? `M${x} ${y}h1v1h-1z` : "").join("")).join("")} /></svg>
+      <svg className={(compact ? "" : "my-3 ") + "h-auto w-full max-w-[264px] rounded-field"} role="img" aria-label="Cloud computer approval QR code" viewBox={`0 0 ${root.modules.length} ${root.modules.length}`} width="264" height="264" shapeRendering="crispEdges"><rect width="100%" height="100%" fill="white" /><path fill="black" d={root.modules.map((row, y) => [...row].map((cell, x) => cell === "1" ? `M${x} ${y}h1v1h-1z` : "").join("")).join("")} /></svg>
       <div className="min-w-0">
       <p className="text-muted-foreground">This computer's security code</p>
       <code className="my-2 block break-words rounded-field border border-border bg-field p-3 text-sm">{root.fingerprint}</code>
@@ -66,7 +66,7 @@ export function HostedRootCode({hosted, client, autoShow = false, compact = fals
 /** Approve a device's signed request after the owner compares its full fingerprint.
  * Devices that signed in offer their request through the service, so it appears here by
  * itself; the code is verified on this computer and pasting stays as a fallback. */
-export function HostedApproveDevice({hosted, client, onApproved}: {hosted: HostedState; client: Client; onApproved?: () => void}) {
+export function HostedApproveDevice({hosted, client, onApproved}: {hosted: HostedState; client: Client; onApproved?: (label: string) => void}) {
   const id = useId();
   const revision = useRef(0);
   const [code, setCode] = useState("");
@@ -91,7 +91,7 @@ export function HostedApproveDevice({hosted, client, onApproved}: {hosted: Hoste
         <Button variant="tonal" onClick={() => review(item)}>Review and approve</Button>
       </div>)}
     </div> : <p className="muted" aria-live="polite">Waiting for your device… After it signs in and checks this computer's code, it appears here.</p>)}
-    {request && <Form className="[&_fieldset]:grid [&_fieldset]:gap-4" submit={async () => {const current = revision.current; await client.call("hosted.approve", {code, label, confirmed}); if (revision.current === current) { reset(); onApproved?.(); }}}>
+    {request && <Form className="[&_fieldset]:grid [&_fieldset]:gap-4" submit={async () => {const current = revision.current; await client.call("hosted.approve", {code, label, confirmed}); if (revision.current === current) { const approved = label; reset(); onApproved?.(approved); }}}>
       <p>Compare every group of this security code with the one on the device you are adding:</p>
       <code className="block break-words rounded-field border border-border bg-field p-3 text-sm">{request.fingerprint}</code>
       <Field label="Device name" htmlFor={id + "-name"} className="[&_label]:text-sm"><Input id={id + "-name"} value={label} maxLength={40} required placeholder="For example: My phone" onChange={event => setLabel(event.target.value)} /></Field>
@@ -120,19 +120,19 @@ export function HostedSettings({hosted, client}: {hosted?: HostedState; client: 
   const enabled = hosted?.enabled === true;
   const signedIn = enabled && hosted?.account?.status === "signed_in";
   const active = enabled && signedIn && !!hosted?.roster;
-  return <Card title="Saiph account" subtitle="Your phone and computers, connected through Saiph Hosted.">
+  return <Card title="Saiph Cloud" subtitle="Your phone and computers, connected through Saiph Cloud.">
     <p role="status">{statuses[hosted?.status || "off"] || "Starting"}</p>
-    {!hosted?.available ? <p>This build does not include Hosted support.</p> : <>
+    {!hosted?.available ? <p>This build does not include Cloud support.</p> : <>
       {hosted.identity && <Disclosure summary="Connection details">{isMember
         ? <p className="muted">This computer joined your account as another computer. Your main computer approves and removes devices and renews approvals; keep it online at least every 12 hours.</p>
         : <p className="muted">This computer approves your other devices. Keep it online to renew approvals every 8 hours. Devices stop syncing after 12 hours without renewal. Lost root keys cannot be recovered or transferred yet.</p>}</Disclosure>}
       {!hosted.configured && <><p>This build cannot connect to Saiph accounts. Download the current beta from your account page.</p>
       <details><summary>Custom service (advanced)</summary><Form submit={() => client.call("hosted.configure", {...config})}>
-        {([['service_url', 'Hosted service address'], ['issuer', 'Sign-in issuer'], ['audience', 'API audience'], ['client_id', 'Desktop client ID']] as const).map(([key, title]) => <label key={key}>{title}<input value={config[key]} required disabled={enabled} onChange={event => setConfig({...config, [key]: event.target.value})} /></label>)}
+        {([['service_url', 'Cloud service address'], ['issuer', 'Sign-in issuer'], ['audience', 'API audience'], ['client_id', 'Desktop client ID']] as const).map(([key, title]) => <label key={key}>{title}<input value={config[key]} required disabled={enabled} onChange={event => setConfig({...config, [key]: event.target.value})} /></label>)}
         <label><input type="checkbox" checked={config.refresh_tokens} disabled={enabled} onChange={event => setConfig({...config, refresh_tokens: event.target.checked})} /> Keep me signed in using a protected rotating refresh token (requires deployment support)</label>
         <button disabled={enabled}>Save deployment</button>
       </Form></details></>}
-      {hosted.self_hosted_paired ? <p>This computer is paired with a self-hosted Hub. Use a separate profile for Saiph Hosted.</p>
+      {hosted.self_hosted_paired ? <p>This computer is paired with a self-hosted Hub. Use a separate profile for Saiph Cloud.</p>
         : !signedIn && hosted.configured && <HostedSignIn hosted={hosted} client={client} />}
       {hosted.account?.error && <p role="alert">{hosted.account.error}</p>}
       {enabled && <>
@@ -153,9 +153,9 @@ export function HostedSettings({hosted, client}: {hosted?: HostedState; client: 
           {hosted.notifications?.map(item => <div key={item.id}><b>{item.app}: {item.title}</b><p>{item.text}</p><Action run={() => client.call("hosted.notification.dismiss", {id: item.id})}>Dismiss notification</Action></div>)}
         </>}
         {hosted.error && <p role="alert">{hosted.error}</p>}
-        <Action run={() => client.call("hosted.enable", {enabled: false})}>Turn off Hosted</Action>
+        <Action run={() => client.call("hosted.enable", {enabled: false})}>Turn off Cloud</Action>
       </>}
-      {!enabled && hosted.identity && <><label><input type="checkbox" checked={forget} onChange={event => setForget(event.target.checked)} /> {isMember ? "Retire this computer's Hosted identity; remove it on your main computer too" : "Retire this computer's root identity; other devices will stop syncing when approvals expire"}</label><Action disabled={!forget} run={() => client.call("hosted.forget", {confirm: true})}>Forget Hosted on this computer</Action></>}
+      {!enabled && hosted.identity && <><label><input type="checkbox" checked={forget} onChange={event => setForget(event.target.checked)} /> {isMember ? "Retire this computer's Cloud identity; remove it on your main computer too" : "Retire this computer's root identity; other devices will stop syncing when approvals expire"}</label><Action disabled={!forget} run={() => client.call("hosted.forget", {confirm: true})}>Forget Cloud on this computer</Action></>}
     </>}
   </Card>;
 }

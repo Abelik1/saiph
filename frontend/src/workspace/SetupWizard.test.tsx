@@ -53,9 +53,9 @@ describe("Setup guide", () => {
     const call = vi.fn().mockResolvedValue({});
     const state = { ...hubState(false), hosted: { available: true, enabled: true, status: "setup", identity: false, configured: true, account: { status: "signed_out", error: "", refresh_tokens: false } } } as unknown as State;
     const { rerender } = render(<SetupWizard state={state} client={{ call } as unknown as Client} close={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: "Sign in to Saiph" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue with Google" }));
     expect(call).toHaveBeenCalledWith("settings.save", { setup: { mode: "hosted" } });
-    await waitFor(() => expect(call).toHaveBeenCalledWith("hosted.sign_in"));
+    await waitFor(() => expect(call).toHaveBeenCalledWith("hosted.sign_in", { google: true }));
     const signedIn = { ...state, hosted: { ...state.hosted!, account: { status: "signed_in", error: "", refresh_tokens: false } } } as State;
     rerender(<SetupWizard state={signedIn} client={{ call } as unknown as Client} close={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: "Set up this computer" }));
@@ -76,8 +76,8 @@ describe("Setup guide", () => {
     const call = vi.fn().mockResolvedValue({});
     render(<SetupWizard state={hubState(false)} client={{ call } as unknown as Client} close={vi.fn()} />);
     expect(call).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Sign in to Saiph" }));
-    await waitFor(() => expect(call).toHaveBeenCalledWith("hosted.sign_in"));
+    fireEvent.click(screen.getByRole("button", { name: "Continue with Google" }));
+    await waitFor(() => expect(call).toHaveBeenCalledWith("hosted.sign_in", { google: true }));
     expect(call.mock.calls.map(([method]) => method)).toEqual(["settings.save", "hosted.enable", "hosted.sign_in"]);
     expect(screen.queryByText(/Enter them under Settings/)).toBeNull();
     expect(screen.queryByRole("textbox")).toBeNull();
@@ -90,10 +90,10 @@ describe("Setup guide", () => {
       return {};
     });
     render(<SetupWizard state={hubState(false)} client={{ call } as unknown as Client} close={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: "Sign in to Saiph" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue with Google" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Connection could not be started.");
-    expect(call).not.toHaveBeenCalledWith("hosted.sign_in");
-    expect(screen.getByRole("button", { name: "Sign in to Saiph" })).toBeEnabled();
+    expect(call).not.toHaveBeenCalledWith("hosted.sign_in", { google: true });
+    expect(screen.getByRole("button", { name: "Continue with Google" })).toBeEnabled();
   });
 
   it("does not ask people to supply service settings when a build is incomplete", () => {
@@ -101,7 +101,7 @@ describe("Setup guide", () => {
     state.hosted!.configured = false;
     const call = vi.fn();
     render(<SetupWizard state={state} client={{ call } as unknown as Client} close={vi.fn()} />);
-    expect(screen.getByRole("button", { name: "Sign in to Saiph" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Continue with Google" })).toBeDisabled();
     expect(screen.getByRole("status")).toHaveTextContent("Download the current beta");
     expect(screen.queryByRole("textbox")).toBeNull();
     expect(call).not.toHaveBeenCalled();
@@ -113,7 +113,7 @@ describe("Setup guide", () => {
     const fresh = { ...hubState(false), hosted: { available: true, enabled: true, status: "setup", identity: false, configured: true, account } } as unknown as State;
     const { rerender } = render(<SetupWizard state={fresh} client={{ call } as unknown as Client} close={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    expect(await screen.findByText("Already use Saiph Hosted on another computer?")).toBeInTheDocument();
+    expect(await screen.findByText("Already use Saiph Cloud on another computer?")).toBeInTheDocument();
     expect(screen.getByLabelText("Main computer's code")).toBeInTheDocument();
     const waiting = { ...fresh, hosted: { ...fresh.hosted!, identity: true, role: "member", status: "awaiting_approval" } } as State;
     rerender(<SetupWizard state={waiting} client={{ call } as unknown as Client} close={vi.fn()} />);
@@ -127,12 +127,19 @@ describe("Setup guide", () => {
     expect(screen.queryByLabelText("Device request code")).toBeNull();
     expect(screen.getByRole("button", { name: "Skip for now" })).toBeVisible();
   });
+  it("starts a connected computer at the feature choices", () => {
+    const call = vi.fn().mockResolvedValue({});
+    render(<SetupWizard state={{ ...hubState(true, true), setup: { ...setup, mode: "hub", connected: true, show: false } } as State} client={{ call } as unknown as Client} close={vi.fn()} />);
+    expect(screen.getByRole("heading", { name: "Choose features" })).toBeVisible();
+    expect(screen.queryByText("How do you want to connect your devices?")).toBeNull();
+    expect(screen.getByLabelText(/Share the clipboard/)).toBeChecked();
+  });
   it("opens first connection in Phone and keeps the optional guide reachable from Settings", async () => {
     const call = vi.fn(async (method: string) => method === "state" ? hubState(false) : {});
     render(<App providedClient={{ call, subscribe: () => () => {} } as unknown as Client} />);
     expect(await screen.findByRole("heading", { name: "Connect your phone" })).toBeVisible();
     expect(screen.queryByRole("dialog", { name: "Saiph setup" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Sign in to Saiph" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Continue with Google" })).toBeEnabled();
     expect(call.mock.calls.map(([method]) => method)).toEqual(["state"]);
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     fireEvent.click(screen.getByRole("button", { name: "Run the setup guide" }));
