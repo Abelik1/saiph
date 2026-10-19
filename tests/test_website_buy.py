@@ -76,7 +76,9 @@ def settings(**changes):
 
 
 def test_ga4_and_price_test_are_off_by_default_and_validated():
-    assert LANDING['ga4'] == {'measurementId': ''}
+    # The owner's GA4 web stream (public Measurement ID, never an API secret); the price test stays off.
+    assert LANDING['ga4'] == {'measurementId': 'G-8S9PGZ7P6Z'}
+    assert site.validate_settings(settings(ga4={'measurementId': ''}), 'preview')['ga4']['measurementId'] == ''
     assert LANDING['priceTest'] == {'enabled': False, 'id': '', 'variants': {}}
     assert site.validate_settings(settings(ga4={'measurementId': 'G-ABC123XYZ'}), 'preview')['ga4']['measurementId'] == 'G-ABC123XYZ'
     for bad in ({'measurementId': 'UA-1234-1'}, {'measurementId': 'G-ABC', 'apiSecret': 'x'}, {'id': 'G-ABC123'}, 'G-ABC123'):
@@ -284,4 +286,4 @@ def test_built_site_includes_the_consent_script(tmp_path):
     site.prepare(ROOT / 'website', output, LANDING, 'preview')
     assert (output / 'assets/consent.js').exists()
     config = (output / 'assets/config.js').read_text(encoding='utf-8')
-    assert '"measurementId": ""' in config and '"enabled": false' in config
+    assert '"measurementId": "G-8S9PGZ7P6Z"' in config and '"enabled": false' in config
