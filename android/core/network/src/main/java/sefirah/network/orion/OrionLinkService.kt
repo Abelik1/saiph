@@ -10,6 +10,7 @@ import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.drop
 import sefirah.status.DeviceControlHandler
 import sefirah.notification.NotificationFeature
 import sefirah.clipboard.ClipboardFeature
@@ -34,11 +35,14 @@ class OrionLinkService : Service() {
     @Inject lateinit var phoneFeatures: OrionPhoneFeatures
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val continuity by lazy { OrionContinuity(this) }
+    // Battery, network, sound and quick actions: the same layer as Saiph Cloud.
+    private val phoneStatus by lazy { LinkPhoneStatus(this, link) }
     private var clipboardEnabled = false
     // The owner's own Do Not Disturb changes are shared; applying a shared state is not.
     private val interruptionFilter = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             scope.launch { runCatching { continuity.systemChanged { type, payload -> link.publish(type, payload) } } }
+            scope.launch { runCatching { phoneStatus.sync() } }
         }
     }
     override fun onCreate() {
@@ -50,10 +54,23 @@ class OrionLinkService : Service() {
         controls.start()
         androidx.core.content.ContextCompat.registerReceiver(this, interruptionFilter, IntentFilter(NotificationManager.ACTION_INTERRUPTION_FILTER_CHANGED), androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED)
         scope.launch { notifications.enable("") }
+        // Find phone started or stopped: every paired computer hears it (an older Hub relays this type unchecked).
+        scope.launch {
+            OrionRing.state.drop(1).collect { state ->
+                runCatching { link.publish(PhoneStatusFrames.RING_STATE, PhoneStatusFrames.ringStateBody(state, System.currentTimeMillis())) }
+            }
+        }
         scope.launch { link.status.collect { manager.notify(42, notification(it)); OrionPause.changed(this@OrionLinkService) } }
         val receipts = CommandReceipts(this)
-        scope.launch { link.run(onConnected = { controls.sendDeviceStatus(""); notifications.sendActiveNotifications(""); scope.launch { phoneFeatures.connected() };scope.launch { runCatching { continuity.restore() } } }, onEvent = { event ->
+        scope.launch { link.run(onConnected = { controls.sendDeviceStatus(""); notifications.sendActiveNotifications(""); scope.launch { phoneFeatures.connected() };scope.launch { runCatching { continuity.restore() } }
+            scope.launch { runCatching { phoneStatus.connected() } } }, onEvent = { event ->
             continuity.event(event)
+            val type = event["type"]?.jsonPrimitive?.content.orEmpty()
+            // Refresh, Do Not Disturb and hotspot; no other handler below takes these types.
+            runCatching { phoneStatus.receive(type, event.getValue("payload").jsonObject, event.getValue("source").jsonPrimitive.content) {
+                receipts.claim(event.getValue("id").jsonPrimitive.content) } }
+            // A ringer change from a computer shows in the status on the next pass rather than waiting for the loop.
+            if (type == "phone.ringer") scope.launch { delay(1000); runCatching { phoneStatus.sync() } }
             runCatching { OrionRemote.receive(event) }
             if(event["type"]?.jsonPrimitive?.content in setOf("sms.open","sms.send","call.command","photo.request","file.offer","sms.compose","contacts.search",
                     "calls.log.request","call.dial","phone.ringer","media.command","sms.attachment.request")) phoneFeatures.receive(event)
@@ -81,7 +98,7 @@ class OrionLinkService : Service() {
                 updateClipboard()
                 runCatching { continuity.tick() }
                 if (link.status.value == "Online") controls.sendDeviceStatus("")
-                if(link.status.value=="Online") { runCatching { peer.start() };runCatching { phoneFeatures.refresh() } }
+                if(link.status.value=="Online") { runCatching { peer.start() };runCatching { phoneFeatures.refresh() };runCatching { phoneStatus.sync() } }
                 else runCatching { phoneFeatures.refreshPermissions() }
                 link.refreshCapabilities()
                 manager.notify(42, notification(link.status.value))

@@ -12,6 +12,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Security.AccessControl;
 using System.Security.Cryptography;
 using System.Security.Principal;
 using System.Threading;
@@ -38,7 +39,7 @@ public static class Setup {
     // Releases before the rename launch OrionMini.exe. Newer packages keep a byte copy
     // under that name for older updaters; shortcuts and startup use Saiph.exe.
     const string Entrypoint = "app/Saiph.exe", LegacyEntrypoint = "app/OrionMini.exe";
-    static bool silent, isolated, uninstall, noStartup, noLaunch, noSendTo;
+    static bool silent, isolated, uninstall, noStartup, noLaunch, noSendTo, noEnrollmentAssociation;
     // Set only by the options page: an explicit untick also removes the owned integration.
     static bool removeStartup;
     // Set only after the person agrees to replace a startup entry Saiph did not create.
@@ -57,6 +58,7 @@ public static class Setup {
                     case "--no-startup": noStartup = true; break;
                     case "--no-launch": noLaunch = true; break;
                     case "--no-send-to": noSendTo = true; break;
+                    case "--no-enrollment-association": noEnrollmentAssociation = true; break;
                     case "--destination": destination = arguments[++i]; break;
                     default: throw new InvalidDataException();
                 }
@@ -65,6 +67,7 @@ public static class Setup {
             destination = Path.GetFullPath(destination).TrimEnd(Path.DirectorySeparatorChar);
             if (!isolated && destination != Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "OrionMini"))
                 throw new InvalidDataException(); // Arbitrary paths are accepted only in explicit no-integration test mode.
+            if (isolated) cameraTestRoot = CameraTestRoot();
             if (silent) { Perform(); return 0; }
             Application.EnableVisualStyles(); Application.SetCompatibleTextRenderingDefault(false);
             if (!uninstall) { RunWizard(); return 0; }
@@ -151,8 +154,9 @@ public static class Setup {
         var sendToHelp = new Label { Left = 46, Top = 208, Width = 548, Height = 36,
             Text = "Right-click a file → Show more options (Windows 11) → Send to → Saiph (phone)",
             BackColor = WaveSurface.Card, ForeColor = WaveSurface.Muted, Font = new Font("Segoe UI", 9) };
-        var launch = WaveSurface.Option("Open Saiph when setup finishes", 248, !noLaunch);
-        var location = new Label { Left = 46, Top = 284, Width = 548, Height = 44, Text = "Installs for your Windows account only, in " + destination,
+        var enrollment = WaveSurface.Option("Open pairing invitation files with Saiph", 244, !noEnrollmentAssociation);
+        var launch = WaveSurface.Option("Open Saiph when setup finishes", 276, !noLaunch);
+        var location = new Label { Left = 46, Top = 308, Width = 548, Height = 36, Text = "Installs for your Windows account only, in " + destination,
                                    BackColor = WaveSurface.Card, ForeColor = WaveSurface.Muted, Font = new Font("Segoe UI", 9) };
         status = new Label { Left = 24, Top = 362, Width = 340, Height = 48, Text = "Internal preview · publisher signing and clean-device acceptance pending.",
                              BackColor = WaveSurface.Footer, ForeColor = WaveSurface.Muted, Font = new Font("Segoe UI", 9) };
@@ -166,7 +170,7 @@ public static class Setup {
                 + " After setup, Saiph's guide helps you sign in and add your phone."
                 : page == 2 ? "Installing Saiph. This takes a moment." : page == 3 ? "Saiph is installed. Open it from the Start menu any time." : "";
             surface.ShowCard = page == 1; surface.Hero = page == 0;
-            startup.Visible = sendTo.Visible = sendToHelp.Visible = launch.Visible = location.Visible = page == 1;
+            startup.Visible = sendTo.Visible = sendToHelp.Visible = enrollment.Visible = launch.Visible = location.Visible = page == 1;
             back.Visible = page == 1; next.Enabled = page != 2;
             next.Text = page == 1 ? (upgrade ? "Update" : "Install") : page == 3 ? "Finish" : "Next";
             surface.AccessibleName = surface.Heading; surface.AccessibleDescription = surface.Body;
@@ -179,6 +183,7 @@ public static class Setup {
             if (page == 0) { page = 1; show(); return; }
             if (page == 3) { window.Close(); return; }
             noStartup = removeStartup = !startup.Checked; noSendTo = !sendTo.Checked; noLaunch = !launch.Checked; replaceStartup = false;
+            noEnrollmentAssociation = !enrollment.Checked;
             string foreign = startup.Checked ? ForeignStartup() : null;
             if (foreign != null) {
                 // For example a copy run from source. Never replace it without asking.
@@ -203,7 +208,7 @@ public static class Setup {
             worker.SetApartmentState(ApartmentState.STA);
             worker.Start();
         };
-        foreach (Control control in new Control[] { startup, sendTo, sendToHelp, launch, location }) surface.Controls.Add(control);
+        foreach (Control control in new Control[] { startup, sendTo, sendToHelp, enrollment, launch, location }) surface.Controls.Add(control);
         foreach (Control control in new Control[] { surface, status, back, next }) window.Controls.Add(control);
         show(); Application.Run(window);
     }
@@ -333,6 +338,10 @@ public static class Setup {
                 integration.Add(Under(release, Entrypoint)); integration.Add(Under(release, LegacyEntrypoint));
                 Integrate(release, old == null, integration);
             }
+            // The new release registers its bundled camera on first use; an older
+            // release's registration would make that refuse.
+            phase = "camera-registration";
+            UnregisterOwnedCameras(old);
             phase = "current-marker";
             string temporary = Marker + ".new"; File.WriteAllText(temporary, Json.Serialize(next));
             RetryOwnedRename(() => { if (File.Exists(Marker)) File.Replace(temporary, Marker, Marker + ".previous"); else File.Move(temporary, Marker); });
@@ -340,6 +349,8 @@ public static class Setup {
             string uninstallFile = Path.Combine(destination, "Uninstall.exe");
             phase = "uninstall-activation";
             RetryOwnedRename(() => { if (File.Exists(uninstallFile)) File.Replace(uninstallFile + ".new", uninstallFile, null); else File.Move(uninstallFile + ".new", uninstallFile); });
+            phase = "network-relay";
+            KeepRelay(release);
             if (!isolated && !noLaunch) Process.Start(new ProcessStartInfo(Under(release, manifest.entrypoint)) { WorkingDirectory = Path.Combine(release, "app"), UseShellExecute = true });
         } catch {
             if (!activated && !isolated && old != null && !old.removed) {
@@ -352,6 +363,26 @@ public static class Setup {
             // Only the random staging directory created by this invocation is removable.
             if (Directory.Exists(stage)) { CheckParents(stage, destination); Directory.Delete(stage, true); }
             if (!activated) Progress("Installation was not activated. Existing Saiph data and release remain available.");
+        }
+    }
+
+    // Windows Firewall allows inbound connections by program path, and every release
+    // has a new path. The local network relay (WindowsNetworkRelay.cs) therefore lives
+    // at one fixed path beside the releases, so the owner's one firewall answer keeps
+    // applying after updates. Not fatal: Saiph listens directly without it.
+    const string RelayName = "SaiphNetwork.exe";
+    static string RelayFile { get { return Path.Combine(destination, RelayName); } }
+    static void KeepRelay(string release) {
+        string source = Path.Combine(release, RelayName), temporary = RelayFile + ".new";
+        try {
+            if (!File.Exists(source) || (File.Exists(RelayFile) && SHA(RelayFile) == SHA(source))) return;
+            CheckParents(RelayFile, destination);
+            File.Copy(source, temporary, true);
+            RetryOwnedRename(() => { if (File.Exists(RelayFile)) File.Replace(temporary, RelayFile, null); else File.Move(temporary, RelayFile); });
+        } catch (Exception failure) {
+            // A relay still running for an open session keeps the previous copy, which works the same.
+            Log("network relay kept: " + failure.GetType().Name + " " + failure.HResult);
+            try { if (File.Exists(temporary)) File.Delete(temporary); } catch (IOException) { } catch (UnauthorizedAccessException) { }
         }
     }
 
@@ -418,9 +449,9 @@ public static class Setup {
         var extension = ReadTree(EnrollmentExtension);
         var command = ReadTree(EnrollmentClass);
         // A bare extension owned by another application is never overwritten.
-        if (extension != null && (command == null || !IntegrationPolicy.Matches(extension, IntegrationPolicy.Extension())) ||
-            command != null && !targets.Any(exe => IntegrationPolicy.Matches(command, IntegrationPolicy.Enrollment(exe))))
-            throw new SetupBlocked("Another program opens .orion-enrollment invitation files. Remove that file association, then try again.");
+        if (!noEnrollmentAssociation && (extension != null && (command == null || !IntegrationPolicy.Matches(extension, IntegrationPolicy.Extension())) ||
+            command != null && !targets.Any(exe => IntegrationPolicy.Matches(command, IntegrationPolicy.Enrollment(exe)))))
+            throw new SetupBlocked("Another program opens pairing invitation files. Untick \"Open pairing invitation files with Saiph\" to keep it, then try again.");
     }
     // A startup entry named OrionMini that no installed release owns, e.g. a copy run from source.
     static string ForeignStartup() {
@@ -458,8 +489,10 @@ public static class Setup {
             key.SetValue("UninstallString", "\"" + Path.Combine(destination, "Uninstall.exe") + "\" --uninstall --no-launch");
             key.SetValue("NoModify", 1); key.SetValue("NoRepair", 1);
         }
-        using (var extension = Registry.CurrentUser.CreateSubKey(EnrollmentExtension)) extension.SetValue("", "Orion.Enrollment");
-        using (var command = Registry.CurrentUser.CreateSubKey(EnrollmentClass + @"\shell\open\command")) command.SetValue("", "\"" + exe + "\" --enrollment \"%1\"");
+        if (!noEnrollmentAssociation) {
+            using (var extension = Registry.CurrentUser.CreateSubKey(EnrollmentExtension)) extension.SetValue("", "Orion.Enrollment");
+            using (var command = Registry.CurrentUser.CreateSubKey(EnrollmentClass + @"\shell\open\command")) command.SetValue("", "\"" + exe + "\" --enrollment \"%1\"");
+        }
     }
 
     static void Remove() {
@@ -499,7 +532,11 @@ public static class Setup {
                 }
             }
         }
+        phase = "camera-registration";
+        UnregisterOwnedCameras(installation);
+        phase = "uninstall";
         var retained = new List<string>();
+        var relays = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (string version in installation.versions) {
             string release = Under(destination, "releases/" + version);
             // A listed release whose folder is gone must not block removal of the rest.
@@ -507,6 +544,7 @@ public static class Setup {
             string manifestFile = Under(release, "package-manifest.json"); if (!File.Exists(manifestFile)) throw new InvalidDataException();
             var manifest = Json.Deserialize<Package>(File.ReadAllText(manifestFile));
             if (manifest.format != "orion-desktop-package" || manifest.version != version || manifest.files == null) throw new InvalidDataException();
+            foreach (var item in manifest.files) if (item.path == RelayName) relays.Add(item.sha256);
             // Preflight all paths first; do not recursively remove arbitrary files added by a user.
             foreach (var item in manifest.files) Under(release, item.path);
             var directories = new List<string>();
@@ -535,10 +573,109 @@ public static class Setup {
                 if (IntegrationPolicy.Matches(TryReadTree(EnrollmentExtension), IntegrationPolicy.Extension())) Registry.CurrentUser.DeleteSubKeyTree(EnrollmentExtension, false);
             }
         }
+        // The fixed-path relay is removed only if it is byte-for-byte one that our releases shipped.
+        try { if (File.Exists(RelayFile) && relays.Contains(SHA(RelayFile))) File.Delete(RelayFile); }
+        catch (IOException) { } catch (UnauthorizedAccessException) { }
         installation.versions = retained; installation.removed = true;
         File.WriteAllText(Marker, Json.Serialize(installation));
         if (File.Exists(Marker + ".previous")) File.Delete(Marker + ".previous");
         // Uninstall.exe may be the running file. Retain the small stub; never delete outside owned releases.
+    }
+
+    // Explicit --isolated test mode only: a disposable HKCU subtree stands in for both
+    // registry views, so the real camera registrations are never read or changed.
+    const string CameraTestRootVariable = "ORION_SETUP_CAMERA_TEST_ROOT", CameraTestRootPrefix = @"Software\OrionMini\SetupCameraTests\";
+    static string cameraTestRoot;
+    static string CameraTestRoot() {
+        string test = Environment.GetEnvironmentVariable(CameraTestRootVariable);
+        if (String.IsNullOrEmpty(test)) return null;
+        if (!test.StartsWith(CameraTestRootPrefix, StringComparison.Ordinal) || !Regex.IsMatch(test.Substring(CameraTestRootPrefix.Length), "^[A-Za-z0-9-]{1,64}$"))
+            throw new InvalidDataException();
+        using (var root = Registry.CurrentUser.OpenSubKey(test)) if (root == null) throw new InvalidDataException();
+        return test;
+    }
+    static RegistryKey CameraRoot(RegistryView view) {
+        if (!isolated) return RegistryKey.OpenBaseKey(RegistryHive.CurrentUser, view);
+        return cameraTestRoot == null ? null : Registry.CurrentUser.OpenSubKey(cameraTestRoot, true);
+    }
+    // Plain diagnostic lines beside orion-install.json; only registry paths and install paths.
+    static void Log(string line) {
+        try {
+            string path = Path.Combine(destination, "setup.log"); CheckParents(path, destination);
+            if (File.Exists(path) && new FileInfo(path).Length > 256 * 1024) File.Delete(path);
+            File.AppendAllText(path, DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ") + " " + line + Environment.NewLine);
+        } catch (IOException) { } catch (UnauthorizedAccessException) { }
+    }
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode)] static extern int RegDeleteKeyExW(Microsoft.Win32.SafeHandles.SafeRegistryHandle key, string subKey, int view, int reserved);
+    // Deletes a key and its subkeys with only the rights that regsvr32's RegDeleteTree
+    // needs, and throws on any failure. RegistryKey.DeleteSubKeyTree(name, false) opens
+    // the key for writing and silently does nothing when that open is refused.
+    static void DeleteTree(RegistryKey parent, string name, RegistryView view) {
+        using (var key = parent.OpenSubKey(name, RegistryKeyPermissionCheck.ReadSubTree, RegistryRights.Delete | RegistryRights.EnumerateSubKeys | RegistryRights.QueryValues)) {
+            if (key == null) return;
+            foreach (string child in key.GetSubKeyNames()) DeleteTree(key, child, view);
+        }
+        int result = RegDeleteKeyExW(parent.Handle, name, view == RegistryView.Registry64 ? 0x100 : view == RegistryView.Registry32 ? 0x200 : 0, 0);
+        if (result != 0 && result != 2) throw new System.ComponentModel.Win32Exception(result);
+    }
+    static string CameraClass(RegistryView view, bool properties) { return "{D9B25791-5540-48BE-842C-C73BF85403" + (view == RegistryView.Registry64 ? (properties ? "41" : "40") : (properties ? "43" : "42")) + "}"; }
+    const string ClassPrefix = @"Software\Classes\CLSID\", CameraCategory = ClassPrefix + @"{860BB310-5D01-11D0-BD3B-00A0C911CE86}\Instance\";
+    static string CameraServer(RegistryKey root, string id) {
+        using (var server = root.OpenSubKey(ClassPrefix + id + @"\InprocServer32")) return server == null ? null : server.GetValue("") as string;
+    }
+
+    // Removes only registrations whose server DLL is a hash-verified file of one of this
+    // installation's releases, then checks again with fresh handles and reports survivors.
+    static void UnregisterOwnedCameras(Installation installation) {
+        if (installation == null) return;
+        var owned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (string version in installation.versions) {
+            string release = Under(destination, "releases/" + version);
+            string manifestPath = Under(release, "package-manifest.json");
+            if (!File.Exists(manifestPath)) continue;
+            var manifest = Json.Deserialize<Package>(File.ReadAllText(manifestPath));
+            if (manifest.format != "orion-desktop-package" || manifest.schema != 1 || manifest.version != version || manifest.files == null) throw new InvalidDataException();
+            foreach (string name in new[] { "app/_internal/camera/SaiphCamera64.dll", "app/_internal/camera/SaiphCamera32.dll" }) {
+                var entry = manifest.files.SingleOrDefault(item => item.path == name);
+                string file = Under(release, name);
+                if (entry != null && Hash.IsMatch(entry.sha256) && File.Exists(file) && new FileInfo(file).Length == entry.bytes && SHA(file) == entry.sha256) owned.Add(file);
+            }
+        }
+        var survivors = new List<string>();
+        Log("camera cleanup: " + owned.Count + " verified camera files from " + installation.versions.Count + " listed releases, process "
+            + (Environment.Is64BitProcess ? "x64" : "x86") + (isolated ? ", test registry" : ""));
+        foreach (var view in new[] { RegistryView.Registry64, RegistryView.Registry32 }) {
+            string camera = CameraClass(view, false), properties = CameraClass(view, true);
+            using (var root = CameraRoot(view)) {
+                if (root == null) return; // Isolated mode without a test registry owns no registration.
+                // The properties class can outlive a camera class removed by hand; each is judged by its own server.
+                foreach (string id in new[] { camera, properties }) {
+                    string registered = CameraServer(root, id);
+                    if (registered == null) { Log("camera " + view + " " + id + " not registered"); continue; }
+                    if (!owned.Contains(registered)) { Log("camera " + view + " " + id + " kept: " + registered + " is not a verified file of this installation"); continue; }
+                    try {
+                        if (id == camera) using (var device = root.OpenSubKey(CameraCategory + camera)) {
+                            if (device != null && String.Equals(device.GetValue("DevicePath") as string, "saiph:camera:" + camera, StringComparison.OrdinalIgnoreCase))
+                                DeleteTree(root, CameraCategory + camera, view);
+                        }
+                        DeleteTree(root, ClassPrefix + id, view);
+                        Log("camera " + view + " " + id + " removed: " + registered);
+                    } catch (Exception failure) {
+                        Log("camera " + view + " " + id + " removal failed: " + failure.GetType().Name + " " + failure.HResult + ": " + registered);
+                    }
+                }
+            }
+            // Post-check with a fresh handle: an owned registration must not survive.
+            using (var root = CameraRoot(view)) foreach (string id in new[] { camera, properties }) {
+                string registered = CameraServer(root, id);
+                if (registered != null && owned.Contains(registered)) survivors.Add(view + " " + id + " -> " + registered);
+            }
+        }
+        foreach (string survivor in survivors) {
+            // Not fatal: the new release's camera replaces a registration from this installation's own releases folder.
+            Log("camera registration survived removal: " + survivor);
+            Console.Error.WriteLine("Saiph installer warning: camera registration survived removal: " + survivor);
+        }
     }
 }
 

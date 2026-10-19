@@ -2,7 +2,7 @@
 const labels = {
   incomplete: "Checkout incomplete",
   incomplete_expired: "Checkout expired",
-  trialing: "Trial",
+  trialing: "Subscribed, free trial running",
   active: "Subscription active",
   past_due: "Payment overdue",
   canceled: "Subscription canceled",
@@ -12,7 +12,7 @@ const labels = {
 const testLabels = {
   incomplete: "Checkout incomplete",
   incomplete_expired: "Checkout expired",
-  trialing: "Test trial",
+  trialing: "Test subscription, free trial running",
   active: "Test subscription active",
   past_due: "Test payment overdue",
   canceled: "Test subscription canceled",
@@ -47,7 +47,11 @@ export function subscriptionSummary(snapshot, { test = true, plan = null } = {})
       year: "numeric",
       timeZone: "UTC",
     }).format(new Date(seconds * 1000));
-    period = `${snapshot.cancelAtPeriodEnd ? "Scheduled to end" : test ? "Current test period ends" : "Renews"} ${date} (UTC)`;
+    // A subscription taken during the free trial is first charged when the trial ends.
+    const what = snapshot.cancelAtPeriodEnd ? "Scheduled to end"
+      : snapshot.status === "trialing" ? (test ? "First test payment" : "First payment")
+      : test ? "Current test period ends" : "Renews";
+    period = `${what} ${date} (UTC)`;
   }
   return { label, period };
 }

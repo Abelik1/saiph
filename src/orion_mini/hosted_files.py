@@ -184,7 +184,15 @@ def _manifest(session, envelope):
                 or type(payload["file"]) is not dict):
             raise AttachmentError()
         payload = payload["file"]
-    expected = {"type", "kind", "name", "mime", "size", "sha256", "blob", "ciphertext_size", "ciphertext_sha256", "keyset"}
+    elif payload.get("type") == "sms.attachment.original":
+        # One MMS part this computer asked for (thread, message, part); same file manifest.
+        if (set(payload) != {"type", "thread", "message", "part", "request", "file"}
+                or any(type(payload[key]) is not int or not 0 <= payload[key] <= (1 << 53) - 1 for key in ("thread", "message", "part"))
+                or type(payload["request"]) is not str or str(UUID(payload["request"])) != payload["request"]
+                or type(payload["file"]) is not dict):
+            raise AttachmentError()
+        payload = payload["file"]
+    expected ={"type", "kind", "name", "mime", "size", "sha256", "blob", "ciphertext_size", "ciphertext_sha256", "keyset"}
     if (set(payload) != expected or payload["type"] != "file.encrypted" or payload["kind"] not in ("file", "photo", "clipboard.image")
             or type(payload["size"]) is not int or not 0 <= payload["size"] <= MAX_CIPHERTEXT - 4096
             or type(payload["ciphertext_size"]) is not int or not 1 <= payload["ciphertext_size"] <= MAX_CIPHERTEXT

@@ -4,6 +4,12 @@ package com.orionmini.mobile
 import android.content.Intent
 import android.net.Uri
 import android.content.pm.PackageManager
+import android.app.Activity
+import android.os.Bundle
+import android.view.View
+import android.view.ViewGroup
+import android.widget.TextView
+import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import net.openid.appauth.*
@@ -102,5 +108,31 @@ class HostedCallbackInstrumentedTest {
         for (url in listOf("https://usesaiph.com/", "https://usesaiph.com/android/oauth2redirect/extra",
             "https://www.usesaiph.com/android/oauth2redirect", "https://usesaiph.com.evil.invalid/android/oauth2redirect",
             "http://usesaiph.com/android/oauth2redirect")) assertTrue(url, receivers(url).isEmpty())
+    }
+
+    @Test fun preUpgradeBrowserResultStillReachesSignInAfterAddingPermissionsLauncher() {
+        // Restore the launch key used by the previous APK. Cancellation needs no
+        // token exchange and demonstrates which callback receives the result.
+        prefs.edit().putBoolean("enabled", false).commit()
+        AppPolicy.acknowledge(context)
+        ActivityScenario.launch(HostedActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val registry = activity.activityResultRegistry
+                val saved = Bundle()
+                registry.onSaveInstanceState(saved)
+                val keys = saved.getStringArrayList("KEY_COMPONENT_ACTIVITY_REGISTERED_KEYS")!!
+                val codes = saved.getIntegerArrayList("KEY_COMPONENT_ACTIVITY_REGISTERED_RCS")!!
+                val originalLoginKey = "activity_rq#1" // AppLock, then sign-in in the previous APK.
+                val index = keys.indexOf(originalLoginKey)
+                assertTrue(index >= 0)
+                saved.putStringArrayList("KEY_COMPONENT_ACTIVITY_LAUNCHED_KEYS", arrayListOf(originalLoginKey))
+                registry.onRestoreInstanceState(saved)
+                assertTrue(registry.dispatchResult(codes[index], Activity.RESULT_CANCELED, Intent()))
+                fun hasLoginError(view: View): Boolean =
+                    (view is TextView && view.text.contains("Sign-in did not complete")) ||
+                        (view is ViewGroup && (0 until view.childCount).any { hasLoginError(view.getChildAt(it)) })
+                assertTrue("A pending browser result must reach sign-in, not the permission callback", hasLoginError(activity.window.decorView))
+            }
+        }
     }
 }

@@ -46,7 +46,10 @@ public class Fixtures extends ContentProvider {
             MatrixCursor c=new MatrixCursor(cols);Object[] row=new Object[cols.length];for(int i=0;i<cols.length;i++)row[i]=OpenableColumns.DISPLAY_NAME.equals(cols[i])?f.getName():OpenableColumns.SIZE.equals(cols[i])?f.length():null;c.addRow(row);return c;
         } catch(Exception e) { throw new IllegalArgumentException("Unknown fixture"); }
     }
-    @Override public String getType(Uri uri) { return uri.toString().endsWith(".png")?"image/png":"text/plain"; }
+    @Override public String getType(Uri uri) {
+        String name=uri.getLastPathSegment();
+        return name!=null&&name.endsWith(".png")?"image/png":name!=null&&name.endsWith(".jpg")?"image/jpeg":name!=null&&name.endsWith(".webp")?"image/webp":"text/plain";
+    }
     @Override public Uri insert(Uri u,ContentValues v) { throw new UnsupportedOperationException(); }
     @Override public int delete(Uri u,String s,String[] a) { throw new UnsupportedOperationException(); }
     @Override public int update(Uri u,ContentValues v,String s,String[] a) { throw new UnsupportedOperationException(); }

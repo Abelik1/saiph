@@ -3,67 +3,11 @@
 // strings. The background, loaders, progress and the brand mark all share it.
 import { useEffect, useId, useRef } from "react";
 
-type Pluck = { x: number; y: number; strength: number; born: number };
-type Gather = { id: number; x: number; y: number; radius: number };
-
-// One shared field per window. Components pluck it or gather its strings to a
-// point while they work, without needing a reference to the canvas.
-const field = { plucks: [] as Pluck[], gathers: [] as Gather[], next: 1 };
-
-function now() { return typeof performance === "undefined" ? Date.now() : performance.now(); }
-
 export function reducedMotion() {
   return typeof window === "undefined" || typeof window.matchMedia !== "function" || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
-/** Sends a ripple through the strings near a window point (CSS pixels). */
-export function pluck(x: number, y: number, strength = 1) {
-  field.plucks.push({ x, y, strength, born: now() });
-  if (field.plucks.length > 24) field.plucks.shift();
-}
-
-/**
- * Curls the strings around a ball at a point, ringing where they touch it,
- * until released. This is Saiph's "working" state.
- */
-export function gather(x: number, y: number, radius = 90) {
-  const id = field.next++;
-  field.gathers.push({ id, x, y, radius });
-  return () => { field.gathers = field.gathers.filter((g) => g.id !== id); };
-}
-
-/** Gathers the strings around an element while `active` is true. */
-export function useGather(ref: React.RefObject<Element | null>, active: boolean) {
-  useEffect(() => {
-    const element = ref.current;
-    if (!active || !element || typeof element.getBoundingClientRect !== "function") return;
-    const box = element.getBoundingClientRect();
-    if (!box.width && !box.height) return;
-    const x = box.left + box.width / 2, y = box.top + box.height / 2;
-    const release = gather(x, y, Math.min(70, Math.max(box.width, box.height) / 2 + 18));
-    return () => { release(); pluck(x, y, 0.8); };
-  }, [ref, active]);
-}
-
 const STRINGS = 30;
-// The drift is slow, so it is drawn at 30 fps; a pluck or a gather draws at full rate.
-const IDLE_FRAME_MS = 1000 / 30;
-
-// Ideal flow around a cylinder: the height at `dx` of the streamline that sits
-// `far` above the centre far away. Strings part smoothly around the ball.
-function streamline(dx: number, far: number, radius: number) {
-  const x2 = dx * dx, r2 = radius * radius;
-  let y = far + radius;
-  for (let n = 0; n < 8; n++) {
-    const f = y * y * y - far * y * y + (x2 - r2) * y - far * x2;
-    const slope = 3 * y * y - 2 * far * y + x2 - r2;
-    if (!slope) break;
-    y -= f / slope;
-  }
-  return y;
-}
-
-function ease(value: number) { return value < 0 ? 0 : value > 1 ? 1 : value * value * (3 - 2 * value); }
 
 type Rgb = [number, number, number];
 /** A colour token resolved to rgb, so canvas strokes follow the design tokens. */
@@ -79,31 +23,32 @@ function tokenRgb(name: string, fallback: Rgb): Rgb {
 }
 function alpha([r, g, b]: Rgb, a: number) { return `rgba(${r}, ${g}, ${b}, ${a})`; }
 
-/** Full-window animated string field. Purely decorative. */
+/**
+ * Full-window string field: a still picture, drawn once and redrawn only when
+ * the window is resized or the theme changes. Purely decorative: it never moves,
+ * and nothing on the page (pointer, buttons, progress) makes it move. A
+ * still background next to a moving one reads as parts of the window twitching.
+ */
 export function WaveField() {
   const canvas = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const element = canvas.current;
     const context = element?.getContext?.("2d");
     if (!element || !context) return;
-    const still = reducedMotion();
-    let width = 0, height = 0, frame = 0, visible = true, pointerAt = 0, previous = 0, drawn = 0;
-    const start = now();
-    const knots = new Map<number, { x: number; y: number; radius: number; level: number }>();
-    let strokes: CanvasGradient[] = [];
-    let glow: [Rgb, Rgb] = [[103, 232, 249], [34, 211, 238]];
+    let layout = 0;
 
-    function resize() {
+    function draw() {
       // Thin lines gain little above 1.5x and cost twice the pixels at 2x.
       const ratio = Math.min(window.devicePixelRatio || 1, 1.5);
-      width = window.innerWidth; height = window.innerHeight;
+      const width = window.innerWidth, height = window.innerHeight;
       element!.width = Math.round(width * ratio); element!.height = Math.round(height * ratio);
       context!.setTransform(ratio, 0, 0, ratio, 0, 0);
-      // Each string's colour depends only on its row, so its gradient is made once here.
+      context!.clearRect(0, 0, width, height);
       const one = tokenRgb("--wave-1", [34, 211, 238]), two = tokenRgb("--wave-2", [103, 232, 249]), three = tokenRgb("--wave-3", [167, 139, 250]);
-      glow = [two, one];
-      strokes = [];
+      const gap = height / (STRINGS + 1);
+      const step = Math.max(5, width / 220);
       for (let i = 1; i <= STRINGS; i++) {
+        const base = i * gap;
         const depth = i / (STRINGS + 1);
         // Strings fade towards the top and bottom edges.
         const level = 0.07 + 0.26 * Math.sin(Math.PI * depth) ** 2;
@@ -111,121 +56,75 @@ export function WaveField() {
         gradient.addColorStop(0, alpha(one, level * 0.35));
         gradient.addColorStop(0.45, alpha(two, level));
         gradient.addColorStop(1, alpha(three, level * 0.55));
-        strokes.push(gradient);
-      }
-    }
-
-    function draw(time: number) {
-      const t = (time - start) / 1000;
-      // Ramps run on elapsed time, so slow or throttled frames look the same.
-      const elapsed = previous ? Math.min(0.1, (time - previous) / 1000) : 0;
-      previous = time;
-      context!.clearRect(0, 0, width, height);
-      const gap = height / (STRINGS + 1);
-      const step = Math.max(5, width / 220);
-      const balls = [...knots.values()].map((k) => ({ ...k, level: ease(k.level) }));
-      // A faint glow marks each ball the strings are wrapped around.
-      for (const b of balls) {
-        const light = context!.createRadialGradient(b.x, b.y, 0, b.x, b.y, b.radius * 1.6);
-        light.addColorStop(0, alpha(glow[0], 0.1 * b.level));
-        light.addColorStop(0.6, alpha(glow[1], 0.05 * b.level));
-        light.addColorStop(1, alpha(glow[1], 0));
-        context!.fillStyle = light;
-        context!.fillRect(b.x - b.radius * 2, b.y - b.radius * 2, b.radius * 4, b.radius * 4);
-      }
-      // Held gathers ramp in; released ones relax back instead of snapping.
-      const active = new Set(field.gathers.map((g) => g.id));
-      for (const g of field.gathers) {
-        const knot = knots.get(g.id) || { ...g, level: 0 };
-        knots.set(g.id, { ...g, level: Math.min(1, knot.level + elapsed * 1.8) });
-      }
-      for (const [id, knot] of knots) if (!active.has(id)) {
-        knot.level -= elapsed * 1.1;
-        if (knot.level <= 0) knots.delete(id);
-      }
-      field.plucks = field.plucks.filter((p) => time - p.born < 4000);
-      const ripples = field.plucks.map((p) => {
-        const age = (time - p.born) / 1000;
-        return { x: p.x, y: p.y, age, travel: age * 520, size: 16 * p.strength * Math.exp(-age * 1.3) };
-      });
-      const spread = 2 * (gap * 3.2) ** 2;
-
-      for (let i = 1; i <= STRINGS; i++) {
-        const base = i * gap;
-        const depth = i / (STRINGS + 1);
-        // Only ripples close enough to this string move it; the rest are skipped whole.
-        const near: { x: number; age: number; travel: number; reach: number }[] = [];
-        for (const r of ripples) {
-          const dy = base - r.y;
-          const reach = Math.exp(-(dy * dy) / spread) * r.size;
-          if (reach > 0.05) near.push({ x: r.x, age: r.age, travel: r.travel, reach });
-        }
-        context!.strokeStyle = strokes[i - 1];
+        context!.strokeStyle = gradient;
         context!.lineWidth = 1;
         context!.beginPath();
         for (let x = -step; x <= width + step; x += step) {
           const u = x / width;
-          // Contour: slow, wide swells that make the strings look like terrain lines.
-          let y = base + Math.sin(u * 2.6 + depth * 4.1 + t * 0.12) * gap * 0.9 + Math.sin(u * 6.3 - depth * 2.2 - t * 0.21) * gap * 0.25;
-          // Hum: a fine, slow ripple along every string.
-          y += Math.sin(u * 22 - t * 0.9 + i * 0.7) * 1.2;
-          for (const r of near) {
-            const dx = x - r.x;
-            const front = Math.abs(dx) - r.travel;
-            // Beyond about 280 px from the wave front its envelope is below 1/5000.
-            if (front > 280 || front < -280) continue;
-            y += Math.sin(dx * 0.045 - r.age * 18) * r.reach * Math.exp(-(front * front) / 9000);
-          }
-          for (const b of balls) {
-            const offset = y - b.y;
-            if (Math.abs(offset) > b.radius * 7) continue;
-            const dx = x - b.x, side = offset === 0 ? (i % 2 ? 1 : -1) : Math.sign(offset);
-            const wrapped = b.y + streamline(dx, Math.abs(offset) || 0.5, b.radius) * side;
-            // Fade the influence out smoothly so distant strings never kink.
-            const reach = Math.exp(-((Math.max(0, Math.abs(offset) - b.radius * 1.5) / (b.radius * 1.6)) ** 2));
-            y += (wrapped - y) * b.level * reach;
-            // Where the strings hug the ball they ring like a struck string.
-            const touch = Math.hypot(dx, y - b.y) - b.radius;
-            y += Math.sin(t * 17 + i * 1.9 + dx * 0.06) * 3.2 * Math.exp(-(touch * touch) / 260) * b.level;
-          }
+          // Contour: wide swells that make the strings look like terrain lines,
+          // with a fine ripple along every string.
+          const y = base + Math.sin(u * 2.6 + depth * 4.1) * gap * 0.9 + Math.sin(u * 6.3 - depth * 2.2) * gap * 0.25
+            + Math.sin(u * 22 + i * 0.7) * 1.2;
           if (x === -step) context!.moveTo(x, y); else context!.lineTo(x, y);
         }
         context!.stroke();
       }
     }
-
-    function loop(time: number) {
-      const busy = field.plucks.length > 0 || field.gathers.length > 0 || knots.size > 0;
-      if (visible && (busy || time - drawn >= IDLE_FRAME_MS)) { drawn = time; draw(time); }
-      frame = requestAnimationFrame(loop);
+    // Resizing clears the canvas, so it is redrawn in the same frame; the many
+    // events of a dragged window edge coalesce into one redraw per frame.
+    function relayout() {
+      if (!layout) layout = requestAnimationFrame(() => { layout = 0; draw(); });
     }
-    function onVisibility() { visible = document.visibilityState !== "hidden"; }
-    function onPointer(event: PointerEvent) {
-      // Moving across the window brushes the strings softly.
-      const time = now();
-      if (time - pointerAt < 140) return;
-      pointerAt = time;
-      pluck(event.clientX, event.clientY, 0.18);
-    }
-    function onDown(event: PointerEvent) { pluck(event.clientX, event.clientY, 0.55); }
-    function onResize() { resize(); if (still) draw(now()); }
 
-    resize();
-    window.addEventListener("resize", onResize);
-    if (still) { draw(start); return () => window.removeEventListener("resize", onResize); }
-    document.addEventListener("visibilitychange", onVisibility);
-    window.addEventListener("pointermove", onPointer, { passive: true });
-    window.addEventListener("pointerdown", onDown, { passive: true });
-    frame = requestAnimationFrame(loop);
+    draw();
+    window.addEventListener("resize", relayout);
+    // Colours come from tokens, which follow the system scheme and the root element.
+    const scheme = typeof window.matchMedia === "function" ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+    scheme?.addEventListener?.("change", relayout);
+    const theme = typeof MutationObserver === "function" ? new MutationObserver(relayout) : null;
+    theme?.observe(document.documentElement, { attributes: true, attributeFilter: ["class", "style", "data-theme"] });
     return () => {
-      cancelAnimationFrame(frame);
-      window.removeEventListener("resize", onResize);
-      document.removeEventListener("visibilitychange", onVisibility);
-      window.removeEventListener("pointermove", onPointer);
-      window.removeEventListener("pointerdown", onDown);
+      if (layout) cancelAnimationFrame(layout);
+      window.removeEventListener("resize", relayout);
+      scheme?.removeEventListener?.("change", relayout);
+      theme?.disconnect();
     };
   }, []);
   return <div className="wave-field" aria-hidden="true"><canvas ref={canvas} /></div>;
+}
+
+// The selected-tab wave moves 1 px at this rate, forever. One timer moves every
+// underline at once, and no CSS animation runs, so the window presents exactly
+// these frames for it (each costs about 1 % of a core in Qt WebEngine).
+export const WAVE_HZ = 8;
+const WAVE_PERIOD = 12;
+let waveTicker: { users: number; stop: () => void } | null = null;
+
+/** Starts the shared underline timer; the returned function releases it. */
+export function startWaveTicker() {
+  if (typeof window === "undefined" || reducedMotion()) return () => {};
+  if (!waveTicker) {
+    const lines = document.getElementsByClassName("wave-underline") as HTMLCollectionOf<HTMLElement>;
+    let shift = 0, timer = 0;
+    const step = () => {
+      shift = (shift + 1) % WAVE_PERIOD;
+      for (const line of Array.from(lines)) line.style.setProperty("--wave-shift", `-${shift}px`);
+    };
+    // A hidden window shows nothing, so it moves nothing.
+    const run = () => {
+      window.clearInterval(timer);
+      timer = document.visibilityState === "hidden" ? 0 : window.setInterval(step, 1000 / WAVE_HZ);
+    };
+    run();
+    document.addEventListener("visibilitychange", run);
+    waveTicker = { users: 0, stop: () => { window.clearInterval(timer); document.removeEventListener("visibilitychange", run); } };
+  }
+  const ticker = waveTicker;
+  ticker.users += 1;
+  return () => {
+    ticker.users -= 1;
+    if (!ticker.users && waveTicker === ticker) { ticker.stop(); waveTicker = null; }
+  };
 }
 
 // A string fixed at both ends, drawn at several moments of its vibration.
@@ -290,26 +189,16 @@ export function WaveLoader({ label, size = 120 }: { label?: string; size?: numbe
   </span>;
 }
 
-/**
- * Step progress drawn as a string between stars. The finished stretch carries
- * a travelling wave; each step change plucks it.
- */
+/** Step progress drawn as a string between stars. The finished stretch carries a travelling wave. */
 export function WaveProgress({ steps, current, done = [] }: { steps: string[]; current: number; done?: number[] }) {
   const id = useId().replace(/:/g, "");
-  const line = useRef<SVGSVGElement>(null);
   const width = 600, period = 40;
   const span = steps.length > 1 ? width / (steps.length - 1) : width;
   const reached = Math.max(0, Math.min(steps.length - 1, current)) * span;
   let wave = "M0 12";
   for (let x = 0; x <= width + period; x += 2) wave += ` L${x} ${(12 + Math.sin((x / period) * Math.PI * 2) * 3).toFixed(2)}`;
-  useEffect(() => {
-    const element = line.current;
-    if (!element || typeof element.getBoundingClientRect !== "function") return;
-    const box = element.getBoundingClientRect();
-    if (box.width) pluck(box.left + (reached / width) * box.width, box.top + box.height / 2, 1);
-  }, [reached]);
   return <div className="wave-progress">
-    <svg ref={line} viewBox={`0 0 ${width} 24`} preserveAspectRatio="none" aria-hidden="true" className="wave-progress-line"
+    <svg viewBox={`0 0 ${width} 24`} preserveAspectRatio="none" aria-hidden="true" className="wave-progress-line"
       style={{ left: `${50 / steps.length}%`, width: `${100 - 100 / steps.length}%` }}>
       <defs>
         <linearGradient id={`${id}p`} x1="0" x2={width} gradientUnits="userSpaceOnUse"><stop offset="0" style={{ stopColor: "var(--wave-1)" }} /><stop offset="1" style={{ stopColor: "var(--wave-3)" }} /></linearGradient>

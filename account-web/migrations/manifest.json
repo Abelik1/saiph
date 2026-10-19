@@ -13,5 +13,10 @@
     "version": 3,
     "file": "0003_paid_hosted.sql",
     "sha256": "e156e85386e79105f09d5c1c0ad8ca3f9964fd3760aa813c5cb68db479d07e63"
+  },
+  {
+    "version": 4,
+    "file": "0004_free_trial.sql",
+    "sha256": "a6d9ff17e8390d9589dbca761fb069c353dd77772a07d7ce7e00860682b886cb"
   }
 ]

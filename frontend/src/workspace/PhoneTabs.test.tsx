@@ -167,12 +167,12 @@ describe("Phone tabs", () => {
       existing: false,
       name: "Photo.jpg",
       path: "/home/owner/Downloads/Orion/Photo.jpg",
-      folder: "Downloads → Orion",
+      folder: "Downloads → Saiph",
       file_id: "f1",
     });
     await waitFor(() =>
       expect(screen.getByRole("status")).toHaveTextContent(
-        "Saved to Downloads → Orion",
+        "Saved to Downloads → Saiph",
       ),
     );
     expect(screen.getByRole("status")).toHaveAttribute(
@@ -215,7 +215,7 @@ describe("Phone tabs", () => {
             {
               ...saving.photo_saves[0],
               status: "saved",
-              folder: "Downloads → Orion",
+              folder: "Downloads → Saiph",
               path: "/p/Photo.jpg",
               file_id: "f1",
               updated_at: "2",
@@ -227,7 +227,7 @@ describe("Phone tabs", () => {
       />,
     );
     expect(screen.getByRole("status")).toHaveTextContent(
-      "Saved to Downloads → Orion",
+      "Saved to Downloads → Saiph",
     );
     rerender(
       <PhoneTabs

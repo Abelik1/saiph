@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { Client, MicrophoneStatus, Settings } from "./types";
-import { Action, Card } from "./ui";
+import { Action } from "./ui";
+import { PreferenceCard as Card } from "./PreferenceCard";
 import { SettingsShortcut } from "./Navigation";
 import { Mic, MicOff } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "@/components/ui/item";
+import { Disclosure } from "@/components/ui/disclosure";
 
 export function PhoneMicrophone({
   microphone,
@@ -78,14 +80,11 @@ export function MicrophoneSettings({
       title="Phone microphone"
       subtitle="Optional audio input for your meeting app."
     >
-      <p>
-        Capture starts only when you choose it on Phone. Mute stops phone
-        capture. Stop removes Saiph’s temporary audio route. Camera sharing is
-        separate.
-      </p>
-      <p className="muted">{microphone?.message}</p>
-      <p>Phone microphone sharing: {enabled ? "Enabled" : "Off"}</p>
+      <p role="status"><Badge tone={enabled ? "good" : "quiet"}>{enabled ? "Enabled" : "Off"}</Badge></p>
+      <p>Start and stop capture from Phone. Mute stops microphone capture.</p>
+      {microphone?.message && <p>{microphone.message}</p>}
       <Action
+        variant="tonal"
         run={() =>
           client.call("settings.save", {
             link: { microphone: { enabled: !enabled } },
@@ -94,8 +93,7 @@ export function MicrophoneSettings({
       >
         {enabled ? "Turn off phone microphone" : "Enable phone microphone"}
       </Action>
-      <details className="device-setup-guide">
-        <summary>One-time microphone setup</summary>
+      <Disclosure summary="Microphone setup">
         <p>Use scrcpy 3.3.4 with SDL2.</p>
         {platform !== "windows" && (
           <p>
@@ -113,17 +111,13 @@ export function MicrophoneSettings({
           </p>
         )}
         <Action
-          className="text-button"
+          variant="tonal"
           run={() => client.call("microphone.help")}
         >
           Open microphone setup guide
         </Action>
-      </details>
-      <p className="muted">
-        Use headphones to prevent feedback. Readiness does not prove audible
-        meeting delivery. Microphone capture remains experimental until verified
-        with your phone.
-      </p>
+        <p>Use headphones to prevent feedback. Microphone sharing is experimental; check sound in your meeting app before use.</p>
+      </Disclosure>
     </Card>
   );
 }

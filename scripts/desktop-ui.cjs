@@ -4,6 +4,29 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { parseArgs } = require("node:util");
 const { pathToFileURL } = require("node:url");
+const { execFileSync } = require("node:child_process");
+const { createHash } = require("node:crypto");
+
+function verifyInstalledSession(session) {
+  if (process.platform !== "win32" || session.mode !== "live" || !session.existing_profile
+    || !path.isAbsolute(session.executable || "") || !/^[a-f0-9]{64}$/.test(session.executable_sha256 || "")) {
+    throw new Error("Installed UI control needs an explicitly authorized Windows live session.");
+  }
+  const digest = createHash("sha256").update(fs.readFileSync(session.executable)).digest("hex");
+  const dashboard = path.join(path.dirname(session.executable), "_internal", "frontend", "dist", "index.html");
+  if (pathToFileURL(dashboard).href !== session.dashboard) throw new Error("Installed dashboard is outside the verified package.");
+  const discovery = JSON.parse(fs.readFileSync(path.join(session.profile, "api.json"), "utf8"));
+  if (digest !== session.executable_sha256 || discovery.pid !== session.pid) throw new Error("Installed app identity/profile changed.");
+  const check = `$ErrorActionPreference='Stop'; $expectedProcessId=[int]$env:SAIPH_UI_PID; $expectedPort=[int]$env:SAIPH_UI_PORT; `
+    + `$app=Get-CimInstance Win32_Process -Filter ('ProcessId='+$expectedProcessId); `
+    + `if(-not $app -or $app.ExecutablePath -ine $env:SAIPH_UI_EXE){throw 'Executable mismatch'}; `
+    + `$listeners=@(Get-NetTCPConnection -State Listen -LocalPort $expectedPort -ErrorAction Stop); `
+    + `if(-not ($listeners | Where-Object {$_.OwningProcess -eq $expectedProcessId -and $_.LocalAddress -in @('127.0.0.1','::1')})){throw 'Debug port belongs to another process'}; 'verified'`;
+  execFileSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", check], {
+    env: { ...process.env, SAIPH_UI_PID: String(session.pid), SAIPH_UI_PORT: new URL(session.endpoint).port, SAIPH_UI_EXE: session.executable },
+    windowsHide: true, timeout: 15000, stdio: ["ignore", "pipe", "pipe"],
+  });
+}
 
 function readSession(file) {
   const session = JSON.parse(fs.readFileSync(file, "utf8"));
@@ -20,11 +43,17 @@ function readSession(file) {
 
 async function connectDesktop(file) {
   const session = readSession(file);
+  if (session.installed) verifyInstalledSession(session);
   const playwright = require(process.env.SAIPH_UI_PLAYWRIGHT_PATH || path.resolve(__dirname, "../frontend/node_modules/@playwright/test"));
   const browser = await playwright.chromium.connectOverCDP(session.endpoint, { noDefaults: true, timeout: 15000 });
   try {
     const candidates = browser.contexts().flatMap(context => context.pages()).filter(page => page.url() === session.dashboard);
     for (const page of candidates) {
+      if (session.installed && await page.evaluate(() => window.__saiphUISession) === undefined) {
+        // Only our exact installed process, loopback listener, retained profile
+        // and packaged dashboard may acquire the control marker above.
+        await page.evaluate(nonce => { window.__saiphUISession = nonce; }, session.nonce);
+      }
       if (await page.evaluate(() => window.__saiphUISession) === session.nonce) {
         page.setDefaultTimeout(15000);
         return { browser, page, session, expect: playwright.expect };
@@ -88,6 +117,7 @@ async function main(args = process.argv.slice(2)) {
         await flow(connection); break;
       }
       case "stop":
+        if (connection.session.installed) throw new Error("Close an installed session using Saiph's native Quit control.");
         fs.writeFileSync(path.join(path.dirname(path.resolve(values.session)), "stop-request.json"), JSON.stringify({ nonce: connection.session.nonce }));
         break;
     }
@@ -96,5 +126,5 @@ async function main(args = process.argv.slice(2)) {
   }
 }
 
-module.exports = { connectDesktop, readSession, main };
+module.exports = { connectDesktop, readSession, verifyInstalledSession, main };
 if (require.main === module) main().catch(error => { console.error(error.message); process.exitCode = 1; });

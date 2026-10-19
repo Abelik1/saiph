@@ -95,6 +95,9 @@ def audit_bundle(bundle, platform):
 
 def license_inventory(destination, analysis, frontend):
     """Record packages represented in the actual PyInstaller analysis, not every pip tool."""
+    lock = frontend / 'package-lock.json'
+    if not lock.is_file():
+        raise ValueError('Frontend licence inventory requires the source package-lock.json and installed dependencies')
     import importlib.util
     spec = importlib.util.spec_from_file_location('distribution_native_notices', HERE / 'native_notices.py')
     native_notices = importlib.util.module_from_spec(spec)
@@ -122,7 +125,6 @@ def license_inventory(destination, analysis, frontend):
                          'license': distribution.metadata.get('License-Expression') or distribution.metadata.get('License'),
                          'project_urls': distribution.metadata.get_all('Project-URL') or [], 'notices': notices})
     npm = []
-    lock = frontend / 'package-lock.json'
     if lock.is_file():
         for path, data in json.loads(lock.read_text(encoding='utf-8')).get('packages', {}).items():
             if not path or data.get('dev') is True: continue
@@ -190,6 +192,24 @@ def aligned_padding(length, alignment=8):
     return -length % alignment
 
 
+def add_network_relay(staging, compiler):
+    """Compile SaiphNetwork.exe beside app/; the installer keeps it at one fixed path.
+
+    Windows Firewall rules name a program path and every release has a new one,
+    so Saiph's local listeners go through this relay (src/orion_mini/lan_relay.py).
+    """
+    relay = staging / 'SaiphNetwork.exe'
+    if relay.exists():
+        raise ValueError('Staging already contains SaiphNetwork.exe')
+    subprocess.run([str(compiler), '/nologo', '/target:winexe', '/optimize+', '/platform:x64', '/out:' + str(relay),
+                    str(HERE / 'WindowsNetworkRelay.cs')], check=True)
+    manifest_path = staging / 'package-manifest.json'
+    manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+    manifest.setdefault('files', []).append({'path': 'SaiphNetwork.exe', 'bytes': relay.stat().st_size, 'sha256': digest(relay)})
+    manifest_path.write_text(json.dumps(manifest, indent=2), encoding='utf-8')
+    return manifest
+
+
 def build_windows(staging, output, compiler):
     from windows_metadata import write_assembly_metadata
     staging, output, compiler = staging.absolute(), output.absolute(), compiler.absolute()
@@ -197,7 +217,7 @@ def build_windows(staging, output, compiler):
     metadata_path = output.with_suffix('.assembly.cs')
     if any(path.exists() or path.is_symlink() for path in (stub, metadata_path, output.with_suffix('.payload.zip'))):
         raise ValueError('Installer temporary outputs already exist; choose a fresh output directory')
-    manifest = json.loads((staging / 'package-manifest.json').read_text(encoding='utf-8'))
+    manifest = add_network_relay(staging, compiler)
     write_assembly_metadata(metadata_path, manifest['version'], manifest['build'], manifest['profile'])
     subprocess.run([str(compiler), '/nologo', '/target:winexe', '/optimize+', '/platform:x64', '/out:' + str(stub),
                     '/reference:System.Windows.Forms.dll', '/reference:System.Drawing.dll',

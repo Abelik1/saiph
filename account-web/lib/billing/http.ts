@@ -2,11 +2,12 @@
 import {timingSafeEqual} from "node:crypto";
 import type Stripe from "stripe";
 import {billingHeaders,maySubscribe,readBillingConfig,reportBillingConfig,type BillingConfig,type PlanKey} from "./policy.ts";
-import {BillingConflict,WithdrawalUnavailable,checkout,grantPolicy,portal,processWebhook,eventDescriptor,withdraw,type BillingStore} from "./service.ts";
+import {BillingConflict,TrialUnavailable,WithdrawalUnavailable,checkout,grantPolicy,portal,processWebhook,eventDescriptor,startTrial,withdraw,type BillingStore} from "./service.ts";
+import {checkTrialConfig,validEmailKey} from "./trial.mjs";
 import {syncGrants} from "./grant-sync.mjs";
 import type {GrantValue} from "./grant-push.mjs";
 import {secondFactorRequired} from "../beta-policy.mjs";
-export type Dependencies={env:NodeJS.ProcessEnv;getSession:()=>Promise<{user:{sub?:string;mfa?:unknown}}|null>;
+export type Dependencies={env:NodeJS.ProcessEnv;getSession:()=>Promise<{user:{sub?:string;mfa?:unknown;trialKey?:unknown}}|null>;
   createStripe:(config:BillingConfig)=>Stripe;
   withStore:<T>(config:BillingConfig,callback:(store:BillingStore)=>Promise<T>)=>Promise<T>;
   pushGrant:(config:BillingConfig,value:GrantValue)=>Promise<boolean>};
@@ -77,6 +78,38 @@ export async function withdrawAction(request:Request,deps:Dependencies):Promise<
   } catch (error) {
     if (error instanceof WithdrawalUnavailable) return reply(409,"There is no subscription within its 14-day withdrawal period on this account.");
     return reply(503,"Withdrawal is temporarily unavailable. Please try again shortly or contact support@usesaiph.com.");
+  }
+}
+/** Free trial: exactly `trial=start` from the account's own form, no card. */
+export async function trialAction(request:Request,deps:Dependencies):Promise<Response> {
+  if (request.method!=="POST") return reply(405,"Method not allowed.");
+  const config=readBillingConfig(deps.env);if(!config) return reportBillingConfig(deps.env), reply(503,"Free trials are not available yet.");
+  const {config:trial,problems}=checkTrialConfig(deps.env);
+  if (!trial) {if (problems.length) console.error("Free trials are off; these settings were rejected: "+problems.join(", "));return reply(503,"Free trials are not available right now.");}
+  if (request.headers.get("origin")!==config.origin || request.headers.get("sec-fetch-site") && request.headers.get("sec-fetch-site")!=="same-origin"
+    || new URL(request.url).search) return reply(403,"Request rejected.");
+  try {
+    const body=await boundedBody(request,256);
+    const fields=request.headers.get("content-type")?.split(";")[0].trim()==="application/x-www-form-urlencoded"
+      ? [...new URLSearchParams(body.toString("utf8")).entries()] : [];
+    if (fields.length!==1 || fields[0][0]!=="trial" || fields[0][1]!=="start") return reply(400,"Start the trial from your account page.");
+  } catch {return reply(400,"Request rejected.");}
+  try {
+    const session=await deps.getSession();if(!session) return reply(401,"Sign in required.");
+    const subject=session.user.sub;
+    if(!maySubscribe(config,subject) || secondFactorRequired(deps.env) && session.user.mfa!==true) return reply(403,"Access denied.");
+    // The email key comes only from the verified sign-in (lib/auth.ts), never the browser.
+    const emailKey=session.user.trialKey;
+    if (!validEmailKey(emailKey)) return reply(401,"Sign out and sign in again to start your free trial.");
+    await deps.withStore(config,store=>startTrial(store,config,trial,subject,emailKey as string,value=>deps.pushGrant(config,value)));
+    return new Response(null,{status:303,headers:{...billingHeaders,Location:config.origin+"/account?trial=started"}});
+  } catch (error) {
+    if (error instanceof TrialUnavailable) return reply(409,{
+      subscribed:"This account already has a subscription, so it does not need a free trial.",
+      used:"A free trial has already been used with this email address. Subscribe on your account page to continue.",
+      full:"All free trial places have been taken. You can still subscribe on your account page.",
+    }[error.state]);
+    return reply(503,"Your trial could not be activated just now. Press Start free trial again in a minute; you will not get a second trial or lose days.");
   }
 }
 export async function webhook(request:Request,deps:Dependencies):Promise<Response> {

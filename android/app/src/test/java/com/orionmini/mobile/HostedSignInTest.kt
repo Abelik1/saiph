@@ -17,4 +17,12 @@ class HostedSignInTest {
         for (issuer in listOf("https://auth.synthetic.invalid/", "https://auth0.com.evil.invalid/", "https://notauth0.com/"))
             assertFalse(HostedSignIn.parameters(issuer, "synthetic-audience").containsKey("connection"))
     }
+    @Test fun untrustedFailureTextCannotReachTheSignInNotice() {
+        val privateBody = "synthetic-token https://synthetic.invalid/callback?code=private-code"
+        val issue = HostedSignIn.issue(IllegalStateException(privateBody))
+        assertEquals(HostedSignInIssue.UNAVAILABLE, issue)
+        assertFalse(issue.message.contains("synthetic-token"))
+        assertFalse(issue.message.contains("private-code"))
+        assertFalse(issue.message.contains("https://"))
+    }
 }

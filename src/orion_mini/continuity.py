@@ -38,14 +38,16 @@ def received_file_handoff(workspace, item_id):
             raise ValueError()
         destination = received.get("destination", "downloads")
         if destination == "downloads":
-            directory = Path.home() / "Downloads" / "Orion"
+            from .paths import received_dir
+            # Files received before every transfer used Downloads → Saiph stay openable.
+            directories = (received_dir(), Path.home() / "Downloads" / "Orion")
         elif destination == "cloud":
             from .cloud import ensure_layout
-            directory = ensure_layout(workspace.settings) / "Shared"
+            directories = (ensure_layout(workspace.settings) / "Shared",)
         else:
             raise ValueError()
         path = Path(received["path"]).resolve(strict=True)
-        if not path.is_file() or path.parent != directory.resolve():
+        if not path.is_file() or path.parent not in {directory.resolve() for directory in directories}:
             raise ValueError()
         return path
     except (OSError, ValueError, KeyError, TypeError):

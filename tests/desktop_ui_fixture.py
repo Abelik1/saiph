@@ -7,8 +7,10 @@ from PySide6.QtCore import QTimer, QByteArray, QBuffer, QIODevice
 from PySide6.QtGui import QImage, QPainter, QLinearGradient, QColor
 from PySide6.QtWidgets import QApplication
 import orion_mini.app as desktop
+from orion_mini.dashboard_view import prepare_web_engine
 # Exercise the installed Link edition's real services in an isolated test profile.
 desktop.workspace_installed=lambda:False
+prepare_web_engine()
 app=QApplication([])
 root=Path(sys.argv[1]).resolve();root.mkdir(parents=True,exist_ok=True)
 window=desktop.MainWindow(root,bootstrap=False)

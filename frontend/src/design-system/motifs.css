@@ -2,8 +2,9 @@
 /*
  * Saiph's motifs that Tailwind classes cannot spell out: the string squiggle and the
  * disclosure chevron as masks (so their colour is always a token), and the motion
- * they use. Every animation here moves with transform or opacity only, so the
- * compositor runs it without repainting the page.
+ * they use. Selected tabs keep their wave moving, stepped at a low rate; broad
+ * status accents settle after a short animation to bound their native
+ * compositing cost (docs/DESKTOP_PERFORMANCE.md).
  */
 @layer components {
   /* A short ringing string under the selected tab or nav item. Both ends fade out,
@@ -16,6 +17,7 @@
     height: 8px;
     margin-left: -20px;
     overflow: hidden;
+    contain: paint;
     pointer-events: none;
     -webkit-mask: linear-gradient(90deg, transparent, currentColor 35%, currentColor 65%, transparent);
     mask: linear-gradient(90deg, transparent, currentColor 35%, currentColor 65%, transparent);
@@ -27,7 +29,10 @@
     background: var(--wave-2);
     -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='6' viewBox='0 0 12 6'%3E%3Cpath d='M0 3 Q3 0 6 3 T12 3' fill='none' stroke='black' stroke-width='1.6'/%3E%3C/svg%3E") repeat-x 0 50% / 12px 6px;
     mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='6' viewBox='0 0 12 6'%3E%3Cpath d='M0 3 Q3 0 6 3 T12 3' fill='none' stroke='black' stroke-width='1.6'/%3E%3C/svg%3E") repeat-x 0 50% / 12px 6px;
-    animation: saiph-wave-slide 1.2s linear infinite;
+    /* Moved forever by one shared timer (waves.tsx, startWaveTicker): 1 px eight
+       times a second. A CSS animation would wake the compositor every display
+       frame even between steps, and each presented frame costs CPU in Qt. */
+    transform: translateX(var(--wave-shift, 0px));
     will-change: transform;
   }
 
@@ -56,16 +61,26 @@
     width: 200%;
     height: 1px;
     background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--wave-2) 80%, transparent), color-mix(in srgb, var(--wave-3) 70%, transparent), transparent 50%, color-mix(in srgb, var(--wave-2) 80%, transparent), color-mix(in srgb, var(--wave-3) 70%, transparent), transparent);
-    animation: saiph-sweep 6s linear infinite;
-    will-change: transform;
+    animation: saiph-sweep 6s linear 1;
   }
 
-  @keyframes saiph-wave-slide { to { transform: translateX(-12px); } }
+  /* The footer's Update button: a still glow, and three slow breaths when it first
+     appears. Finite on purpose: an endless glow would repaint the window forever. */
+  .update-glow {
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 40%, transparent), 0 0 12px color-mix(in srgb, var(--primary) 45%, transparent);
+    animation: saiph-update-breathe 2.4s var(--ease) 3;
+  }
+
+  @keyframes saiph-update-breathe {
+    50% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 55%, transparent), 0 0 22px color-mix(in srgb, var(--primary) 65%, transparent); }
+  }
+
   @keyframes saiph-sweep { to { transform: translateX(-50%); } }
   @keyframes saiph-rise { from { opacity: 0; transform: translateY(8px); } }
 
   @media (prefers-reduced-motion: reduce) {
-    .wave-underline::before, .string-edge::before { animation: none; }
+    .string-edge::before { animation: none; }
+    .update-glow { animation: none; }
     .disclosure-chevron { transition: none; }
   }
 }

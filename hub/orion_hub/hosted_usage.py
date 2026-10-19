@@ -100,6 +100,8 @@ def classify(method: str, path: str) -> str | None:
         return "download.file"
     if path in ("/v1/beta/redeem", "/v1/beta/access", "/v1/beta/download"):
         return "beta." + path.rsplit("/", 1)[1]
+    if path.startswith("/v1/app/desktop/"):
+        return "desktop.release" if path.endswith("/release") else "desktop.download"
     if path == "/v1/account":
         return "account"
     if path.startswith("/v1/devices/"):

@@ -171,6 +171,8 @@ class HostedHttpTransport private constructor(
         raw
     }
 
+    /** This account's Cloud access (free trial end, grant kinds); readable without a grant. */
+    fun access(accessToken: String): JsonObject = call("GET", "/v1/access", token = accessToken, maximum = 4096)
     fun submitEnrollment(accessToken: String): JsonObject = call("POST", "/v1/devices/requests", session.enrollment(), accessToken)
 
     /** Hands this phone's signed request to the service so the computer can show it without pasting. */

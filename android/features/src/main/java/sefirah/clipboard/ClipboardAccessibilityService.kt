@@ -29,6 +29,7 @@ class ClipboardAccessibilityService : AccessibilityService() {
     @Inject lateinit var deviceManager: DeviceManager
     @Inject lateinit var workerManager: WorkerManager
     @Inject lateinit var clipboardFeature: ClipboardFeature
+    @Inject lateinit var networkManager: sefirah.domain.interfaces.NetworkManager
 
     private lateinit var clipboardDetector: ClipboardDetection
 
@@ -92,6 +93,7 @@ class ClipboardAccessibilityService : AccessibilityService() {
     override fun onInterrupt() {}
 
     private fun isAnyDeviceConnected(): Boolean = runBlocking {
+        if (networkManager.clipboardConnectionMode == "cloud") return@runBlocking !networkManager.clipboardDeviceId().isNullOrEmpty()
         deviceManager.pairedDevices.first().any {
             it.connectionState.isConnected || it.connectionState.isConnecting
         }

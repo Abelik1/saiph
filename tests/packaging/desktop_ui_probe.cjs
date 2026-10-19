@@ -108,13 +108,11 @@ const {
   );
   await page.screenshot({ path: out + "/settings.png" });
   await page.getByRole("tab", { name: "Connections" }).click();
-  await expect(page.getByLabel("Saiph Hub address")).toBeVisible();
-  expect(
-    await page
-      .locator(".settings-content label.check")
-      .first()
-      .evaluate((el) => getComputedStyle(el).flexDirection),
-  ).toBe("row");
+  // Connections lays its preferences out as visible switch rows, like Settings → Phone.
+  await expect(page.getByRole("switch", { name: "Share clipboard" })).toBeVisible();
+  await expect(
+    page.locator(".settings-content details:not([data-slot=disclosure])"),
+  ).toHaveCount(0);
   await page
     .getByLabel("Cloud folder", { exact: true })
     .fill("/tmp/synthetic-cloud-draft");

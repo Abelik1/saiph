@@ -1,0 +1,23 @@
+{
+ "phone_private": "1111111111111111111111111111111111111111111111111111111111111111",
+ "computer_private": "2222222222222222222222222222222222222222222222222222222222222222",
+ "phone_public": "BAIX5hfwtkQ5KCePlpmeaaI6TywVK99tbN9m5bgCgtTtGUp968uXcS0t2jyoWqh2Wlb0X8dYWZZS8ol8ZTBuV5Q",
+ "computer_public": "BNZak5d8qj0bCBhS_1ennkZfFmBXcwS66tUF3TpIWJzzUBheiVNy32Ih6joTdVfkc_3bZ1XwW9UHw8Uz_OnJEoU",
+ "phone_nonce": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+ "computer_nonce": "ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8",
+ "root_code": "orion-root-v1:{\"data\":{\"synthetic\":true},\"signature\":\"AAAA\"}",
+ "commit": "8iwHu04Idn7DIkRSmjF-O0-NtfdEqWf5St8JYHgHb68",
+ "transcript": "9c9bcb17a43581c939f86eb1ebaf0b0c85a43fd7c6a7f263ce6683cfb2991226",
+ "shared": "ccfc261f58193c98ca4ad4a53bbac6f0ee29bc4d48438090446908622ca79af6",
+ "code": "713 284",
+ "mac_key": "8412554c50a796fe48300851acfcd4b9a5ab990ec4bb68cae5b09fb1dd4e24a0",
+ "request_code": "orion-approve-v1:{\"data\":{\"synthetic\":true},\"signature\":\"BBBB\"}",
+ "request_mac": "qf6gHYzq4jRE-MsRj7eEX8fJzaLujR03mwrg0LBYzfU",
+ "received_mac": "HVX0ICCGqfmqZ6DZprHq6dqO17aFDDnamo_7I2Ybz78",
+ "hello": {
+  "type": "link.hello",
+  "version": 1,
+  "commit": "8iwHu04Idn7DIkRSmjF-O0-NtfdEqWf5St8JYHgHb68",
+  "name": "Pixel"
+ }
+}

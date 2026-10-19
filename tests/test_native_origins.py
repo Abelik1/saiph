@@ -47,6 +47,25 @@ def test_native_audit_records_actual_trusted_inputs_and_copied_bytes(tmp_path):
     assert report['files'][0]['path'] == '_internal/libssl.dll'
 
 
+def test_explicit_project_component_does_not_trust_its_entire_build_folder(tmp_path):
+    interpreter, source, bundle, target, analysis = native_fixture(tmp_path)
+    component = tmp_path / 'project/SaiphCamera64.dll'
+    component.parent.mkdir()
+    component.write_bytes(b'synthetic project camera')
+    destination = bundle / '_internal/camera/SaiphCamera64.dll'
+    destination.parent.mkdir()
+    destination.write_bytes(component.read_bytes())
+    analysis.write_text(repr([('libssl.dll', str(source), 'BINARY'),
+                             ('camera/SaiphCamera64.dll', str(component), 'BINARY')]))
+    with pytest.raises(ValueError, match='outside trusted'):
+        origins.audit_analysis(analysis, bundle, [interpreter])
+    report = origins.audit_analysis(analysis, bundle, [interpreter], {'camera/SaiphCamera64.dll': component})
+    assert len(report['files']) == 2
+    destination.write_bytes(b'changed component')
+    with pytest.raises(ValueError, match='differs'):
+        origins.audit_analysis(analysis, bundle, [interpreter], {'camera/SaiphCamera64.dll': component})
+
+
 def test_same_named_matching_ambient_dll_is_rejected(tmp_path):
     interpreter, source, bundle, target, analysis = native_fixture(tmp_path)
     ambient = tmp_path / 'python-unrelated/poppler/libssl.dll'

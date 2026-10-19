@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { PhonePanel } from "./PhonePanel";
 import { PhoneTabs } from "./PhoneTabs";
@@ -24,6 +24,21 @@ describe("Phone panel", () => {
     expect(screen.getByRole("radio", { name: "Ring" })).toHaveAttribute("aria-checked", "true");
     fireEvent.click(screen.getByRole("radio", { name: "Silent" }));
     await waitFor(() => expect(call).toHaveBeenCalledWith("phone.ringer", { device_id: "phone", mode: "silent" }));
+  });
+  it("turns Find phone into Stop ringing while the phone rings", async () => {
+    const call = vi.fn().mockResolvedValue({ queued: true });
+    const { rerender } = render(<PhonePanel features={empty} phone={phone(["ring"])} client={{ call } as unknown as Client} />);
+    fireEvent.click(screen.getByRole("button", { name: "Find phone" }));
+    await waitFor(() => expect(call).toHaveBeenCalledWith("phone.ring", { device_id: "phone" }));
+    rerender(<PhonePanel features={empty} phone={{ ...phone(["ring"]), ringing: true }} client={{ call } as unknown as Client} />);
+    const stop = screen.getByRole("switch", { name: "Stop ringing" });
+    expect(stop).toHaveAttribute("aria-checked", "true");
+    expect(screen.queryByRole("button", { name: "Find phone" })).toBeNull();
+    fireEvent.click(stop);
+    await waitFor(() => expect(call).toHaveBeenCalledWith("phone.ring.stop", { device_id: "phone" }));
+    // Stopped on the phone: the next state shows Find phone again.
+    rerender(<PhonePanel features={empty} phone={{ ...phone(["ring"]), ringing: false }} client={{ call } as unknown as Client} />);
+    expect(screen.getByRole("button", { name: "Find phone" })).toBeVisible();
   });
   it("shows nothing when the phone offers neither", () => {
     const { container } = render(<PhonePanel features={empty} phone={phone([])} client={{ call: vi.fn() } as unknown as Client} />);
@@ -81,17 +96,79 @@ describe("MMS pictures", () => {
 });
 
 describe("Phone apps", () => {
-  it("lists apps on request, filters, opens and pins", async () => {
-    const call = vi.fn(async (method: string) => method === "phone.apps"
-      ? { apps: [{ package: "com.spotify.music", name: "Spotify", system: false }, { package: "com.android.settings", name: "Settings", system: true }] } : { opened: true });
+  it("shows apps as tiles, filters, opens, pins and adds a menu shortcut", async () => {
+    const call = vi.fn(async (method: string, args?: Record<string, unknown>) => method === "phone.apps"
+      ? { apps: [{ package: "com.spotify.music", name: "Spotify", system: false }, { package: "com.android.settings", name: "Settings", system: true }],
+        pinned: [], usage: {}, icons: false }
+      : method === "phone.app.favorite" ? { pinned: args?.pinned ? [args.package] : [] } : { opened: true });
     render(<PhoneTabs features={empty} phone={phone([])} client={{ call } as unknown as Client} />);
     openTab("Apps");
-    await waitFor(() => expect(screen.getByText("Spotify")).toBeVisible());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Open Spotify" })).toBeVisible());
+    expect(screen.getByRole("list", { name: "All apps" })).toBeVisible();
     fireEvent.change(screen.getByLabelText("Find a phone app"), { target: { value: "spot" } });
-    expect(screen.queryByText("Settings")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Open Settings" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Open Spotify" }));
     await waitFor(() => expect(call).toHaveBeenCalledWith("phone.app.open", { device_id: "phone", package: "com.spotify.music", name: "Spotify" }));
-    fireEvent.click(screen.getByRole("button", { name: "Pin Spotify" }));
-    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Spotify was added to your apps menu."));
+    fireEvent.change(screen.getByLabelText("Find a phone app"), { target: { value: "" } });
+    // Opening counts locally, so the app appears under Most used straight away.
+    expect(within(screen.getByRole("list", { name: "Most used apps" })).getByRole("button", { name: "Open Spotify" })).toBeVisible();
+    fireEvent.contextMenu(screen.getAllByRole("button", { name: "Open Spotify" })[0]);
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Pin to the top" }));
+    await waitFor(() => expect(call).toHaveBeenCalledWith("phone.app.favorite", { device_id: "phone", package: "com.spotify.music", pinned: true }));
+    expect(await screen.findByRole("list", { name: "Pinned apps" })).toBeVisible();
+    fireEvent.contextMenu(within(screen.getByRole("list", { name: "Pinned apps" })).getByRole("button", { name: "Open Spotify" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /Add to (Start|apps) menu/ }));
+    await waitFor(() => expect(screen.getByText("Spotify was added to your apps menu.")).toBeVisible());
+    expect(call).toHaveBeenCalledWith("phone.app.pin", { package: "com.spotify.music", name: "Spotify" });
+  });
+  it("waits for the phone's Cloud answer without any USB debugging", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      let answers = 0;
+      const call = vi.fn(async (method: string) => method === "phone.apps"
+        ? (++answers < 3 ? { pending: true, source: "cloud" } : { apps: [{ package: "com.example.maps", name: "Maps", system: false }] })
+        : { live: false, session: "a".repeat(32) });
+      render(<PhoneTabs features={empty} phone={phone([])} client={{ call } as unknown as Client} />);
+      openTab("Apps");
+      await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+      expect(screen.getByText("Asking your phone for its apps…")).toBeVisible();
+      await act(async () => { await vi.advanceTimersByTimeAsync(4100); });
+      expect(screen.getByRole("button", { name: "Open Maps" })).toBeVisible();
+      expect(call.mock.calls.filter(([method]) => method === "phone.apps")).toHaveLength(3);
+      expect(call.mock.calls.some(([method]) => String(method).endsWith(".legacy"))).toBe(false);
+      fireEvent.click(screen.getByRole("button", { name: "Open Maps" }));
+      await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+      expect(call).toHaveBeenCalledWith("phone.app.open", { device_id: "phone", package: "com.example.maps", name: "Maps" });
+      expect(screen.getByText("Opening Maps once you start sharing on your phone.")).toBeVisible();
+    } finally { vi.useRealTimers(); }
+  });
+  it("offers no scrcpy route unless USB debugging is turned on in Settings → Advanced", async () => {
+    const call = vi.fn(async (method: string) => method === "phone.apps" ? { apps: [{ package: "com.spotify.music", name: "Spotify", system: false }] } : { opened: true });
+    render(<PhoneTabs features={empty} phone={phone([])} client={{ call } as unknown as Client} />);
+    openTab("Apps");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Open Spotify" })).toBeVisible());
+    expect(screen.queryByRole("button", { name: "Use USB debugging (scrcpy)" })).toBeNull();
+    expect(screen.queryByText(/scrcpy/i)).toBeNull();
+  });
+  it("keeps scrcpy windows as an advanced choice", async () => {
+    const call = vi.fn(async (method: string) => method === "phone.apps" ? { unavailable: true, message: "Start the phone screen to list its apps, or update Saiph on your phone." }
+      : method === "phone.apps.legacy" ? { apps: [{ package: "com.spotify.music", name: "Spotify", system: false }] } : { opened: true });
+    render(<PhoneTabs features={empty} phone={phone([])} client={{ call } as unknown as Client} usbDebugging />);
+    openTab("Apps");
+    expect(await screen.findByText(/Start the phone screen to list its apps/)).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Use USB debugging (scrcpy)" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Open Spotify" })).toBeVisible());
+    expect(screen.queryByRole("button", { name: "Show phone screen" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Open Spotify" }));
+    await waitFor(() => expect(call).toHaveBeenCalledWith("phone.app.open.legacy", { device_id: "phone", package: "com.spotify.music", name: "Spotify" }));
+  });
+  it("switches to Apps when a pinned phone app opens the screen", async () => {
+    const call = vi.fn(async () => ({ pending: true }));
+    const status = { state: "idle" as const, running: false, waiting: false, message: "", resolution: "1080p" as const, fps: 20 as const,
+      quality: "high" as const, input: false, delivered: false, device_id: null, launch: "", reveal: 0 };
+    const { rerender } = render(<PhoneTabs features={empty} phone={phone([])} client={{ call } as unknown as Client} screen={status} />);
+    expect(screen.getByRole("tab", { name: /Messages/ })).toHaveAttribute("aria-selected", "true");
+    rerender(<PhoneTabs features={empty} phone={phone([])} client={{ call } as unknown as Client} screen={{ ...status, reveal: 1 }} />);
+    await waitFor(() => expect(screen.getByRole("tab", { name: /Apps/ })).toHaveAttribute("aria-selected", "true"));
   });
 });

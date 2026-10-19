@@ -1,21 +1,34 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useId, useRef, useState } from "react";
 import type { Client, HostedConfig, HostedState } from "./types";
-import { Action, Card, Form } from "./ui";
+import { Action, Form } from "./ui";
+import { PreferenceCard as Card } from "./PreferenceCard";
 import { validQr } from "./PairingQr";
 import { HostedJoin } from "./HostedJoin";
 import { HostedSignIn } from "./HostedSignIn";
 import { useSettingsNavigation } from "./settingsNavigation";
+import { CloudTransfers, ReceivedFile } from "./CloudTransfers";
+import { CloudAccessNotice } from "./CloudAccessNotice";
 import { Button } from "@/components/ui/button";
 import { Disclosure } from "@/components/ui/disclosure";
 import { Field, Label } from "@/components/ui/field";
 import { Input, Textarea } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "@/components/ui/item";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ShieldCheck, ShieldOff } from "lucide-react";
+import { NotificationCard, relativeTime } from "./PhoneNotifications";
 
 type RootCode = {code: string; fingerprint: string; modules: string[]; expires_at: string; expires_in: number};
 type Request = {device_id: string; fingerprint: string; expires_at: number};
 type Offered = Request & {code: string};
 const emptyConfig: HostedConfig = {service_url: "", issuer: "", audience: "", client_id: "", refresh_tokens: false};
-const statuses: Record<string, string> = {off: "Off", starting: "Starting", setup: "Set up this computer", active: "Connected", signed_out: "Signed out", sign_in_required: "Sign in again", offline: "Offline; reconnecting", renewal_pending: "Waiting to renew device approvals", retrying: "Reconnecting", clock: "Check this computer's clock", keys_unavailable: "Cloud keys could not be unlocked", awaiting_approval: "Waiting for your main computer to approve this computer", removed: "Removed by your main computer"};
+const statuses: Record<string, string> = {off: "Off", starting: "Starting", setup: "Set up this computer", active: "Connected", signed_out: "Signed out", sign_in_required: "Sign in again", offline: "Offline; reconnecting", renewal_pending: "Waiting to renew device approvals", retrying: "Reconnecting", clock: "Check this computer's clock", keys_unavailable: "Cloud keys could not be unlocked", awaiting_approval: "Waiting for your main computer to approve this computer", removed: "Removed by your main computer", no_access: "Paused: no Cloud access"};
+
+/** "Main computer", "Phone" or "Computer": shown beside every approved device's own name. */
+function describe(member: {root: boolean; kind?: "phone" | "computer" | null}) {
+  return member.root ? "Main computer" : member.kind === "phone" ? "Phone" : member.kind === "computer" ? "Computer" : "Device";
+}
 
 /** Tells the person whether approving or removing devices needs their face, fingerprint or PIN. */
 export function VerificationNote({value}: {value?: string}) {
@@ -108,51 +121,95 @@ export function HostedApproveDevice({hosted, client, onApproved}: {hosted: Hoste
   </div>;
 }
 
+type SecurityEvent = NonNullable<HostedState["security_events"]>[number];
+/** Approvals and removals, newest first: one row each with when it happened. */
+export function DeviceChanges({events, now = Date.now()}: {events: SecurityEvent[]; now?: number}) {
+  const rows = [...events].sort((a, b) => b.at - a.at);
+  return <Disclosure summary="Recent device changes" meta={<Badge tone="quiet" className="tabular">{rows.length}</Badge>}>
+    <div className="grid gap-1" role="list" aria-label="Recent device changes">
+      {rows.map(event => <Item key={event.id} role="listitem" size="sm" className="px-0">
+        <ItemMedia className={event.kind === "added" ? "bg-status-on-surface text-status-on" : "bg-status-off-surface text-status-off"}>{event.kind === "added" ? <ShieldCheck /> : <ShieldOff />}</ItemMedia>
+        <ItemContent>
+          <ItemTitle>{event.kind === "added" ? "Approved" : "Removed"} {event.label}</ItemTitle>
+          <ItemDescription><time dateTime={new Date(event.at * 1000).toISOString()} title={new Date(event.at * 1000).toLocaleString()}>{relativeTime(event.at * 1000, now)}</time></ItemDescription>
+        </ItemContent>
+      </Item>)}
+    </div>
+  </Disclosure>;
+}
+
+type CloudNotification = NonNullable<HostedState["notifications"]>[number];
+/** The newest phone notification as a card, with how many more wait on the Phone page. */
+export function LatestNotification({notifications, client}: {notifications: CloudNotification[]; client: Client}) {
+  const [latest, ...rest] = [...notifications].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+  return <div className="grid gap-2" role="group" aria-label="Latest phone notification">
+    <p className="m-0 text-[12px] font-medium text-muted-foreground">Latest phone notification</p>
+    <NotificationCard row={latest} online dismiss={() => client.call("hosted.notification.dismiss", {id: latest.id})} />
+    {rest.length > 0 && <p className="muted">{rest.length === 1 ? "1 more notification" : `${rest.length} more notifications`} on the Phone page.</p>}
+  </div>;
+}
+
 /** Opt-in preview. Deployment values are public configuration; credentials stay native. */
 export function HostedSettings({hosted, client}: {hosted?: HostedState; client: Client}) {
   const { connectPhone } = useSettingsNavigation();
   const [config, setConfig] = useState<HostedConfig>(() => hosted?.config || emptyConfig);
   const [forget, setForget] = useState(false);
   const [target, setTarget] = useState("");
+  const fileTarget = useId();
   // Every other approved device; a joined computer also sends to its main computer.
   const members = hosted?.roster?.members.filter(member => member.self === undefined ? !member.root : !member.self) || [];
   const isMember = hosted?.role === "member";
   const enabled = hosted?.enabled === true;
   const signedIn = enabled && hosted?.account?.status === "signed_in";
   const active = enabled && signedIn && !!hosted?.roster;
-  return <Card title="Saiph Cloud" subtitle="Your phone and computers, connected through Saiph Cloud.">
-    <p role="status">{statuses[hosted?.status || "off"] || "Starting"}</p>
+  return <Card title="Saiph Cloud" subtitle="Your account and approved devices.">
+    <p role="status"><Badge tone={active ? "good" : enabled ? "attention" : "quiet"}>{statuses[hosted?.status || "off"] || "Starting"}</Badge></p>
     {!hosted?.available ? <p>This build does not include Cloud support.</p> : <>
       {hosted.identity && <Disclosure summary="Connection details">{isMember
         ? <p className="muted">This computer joined your account as another computer. Your main computer approves and removes devices and renews approvals; keep it online at least every 12 hours.</p>
         : <p className="muted">This computer approves your other devices. Keep it online to renew approvals every 8 hours. Devices stop syncing after 12 hours without renewal. Lost root keys cannot be recovered or transferred yet.</p>}</Disclosure>}
       {!hosted.configured && <><p>This build cannot connect to Saiph accounts. Download the current beta from your account page.</p>
-      <details><summary>Custom service (advanced)</summary><Form submit={() => client.call("hosted.configure", {...config})}>
+      <Disclosure summary="Custom service (advanced)"><Form submit={() => client.call("hosted.configure", {...config})}>
         {([['service_url', 'Cloud service address'], ['issuer', 'Sign-in issuer'], ['audience', 'API audience'], ['client_id', 'Desktop client ID']] as const).map(([key, title]) => <label key={key}>{title}<input value={config[key]} required disabled={enabled} onChange={event => setConfig({...config, [key]: event.target.value})} /></label>)}
         <label><input type="checkbox" checked={config.refresh_tokens} disabled={enabled} onChange={event => setConfig({...config, refresh_tokens: event.target.checked})} /> Keep me signed in using a protected rotating refresh token (requires deployment support)</label>
-        <button disabled={enabled}>Save deployment</button>
-      </Form></details></>}
+        <Button type="submit" variant="secondary" className="justify-self-start" disabled={enabled}>Save deployment</Button>
+      </Form></Disclosure></>}
       {hosted.self_hosted_paired ? <p>This computer is paired with a self-hosted Hub. Use a separate profile for Saiph Cloud.</p>
         : !signedIn && hosted.configured && <HostedSignIn hosted={hosted} client={client} />}
       {hosted.account?.error && <p role="alert">{hosted.account.error}</p>}
       {enabled && <>
-        {signedIn && <><p>Signed in</p><Action run={() => client.call("hosted.sign_out")}>Sign out</Action></>}
-        {signedIn && !isMember && (connectPhone ? <Button variant="tonal" onClick={connectPhone}>Connect a phone</Button> : <HostedRootCode hosted={hosted} client={client} />)}
-        {signedIn && !hosted.identity && <details><summary>Join as another computer</summary><HostedJoin client={client} waiting={false} /></details>}
+        {signedIn && <div className="flex flex-wrap items-center gap-3"><Action variant="tonal" run={() => client.call("hosted.sign_out")}>Sign out</Action></div>}
+        {signedIn && <CloudAccessNotice access={hosted.access} client={client} />}
+        {signedIn && !isMember && hosted.identity && hosted.fingerprint && <p className="muted">This computer's security code (a new computer compares it before joining): <code>{hosted.fingerprint}</code></p>}
+        {signedIn && !isMember && (connectPhone ? <Button variant="tonal" onClick={connectPhone}>Add a device</Button> : <HostedRootCode hosted={hosted} client={client} />)}
+        {signedIn && !hosted.identity && <Disclosure summary="Join as another computer"><HostedJoin client={client} waiting={false} /></Disclosure>}
         {signedIn && isMember && hosted.status === "awaiting_approval" && <HostedJoin client={client} waiting />}
         {isMember && hosted.root_fingerprint && <p className="muted">Main computer fingerprint: <code>{hosted.root_fingerprint}</code></p>}
         {active && <>
           {!isMember && !connectPhone && <HostedApproveDevice hosted={hosted} client={client} />}
           <Disclosure summary="Approved devices">
           <p>Approvals expire at {new Date(hosted.roster!.expires_at * 1000).toLocaleString()}.</p>
-          {members.map(member => <div className="list-row" key={member.id}><div className="grow"><b>{member.label}</b><small>{member.fingerprint}</small></div>{!isMember && <Action run={() => client.call("hosted.revoke", {device_id: member.id})}>Revoke {member.label}</Action>}</div>)}
+          {members.map(member => <div className="list-row" key={member.id}><div className="grow"><b>{member.label}</b><small>{describe(member)}</small><small>{member.fingerprint}</small></div>{!isMember && <Action run={() => client.call("hosted.revoke", {device_id: member.id})}>Revoke {member.label}</Action>}</div>)}
           </Disclosure>
-          {members.length > 0 && <><label>Send file to<select value={target} onChange={event => setTarget(event.target.value)}><option value="">Choose device</option>{members.map(member => <option key={member.id} value={member.id}>{member.label}</option>)}</select></label><Action disabled={!target} run={() => client.call("hosted.file.choose", {target})}>Choose file to send</Action></>}
-          {hosted.offers?.map(offer => <div className="list-row" key={offer.id}><span>{offer.name} ({offer.size} bytes)</span><Action run={() => client.call("hosted.file.save", {id: offer.id})}>Save {offer.name}</Action></div>)}
-          {!!hosted.security_events?.length && <details><summary>Recent device changes</summary>{hosted.security_events.map(event => <p key={event.id}>{event.kind === "added" ? "Approved" : "Removed"} {event.label} · {new Date(event.at * 1000).toLocaleString()}</p>)}</details>}
-          {hosted.notifications?.map(item => <div key={item.id}><b>{item.app}: {item.title}</b><p>{item.text}</p><Action run={() => client.call("hosted.notification.dismiss", {id: item.id})}>Dismiss notification</Action></div>)}
+          {members.length > 0 && <div className="flex flex-wrap items-end gap-2">
+            <Field label="Send file to" htmlFor={fileTarget} className="min-w-56 flex-1">
+              <Select value={target || undefined} onValueChange={setTarget}>
+                <SelectTrigger id={fileTarget}><SelectValue placeholder="Choose device" /></SelectTrigger>
+                <SelectContent>{members.map(member => <SelectItem key={member.id} value={member.id}>{member.label} · {describe(member)}</SelectItem>)}</SelectContent>
+              </Select>
+            </Field>
+            <Action variant="secondary" disabled={!target} run={() => client.call("hosted.file.choose", {target})}>Choose file to send</Action>
+          </div>}
+          {hosted.lan_notice && <div className="list-row" role="alert"><span className="grow">{hosted.lan_notice}</span>
+            <Action variant="tonal" run={() => client.call("hosted.firewall.open")}>Open firewall settings</Action></div>}
+          <CloudTransfers transfers={hosted.transfers} client={client} />
+          {!!hosted.offers?.length && <div className="mb-3 grid gap-1.5" aria-label="Files sent to this computer">
+            {hosted.offers.map(offer => <ReceivedFile key={offer.id} offer={offer} client={client} />)}
+          </div>}
+          {!!hosted.security_events?.length && <DeviceChanges events={hosted.security_events} />}
+          {!!hosted.notifications?.length && <LatestNotification notifications={hosted.notifications} client={client} />}
         </>}
-        {hosted.error && <p role="alert">{hosted.error}</p>}
+        {hosted.error && !(signedIn && hosted.error === hosted.access?.message) && <p role="alert">{hosted.error}</p>}
         <Action run={() => client.call("hosted.enable", {enabled: false})}>Turn off Cloud</Action>
       </>}
       {!enabled && hosted.identity && <><label><input type="checkbox" checked={forget} onChange={event => setForget(event.target.checked)} /> {isMember ? "Retire this computer's Cloud identity; remove it on your main computer too" : "Retire this computer's root identity; other devices will stop syncing when approvals expire"}</label><Action disabled={!forget} run={() => client.call("hosted.forget", {confirm: true})}>Forget Cloud on this computer</Action></>}

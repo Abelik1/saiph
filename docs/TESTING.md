@@ -37,6 +37,19 @@ isolated fixture or successful unit suite does not establish those results.
 
 ## Desktop UI control
 
+Integrated camera checks and their separate Windows/Android acceptance scope are
+documented in [PHONE_CAMERA.md](PHONE_CAMERA.md#verification-and-limits). Run
+`python -m pytest tests/test_camera_session.py tests/test_phone_camera.py tests/test_native_origins.py tests/test_desktop_distribution.py tests/test_windows_camera_registration.py -q`
+with isolated temporary folders. These use synthetic JPEG frames and loopback TLS;
+the native Windows test redirects camera registration into a disposable registry
+subtree rather than installing a system camera. `test_windows_camera_registration.py`
+runs the real installer with `--isolated` and `ORION_SETUP_CAMERA_TEST_ROOT`, which
+setup accepts only in that mode and only below `HKCU\Software\OrionMini\SetupCameraTests\`;
+it never reads or changes the real camera registrations. The registry views'
+WOW6432Node redirection is not exercised there. Android's camera instrumentation
+requires a fresh synthetic local invitation provisioned by the emulator harness;
+without one it deliberately skips, which must not be reported as camera acceptance.
+
 Agents can drive the real Qt desktop directly: switch tabs, click buttons, type
 into forms, use keyboard shortcuts and capture screenshots. Use these tools for
 routine desktop testing instead of asking the user to click or enter details.
@@ -105,6 +118,16 @@ needed. External provider sign-in, Windows Hello and physical phone prompts can
 still require the owner. Do not bypass them or treat isolated UI results as live
 connection, cryptography, installation or physical-device acceptance.
 
+An attended test explicitly authorized to use an existing paired desktop can add
+`--existing-profile ABSOLUTE_PROFILE_PATH --live --show`. Keep the new session
+directory outside source control. This reads and operates the selected profile in
+place, retaining its keys and pairing; it never copies owner data into a fixture.
+The launcher preserves its settings and holds the normal app lock before opening
+the workspace. A running instance causes refusal. Stop the session through the
+controller before reopening or updating the installed app. Use synthetic inputs
+and keep any private screen evidence outside the product repository. Fresh
+disposable profiles remain the default.
+
 For isolated frontend dependencies, set `SAIPH_UI_PLAYWRIGHT_PATH` to that copy's
 `node_modules/@playwright/test` directory. Qt WebEngine needs permission to start
 its renderer subprocesses; if an execution sandbox blocks this, request scoped
@@ -135,6 +158,18 @@ with synthetic fixtures over authorized USB debugging. Coordinate with the
 device owner first. Its results are attended physical evidence, kept privately,
 not unit-test results.
 
+Keep the native Qt fixture's event loop responsive during ADB and API waits:
+Windows can request delayed rendering from the clipboard owner. The helper must
+also be the foreground Android activity for paste checks; a completed share
+activity can remain above it. The harness clears activities above its own Pad
+before each command. Distinct A–B–A images establish replacement without empty
+clipboard writes between copies; test empty clipboard behavior separately.
+
+For interactive performance checks, use a visible session (`--show`) with the
+normal rendering settings. Only offscreen sessions force software rendering.
+Compare native request timing separately from automation click/readback timing,
+and record the rendering mode, installed version and profile scope.
+
 Public CI also scans source/history with gitleaks and audits Python/frontend
 dependencies. Review findings and fix affected dependencies; never suppress an
 entire file because it contains one synthetic fixture. Signing and final source
@@ -152,6 +187,18 @@ Do not run this class in an owner profile. JVM crypto tests do not replace it.
 
 ## Android callback and Cloud photo gallery regression
 
-In a fresh disposable emulator, run HostedCallbackInstrumentedTest and HostedPhotosInstrumentedTest. The first never exchanges a token: it validates pending state, PKCE, client/endpoints, replay/cancellation/expiry, legacy in-flight compatibility and compiled-manifest URI routing. The second writes/deletes one synthetic MediaStore image, grants only the test app photo permission, checks the separate opt-in and a bounded JPEG preview with preserved aspect ratio. It must not run on an owner phone/profile. Separately verify the distributed APK's exact signer against the live assetlinks.json and Android's actual domain verification result; never force a link approved to manufacture acceptance.
+In a fresh disposable emulator, run HostedCallbackInstrumentedTest and HostedPhotosInstrumentedTest. The first never exchanges a token: it validates pending state, PKCE, client/endpoints, replay/cancellation/expiry, legacy in-flight compatibility, restored pre-upgrade activity-result routing and compiled-manifest URI routing. The second writes/deletes one synthetic MediaStore image, grants only the test app photo permission, checks the separate opt-in and a bounded JPEG preview with preserved aspect ratio. It must not run on an owner phone/profile. Separately verify the distributed APK's exact signer against the live assetlinks.json and Android's actual domain verification result; never force a link approved to manufacture acceptance.
 
 The desktop synthetic gallery tests use real sealed envelopes and streaming encryption through an in-memory relay, check unrequested/stale original rejection and one saved copy per original. No live account, personal gallery or SMS is accessed.
+
+
+For the sharing follow-up, also run HostedAccountInstrumentedTest and
+HostedPermissionsInstrumentedTest in that disposable emulator. The first accepts
+only synthetic grants and tests actual Keystore refresh wrapping, rotation and
+account recreation. The second uses real Android permission dialogs to deny photo
+access and verifies the Settings fallback; it never enables gallery sharing.
+The permission-dialog matcher assumes the test emulator uses English. Keep the
+existing activity-result launcher registration order when adding launchers:
+Android retains the old generated keys during an APK update with browser sign-in
+open. The callback regression restores that old launch key using a cancelled
+result, so it never contacts an identity provider.

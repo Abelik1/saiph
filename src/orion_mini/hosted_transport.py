@@ -149,6 +149,17 @@ class HostedTransport:
             raise TransportError() from None
         return result["deployment_id"]
 
+    def access(self, access_token):
+        """This account's Cloud access (free trial end, grant kinds); None from a service without it."""
+        if access_token is None:
+            raise TransportError()
+        try:
+            return self._call("GET", "/v1/access", token=access_token)
+        except TransportError as error:
+            if error.status == 404:
+                return None
+            raise
+
     def account(self, access_token):
         if access_token is None:
             raise TransportError()

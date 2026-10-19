@@ -6,8 +6,8 @@ import SubscriptionCard from "./SubscriptionCard";
 import Link from "next/link";
 import {Icon, type IconName} from "../ui";
 
-type Access = {entitled: boolean; until: number | null; kinds: ("admin" | "beta" | "paid")[] | null};
-type Props = {billing: BillingView | "unavailable" | null; notice: "returned" | "cancelled" | null};
+type Access = {entitled: boolean; until: number | null; kinds: ("admin" | "beta" | "paid" | "trial")[] | null};
+type Props = {billing: BillingView | "unavailable" | null; notice: "returned" | "cancelled" | "trial" | null};
 
 export default async function BetaAccount(props: Props) {
   const access = await hostedAccess().catch(() => null);
@@ -28,15 +28,17 @@ const day = (seconds: number) => new Intl.DateTimeFormat("en-IE", {day: "numeric
 
 export function BetaAccountView({access, billing, notice}: Props & {access: Access | null}) {
   const paid = access?.kinds?.includes("paid") ?? false;
+  const trial = !paid && (access?.kinds?.includes("trial") ?? false) && !(access?.kinds?.includes("beta") ?? false);
   const source = access?.kinds == null ? null : paid && access.kinds.length > 1 ? "Subscription and invitation"
-    : paid ? "Subscription" : "Beta invitation";
+    : paid ? "Subscription" : trial ? "Free trial" : "Beta invitation";
+  const offerTrial = billing !== null && billing !== "unavailable" && billing.trial.state === "available";
   const firebase = process.env.SAIPH_ANDROID_BETA_URL;
   return <>
     <div className="page-head">
       <div>
         <p className="eyebrow">Your Saiph account</p>
-        <h1>{access?.entitled ? (paid ? "Welcome to Saiph Cloud." : "Welcome to the beta.") : billing ? "Get Saiph Cloud." : "Activate your beta access."}</h1>
-        <p className="lede">Use this same account on your computer and phone.{access?.entitled ? "" : billing ? " Subscribe, or enter an invitation code." : " Your invitation gives you access without a subscription."}</p>
+        <h1>{access?.entitled ? (paid || trial ? "Welcome to Saiph Cloud." : "Welcome to the beta.") : billing ? "Get Saiph Cloud." : "Activate your beta access."}</h1>
+        <p className="lede">Use this same account on your computer and phone.{access?.entitled ? "" : billing ? (offerTrial ? " Start your free trial, subscribe, or enter an invitation code." : " Subscribe, or enter an invitation code.") : " Your invitation gives you access without a subscription."}</p>
       </div>
       <SignOut />
     </div>
@@ -54,7 +56,7 @@ export function BetaAccountView({access, billing, notice}: Props & {access: Acce
             <div><dt>Active until</dt><dd>{day(access.until!)}</dd></div>
             {source && <div><dt>Through</dt><dd>{source}</dd></div>}
           </dl>
-          {!paid && <p className="fine after">Beta access needs no payment.</p>}
+          {!paid && !trial && <p className="fine after">Beta access needs no payment.</p>}
         </section>
         <NextSteps />
       </div>

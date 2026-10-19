@@ -59,7 +59,7 @@ SCREENS = {name.removeprefix("screen_") for name in FEATURES if name.startswith(
 
 # Desktop bridge actions mapped to the feature they represent.
 BRIDGE_FEATURES = {
-    "phone.notification": "notification_action", "phone.code.copy": "code_copy", "phone.sms.send": "sms_send",
+    "phone.notification": "notification_action", "hosted.notification": "notification_action", "phone.code.copy": "code_copy", "phone.sms.send": "sms_send",
     "phone.call": "call", "phone.ring": "find_phone", "phone.file.choose": "file_to_phone",
     "phone.file.send": "file_to_phone", "phone.photo.save": "photo_save", "phone.photo.drag": "photo_drag",
     "phone.mirror": "phone_mirror", "camera.start": "phone_camera", "microphone.start": "phone_microphone",
@@ -68,7 +68,8 @@ BRIDGE_FEATURES = {
     "hosted.file.save": "hosted_file_save", "hosted.approve": "device_approved",
 }
 STAGES = ("installed", "connected", "phone_added", "setup_completed")
-_VERSION = re.compile(r"[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}(?:[-+.][A-Za-z0-9.]{1,20})?")
+# Pre-release labels may have several parts, e.g. 0.1.0-beta.30-acceptance.1.
+_VERSION = re.compile(r"[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}(?:[-+.][A-Za-z0-9.-]{1,32})?")
 
 
 def bucket(count: int) -> str:
@@ -130,6 +131,7 @@ class UsageCounter:
         self._lock = threading.RLock()
         self._stop = threading.Event()
         self._thread = None
+        self._generation = 0
 
     # ------------------------------------------------------------ consent
     def _settings(self) -> dict:
@@ -147,6 +149,7 @@ class UsageCounter:
         if type(granted) is not bool:
             raise ValueError("Choose whether to share anonymous usage counts.")
         with self._lock:
+            self._generation += 1
             usage = dict(self._settings())
             today = _day(self.clock())
             usage.update(consent="granted" if granted else "declined", decided_on=today)
@@ -163,14 +166,19 @@ class UsageCounter:
         return self.snapshot()
 
     # ----------------------------------------------------------- counting
-    def count(self, feature: str, amount: int = 1) -> None:
+    def count(self, feature: str, amount: int = 1, *, generations=None) -> None:
         # The local-only "Your week" summary keeps its own counts, whatever the sharing choice.
         insights = getattr(self.workspace, "insights", None)
         if insights is not None:
-            insights.count(feature, amount)
-        if feature not in FEATURES or type(amount) is not int or amount < 1 or self.consent() != "granted":
+            if generations is None or generations[1] is None:
+                insights.count(feature, amount)
+            else:
+                insights.count(feature, amount, generation=generations[1])
+        if feature not in FEATURES or type(amount) is not int or amount < 1:
             return
         with self._lock:
+            if self.consent() != "granted" or (generations is not None and generations[0] != self._generation):
+                return
             day = _day(self.clock())
             try:
                 row = self.workspace.store.get(KIND, day)
@@ -183,6 +191,16 @@ class UsageCounter:
     def screen(self, name) -> None:
         if name in SCREENS:
             self.count("screen_" + name)
+
+    def screen_action(self, name):
+        """A deferred counter action invalidated by later consent/summary changes."""
+        insights = getattr(self.workspace, 'insights', None)
+        generations = (self._generation, getattr(insights, '_generation', None))
+        def run():
+            if name in SCREENS:
+                self.count('screen_' + name, generations=generations)
+            return {'ok': True}
+        return run
 
     # ------------------------------------------------------------ batches
     def _stage(self) -> str:

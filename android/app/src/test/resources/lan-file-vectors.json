@@ -1,0 +1,237 @@
+{
+ "now": 1800000000,
+ "requests": [
+  {
+   "name": "request",
+   "payload": {
+    "type": "file.lan.request",
+    "version": 1,
+    "id": "dddddddddddddddddddddddddddddddd",
+    "name": "Synthetic phone video.mp4",
+    "size": 524288000,
+    "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "expires_at": 1800000120
+   },
+   "valid": true
+  },
+  {
+   "name": "request empty file",
+   "payload": {
+    "type": "file.lan.request",
+    "version": 1,
+    "id": "dddddddddddddddddddddddddddddddd",
+    "name": "Synthetic phone video.mp4",
+    "size": 0,
+    "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "expires_at": 1800000120
+   },
+   "valid": true
+  },
+  {
+   "name": "request expired",
+   "payload": {
+    "type": "file.lan.request",
+    "version": 1,
+    "id": "dddddddddddddddddddddddddddddddd",
+    "name": "Synthetic phone video.mp4",
+    "size": 524288000,
+    "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "expires_at": 1800000000
+   },
+   "valid": false
+  },
+  {
+   "name": "request too far ahead",
+   "payload": {
+    "type": "file.lan.request",
+    "version": 1,
+    "id": "dddddddddddddddddddddddddddddddd",
+    "name": "Synthetic phone video.mp4",
+    "size": 524288000,
+    "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "expires_at": 1800000121
+   },
+   "valid": false
+  },
+  {
+   "name": "request extra field",
+   "payload": {
+    "type": "file.lan.request",
+    "version": 1,
+    "id": "dddddddddddddddddddddddddddddddd",
+    "name": "Synthetic phone video.mp4",
+    "size": 524288000,
+    "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "expires_at": 1800000120,
+    "mime": "video/mp4"
+   },
+   "valid": false
+  },
+  {
+   "name": "request bad id",
+   "payload": {
+    "type": "file.lan.request",
+    "version": 1,
+    "id": "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD",
+    "name": "Synthetic phone video.mp4",
+    "size": 524288000,
+    "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "expires_at": 1800000120
+   },
+   "valid": false
+  },
+  {
+   "name": "request name with a path",
+   "payload": {
+    "type": "file.lan.request",
+    "version": 1,
+    "id": "dddddddddddddddddddddddddddddddd",
+    "name": "a/b.mp4",
+    "size": 524288000,
+    "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "expires_at": 1800000120
+   },
+   "valid": false
+  },
+  {
+   "name": "request size boolean",
+   "payload": {
+    "type": "file.lan.request",
+    "version": 1,
+    "id": "dddddddddddddddddddddddddddddddd",
+    "name": "Synthetic phone video.mp4",
+    "size": true,
+    "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "expires_at": 1800000120
+   },
+   "valid": false
+  },
+  {
+   "name": "request version string",
+   "payload": {
+    "type": "file.lan.request",
+    "version": "1",
+    "id": "dddddddddddddddddddddddddddddddd",
+    "name": "Synthetic phone video.mp4",
+    "size": 524288000,
+    "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "expires_at": 1800000120
+   },
+   "valid": false
+  }
+ ],
+ "refusals": [
+  {
+   "name": "unreachable",
+   "payload": {
+    "type": "session.refuse",
+    "version": 1,
+    "id": "cccccccccccccccccccccccccccccccc",
+    "reason": "unreachable"
+   },
+   "valid": true
+  },
+  {
+   "name": "storage",
+   "payload": {
+    "type": "session.refuse",
+    "version": 1,
+    "id": "cccccccccccccccccccccccccccccccc",
+    "reason": "storage"
+   },
+   "valid": true
+  },
+  {
+   "name": "busy",
+   "payload": {
+    "type": "session.refuse",
+    "version": 1,
+    "id": "cccccccccccccccccccccccccccccccc",
+    "reason": "busy"
+   },
+   "valid": true
+  },
+  {
+   "name": "unknown reason",
+   "payload": {
+    "type": "session.refuse",
+    "version": 1,
+    "id": "cccccccccccccccccccccccccccccccc",
+    "reason": "declined"
+   },
+   "valid": false
+  },
+  {
+   "name": "bad id",
+   "payload": {
+    "type": "session.refuse",
+    "version": 1,
+    "id": "ccccccccccccccccccccccccccccccc",
+    "reason": "unreachable"
+   },
+   "valid": false
+  }
+ ],
+ "names": [
+  {
+   "name": "Synthetic holiday.mp4",
+   "valid": true
+  },
+  {
+   "name": "ok name (1).bin",
+   "valid": true
+  },
+  {
+   "name": "emoji 🎉.png",
+   "valid": true
+  },
+  {
+   "name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "valid": true
+  },
+  {
+   "name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "valid": false
+  },
+  {
+   "name": "ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+   "valid": true
+  },
+  {
+   "name": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+   "valid": false
+  },
+  {
+   "name": "",
+   "valid": false
+  },
+  {
+   "name": "..",
+   "valid": false
+  },
+  {
+   "name": "trailing dot.",
+   "valid": false
+  },
+  {
+   "name": "trailing space ",
+   "valid": false
+  },
+  {
+   "name": "tab\tname",
+   "valid": false
+  },
+  {
+   "name": "colon:name",
+   "valid": false
+  },
+  {
+   "name": "lpt1.log",
+   "valid": false
+  },
+  {
+   "name": "back\\slash",
+   "valid": false
+  }
+ ]
+}

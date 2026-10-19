@@ -81,6 +81,22 @@ class HostedPreviewTest {
             chunks[0]!![100] = (chunks[0]!![100].toInt() xor 1).toByte()
             assertTrue(runCatching { HostedAttachments.receive(rootSession, rootTransport, event!!, folder) }.isFailure)
             assertEquals(0, folder.listFiles()!!.size)
+            chunks.clear()
+            val prepared = HostedAttachments.prepare(phoneSession, ByteArrayInputStream(source), "clipboard.png", "image/png",
+                kind = "clipboard.image", ttlSeconds = 30)
+            HostedAttachments.upload(phoneTransport, prepared)
+            val firstEnvelope = event
+            val firstChunks = chunks.mapValues { it.value.copyOf() }
+            HostedAttachments.upload(phoneTransport, prepared)
+            assertEquals(firstEnvelope, event)
+            firstChunks.forEach { (index, bytes) -> assertArrayEquals(bytes, chunks[index]) }
+            val manifest = rootSession.authenticate(event!!)
+            assertEquals(JsonPrimitive("clipboard.image"), manifest["kind"])
+            assertEquals(JsonPrimitive("image/png"), manifest["mime"])
+            val imageBytes = HostedAttachments.receive(rootSession, rootTransport, event!!, folder)
+            assertArrayEquals(source, imageBytes.readBytes()); imageBytes.delete()
+            assertTrue(runCatching { HostedAttachments.prepare(phoneSession, ByteArrayInputStream(source), "clipboard.gif", "image/gif", kind = "clipboard.image", ttlSeconds = 30) }.isFailure)
+            assertTrue(runCatching { HostedAttachments.prepare(phoneSession, ByteArrayInputStream(source), "clipboard.png", "image/png", kind = "clipboard.image", ttlSeconds = 31) }.isFailure)
         } finally { folder.deleteRecursively() }
     }
 }

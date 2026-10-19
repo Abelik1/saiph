@@ -55,6 +55,25 @@ def config(refresh=True, client="synthetic-desktop"):
                              refresh_tokens=refresh)
 
 
+@pytest.mark.parametrize('outcome', ['success', 'failed', 'cancelled'])
+def test_return_to_app_only_follows_the_active_successful_browser_attempt(outcome):
+    ready = Event()
+    returned = []
+    class Attempt:
+        def __init__(self, value): pass
+        def begin(self): return 'https://synthetic.example/authorize'
+        def close(self): pass
+        def wait_grant(self):
+            ready.wait(3)
+            if outcome == 'failed': raise LoginError()
+            return TokenGrant('synthetic-access', 9_000_000_000, None)
+    account = HostedAccount(config(refresh=False), attempt_factory=Attempt, on_sign_in=lambda: returned.append(True))
+    account.begin_sign_in()
+    if outcome == 'cancelled': account.cancel_sign_in()
+    ready.set(); account._thread.join(3)
+    assert returned == ([True] if outcome == 'success' else [])
+
+
 def test_provider_choice_reaches_attempt_without_changing_token_configuration():
     configs = []
     finished = Event()

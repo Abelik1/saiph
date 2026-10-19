@@ -1,4 +1,6 @@
 <resources>
     <string name="saiph_widget_toggle_description">One tap pauses or resumes Saiph</string>
     <string name="saiph_widget_actions_description">Pause, ring your computer, and send a photo or sketch</string>
+    <string name="saiph_input_label">Saiph phone screen control</string>
+    <string name="saiph_input_description">Lets your computer\'s mouse and keyboard tap, swipe, type and press Back, Home and Recents on this phone, only during a phone screen session you start in Saiph. Each session shows a notification with Stop. Saiph does not read, store or send screen content through this service.</string>
 </resources>

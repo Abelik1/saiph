@@ -53,15 +53,23 @@ class OrionNetworkManager @Inject constructor(private val context: Context, priv
     override fun sendMessage(deviceId: String, message: SocketMessage): Boolean {
         if (hostedEnabled() && HostedPhoneFrames.carries(message)) return sendHostedPhone(deviceId, message)
         if (hostedEnabled()) return when (message) {
+            // Merged here, as for the Hub; the Cloud runtime sends the result with its rate limit.
+            is PlaybackInfo -> { OrionPhoneFeatures.media.update(message)?.let { HostedFeatureBridge.mediaChanged() }; true }
             is ClipboardInfo -> if (clipboardEnabled() && message.clipboardType == "text/plain") HostedFeatureBridge.send("clipboard.text", buildJsonObject { put("text", message.content) }) else false
             is NotificationInfo -> if (message.infoType == NotificationInfoType.Removed)
                 HostedFeatureBridge.send("notification.remove", buildJsonObject { put("type", "notification.remove"); put("key", message.notificationKey) })
-            else HostedFeatureBridge.send("notification.upsert", buildJsonObject {
+            else {
+                // Buttons and the reply key first, so the computer's alert can offer them (older desktops ignore the type).
+                HostedNotificationFrames.actions(message.notificationKey, message.timestampMillis.coerceAtLeast(0),
+                    message.actions.map { it.actionIndex to it.label }, message.replyResultKey)
+                    ?.let { HostedFeatureBridge.send(HostedNotificationFrames.ACTIONS, it) }
+                HostedFeatureBridge.send("notification.upsert", buildJsonObject {
                 put("type", "notification.upsert"); put("notification", buildJsonObject {
                     put("key", message.notificationKey); put("app", (message.appName ?: "Phone").take(120))
                     put("title", message.title.orEmpty().take(512)); put("text", message.text.orEmpty().take(4096)); put("timestamp", message.timestampMillis.coerceAtLeast(0))
                 })
-            })
+                })
+            }
             else -> false
         }
         // Later phases wire the retained modules individually, with capability and action checks.
@@ -93,8 +101,13 @@ class OrionNetworkManager @Inject constructor(private val context: Context, priv
     }
     override fun refreshCapabilities() { link.refreshCapabilities() }
     private fun clipboardEnabled() = context.getSharedPreferences("orion", Context.MODE_PRIVATE).getBoolean("clipboard_enabled",true)
+    override val clipboardConnectionMode: String get() = if (hostedEnabled()) "cloud" else "self_hosted"
+    override fun clipboardDeviceId(): String? = if (hostedEnabled()) HostedFeatureBridge.clipboardIdentity?.invoke()
+        else context.getSharedPreferences("orion", Context.MODE_PRIVATE).getString("device_id", null)
+    override val clipboardFileLimit: Long get() = if (hostedEnabled()) HostedClipboardImages.MAX_BYTES.toLong() else 2L * 1024 * 1024 * 1024
     override fun sendClipboardFile(mime: String, file: java.io.File): Boolean {
-        if (hostedEnabled() || !clipboardEnabled()) { file.delete(); return false }
+        if (!clipboardEnabled()) { file.delete(); return false }
+        if (hostedEnabled()) return HostedFeatureBridge.sendClipboardImage(mime, file)
         return peer.sendFile(mime,file)
     }
 }

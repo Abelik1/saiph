@@ -50,6 +50,8 @@ def enrolled(tmp_path):
             return response.json()
 
     controller = HostedController(workspace(tmp_path / 'desktop'), protection=SyntheticProtection(), transport_factory=OfflineTransport)
+    controller.transfers.background = False  # Tests run queued file sends with run_due().
+    controller.lan_addresses = lambda: []  # Saiph Cloud only, whatever network the test machine is on.
     controller.configure(CONFIG)
     controller.set_enabled(True)
     controller._account()._accept(TokenGrant('synthetic-access', time.time() + 3600, None))
@@ -109,8 +111,10 @@ def test_expiry_during_encryption_removes_staged_ciphertext(enrolled, monkeypatc
         controller.account._expires_at = time.time() - 1
         return prepared
     monkeypatch.setattr(hosted_files, 'prepare_attachment', expire)
-    with pytest.raises(HostedError):
-        controller.send_file(str(source), device)
+    queued = controller.send_file(str(source), device)
+    controller.transfers.run_due()
+    [row] = [row for row in controller.transfers.snapshot() if row['id'] == queued['id']]
+    assert row['state'] == 'failed' and 'Sign in' in row['error']
     assert list((controller.folder/'outgoing').iterdir()) == []
     assert transport._call('GET', '/v1/sealed/events')['events'] == []
 
@@ -124,7 +128,10 @@ def test_reauthentication_restores_real_encrypted_file_transfer(enrolled):
     controller.step()
     controller.account._accept(TokenGrant('synthetic-access', time.time()+3600, None))
     controller.step()
-    assert controller.send_file(str(source), device) == {'sent': True}
+    queued = controller.send_file(str(source), device)
+    assert queued['queued'] and queued['name'] == source.name
+    assert controller.transfers.run_due() is None
+    assert [row['state'] for row in controller.transfers.snapshot()] == ['sent']
     envelope = transport._call('GET', '/v1/sealed/events')['events'][0]
     payload, primitive = _manifest(phone, envelope)
     ciphertext = b''.join(transport.download_blob_chunk(payload['blob']['id'], index)

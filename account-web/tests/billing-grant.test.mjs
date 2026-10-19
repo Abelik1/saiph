@@ -109,6 +109,7 @@ test("sync pushes only what changed and ends any sandbox grant held by someone o
   const recorded = [], pushes = [];
   const store = {
     grantCandidates: async () => candidates,
+    trialGrantCandidates: async () => [],
     withGrant: async (id, push) => { const until = await push(candidates.find((c) => c.subscriptionId === id), recorded.length + 1); recorded.push([id, until]); return { until }; },
   };
   const policy = { issuer: "https://synthetic.eu.auth0.com/", livemode: false, ownerOnly: "auth0|owner" };

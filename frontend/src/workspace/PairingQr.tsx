@@ -7,6 +7,16 @@ import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle }
 /** QR modules from the desktop. The grid is itself a private invitation credential. */
 export type PairingQrCode = { modules: string[]; expires_at: string; expires_in: number };
 
+/** Camera and pairing credentials need the same fixed black-on-white QR. */
+export function QrImage({ modules, label, width = 264 }: { modules: string[]; label: string; width?: number }) {
+  const size = modules.length;
+  const path = modules.map((row, y) => [...row].map((cell, x) => cell === "1" ? `M${x} ${y}h1v1h-1z` : "").join("")).join("");
+  return <svg className="block h-auto max-w-full rounded-[10px] bg-white p-3" role="img" aria-label={label}
+    viewBox={`0 0 ${size} ${size}`} width={width} height={width} shapeRendering="crispEdges">
+    <rect width={size} height={size} fill="#fff" /><path d={path} fill="#000" />
+  </svg>;
+}
+
 export function validQr(qr: unknown): qr is PairingQrCode {
   const value = qr as PairingQrCode;
   const size = Array.isArray(value?.modules) ? value.modules.length : 0;
@@ -32,8 +42,6 @@ export function PairingQr({ qr, shownAt, onExpire, onClose }: { qr: PairingQrCod
     return () => window.clearInterval(timer);
   }, [qr, shownAt]);
   useEffect(() => { if (seconds <= 0) onExpire(); }, [seconds, onExpire]);
-  const size = qr.modules.length;
-  const path = qr.modules.map((row, y) => [...row].map((cell, x) => cell === "1" ? `M${x} ${y}h1v1h-1z` : "").join("")).join("");
   return <Card className="string-edge">
     <CardHeader>
       <CardTitle>Pair a phone</CardTitle>
@@ -42,9 +50,7 @@ export function PairingQr({ qr, shownAt, onExpire, onClose }: { qr: PairingQrCod
     </CardHeader>
     <CardContent className="flex flex-wrap items-center gap-6">
       {/* Fixed black on white in every theme so phone cameras can read it. */}
-      <svg className="block h-auto max-w-full rounded-[10px] bg-white p-3" role="img" aria-label="Pairing QR code" viewBox={`0 0 ${size} ${size}`} width={264} height={264} shapeRendering="crispEdges">
-        <rect width={size} height={size} fill="#fff" /><path d={path} fill="#000" />
-      </svg>
+      <QrImage modules={qr.modules} label="Pairing QR code" />
       <div className="grid max-w-[38ch] gap-2">
         <p className="m-0 text-[15px] font-semibold tabular" role="timer" aria-live="off">Expires in {remaining(seconds)}. Works once.</p>
         <p className="m-0 text-[12.5px] leading-relaxed text-muted-foreground">This QR is a private invitation. Show it only to your own phone, and don't photograph, share or screen-share it. Close it if someone else can see your screen.</p>

@@ -184,3 +184,57 @@ retire each legacy stylesheet as its count reaches zero.
 
 Use **Saiph Cloud** and **Self-hosted** for connection choices and people-facing
 service labels. Preserve the existing Hosted protocol, command and settings names.
+
+## Galleries and device preferences
+
+Photo tiles contain the image only. Keep the filename in the viewer and details.
+Place the actions menu over the image's top-right corner, visible on hover,
+keyboard focus and touch screens. Preserve accessible names and the context menu.
+Keep preview and original in the same fitted frame while loading; actual-size
+zoom is a separate action.
+
+Connections leads with the Cloud account and approved devices, then the same
+layout as Settings → Phone: open sections (**Phone and this computer**, **Quiet
+hours**, **Cloud folders**) of `SwitchRow`s (`workspace/SettingRow.tsx`) that save
+as soon as they change. Never hide preferences behind a disclosure; a text field
+(quiet-hours times, the Cloud folder path) keeps its own Save button. Keep
+self-hosted pairing and advanced fields in labelled disclosures: an unpaired Hub is
+a single closed **Self-hosted Hub** disclosure at the end, and a paired one is a
+card with **Pair with a different Hub** folded. Lists inside a disclosure (Recent
+device changes) are `Item` rows, newest first, with a count in the summary's
+`meta` slot and relative times. No bare `<details>` or native `<select>` in
+Settings: use `Disclosure` and `Select`.
+
+### Phone notifications
+
+`workspace/PhoneNotifications.tsx` draws every phone notification, for Saiph Hub
+and Saiph Cloud alike: a card with the app's tile, its name and a relative time
+("Just now", "2 min ago", "3 h ago", "Yesterday", then the date; the full time is
+the tooltip), the title, the text clamped to three lines with **Show more**, the
+notification's own actions, and Open and Dismiss as labelled icon buttons
+(`Dismiss <title>`). Several notifications from one app share one header with the
+tile, a count and **Clear**. An empty list shows an icon, a title and what to do.
+The newest Saiph Cloud notification is previewed with the same card in Settings →
+Connections → Saiph Cloud.
+
+Phones do not send app icons yet, so the tile is the app's initials on one of five
+tints (`--app-tint-1` to `--app-tint-5` in `tokens.css`), chosen by a stable hash of
+the package (or the app name, which is all Saiph Cloud sends). Adding real icons is
+a protocol change across both transports and is not part of this pass: the Hub's
+`notification.upsert` model forbids unknown fields and the desktop's Cloud reader
+requires an exact key set, so a phone that added an icon field would have every
+notification rejected by an older Hub or desktop. The intended design is a separate,
+capability-gated event (`app.icon {package, png}`) that the phone sends once per
+package, a PNG of at most 48×48 pixels and a few kilobytes, which the desktop checks
+(signature, IHDR size, byte limit, package pattern) and caches by package in the
+profile; Saiph Cloud first needs the package name it does not send today.
+Devices uses the same preference cards, label scale and spacing for camera,
+microphone, remote controls and automatic locking. Keep permission consequences
+beside the controls that enable them.
+
+Present phone-camera preview and meeting-app webcam use as Saiph features. The
+Windows build bundles the Saiph Camera backend; normal setup never asks users to
+download or configure another app. Keep the camera QR private and short-lived,
+show live video at a useful width, and keep Stop visible. Legacy OBS profiles,
+scene fields and installation details belong inside
+meeting-app disclosures. Do not start capture when opening or saving preferences.

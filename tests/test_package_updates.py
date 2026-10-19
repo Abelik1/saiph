@@ -127,6 +127,15 @@ def test_check_uses_saved_mesh_pairing_and_rejects_replays_or_conflicts(packaged
     assert (root / 'hub-device-key.pem').read_text() == 'SYNTHETIC_KEY_NOT_LOADED'
 
 
+def test_cloud_preview_never_contacts_retained_hub_pairing(packaged, monkeypatch):
+    root, _ = packaged
+    monkeypatch.setattr(updates.hub_client, 'signed', lambda *args: pytest.fail('Inactive Hub was contacted'))
+    result = updates.check(root, CONFIG, cloud=True)
+    assert result['reason'] == 'cloud_manual'
+    assert result['current'] and not result['supported'] and not result['available'] and result['release'] is None
+    assert not (root / 'package-updates').exists()
+
+
 def test_new_build_cannot_reuse_current_install_directory(packaged, monkeypatch):
     root, _ = packaged
     offered = {**metadata(), 'version': metadata(build=1)['version']}

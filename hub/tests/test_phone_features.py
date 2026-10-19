@@ -69,7 +69,7 @@ def test_capture_insert_names_one_computer_and_a_digest_only(hub):
     for payload,targets in (({'sha256':'a'*64},None),({'sha256':'A'*64},[computer]),({'sha256':'a'*63},[computer]),
                             ({'sha256':'a'*64,'path':'C:/private'},[computer])):
         with pytest.raises(ValueError):apply(hub,phone,'capture.insert',payload,targets)
-    assert features.snapshot(hub.DB)=={'threads':[],'messages':[],'calls':[],'photos':[],'media':[],'ringers':[],'attachments':[]}
+    assert features.snapshot(hub.DB)=={'threads':[],'messages':[],'calls':[],'photos':[],'media':[],'ringers':[],'attachments':[],'statuses':[],'signals':[]}
 def test_remote_control_targets_one_computer_that_offers_it(hub):
     c=client(hub);_,phone=pair(hub,c);_,computer=pair(hub,c)
     with pytest.raises(ValueError):apply(hub,phone,'remote.command',{'app':'media','control':'next'},[computer])
@@ -164,3 +164,68 @@ def test_touchpad_commands_carry_bounded_movement(hub):
     apply(hub,phone,'remote.command',{'app':'touchpad','control':'move','dx':-40,'dy':12},[computer])
     with pytest.raises(ValueError):apply(hub,phone,'remote.command',{'app':'touchpad','control':'move','dx':5000,'dy':0},[computer])
     apply(hub,computer,'remote.catalog',{'apps':[{'id':'touchpad','name':'Touchpad','available':True,'controls':[{'id':'move','label':'Move','kind':'pad'}]}]},[phone])
+
+# Shared with Saiph Cloud (desktop phone_status.py, Android PhoneStatusFrames).
+STATUS={'battery':76,'charging':True,'wifi':True,'cellular':False,'metered':False,'bluetooth':True,'signal':3,'ringer':'vibrate','dnd':False,
+        'controls':['status','ring','ringer','dnd','media','hotspot'],'mobile_data':True,'paused':False}
+@pytest.mark.parametrize('changes',[{'battery':101},{'battery':True},{'signal':5},{'ringer':'loud'},{'wifi':'yes'},{'controls':['ring','ring']},
+                                    {'controls':['x'*41]},{'controls':['x']*17},{'extra':1}])
+def test_phone_status_shape_is_exact(hub,changes):
+    c=client(hub);_,phone=pair(hub,c)
+    with pytest.raises(ValueError):apply(hub,phone,'phone.status',{**STATUS,**changes})
+    missing=dict(STATUS);missing.pop('paused')
+    with pytest.raises(ValueError):apply(hub,phone,'phone.status',missing)
+def test_phone_status_is_kept_for_the_snapshot_and_lists_quick_actions(hub):
+    c=client(hub);_,phone=pair(hub,c);_,computer=pair(hub,c)
+    caps(hub,phone,['battery'])
+    for kind,payload in (('phone.dnd',{'active':True}),('phone.hotspot',{}),('phone.status.request',{})):
+        with pytest.raises(ValueError):apply(hub,computer,kind,payload,[phone])
+    apply(hub,phone,'phone.status',STATUS)
+    apply(hub,phone,'phone.status',{**STATUS,'battery':None,'signal':None,'ringer':None,'dnd':None})
+    statuses=features.snapshot(hub.DB)['statuses']
+    assert len(statuses)==1 and statuses[0]['device_id']==phone and statuses[0]['battery'] is None and statuses[0]['updated_at']==10
+    for kind,payload in (('phone.dnd',{'active':True}),('phone.hotspot',{}),('phone.status.request',{}),('phone.ringer',{'mode':'silent'})):
+        apply(hub,computer,kind,payload,[phone])
+    for kind,payload,targets in (('phone.dnd',{'active':'on'},[phone]),('phone.dnd',{'active':True},None),('phone.hotspot',{'x':1},[phone])):
+        with pytest.raises(ValueError):apply(hub,computer,kind,payload,targets)
+    apply(hub,phone,'phone.status',{**STATUS,'controls':['status']})
+    with pytest.raises(ValueError):apply(hub,computer,'phone.dnd',{'active':True},[phone])
+    hub.DB.execute('DELETE FROM devices WHERE id=?',(phone,))
+    assert features.snapshot(hub.DB)['statuses']==[]
+def test_phone_signal_is_exact_and_kept_for_the_snapshot(hub):
+    c=client(hub);_,phone=pair(hub,c)
+    for bad in ({'wifi_level':5,'cellular_level':3},{'wifi_level':2},{'wifi_level':2,'cellular_level':3,'rssi':-73},{'wifi_level':True,'cellular_level':3}):
+        with pytest.raises(ValueError):apply(hub,phone,'phone.signal',bad)
+    apply(hub,phone,'phone.signal',{'wifi_level':2,'cellular_level':3})
+    apply(hub,phone,'phone.signal',{'wifi_level':None,'cellular_level':1})
+    signals=features.snapshot(hub.DB)['signals']
+    assert signals==[{'wifi_level':None,'cellular_level':1,'device_id':phone,'updated_at':10}]
+    hub.DB.execute('DELETE FROM devices WHERE id=?',(phone,))
+    assert features.snapshot(hub.DB)['signals']==[]
+def test_wallpaper_is_a_private_answer_to_one_computer(hub):
+    c=client(hub);_,phone=pair(hub,c);_,computer=pair(hub,c);_,other=pair(hub,c)
+    caps(hub,phone,['battery'])
+    with pytest.raises(ValueError):apply(hub,computer,'phone.wallpaper.request',{},[phone])
+    apply(hub,phone,'phone.status',{**STATUS,'controls':[*STATUS['controls'],'wallpaper']})
+    apply(hub,computer,'phone.wallpaper.request',{},[phone])
+    apply(hub,phone,'phone.wallpaper',{'preview':'data:image/jpeg;base64,/9j/2Q=='},[computer])
+    apply(hub,phone,'phone.wallpaper',{'preview':''},[computer])
+    for payload,targets in (({'preview':'data:image/jpeg;base64,/9j/2Q=='},None),({'preview':'data:image/jpeg;base64,/9j/2Q=='},[computer,other]),
+                            ({'preview':'data:image/png;base64,AAAA'},[computer]),({'preview':'x'*16_024},[computer]),({'preview':'','extra':1},[computer])):
+        with pytest.raises(ValueError):apply(hub,phone,'phone.wallpaper',payload,targets)
+    assert all('preview' not in row for row in features.snapshot(hub.DB)['statuses'])
+def test_find_phone_state_is_relayed_and_stop_needs_a_phone_that_can_ring(hub):
+    c=client(hub);_,phone=pair(hub,c);_,computer=pair(hub,c)
+    # Phone -> every computer: started with seconds left, or stopped with 0; never stored.
+    apply(hub,phone,'phone.ring.state',{'ringing':True,'seconds':30})
+    apply(hub,phone,'phone.ring.state',{'ringing':False,'seconds':0})
+    for payload in ({'ringing':True,'seconds':0},{'ringing':False,'seconds':5},{'ringing':True,'seconds':121},
+                    {'ringing':'yes','seconds':30},{'ringing':True}):
+        with pytest.raises(ValueError):apply(hub,phone,'phone.ring.state',payload)
+    assert features.snapshot(hub.DB)['statuses']==[]
+    # Computer -> one phone: the same "ring" capability as phone.ring.
+    with pytest.raises(ValueError):apply(hub,computer,'phone.ring.stop',{},[phone])
+    caps(hub,phone,['ring'])
+    apply(hub,computer,'phone.ring.stop',{},[phone])
+    with pytest.raises(ValueError):apply(hub,computer,'phone.ring.stop',{'now':True},[phone])
+    with pytest.raises(ValueError):apply(hub,computer,'phone.ring.stop',{})

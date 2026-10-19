@@ -79,7 +79,7 @@ class HostedAccount:
 
     def __init__(self, config: HostedLoginConfig, vault: TokenVault | None = None, *,
                  attempt_factory=LoginAttempt, refresher=refresh_access, revoker=revoke_refresh,
-                 clock=time.time, on_change=lambda: None):
+                 clock=time.time, on_change=lambda: None, on_sign_in=lambda: None):
         if config.refresh_tokens and vault is None:
             raise ValueError("Refresh tokens need OS-protected storage.")
         self.config = config
@@ -87,6 +87,7 @@ class HostedAccount:
         self._attempt_factory = attempt_factory
         self._refresher, self._revoker = refresher, revoker
         self._clock, self._on_change = clock, on_change
+        self._on_sign_in = on_sign_in
         self._lock = threading.RLock()
         self._access = None
         self._signed_out = False
@@ -142,20 +143,25 @@ class HostedAccount:
         return url
 
     def _finish(self, attempt):
+        accepted = False
         try:
             grant = attempt.wait_grant()
             with self._lock:
                 if self._attempt is attempt:
                     self._accept(grant)
+                    accepted = True
         except (LoginError, KeyStorageError):
             with self._lock:
                 if self._attempt is attempt:
                     self.error = "Sign-in did not complete."
         finally:
             with self._lock:
+                accepted = accepted and self._attempt is attempt and not self._signed_out
                 if self._attempt is attempt:
                     self._attempt = None
             self._on_change()
+            if accepted:
+                self._on_sign_in()
 
     def _accept(self, grant):
         with self._lock:

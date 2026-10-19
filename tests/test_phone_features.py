@@ -27,7 +27,7 @@ def test_cloud_gallery_original_uses_existing_prefetch_and_idempotent_save(tmp_p
     second=features.photo_request('phone','41','save')
     assert first['path']==second['path']
     assert Path(first['path']).read_bytes()==b'synthetic-photo'
-    assert len(list((tmp_path/'home'/'Downloads'/'Orion').iterdir()))==1
+    assert len(list((tmp_path/'home'/'Downloads'/'Saiph').iterdir()))==1
 
 @pytest.mark.parametrize('name',['../../secret.txt','..\\secret.txt','CON','NUL.txt','<>:\\?*.txt',''])
 def test_untrusted_file_names_stay_in_download_directory(name):
@@ -130,7 +130,7 @@ def test_repeated_photo_save_requests_one_original_and_saves_one_copy(tmp_path,m
     monkeypatch.setattr(features,'command',lambda device,kind,payload:commands.append((kind,payload)) or {'sent':True})
     for _ in range(4):features.photo_request('phone','17','save')
     assert commands==[('photo.request',{'id':'17'})]
-    # The original arrives once and is published to Downloads/Orion.
+    # The original arrives once and is published to Downloads/Saiph.
     original={'id':str(uuid4()),'type':'photo.original','source':'phone',
               'payload':{'name':'Photo.jpg','size':3,'photo_id':'17'}}
     workspace.store.save('phone_transfer',{'id':original['id'],'event':original,'received':time.time()})
@@ -142,7 +142,7 @@ def test_repeated_photo_save_requests_one_original_and_saves_one_copy(tmp_path,m
         deadline=time.monotonic()+3
         while workspace.store.all('phone_transfer') and time.monotonic()<deadline:time.sleep(.02)
     finally:features.stop()
-    saved=list((tmp_path/'home'/'Downloads'/'Orion').iterdir())
+    saved=list((tmp_path/'home'/'Downloads'/'Saiph').iterdir())
     assert [p.read_bytes() for p in saved]==[b'jpg']
     # Later clicks return the existing original without a new request or copy.
     again=features.photo_request('phone','17','save')
@@ -161,7 +161,7 @@ def test_repeated_save_of_prefetched_photo_keeps_one_saved_copy(tmp_path,monkeyp
     for _ in range(7):
         again=features.photo_request('phone','17','save')
         assert again['existing'] and again['path']==first['path']
-    downloads=tmp_path/'home'/'Downloads'/'Orion'
+    downloads=tmp_path/'home'/'Downloads'/'Saiph'
     assert len(list(downloads.iterdir()))==1
     # If the owner deletes the saved copy, Save creates it again.
     Path(first['path']).unlink()
@@ -170,7 +170,8 @@ def test_repeated_save_of_prefetched_photo_keeps_one_saved_copy(tmp_path,monkeyp
 def test_cloud_files_use_only_the_configured_shared_folder(tmp_path,monkeypatch):
     workspace=SimpleNamespace(root=tmp_path/'app',store=Store(tmp_path/'app'),settings={'cloud':{'path':str(tmp_path/'Cloud')}})
     features=f.PhoneFeatures(workspace)
-    assert features._destination({})==Path.home()/'Downloads'/'Orion'
+    from orion_mini.paths import received_dir
+    assert features._destination({})==received_dir()  # Downloads → Saiph, wherever Downloads is.
     assert features._destination({'destination':'cloud','name':'../../outside'})==tmp_path/'Cloud'/'Shared'
     for destination in ['../../outside','screenshots','C:/']:
         with pytest.raises(ValueError):features._destination({'destination':destination})
@@ -238,11 +239,11 @@ def test_repeated_photo_save_of_a_prefetched_original_keeps_one_file(tmp_path,mo
     (cache/'Photo.png').write_bytes(data)
     workspace.store.save('phone_photo_original',{'id':features._photo_key('phone','17'),'device_id':'phone','photo_id':'17','name':'Photo.png','path':str(cache/'Photo.png'),'size':len(data)})
     results=[features.dispatch('phone.photo.save',{'device_id':'phone','photo_id':'17'}) for _ in range(8)]
-    downloads=Path.home()/'Downloads'/'Orion'
+    downloads=Path.home()/'Downloads'/'Saiph'
     assert [p.name for p in downloads.iterdir()]==['Photo.png'] and (downloads/'Photo.png').read_bytes()==data
     assert {r['path'] for r in results}=={str(downloads/'Photo.png')} and not commands
     assert results[0]['status']=='saved' and not results[0]['existing'] and all(r['existing'] for r in results[1:])
-    assert results[0]['folder']=='Downloads → Orion' and len(workspace.store.all('phone_file'))==1
+    assert results[0]['folder']=='Downloads → Saiph' and len(workspace.store.all('phone_file'))==1
     assert results[0]['file_id']==workspace.store.all('phone_file')[0]['id']
     saves=features.snapshot()['photo_saves'];assert [(s['photo_id'],s['status']) for s in saves]==[('17','saved')]
     # A changed copy is not reported as saved; a deliberate new save keeps the edited file.
@@ -272,13 +273,13 @@ def test_photo_save_in_flight_is_requested_once_and_completes_with_one_download(
     features.event({'id':str(uuid4()),'type':'photo.original','source':'phone','payload':offer},{'device_id':'computer'})
     features._transfer_once()
     saved=features.snapshot()['photo_saves'][0]
-    assert saved['status']=='saved' and saved['folder']=='Downloads → Orion' and Path(saved['path']).read_bytes()==data
+    assert saved['status']=='saved' and saved['folder']=='Downloads → Saiph' and Path(saved['path']).read_bytes()==data
     assert not workspace.store.all('phone_transfer')
     # A duplicate offer from the phone is not downloaded again.
     features.event({'id':str(uuid4()),'type':'photo.original','source':'phone','payload':offer},{'device_id':'computer'})
     features._transfer_once()
     assert not workspace.store.all('phone_transfer')
-    assert len(downloads)==1 and [p.name for p in (Path.home()/'Downloads'/'Orion').iterdir()]==['Photo.png']
+    assert len(downloads)==1 and [p.name for p in (Path.home()/'Downloads'/'Saiph').iterdir()]==['Photo.png']
     repeat=features.dispatch('phone.photo.save',{'device_id':'phone','photo_id':'17'})
     assert repeat['existing'] and repeat['path']==saved['path'] and len(commands)==1
     # State is metadata only.

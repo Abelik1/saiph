@@ -135,3 +135,11 @@ def test_published_field_list_matches_the_service_and_the_documentation():
     document = (ROOT / "docs/USAGE_ANALYTICS.md").read_text(encoding="utf-8")
     for name in SERVICE["desktop"] | SERVICE["android"]:
         assert f"`{name}`" in document, name
+
+
+def test_multi_part_prerelease_versions_are_reported_not_dev():
+    from orion_mini.usage import _VERSION
+    for value in ("0.1.0-beta.7", "0.1.0-beta.30-acceptance.1", "1.2.3+build.5"):
+        assert _VERSION.fullmatch(value)
+    for value in ("0.1.0-", "0.1.0-beta 1", "x.1.0", "0.1.0-" + "a" * 40):
+        assert not _VERSION.fullmatch(value)

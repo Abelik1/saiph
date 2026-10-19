@@ -109,6 +109,7 @@ describe("Phone page", () => {
       settings: { link: { camera: { enabled: true } } },
       modules: { workspace: { installed: false, enabled: false } },
       camera: {
+          integrated_available: true,
         available: true,
         running: false,
         verified: false,

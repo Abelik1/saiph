@@ -1,0 +1,569 @@
+{
+ "now": 1800000000,
+ "cases": [
+  {
+   "name": "camera v2 profile",
+   "payload": {
+    "type": "session.offer",
+    "version": 1,
+    "id": "cccccccccccccccccccccccccccccccc",
+    "service": "camera",
+    "expires_at": 1800000090,
+    "invite": "orion-camera:2:eyJzZXNzaW9uIjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEiLCJhZGRyZXNzZXMiOlsiMTkyLjE2OC4xLjciXSwicG9ydCI6NDkxOTIsImNlcnRpZmljYXRlIjoiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYiIsInNlY3JldCI6IkF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd00iLCJleHBpcmVzIjoxODAwMDAwMDkwLCJzdHJlYW0iOnsicmVzb2x1dGlvbiI6IjEwODBwIiwiZnBzIjoyMCwicXVhbGl0eSI6ImhpZ2gifX0"
+   },
+   "valid": true
+  },
+  {
+   "name": "camera v1 legacy",
+   "payload": {
+    "type": "session.offer",
+    "version": 1,
+    "id": "cccccccccccccccccccccccccccccccc",
+    "service": "camera",
+    "expires_at": 1800000090,
+    "invite": "orion-camera:1:eyJzZXNzaW9uIjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEiLCJhZGRyZXNzZXMiOlsiMTkyLjE2OC4xLjciXSwicG9ydCI6NDkxOTIsImNlcnRpZmljYXRlIjoiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYiIsInNlY3JldCI6IkF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd00iLCJleHBpcmVzIjoxODAwMDAwMDkwfQ"
+   },
+   "valid": true
+  },
+  {
+   "name": "deadline at maximum lifetime",
+   "payload": {
+    "type": "session.offer",
+    "version": 1,
+    "id": "cccccccccccccccccccccccccccccccc",
+    "service": "camera",
+    "expires_at": 1800000120,
+    "invite": "orion-camera:2:eyJzZXNzaW9uIjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEiLCJhZGRyZXNzZXMiOlsiMTkyLjE2OC4xLjciXSwicG9ydCI6NDkxOTIsImNlcnRpZmljYXRlIjoiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYiIsInNlY3JldCI6IkF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd00iLCJleHBpcmVzIjoxODAwMDAwMTIwLCJzdHJlYW0iOnsicmVzb2x1dGlvbiI6IjEwODBwIiwiZnBzIjoyMCwicXVhbGl0eSI6ImhpZ2gifX0"
+   },
+   "valid": true
+  },
+  {
+   "name": "extra field",
+   "payload": {
+    "type": "session.offer",
+    "version": 1,
+    "id": "cccccccccccccccccccccccccccccccc",
+    "service": "camera",
+    "expires_at": 1800000090,
+    "invite": "orion-camera:2:eyJzZXNzaW9uIjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEiLCJhZGRyZXNzZXMiOlsiMTkyLjE2OC4xLjciXSwicG9ydCI6NDkxOTIsImNlcnRpZmljYXRlIjoiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYiIsInNlY3JldCI6IkF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd00iLCJleHBpcmVzIjoxODAwMDAwMDkwLCJzdHJlYW0iOnsicmVzb2x1dGlvbiI6IjEwODBwIiwiZnBzIjoyMCwicXVhbGl0eSI6ImhpZ2gifX0",
+    "label": "Desk"
+   },
+   "valid": false
+  },
+  {
+   "name": "missing id",
+   "payload": {
+    "type": "session.offer",
+    "version": 1,
+    "service": "camera",
+    "expires_at": 1800000090,
+    "invite": "orion-camera:2:eyJzZXNzaW9uIjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEiLCJhZGRyZXNzZXMiOlsiMTkyLjE2OC4xLjciXSwicG9ydCI6NDkxOTIsImNlcnRpZmljYXRlIjoiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYiIsInNlY3JldCI6IkF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd00iLCJleHBpcmVzIjoxODAwMDAwMDkwLCJzdHJlYW0iOnsicmVzb2x1dGlvbiI6IjEwODBwIiwiZnBzIjoyMCwicXVhbGl0eSI6ImhpZ2gifX0"
+   },
+   "valid": false
+  },
+  {
+   "name": "wrong type",
+   "payload": {
+    "type": "camera.offer",
+    "version": 1,
+    "id": "cccccccccccccccccccccccccccccccc",
+    "service": "camera",
+    "expires_at": 1800000090,
+    "invite": "orion-camera:2:eyJzZXNzaW9uIjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEiLCJhZGRyZXNzZXMiOlsiMTkyLjE2OC4xLjciXSwicG9ydCI6NDkxOTIsImNlcnRpZmljYXRlIjoiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYiIsInNlY3JldCI6IkF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd00iLCJleHBpcmVzIjoxODAwMDAwMDkwLCJzdHJlYW0iOnsicmVzb2x1dGlvbiI6IjEwODBwIiwiZnBzIjoyMCwicXVhbGl0eSI6ImhpZ2gifX0"
+   },
+   "valid": false
+  },
+  {
+   "name": "version boolean",
+   "payload": {
+    "type": "session.offer",
+    "version": true,
+    "id": "cccccccccccccccccccccccccccccccc",
+    "service": "camera",
+    "expires_at": 1800000090,
+    "invite": "orion-camera:2:eyJzZXNzaW9uIjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEiLCJhZGRyZXNzZXMiOlsiMTkyLjE2OC4xLjciXSwicG9ydCI6NDkxOTIsImNlcnRpZmljYXRlIjoiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYiIsInNlY3JldCI6IkF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd00iLCJleHBpcmVzIjoxODAwMDAwMDkwLCJzdHJlYW0iOnsicmVzb2x1dGlvbiI6IjEwODBwIiwiZnBzIjoyMCwicXVhbGl0eSI6ImhpZ2gifX0"
+   },
+   "valid": false
+  },
+  {
+   "name": "version string",
+   "payload": {
+    "type": "session.offer",
+    "version": "1",
+    "id": "cccccccccccccccccccccccccccccccc",
+    "service": "camera",
+    "expires_at": 1800000090,
+    "invite": "orion-camera:2:eyJzZXNzaW9uIjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEiLCJhZGRyZXNzZXMiOlsiMTkyLjE2OC4xLjciXSwicG9ydCI6NDkxOTIsImNlcnRpZmljYXRlIjoiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYiIsInNlY3JldCI6IkF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd00iLCJleHBpcmVzIjoxODAwMDAwMDkwLCJzdHJlYW0iOnsicmVzb2x1dGlvbiI6IjEwODBwIiwiZnBzIjoyMCwicXVhbGl0eSI6ImhpZ2gifX0"
+   },
+   "valid": false
+  },
+  {
+   "name": "future version",
+   "payload": {
+    "type": "session.offer",
+    "version": 2,
+    "id": "cccccccccccccccccccccccccccccccc",
+    "service": "camera",
+    "expires_at": 1800000090,
+    "invite": "orion-camera:2:eyJzZXNzaW9uIjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEiLCJhZGRyZXNzZXMiOlsiMTkyLjE2OC4xLjciXSwicG9ydCI6NDkxOTIsImNlcnRpZmljYXRlIjoiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYiIsInNlY3JldCI6IkF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd00iLCJleHBpcmVzIjoxODAwMDAwMDkwLCJzdHJlYW0iOnsicmVzb2x1dGlvbiI6IjEwODBwIiwiZnBzIjoyMCwicXVhbGl0eSI6ImhpZ2gifX0"
+   },
+   "valid": false
+  },
+  {
+   "name": "uppercase id",
+   "payload": {
+    "type": "session.offer",
+    "version": 1,
+    "id": "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+    "service": "camera",
+    "expires_at": 1800000090,
+    "invite": "orion-camera:2:eyJzZXNzaW9uIjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEiLCJhZGRyZXNzZXMiOlsiMTkyLjE2OC4xLjciXSwicG9ydCI6NDkxOTIsImNlcnRpZmljYXRlIjoiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYiIsInNlY3JldCI6IkF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd00iLCJleHBpcmVzIjoxODAwMDAwMDkwLCJzdHJlYW0iOnsicmVzb2x1dGlvbiI6IjEwODBwIiwiZnBzIjoyMCwicXVhbGl0eSI6ImhpZ2gifX0"
+   },
+   "valid": false
+  },
+  {
+   "name": "short id",
+   "payload": {
+    "type": "session.offer",
+    "version": 1,
+    "id": "ccccccccccccccccccccccccccccccc",
+    "service": "camera",
+    "expires_at": 1800000090,
+    "invite": "orion-camera:2:eyJzZXNzaW9uIjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEiLCJhZGRyZXNzZXMiOlsiMTkyLjE2OC4xLjciXSwicG9ydCI6NDkxOTIsImNlcnRpZmljYXRlIjoiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYiIsInNlY3JldCI6IkF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd00iLCJleHBpcmVzIjoxODAwMDAwMDkwLCJzdHJlYW0iOnsicmVzb2x1dGlvbiI6IjEwODBwIiwiZnBzIjoyMCwicXVhbGl0eSI6ImhpZ2gifX0"
+   },
+   "valid": false
+  },
+  {
+   "name": "unknown service",
+   "payload": {
+    "type": "session.offer",
+    "version": 1,
+    "id": "cccccccccccccccccccccccccccccccc",
+    "service": "screen",
+    "expires_at": 1800000090,
+    "invite": "orion-camera:2:eyJzZXNzaW9uIjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEiLCJhZGRyZXNzZXMiOlsiMTkyLjE2OC4xLjciXSwicG9ydCI6NDkxOTIsImNlcnRpZmljYXRlIjoiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYiIsInNlY3JldCI6IkF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd00iLCJleHBpcmVzIjoxODAwMDAwMDkwLCJzdHJlYW0iOnsicmVzb2x1dGlvbiI6IjEwODBwIiwiZnBzIjoyMCwicXVhbGl0eSI6ImhpZ2gifX0"
+   },
+   "valid": false
+  },
+  {
+   "name": "deadline differs from invitation",
+   "payload": {
+    "type": "session.offer",
+    "version": 1,
+    "id": "cccccccccccccccccccccccccccccccc",
+    "service": "camera",
+    "expires_at": 1800000060,
+    "invite": "orion-camera:2:eyJzZXNzaW9uIjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEiLCJhZGRyZXNzZXMiOlsiMTkyLjE2OC4xLjciXSwicG9ydCI6NDkxOTIsImNlcnRpZmljYXRlIjoiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYiIsInNlY3JldCI6IkF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd00iLCJleHBpcmVzIjoxODAwMDAwMDkwLCJzdHJlYW0iOnsicmVzb2x1dGlvbiI6IjEwODBwIiwiZnBzIjoyMCwicXVhbGl0eSI6ImhpZ2gifX0"
+   },
+   "valid": false
+  },
+  {
+   "name": "expired",
+   "payload": {
+    "type": "session.offer",
+    "version": 1,
+    "id": "cccccccccccccccccccccccccccccccc",
+    "service": "camera",
+    "expires_at": 1800000000,
+    "invite": "orion-camera:2:eyJzZXNzaW9uIjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEiLCJhZGRyZXNzZXMiOlsiMTkyLjE2OC4xLjciXSwicG9ydCI6NDkxOTIsImNlcnRpZmljYXRlIjoiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYiIsInNlY3JldCI6IkF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd00iLCJleHBpcmVzIjoxODAwMDAwMDAwLCJzdHJlYW0iOnsicmVzb2x1dGlvbiI6IjEwODBwIiwiZnBzIjoyMCwicXVhbGl0eSI6ImhpZ2gifX0"
+   },
+   "valid": false
+  },
+  {
+   "name": "too far ahead",
+   "payload": {
+    "type": "session.offer",
+    "version": 1,
+    "id": "cccccccccccccccccccccccccccccccc",
+    "service": "camera",
+    "expires_at": 1800000121,
+    "invite": "orion-camera:2:eyJzZXNzaW9uIjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEiLCJhZGRyZXNzZXMiOlsiMTkyLjE2OC4xLjciXSwicG9ydCI6NDkxOTIsImNlcnRpZmljYXRlIjoiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYiIsInNlY3JldCI6IkF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd00iLCJleHBpcmVzIjoxODAwMDAwMTIxLCJzdHJlYW0iOnsicmVzb2x1dGlvbiI6IjEwODBwIiwiZnBzIjoyMCwicXVhbGl0eSI6ImhpZ2gifX0"
+   },
+   "valid": false
+  },
+  {
+   "name": "deadline boolean",
+   "payload": {
+    "type": "session.offer",
+    "version": 1,
+    "id": "cccccccccccccccccccccccccccccccc",
+    "service": "camera",
+    "expires_at": true,
+    "invite": "orion-camera:2:eyJzZXNzaW9uIjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEiLCJhZGRyZXNzZXMiOlsiMTkyLjE2OC4xLjciXSwicG9ydCI6NDkxOTIsImNlcnRpZmljYXRlIjoiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYiIsInNlY3JldCI6IkF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd00iLCJleHBpcmVzIjoxODAwMDAwMDkwLCJzdHJlYW0iOnsicmVzb2x1dGlvbiI6IjEwODBwIiwiZnBzIjoyMCwicXVhbGl0eSI6ImhpZ2gifX0"
+   },
+   "valid": false
+  },
+  {
+   "name": "public address",
+   "payload": {
+    "type": "session.offer",
+    "version": 1,
+    "id": "cccccccccccccccccccccccccccccccc",
+    "service": "camera",
+    "expires_at": 1800000090,
+    "invite": "orion-camera:2:eyJzZXNzaW9uIjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEiLCJhZGRyZXNzZXMiOlsiOC44LjguOCJdLCJwb3J0Ijo0OTE5MiwiY2VydGlmaWNhdGUiOiJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiIiwic2VjcmV0IjoiQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TSIsImV4cGlyZXMiOjE4MDAwMDAwOTAsInN0cmVhbSI6eyJyZXNvbHV0aW9uIjoiMTA4MHAiLCJmcHMiOjIwLCJxdWFsaXR5IjoiaGlnaCJ9fQ"
+   },
+   "valid": false
+  },
+  {
+   "name": "loopback address",
+   "payload": {
+    "type": "session.offer",
+    "version": 1,
+    "id": "cccccccccccccccccccccccccccccccc",
+    "service": "camera",
+    "expires_at": 1800000090,
+    "invite": "orion-camera:2:eyJzZXNzaW9uIjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEiLCJhZGRyZXNzZXMiOlsiMTI3LjAuMC4xIl0sInBvcnQiOjQ5MTkyLCJjZXJ0aWZpY2F0ZSI6ImJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmIiLCJzZWNyZXQiOiJBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNIiwiZXhwaXJlcyI6MTgwMDAwMDA5MCwic3RyZWFtIjp7InJlc29sdXRpb24iOiIxMDgwcCIsImZwcyI6MjAsInF1YWxpdHkiOiJoaWdoIn19"
+   },
+   "valid": false
+  },
+  {
+   "name": "ambiguous address",
+   "payload": {
+    "type": "session.offer",
+    "version": 1,
+    "id": "cccccccccccccccccccccccccccccccc",
+    "service": "camera",
+    "expires_at": 1800000090,
+    "invite": "orion-camera:2:eyJzZXNzaW9uIjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEiLCJhZGRyZXNzZXMiOlsiMTkyLjE2OC4wMDEuNyJdLCJwb3J0Ijo0OTE5MiwiY2VydGlmaWNhdGUiOiJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiIiwic2VjcmV0IjoiQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TSIsImV4cGlyZXMiOjE4MDAwMDAwOTAsInN0cmVhbSI6eyJyZXNvbHV0aW9uIjoiMTA4MHAiLCJmcHMiOjIwLCJxdWFsaXR5IjoiaGlnaCJ9fQ"
+   },
+   "valid": false
+  },
+  {
+   "name": "not a camera invitation",
+   "payload": {
+    "type": "session.offer",
+    "version": 1,
+    "id": "cccccccccccccccccccccccccccccccc",
+    "service": "camera",
+    "expires_at": 1800000090,
+    "invite": "orion://pair/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+   },
+   "valid": false
+  },
+  {
+   "name": "profile under v1 prefix",
+   "payload": {
+    "type": "session.offer",
+    "version": 1,
+    "id": "cccccccccccccccccccccccccccccccc",
+    "service": "camera",
+    "expires_at": 1800000090,
+    "invite": "orion-camera:1:eyJzZXNzaW9uIjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEiLCJhZGRyZXNzZXMiOlsiMTkyLjE2OC4xLjciXSwicG9ydCI6NDkxOTIsImNlcnRpZmljYXRlIjoiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYiIsInNlY3JldCI6IkF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd00iLCJleHBpcmVzIjoxODAwMDAwMDkwLCJzdHJlYW0iOnsicmVzb2x1dGlvbiI6IjEwODBwIiwiZnBzIjoyMCwicXVhbGl0eSI6ImhpZ2gifX0"
+   },
+   "valid": false
+  },
+  {
+   "name": "invitation extra field",
+   "payload": {
+    "type": "session.offer",
+    "version": 1,
+    "id": "cccccccccccccccccccccccccccccccc",
+    "service": "camera",
+    "expires_at": 1800000090,
+    "invite": "orion-camera:2:eyJzZXNzaW9uIjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEiLCJhZGRyZXNzZXMiOlsiMTkyLjE2OC4xLjciXSwicG9ydCI6NDkxOTIsImNlcnRpZmljYXRlIjoiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYiIsInNlY3JldCI6IkF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd00iLCJleHBpcmVzIjoxODAwMDAwMDkwLCJzdHJlYW0iOnsicmVzb2x1dGlvbiI6IjEwODBwIiwiZnBzIjoyMCwicXVhbGl0eSI6ImhpZ2gifSwiYWNjb3VudF90b2tlbiI6InN5bnRoZXRpYyJ9"
+   },
+   "valid": false
+  },
+  {
+   "name": "unsupported stream",
+   "payload": {
+    "type": "session.offer",
+    "version": 1,
+    "id": "cccccccccccccccccccccccccccccccc",
+    "service": "camera",
+    "expires_at": 1800000090,
+    "invite": "orion-camera:2:eyJzZXNzaW9uIjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEiLCJhZGRyZXNzZXMiOlsiMTkyLjE2OC4xLjciXSwicG9ydCI6NDkxOTIsImNlcnRpZmljYXRlIjoiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYiIsInNlY3JldCI6IkF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd00iLCJleHBpcmVzIjoxODAwMDAwMDkwLCJzdHJlYW0iOnsicmVzb2x1dGlvbiI6IjRrIiwiZnBzIjoyMCwicXVhbGl0eSI6ImhpZ2gifX0"
+   },
+   "valid": false
+  },
+  {
+   "name": "port string",
+   "payload": {
+    "type": "session.offer",
+    "version": 1,
+    "id": "cccccccccccccccccccccccccccccccc",
+    "service": "camera",
+    "expires_at": 1800000090,
+    "invite": "orion-camera:2:eyJzZXNzaW9uIjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEiLCJhZGRyZXNzZXMiOlsiMTkyLjE2OC4xLjciXSwicG9ydCI6IjQ5MTkyIiwiY2VydGlmaWNhdGUiOiJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiIiwic2VjcmV0IjoiQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TSIsImV4cGlyZXMiOjE4MDAwMDAwOTAsInN0cmVhbSI6eyJyZXNvbHV0aW9uIjoiMTA4MHAiLCJmcHMiOjIwLCJxdWFsaXR5IjoiaGlnaCJ9fQ"
+   },
+   "valid": false
+  },
+  {
+   "name": "short secret",
+   "payload": {
+    "type": "session.offer",
+    "version": 1,
+    "id": "cccccccccccccccccccccccccccccccc",
+    "service": "camera",
+    "expires_at": 1800000090,
+    "invite": "orion-camera:2:eyJzZXNzaW9uIjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEiLCJhZGRyZXNzZXMiOlsiMTkyLjE2OC4xLjciXSwicG9ydCI6NDkxOTIsImNlcnRpZmljYXRlIjoiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYiIsInNlY3JldCI6Inh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eCIsImV4cGlyZXMiOjE4MDAwMDAwOTAsInN0cmVhbSI6eyJyZXNvbHV0aW9uIjoiMTA4MHAiLCJmcHMiOjIwLCJxdWFsaXR5IjoiaGlnaCJ9fQ"
+   },
+   "valid": false
+  },
+  {
+   "name": "invitation not text",
+   "payload": {
+    "type": "session.offer",
+    "version": 1,
+    "id": "cccccccccccccccccccccccccccccccc",
+    "service": "camera",
+    "expires_at": 1800000090,
+    "invite": 7
+   },
+   "valid": false
+  },
+  {
+   "name": "screen with launch",
+   "payload": {
+    "type": "session.offer",
+    "version": 1,
+    "id": "cccccccccccccccccccccccccccccccc",
+    "service": "screen",
+    "expires_at": 1800000090,
+    "invite": "orion-screen:1:eyJhZGRyZXNzZXMiOlsiMTkyLjE2OC4xLjciXSwiY2VydGlmaWNhdGUiOiJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiIiwiZXhwaXJlcyI6MTgwMDAwMDA5MCwibGF1bmNoIjoiY29tLmV4YW1wbGUuc3ludGhldGljIiwicG9ydCI6NDkxOTIsInNlY3JldCI6IkF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd00iLCJzZXNzaW9uIjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEiLCJzdHJlYW0iOnsiZnBzIjoyMCwicXVhbGl0eSI6ImhpZ2giLCJyZXNvbHV0aW9uIjoiMTA4MHAifX0"
+   },
+   "valid": true
+  },
+  {
+   "name": "screen 720p no launch",
+   "payload": {
+    "type": "session.offer",
+    "version": 1,
+    "id": "cccccccccccccccccccccccccccccccc",
+    "service": "screen",
+    "expires_at": 1800000090,
+    "invite": "orion-screen:1:eyJhZGRyZXNzZXMiOlsiMTkyLjE2OC4xLjciXSwiY2VydGlmaWNhdGUiOiJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiIiwiZXhwaXJlcyI6MTgwMDAwMDA5MCwibGF1bmNoIjoiIiwicG9ydCI6NDkxOTIsInNlY3JldCI6IkF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd00iLCJzZXNzaW9uIjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEiLCJzdHJlYW0iOnsiZnBzIjozMCwicXVhbGl0eSI6InN0YW5kYXJkIiwicmVzb2x1dGlvbiI6IjcyMHAifX0"
+   },
+   "valid": true
+  },
+  {
+   "name": "screen launch not a package",
+   "payload": {
+    "type": "session.offer",
+    "version": 1,
+    "id": "cccccccccccccccccccccccccccccccc",
+    "service": "screen",
+    "expires_at": 1800000090,
+    "invite": "orion-screen:1:eyJhZGRyZXNzZXMiOlsiMTkyLjE2OC4xLjciXSwiY2VydGlmaWNhdGUiOiJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiIiwiZXhwaXJlcyI6MTgwMDAwMDA5MCwibGF1bmNoIjoibm90IGEgcGFja2FnZSIsInBvcnQiOjQ5MTkyLCJzZWNyZXQiOiJBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNIiwic2Vzc2lvbiI6ImFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhIiwic3RyZWFtIjp7ImZwcyI6MjAsInF1YWxpdHkiOiJoaWdoIiwicmVzb2x1dGlvbiI6IjEwODBwIn19"
+   },
+   "valid": false
+  },
+  {
+   "name": "screen deadline differs from invitation",
+   "payload": {
+    "type": "session.offer",
+    "version": 1,
+    "id": "cccccccccccccccccccccccccccccccc",
+    "service": "screen",
+    "expires_at": 1800000060,
+    "invite": "orion-screen:1:eyJhZGRyZXNzZXMiOlsiMTkyLjE2OC4xLjciXSwiY2VydGlmaWNhdGUiOiJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiIiwiZXhwaXJlcyI6MTgwMDAwMDA5MCwibGF1bmNoIjoiIiwicG9ydCI6NDkxOTIsInNlY3JldCI6IkF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd00iLCJzZXNzaW9uIjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEiLCJzdHJlYW0iOnsiZnBzIjoyMCwicXVhbGl0eSI6ImhpZ2giLCJyZXNvbHV0aW9uIjoiMTA4MHAifX0"
+   },
+   "valid": false
+  },
+  {
+   "name": "screen invitation under camera service",
+   "payload": {
+    "type": "session.offer",
+    "version": 1,
+    "id": "cccccccccccccccccccccccccccccccc",
+    "service": "camera",
+    "expires_at": 1800000090,
+    "invite": "orion-screen:1:eyJhZGRyZXNzZXMiOlsiMTkyLjE2OC4xLjciXSwiY2VydGlmaWNhdGUiOiJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiIiwiZXhwaXJlcyI6MTgwMDAwMDA5MCwibGF1bmNoIjoiIiwicG9ydCI6NDkxOTIsInNlY3JldCI6IkF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd00iLCJzZXNzaW9uIjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEiLCJzdHJlYW0iOnsiZnBzIjoyMCwicXVhbGl0eSI6ImhpZ2giLCJyZXNvbHV0aW9uIjoiMTA4MHAifX0"
+   },
+   "valid": false
+  },
+  {
+   "name": "screen missing launch",
+   "payload": {
+    "type": "session.offer",
+    "version": 1,
+    "id": "cccccccccccccccccccccccccccccccc",
+    "service": "screen",
+    "expires_at": 1800000090,
+    "invite": "orion-screen:1:eyJhZGRyZXNzZXMiOlsiMTkyLjE2OC4xLjciXSwiY2VydGlmaWNhdGUiOiJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiIiwiZXhwaXJlcyI6MTgwMDAwMDA5MCwicG9ydCI6NDkxOTIsInNlY3JldCI6IkF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd00iLCJzZXNzaW9uIjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEiLCJzdHJlYW0iOnsiZnBzIjoyMCwicXVhbGl0eSI6ImhpZ2giLCJyZXNvbHV0aW9uIjoiMTA4MHAifX0"
+   },
+   "valid": false
+  },
+  {
+   "name": "file get",
+   "payload": {
+    "type": "session.offer",
+    "version": 1,
+    "id": "cccccccccccccccccccccccccccccccc",
+    "service": "file",
+    "expires_at": 1800000090,
+    "invite": "orion-file:1:eyJhZGRyZXNzZXMiOlsiMTkyLjE2OC4xLjciXSwiY2VydGlmaWNhdGUiOiJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiIiwiZXhwaXJlcyI6MTgwMDAwMDA5MCwibW9kZSI6ImdldCIsIm5hbWUiOiJTeW50aGV0aWMgaG9saWRheS5tcDQiLCJwb3J0Ijo0OTE5MiwicmVxdWVzdCI6IiIsInNlY3JldCI6IkF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd00iLCJzZXNzaW9uIjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEiLCJzaGEyNTYiOiJlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlIiwic2l6ZSI6NTI0Mjg4MDAwfQ"
+   },
+   "valid": true
+  },
+  {
+   "name": "file put for a phone request",
+   "payload": {
+    "type": "session.offer",
+    "version": 1,
+    "id": "cccccccccccccccccccccccccccccccc",
+    "service": "file",
+    "expires_at": 1800000090,
+    "invite": "orion-file:1:eyJhZGRyZXNzZXMiOlsiMTkyLjE2OC4xLjciXSwiY2VydGlmaWNhdGUiOiJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiIiwiZXhwaXJlcyI6MTgwMDAwMDA5MCwibW9kZSI6InB1dCIsIm5hbWUiOiJSw6lzdW3DqSAyMDI2IPCfjokucGRmIiwicG9ydCI6NDkxOTIsInJlcXVlc3QiOiJkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZCIsInNlY3JldCI6IkF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd00iLCJzZXNzaW9uIjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEiLCJzaGEyNTYiOiJlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlIiwic2l6ZSI6MH0"
+   },
+   "valid": true
+  },
+  {
+   "name": "file largest size",
+   "payload": {
+    "type": "session.offer",
+    "version": 1,
+    "id": "cccccccccccccccccccccccccccccccc",
+    "service": "file",
+    "expires_at": 1800000090,
+    "invite": "orion-file:1:eyJhZGRyZXNzZXMiOlsiMTkyLjE2OC4xLjciXSwiY2VydGlmaWNhdGUiOiJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiIiwiZXhwaXJlcyI6MTgwMDAwMDA5MCwibW9kZSI6ImdldCIsIm5hbWUiOiJTeW50aGV0aWMgaG9saWRheS5tcDQiLCJwb3J0Ijo0OTE5MiwicmVxdWVzdCI6IiIsInNlY3JldCI6IkF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd00iLCJzZXNzaW9uIjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEiLCJzaGEyNTYiOiJlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlIiwic2l6ZSI6MTA5OTUxMTYyNzc3Nn0"
+   },
+   "valid": true
+  },
+  {
+   "name": "file get naming a request",
+   "payload": {
+    "type": "session.offer",
+    "version": 1,
+    "id": "cccccccccccccccccccccccccccccccc",
+    "service": "file",
+    "expires_at": 1800000090,
+    "invite": "orion-file:1:eyJhZGRyZXNzZXMiOlsiMTkyLjE2OC4xLjciXSwiY2VydGlmaWNhdGUiOiJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiIiwiZXhwaXJlcyI6MTgwMDAwMDA5MCwibW9kZSI6ImdldCIsIm5hbWUiOiJTeW50aGV0aWMgaG9saWRheS5tcDQiLCJwb3J0Ijo0OTE5MiwicmVxdWVzdCI6ImRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkIiwic2VjcmV0IjoiQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TSIsInNlc3Npb24iOiJhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYSIsInNoYTI1NiI6ImVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWUiLCJzaXplIjo1MjQyODgwMDB9"
+   },
+   "valid": false
+  },
+  {
+   "name": "file put without a request",
+   "payload": {
+    "type": "session.offer",
+    "version": 1,
+    "id": "cccccccccccccccccccccccccccccccc",
+    "service": "file",
+    "expires_at": 1800000090,
+    "invite": "orion-file:1:eyJhZGRyZXNzZXMiOlsiMTkyLjE2OC4xLjciXSwiY2VydGlmaWNhdGUiOiJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiIiwiZXhwaXJlcyI6MTgwMDAwMDA5MCwibW9kZSI6InB1dCIsIm5hbWUiOiJTeW50aGV0aWMgaG9saWRheS5tcDQiLCJwb3J0Ijo0OTE5MiwicmVxdWVzdCI6IiIsInNlY3JldCI6IkF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd00iLCJzZXNzaW9uIjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEiLCJzaGEyNTYiOiJlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlIiwic2l6ZSI6NTI0Mjg4MDAwfQ"
+   },
+   "valid": false
+  },
+  {
+   "name": "file unknown mode",
+   "payload": {
+    "type": "session.offer",
+    "version": 1,
+    "id": "cccccccccccccccccccccccccccccccc",
+    "service": "file",
+    "expires_at": 1800000090,
+    "invite": "orion-file:1:eyJhZGRyZXNzZXMiOlsiMTkyLjE2OC4xLjciXSwiY2VydGlmaWNhdGUiOiJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiIiwiZXhwaXJlcyI6MTgwMDAwMDA5MCwibW9kZSI6InBvc3QiLCJuYW1lIjoiU3ludGhldGljIGhvbGlkYXkubXA0IiwicG9ydCI6NDkxOTIsInJlcXVlc3QiOiIiLCJzZWNyZXQiOiJBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNIiwic2Vzc2lvbiI6ImFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhIiwic2hhMjU2IjoiZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZSIsInNpemUiOjUyNDI4ODAwMH0"
+   },
+   "valid": false
+  },
+  {
+   "name": "file name with a path",
+   "payload": {
+    "type": "session.offer",
+    "version": 1,
+    "id": "cccccccccccccccccccccccccccccccc",
+    "service": "file",
+    "expires_at": 1800000090,
+    "invite": "orion-file:1:eyJhZGRyZXNzZXMiOlsiMTkyLjE2OC4xLjciXSwiY2VydGlmaWNhdGUiOiJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiIiwiZXhwaXJlcyI6MTgwMDAwMDA5MCwibW9kZSI6ImdldCIsIm5hbWUiOiIuLi9TeW50aGV0aWMubXA0IiwicG9ydCI6NDkxOTIsInJlcXVlc3QiOiIiLCJzZWNyZXQiOiJBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNIiwic2Vzc2lvbiI6ImFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhIiwic2hhMjU2IjoiZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZSIsInNpemUiOjUyNDI4ODAwMH0"
+   },
+   "valid": false
+  },
+  {
+   "name": "file reserved name",
+   "payload": {
+    "type": "session.offer",
+    "version": 1,
+    "id": "cccccccccccccccccccccccccccccccc",
+    "service": "file",
+    "expires_at": 1800000090,
+    "invite": "orion-file:1:eyJhZGRyZXNzZXMiOlsiMTkyLjE2OC4xLjciXSwiY2VydGlmaWNhdGUiOiJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiIiwiZXhwaXJlcyI6MTgwMDAwMDA5MCwibW9kZSI6ImdldCIsIm5hbWUiOiJDT04udHh0IiwicG9ydCI6NDkxOTIsInJlcXVlc3QiOiIiLCJzZWNyZXQiOiJBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNIiwic2Vzc2lvbiI6ImFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhIiwic2hhMjU2IjoiZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZSIsInNpemUiOjUyNDI4ODAwMH0"
+   },
+   "valid": false
+  },
+  {
+   "name": "file name too long",
+   "payload": {
+    "type": "session.offer",
+    "version": 1,
+    "id": "cccccccccccccccccccccccccccccccc",
+    "service": "file",
+    "expires_at": 1800000090,
+    "invite": "orion-file:1:eyJhZGRyZXNzZXMiOlsiMTkyLjE2OC4xLjciXSwiY2VydGlmaWNhdGUiOiJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiIiwiZXhwaXJlcyI6MTgwMDAwMDA5MCwibW9kZSI6ImdldCIsIm5hbWUiOiLDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpw6nDqcOpIiwicG9ydCI6NDkxOTIsInJlcXVlc3QiOiIiLCJzZWNyZXQiOiJBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNIiwic2Vzc2lvbiI6ImFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhIiwic2hhMjU2IjoiZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZSIsInNpemUiOjUyNDI4ODAwMH0"
+   },
+   "valid": false
+  },
+  {
+   "name": "file size over limit",
+   "payload": {
+    "type": "session.offer",
+    "version": 1,
+    "id": "cccccccccccccccccccccccccccccccc",
+    "service": "file",
+    "expires_at": 1800000090,
+    "invite": "orion-file:1:eyJhZGRyZXNzZXMiOlsiMTkyLjE2OC4xLjciXSwiY2VydGlmaWNhdGUiOiJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiIiwiZXhwaXJlcyI6MTgwMDAwMDA5MCwibW9kZSI6ImdldCIsIm5hbWUiOiJTeW50aGV0aWMgaG9saWRheS5tcDQiLCJwb3J0Ijo0OTE5MiwicmVxdWVzdCI6IiIsInNlY3JldCI6IkF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd00iLCJzZXNzaW9uIjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEiLCJzaGEyNTYiOiJlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlIiwic2l6ZSI6MTA5OTUxMTYyNzc3N30"
+   },
+   "valid": false
+  },
+  {
+   "name": "file size negative",
+   "payload": {
+    "type": "session.offer",
+    "version": 1,
+    "id": "cccccccccccccccccccccccccccccccc",
+    "service": "file",
+    "expires_at": 1800000090,
+    "invite": "orion-file:1:eyJhZGRyZXNzZXMiOlsiMTkyLjE2OC4xLjciXSwiY2VydGlmaWNhdGUiOiJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiIiwiZXhwaXJlcyI6MTgwMDAwMDA5MCwibW9kZSI6ImdldCIsIm5hbWUiOiJTeW50aGV0aWMgaG9saWRheS5tcDQiLCJwb3J0Ijo0OTE5MiwicmVxdWVzdCI6IiIsInNlY3JldCI6IkF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd00iLCJzZXNzaW9uIjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEiLCJzaGEyNTYiOiJlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlIiwic2l6ZSI6LTF9"
+   },
+   "valid": false
+  },
+  {
+   "name": "file size string",
+   "payload": {
+    "type": "session.offer",
+    "version": 1,
+    "id": "cccccccccccccccccccccccccccccccc",
+    "service": "file",
+    "expires_at": 1800000090,
+    "invite": "orion-file:1:eyJhZGRyZXNzZXMiOlsiMTkyLjE2OC4xLjciXSwiY2VydGlmaWNhdGUiOiJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiIiwiZXhwaXJlcyI6MTgwMDAwMDA5MCwibW9kZSI6ImdldCIsIm5hbWUiOiJTeW50aGV0aWMgaG9saWRheS5tcDQiLCJwb3J0Ijo0OTE5MiwicmVxdWVzdCI6IiIsInNlY3JldCI6IkF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd00iLCJzZXNzaW9uIjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEiLCJzaGEyNTYiOiJlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlIiwic2l6ZSI6IjUyNDI4ODAwMCJ9"
+   },
+   "valid": false
+  },
+  {
+   "name": "file digest uppercase",
+   "payload": {
+    "type": "session.offer",
+    "version": 1,
+    "id": "cccccccccccccccccccccccccccccccc",
+    "service": "file",
+    "expires_at": 1800000090,
+    "invite": "orion-file:1:eyJhZGRyZXNzZXMiOlsiMTkyLjE2OC4xLjciXSwiY2VydGlmaWNhdGUiOiJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiIiwiZXhwaXJlcyI6MTgwMDAwMDA5MCwibW9kZSI6ImdldCIsIm5hbWUiOiJTeW50aGV0aWMgaG9saWRheS5tcDQiLCJwb3J0Ijo0OTE5MiwicmVxdWVzdCI6IiIsInNlY3JldCI6IkF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd00iLCJzZXNzaW9uIjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEiLCJzaGEyNTYiOiJFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFIiwic2l6ZSI6NTI0Mjg4MDAwfQ"
+   },
+   "valid": false
+  },
+  {
+   "name": "file missing name",
+   "payload": {
+    "type": "session.offer",
+    "version": 1,
+    "id": "cccccccccccccccccccccccccccccccc",
+    "service": "file",
+    "expires_at": 1800000090,
+    "invite": "orion-file:1:eyJhZGRyZXNzZXMiOlsiMTkyLjE2OC4xLjciXSwiY2VydGlmaWNhdGUiOiJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiIiwiZXhwaXJlcyI6MTgwMDAwMDA5MCwibW9kZSI6ImdldCIsInBvcnQiOjQ5MTkyLCJyZXF1ZXN0IjoiIiwic2VjcmV0IjoiQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TSIsInNlc3Npb24iOiJhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYSIsInNoYTI1NiI6ImVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWUiLCJzaXplIjo1MjQyODgwMDB9"
+   },
+   "valid": false
+  },
+  {
+   "name": "file public address",
+   "payload": {
+    "type": "session.offer",
+    "version": 1,
+    "id": "cccccccccccccccccccccccccccccccc",
+    "service": "file",
+    "expires_at": 1800000090,
+    "invite": "orion-file:1:eyJhZGRyZXNzZXMiOlsiOC44LjguOCJdLCJjZXJ0aWZpY2F0ZSI6ImJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmIiLCJleHBpcmVzIjoxODAwMDAwMDkwLCJtb2RlIjoiZ2V0IiwibmFtZSI6IlN5bnRoZXRpYyBob2xpZGF5Lm1wNCIsInBvcnQiOjQ5MTkyLCJyZXF1ZXN0IjoiIiwic2VjcmV0IjoiQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TSIsInNlc3Npb24iOiJhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYSIsInNoYTI1NiI6ImVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWUiLCJzaXplIjo1MjQyODgwMDB9"
+   },
+   "valid": false
+  }
+ ]
+}

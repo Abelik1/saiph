@@ -34,22 +34,76 @@ function hostedState(device: Partial<typeof hostedPhone> | null = {}): State {
 const client = (call = vi.fn().mockResolvedValue({ queued: true })) => ({ call, subscribe: () => () => {} }) as unknown as Client;
 
 describe("Saiph Cloud phone on the Phone page", () => {
-  it("lists an approved hosted phone and points notifications to Hosted settings", () => {
+  it("shows only the selected Cloud phone's pending files in Share and saves explicitly", async () => {
+    const call = vi.fn().mockResolvedValue({ path: "synthetic-download" });
+    const state = hostedState();
+    state.hosted!.offers = [
+      { id: "offer-one", source: hostedPhone.id, name: "ORION-fixture.txt", size: 42 },
+      { id: "offer-other", source: "another-phone", name: "Other device.txt", size: 42 },
+      { id: "offer-unknown", name: "Unattributed.txt", size: 42 },
+    ];
+    render(<Phone state={state} client={client(call)} />);
+    openTab("Share");
+    expect(screen.getByRole("button", { name: "Save ORION-fixture.txt" })).toBeEnabled();
+    expect(screen.queryByText("Other device.txt")).toBeNull();
+    expect(screen.queryByText("Unattributed.txt")).toBeNull();
+    expect(screen.queryByText(/Nothing yet/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Save ORION-fixture.txt" }));
+    await waitFor(() => expect(call).toHaveBeenCalledWith("hosted.file.save", { id: "offer-one" }));
+  });
+  it("disables a pending Cloud file save while the selected phone is offline", () => {
+    render(<PhoneTabs features={features} phone={{ ...hostedPhone, online: false }} client={client()}
+      cloudOffers={[{ id: "offer-one", source: hostedPhone.id, name: "ORION-offline.txt", size: 42 }]} />);
+    openTab("Share");
+    expect(screen.getByRole("button", { name: "Save ORION-offline.txt" })).toBeDisabled();
+  });
+  it("lists an approved Cloud phone and explains notification access on the Phone page", () => {
     render(<Phone state={hostedState()} client={client()} />);
     expect(screen.getByRole("heading", { name: "Synthetic phone" })).toBeVisible();
     expect(screen.getByText("Online")).toBeVisible();
-    expect(screen.getByText(/notifications appear in Settings → Saiph Cloud/)).toBeVisible();
+    expect(screen.getByText(/tap Allow notifications in Saiph/)).toBeVisible();
     // The Link clipboard helper hint does not apply to a hosted phone.
     expect(screen.queryByText(/Clipboard isn't shared/)).toBeNull();
     expect(screen.getByText("Synthetic SMS", { selector: "p" })).toBeVisible();
   });
-  it("finds a Saiph Cloud phone for the webcam over USB or Wi-Fi, never by its Hosted id", async () => {
+  it("shows Cloud notifications for the selected phone and dismisses through the native Cloud handler", async () => {
+    const call = vi.fn().mockResolvedValue({queued: true});
+    const state = hostedState();
+    state.hosted!.notifications = [
+      {id:"notice-one", device_id:"dev_hosted", app:"Synthetic app", title:"A reminder", text:"Synthetic notification"},
+      {id:"notice-other", device_id:"another-phone", app:"Other app", title:"Other phone", text:"Different device"},
+    ];
+    render(<Phone state={state} client={client(call)} />);
+    expect(screen.getByText("Synthetic notification")).toBeVisible();
+    expect(screen.queryByText("Different device")).toBeNull();
+    fireEvent.click(screen.getByRole("button", {name:"Dismiss A reminder"}));
+    await waitFor(() => expect(call).toHaveBeenCalledWith("hosted.notification.dismiss", {id:"notice-one"}));
+    expect(screen.queryByRole("button", {name:"Open A reminder on phone"})).toBeNull();  // An older phone: no Open.
+  });
+  it("presses buttons, replies and opens Cloud notifications when the phone offers notification actions", async () => {
+    const call = vi.fn().mockResolvedValue({queued: true});
+    const state = hostedState({ capabilities: [...hostedPhone.capabilities, "notification-actions"] });
+    state.hosted!.notifications = [{id:"notice-one", device_id:"dev_hosted", app:"Synthetic chat", title:"Ada", text:"See you at 7?",
+      actions:[{index:0, label:"Mark as read"}], reply_key:"synthetic_reply"}];
+    render(<Phone state={state} client={client(call)} />);
+    fireEvent.click(screen.getByRole("button", {name:"Mark as read"}));
+    await waitFor(() => expect(call).toHaveBeenCalledWith("hosted.notification", {id:"notice-one", operation:"action", index:0}));
+    fireEvent.click(screen.getByRole("button", {name:"Reply"}));
+    fireEvent.change(screen.getByLabelText("Reply to Ada"), {target:{value:"Synthetic reply"}});
+    fireEvent.click(screen.getByRole("button", {name:"Send reply"}));
+    await waitFor(() => expect(call).toHaveBeenCalledWith("hosted.notification", {id:"notice-one", operation:"reply", reply_key:"synthetic_reply", text:"Synthetic reply"}));
+    fireEvent.click(screen.getByRole("button", {name:"Open Ada on phone"}));
+    await waitFor(() => expect(call).toHaveBeenCalledWith("hosted.notification", {id:"notice-one", operation:"open"}));
+    expect(call).not.toHaveBeenCalledWith("phone.notification", expect.anything());
+  });
+  it("opens integrated camera setup without debugging or using a Cloud id as an ADB serial", async () => {
     const call = vi.fn().mockResolvedValue({ adb: true, devices: [] });
-    const state = { ...hostedState(), camera: { available: true, running: false } } as unknown as State;
+    const state = { ...hostedState(), camera: { available: true, running: false, integrated_available: true } } as unknown as State;
     render(<Phone state={state} client={client(call)} />);
     fireEvent.click(screen.getByRole("button", { name: "Webcam" }));
-    expect(await screen.findByRole("button", { name: "Find my phone" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Use phone as webcam" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Find my phone" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Use phone as webcam" })).toBeEnabled();
+    expect(call).not.toHaveBeenCalledWith("camera.devices");
   });
   it("shows connection setup before a hosted phone has joined", () => {
     render(<Phone state={hostedState(null)} client={client()} />);
@@ -85,10 +139,15 @@ describe("Saiph Cloud phone on the Phone page", () => {
   it("hides actions the hosted phone does not offer and explains its own switch", () => {
     const limited = { ...hostedPhone, capabilities: ["files"] };
     render(<PhoneTabs features={features} phone={limited} client={client()} />);
-    expect(screen.getByText(/Turn on Texts and calls in Saiph Cloud on your phone and allow SMS/)).toBeVisible();
+    expect(screen.getByText(/On your phone, tap Allow texts and calls in Saiph and allow SMS/)).toBeVisible();
     openTab("Calls");
-    expect(screen.getByText(/Turn on Texts and calls in Saiph Cloud on your phone and allow phone access/)).toBeVisible();
+    expect(screen.getByText(/On your phone, tap Allow texts and calls in Saiph and allow phone access/)).toBeVisible();
     expect(screen.queryByRole("button", { name: "Answer" })).toBeNull();
+  });
+  it("explains missing Cloud permissions even when the heartbeat is stale", () => {
+    render(<PhoneTabs features={features} phone={{ ...hostedPhone, online: false, capabilities: ["files"] }} client={client()} />);
+    expect(screen.getByText(/tap Allow texts and calls/)).toBeVisible();
+    expect(screen.queryByText(/Reconnect Synthetic phone/)).toBeNull();
   });
   it("stops offering answer once another computer handled the call and says which", () => {
     const handled = { ...features, calls: [{ ...features.calls[0], state: "active" as const, handled: "answer" as const, handled_by: "Synthetic laptop" }] };
@@ -107,10 +166,29 @@ describe("Saiph Cloud phone on the Phone page", () => {
     expect(screen.getByText("Declined on Synthetic laptop")).toBeVisible();
     expect(screen.queryByRole("alert")).toBeNull();
   });
-  it("keeps group threads on the phone without suggesting an update", () => {
+  it("keeps group threads on an older Cloud phone and suggests the update", () => {
     const group = { ...features, threads: [{ ...features.threads[0], recipients: ["+15550100", "+15550101"] }] };
     render(<PhoneTabs features={group} phone={hostedPhone} client={client()} />);
-    expect(screen.getByText("Group replies stay in your phone's messaging app with Saiph Cloud.")).toBeVisible();
+    expect(screen.getByText("Group replies stay in your phone's messaging app. Update Saiph on your phone to reply here.")).toBeVisible();
     expect(screen.getByLabelText("SMS reply")).toBeDisabled();
+  });
+  it("replies to a group from a Cloud phone that offers sms-group", async () => {
+    const call = vi.fn().mockResolvedValue({ queued: true });
+    const group = { ...features, threads: [{ ...features.threads[0], recipients: ["+15550100", "+15550101"] }] };
+    render(<PhoneTabs features={group} phone={{ ...hostedPhone, capabilities: [...hostedPhone.capabilities, "sms-group"] }} client={client(call)} />);
+    expect(screen.getByText("Group replies are sent as MMS.")).toBeVisible();
+    fireEvent.change(screen.getByLabelText("SMS reply"), { target: { value: "Synthetic group reply" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(call).toHaveBeenCalledWith("phone.sms.send", expect.objectContaining({ device_id: "dev_hosted", thread: 7, text: "Synthetic group reply" })));
+  });
+  it("asks a Cloud phone for an MMS picture and shows it once it arrived", async () => {
+    const call = vi.fn().mockResolvedValue({ queued: true });
+    const parts = { ...features, attachments: [{ device_id: "dev_hosted", thread: 7, message: 41, parts: [{ part: 3, mime: "image/jpeg", name: "synthetic.jpg" }] }] };
+    const { rerender } = render(<PhoneTabs features={parts} phone={hostedPhone} client={client(call)} />);
+    fireEvent.click(screen.getByRole("button", { name: "Show synthetic.jpg" }));
+    await waitFor(() => expect(call).toHaveBeenCalledWith("phone.sms.attachment", { device_id: "dev_hosted", thread: 7, message: 41, part: 3 }));
+    const arrived = { ...parts, attachment_files: [{ id: "a", device_id: "dev_hosted", thread: 7, message: 41, part: 3, name: "synthetic.jpg", mime: "image/jpeg", size: 4, preview: "data:image/jpeg;base64,AAAA", ready: true }] };
+    rerender(<PhoneTabs features={arrived} phone={hostedPhone} client={client(call)} />);
+    expect(screen.getByRole("img")).toHaveAttribute("src", "data:image/jpeg;base64,AAAA");
   });
 });

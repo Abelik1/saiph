@@ -29,6 +29,16 @@ def bundle(tmp_path, magic=b'MZ'):
     return root
 
 
+def test_compiled_frontend_cannot_silently_omit_dependency_notices(tmp_path):
+    compiled = tmp_path / 'compiled-frontend'
+    compiled.mkdir()
+    (compiled / 'index.html').write_text('<html>Synthetic compiled app</html>')
+    destination = tmp_path / 'licences'
+    with pytest.raises(ValueError, match='source package-lock.json'):
+        packaging.license_inventory(destination, tmp_path / 'Analysis-00.toc', compiled)
+    assert not destination.exists()
+
+
 def test_secret_state_and_path_traversal_are_rejected(tmp_path):
     root = bundle(tmp_path)
     (root / 'google-services.json').write_text('{}')

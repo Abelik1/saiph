@@ -70,10 +70,13 @@
     }
   });
 
+  // A free trial is started on the account page; the site only says it is offered.
+  const trial = subscribeUrl && typeof cfg.hostedTrial === "string" ? cfg.hostedTrial : "";
+  document.querySelectorAll("[data-trial]").forEach((el) => { el.textContent = trial; el.hidden = !trial; });
   document.querySelectorAll('[data-link="subscribe"]').forEach((a) => {
     if (subscribeUrl) {
       link(a, subscribeUrl);
-      a.textContent = a.dataset.liveText || "Subscribe";
+      a.textContent = (trial && a.dataset.trialText) || a.dataset.liveText || "Subscribe";
     } else if (waitlistReady) {
       link(a, "waitlist.html");
       a.textContent = "Join the early-access list";

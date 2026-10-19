@@ -19,9 +19,10 @@
   "androidBetaUrl": "https://appdistribution.firebase.dev/i/127ea32988e8362f",
   "betaAccountUrl": "https://account.dev.usesaiph.com/account",
   "subscribeUrl": "https://account.dev.usesaiph.com/account",
-  "hostedPrice": "€3.99",
+  "hostedPrice": "€9.99",
   "hostedPeriod": "/ month",
-  "hostedPriceNote": "or €36 a year, which saves 25%",
+  "hostedPriceNote": "or €89.99 a year, saving about 25%",
+  "hostedTrial": "",
   "waitlistPrivacyUrl": "privacy.html#waitlist",
   "waitlistNotice": "I agree to receive the Saiph launch announcement and occasional launch updates by email. I can unsubscribe or ask for my email to be deleted at any time.",
   "waitlist": {

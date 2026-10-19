@@ -6,6 +6,8 @@ import json
 import os
 import shutil
 import sqlite3
+import threading
+from contextlib import contextmanager
 from pathlib import Path
 from uuid import uuid4
 
@@ -51,10 +53,50 @@ class Store:
         with self.connect() as db:
             db.execute("CREATE TABLE IF NOT EXISTS records (kind TEXT, id TEXT, data TEXT, PRIMARY KEY(kind,id))")
 
-    def connect(self):
+    @property
+    def _local(self):
+        local = self.__dict__.get("_thread_local")
+        if local is None:
+            local = self.__dict__.setdefault("_thread_local", threading.local())
+        return local
+
+    @contextmanager
+    def reading(self):
+        """Share one connection for every access on this thread inside the block.
+
+        A dashboard snapshot reads the store five to ten times, and opening the
+        database costs about 12 ms each on Windows. Each access still runs in its
+        own transaction (committed at the end of its block), so nothing is held
+        open between them; other threads keep their own connections."""
+        local = self._local
+        if getattr(local, "connection", None) is not None:
+            yield
+            return
         connection = sqlite3.connect(self.path, timeout=15)
-        connection.execute("PRAGMA journal_mode=WAL")
-        return connection
+        try:
+            connection.execute("PRAGMA journal_mode=WAL")
+            local.connection = connection
+            yield
+        finally:
+            local.connection = None
+            connection.close()
+
+    @contextmanager
+    def connect(self):
+        shared = getattr(self._local, "connection", None)
+        if shared is not None:
+            with shared:
+                yield shared
+            return
+        connection = sqlite3.connect(self.path, timeout=15)
+        try:
+            connection.execute("PRAGMA journal_mode=WAL")
+            # sqlite3's transaction context commits/rolls back but does not close
+            # the connection. State reads otherwise retain handles until GC.
+            with connection:
+                yield connection
+        finally:
+            connection.close()
 
     def all(self, kind: str) -> list[dict]:
         with self.connect() as db:

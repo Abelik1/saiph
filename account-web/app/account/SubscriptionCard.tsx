@@ -2,6 +2,7 @@
 import type {Entitlement} from "../../lib/billing/entitlement.mjs";
 import type {BillingView} from "../../lib/billing/view";
 import {Icon, Notice} from "../ui";
+import TrialCard from "./TrialCard";
 
 const standingText: Record<Entitlement["state"], string> = {
   none: "No subscription yet", active: "Active", ending: "Active, cancellation scheduled",
@@ -20,7 +21,8 @@ const day = (seconds: number) => new Intl.DateTimeFormat("en-IE", {day: "numeric
  * The checkout return notice is shown by the page, never derived here. */
 export default function SubscriptionCard({view}: {view: BillingView | "unavailable"}) {
   const test = view !== "unavailable" && view.mode === "owner-sandbox";
-  return <section className="card" aria-labelledby="subscription-title">
+  const trialShown = view !== "unavailable" && view.trial.state !== "off" && view.trial.state !== "subscribed";
+  return <>{view !== "unavailable" && <TrialCard trial={view.trial} />}<section className={trialShown ? "card after" : "card"} aria-labelledby="subscription-title">
     <div className="card-head">
       <div>
         <p className="eyebrow">Saiph Cloud subscription</p>
@@ -45,7 +47,7 @@ export default function SubscriptionCard({view}: {view: BillingView | "unavailab
       {view.canSubscribe && <div className="plans">
         <div className="plan">
           <h3>Monthly</h3>
-          <p className="price">€3.99 <span>/ month</span></p>
+          <p className="price">€9.99 <span>/ month</span></p>
           <p>Cancel any time.</p>
           <form method="post" action="/api/billing/checkout">
             <input type="hidden" name="plan" value="monthly" />
@@ -53,10 +55,10 @@ export default function SubscriptionCard({view}: {view: BillingView | "unavailab
           </form>
         </div>
         <div className="plan recommended">
-          <span className="pill info plain">Save 25%</span>
+          <span className="pill info plain">Save about 25%</span>
           <h3>Yearly</h3>
-          <p className="price">€36 <span>/ year</span></p>
-          <p>Works out at €3 a month.</p>
+          <p className="price">€89.99 <span>/ year</span></p>
+          <p>Works out at about €7.50 a month.</p>
           <form method="post" action="/api/billing/checkout">
             <input type="hidden" name="plan" value="yearly" />
             <button className="block" type="submit">Choose yearly</button>
@@ -73,5 +75,5 @@ export default function SubscriptionCard({view}: {view: BillingView | "unavailab
       <p className="fine after">{test ? "Test mode: use Stripe test card details only. No real money is charged." : "Cancel any time in Manage billing; access continues to the end of the paid period."}</p>
     </>}
     <div className="card-foot"><Icon name="lock" /><span>Paying gives your account Cloud access. You still approve devices on your own computer, and signing in never unlocks your content.</span></div>
-  </section>;
+  </section></>;
 }

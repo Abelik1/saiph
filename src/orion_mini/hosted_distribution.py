@@ -35,7 +35,7 @@ def read_configuration(path):
 
 def desktop_config(value):
     return {**{key:value[key] for key in ('service_url', 'issuer', 'audience')},
-            'client_id':value['desktop_client_id'], 'refresh_tokens':False}
+            'client_id':value['desktop_client_id'], 'refresh_tokens':True}
 
 
 def packaged_config():

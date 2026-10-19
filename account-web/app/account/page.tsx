@@ -39,10 +39,10 @@ export default async function Account({ searchParams }: Props) {
       </section>
     );
   // Billing standing comes only from webhook-stored rows (lib/billing/view.ts).
-  const billing = await billingView(session.user.sub);
+  const billing = await billingView(session.user.sub, session.user.trialKey);
   // The checkout return is a display hint only; it never reaches billing state.
-  const { checkout } = await searchParams;
-  const notice = checkout === "returned" ? "returned" : checkout === "cancelled" ? "cancelled" : null;
+  const { checkout, trial } = await searchParams;
+  const notice = checkout === "returned" ? "returned" : checkout === "cancelled" ? "cancelled" : trial === "started" ? "trial" : null;
   if (readBetaConfig(process.env)) return <BetaAccount billing={billing} notice={notice} />;
   return (
     <>

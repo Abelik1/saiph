@@ -158,7 +158,7 @@ def test_mms_pictures_are_requested_held_privately_shown_and_saved(tmp_path, mon
     assert service.store.all("phone_file") == []  # Not a Downloads transfer or handoff.
     monkeypatch.setattr(f.Path, "home", lambda: tmp_path / "home")
     saved = service.dispatch("phone.sms.attachment.save", {"id": view["id"]})
-    assert f.Path(saved["path"]).read_bytes() == data and f.Path(saved["path"]).parent == tmp_path / "home" / "Downloads" / "Orion"
+    assert f.Path(saved["path"]).read_bytes() == data and f.Path(saved["path"]).parent == tmp_path / "home" / "Downloads" / "Saiph"
     assert service.dispatch("phone.sms.attachment", {"device_id": "phone", "thread": 7, "message": 31, "part": 5}) == {"ready": True, "id": view["id"]}
     service.event(event("sms.remove", {"thread": 7}), None)
     assert service.snapshot()["attachments"] == []

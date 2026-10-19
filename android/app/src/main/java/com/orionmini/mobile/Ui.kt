@@ -333,6 +333,23 @@ fun Context.dockAction(icon: Int, label: String, run: () -> Unit) = LinearLayout
     setOnClickListener { run() }
 }
 
+/** One tile of the home screen's quick-actions strip. */
+data class QuickAction(val icon: Int, val label: String, val run: () -> Unit)
+
+/**
+ * The home screen's quick-actions strip: the features people start most, as equal icon
+ * tiles on one card at the top, so they never sit below a long page. Three or four tiles.
+ */
+fun Context.quickActions(vararg actions: QuickAction): LinearLayout = card().apply {
+    orientation = LinearLayout.HORIZONTAL; setPadding(dp(6), dp(6), dp(6), dp(6))
+    actions.forEach { action ->
+        addView(dockAction(action.icon, action.label, action.run).apply {
+            // Two lines at most, so "Use as webcam" never truncates at larger text sizes.
+            (getChildAt(1) as TextView).apply { maxLines = 2; textSize = UiType.META }
+        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+    }
+}
+
 /**
  * The strings behind every screen, as on the desktop: contour lines running from
  * cyan to violet over a night ground. Drawn once per size, never animated, so it

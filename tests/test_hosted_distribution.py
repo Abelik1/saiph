@@ -19,7 +19,7 @@ def test_bundled_public_defaults_do_not_enable_hosted_or_override_user_configura
     assert packaged_config() is None
     monkeypatch.setattr(sys, 'frozen', True)
     assert packaged_config()['client_id'] == 'SyntheticDesktop'
-    assert packaged_config()['refresh_tokens'] is False
+    assert packaged_config()['refresh_tokens'] is True
     assert 'enabled' not in packaged_config()
     from orion_mini.hosted_runtime import HostedController
     controller = object.__new__(HostedController)
@@ -54,6 +54,43 @@ def test_fresh_link_state_exposes_bundled_settings_without_enabling_or_creating_
     assert snapshot['account']['status'] == 'signed_out'
     assert profile.settings == {}
     assert not profile.root.exists()
+
+
+@pytest.mark.parametrize('difference', [None, 'service_url', 'issuer', 'audience', 'client_id', 'disabled', 'hub'])
+def test_persistent_session_upgrade_only_matches_enabled_packaged_deployment(tmp_path, monkeypatch, difference):
+    from types import SimpleNamespace
+    from orion_mini.hosted_distribution import desktop_config
+    from orion_mini.hosted_runtime import HostedController
+    from orion_mini.storage import Store
+
+    bundled = desktop_config(settings())
+    monkeypatch.setattr('orion_mini.hosted_runtime.packaged_config', lambda: bundled)
+    original = {**bundled, 'refresh_tokens': False, 'enabled': difference != 'disabled', 'owner_option': 'kept'}
+    if difference in ('service_url', 'issuer', 'audience', 'client_id'):
+        original[difference] += 'different'
+    profile = SimpleNamespace(root=tmp_path, settings={'hosted': original.copy()},
+                              store=Store(tmp_path / 'store'))
+    if difference == 'hub': profile.settings['hub'] = {'paired': True}
+    saves = []
+    profile.save = lambda: saves.append(True)
+    account = tmp_path / 'hosted' / 'account'
+    account.mkdir(parents=True)
+    tombstone = account / 'signed-out'
+    tombstone.write_bytes(b'signed-out\n')
+    identity = tmp_path / 'hosted' / 'identity'
+    identity.mkdir()
+    retained = identity / 'synthetic-retained-fixture'
+    retained.write_bytes(b'ORION-SYNTHETIC-IDENTITY')
+
+    controller = HostedController(profile)
+    expected = {**original, 'refresh_tokens': difference is None}
+    assert controller.settings == expected
+    assert saves == ([True] if difference is None else [])
+    assert tombstone.read_bytes() == b'signed-out\n'
+    assert retained.read_bytes() == b'ORION-SYNTHETIC-IDENTITY'
+    assert controller.account is None and controller.transport is None
+    controller._migrate_packaged_session()
+    assert saves == ([True] if difference is None else [])
 
 
 @pytest.mark.parametrize('mutation', ['secret','http','query','issuer','clients','oversize'])

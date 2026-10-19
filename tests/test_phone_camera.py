@@ -237,12 +237,79 @@ def test_windows_preview_opens_only_the_scrcpy_window_for_obs_setup(tools):
     with pytest.raises(ValueError, match='one-time phone camera setup'):
         instance.start(serial='SYNTHUSB01')
     status = instance.start(serial='SYNTHUSB01', preview=True)
-    assert status['running'] is True and status['mode'] == 'preview' and 'preview window' in status['message']
+    assert status['running'] is True and status['mode'] == 'preview' and 'own window' in status['message']
     (process,) = started
     assert process.argv[-2:] == ['--window-title', camera_module.WINDOW_TITLE]
     assert not any('obs' in str(part).lower() for part in process.argv)
     assert not any(call[0] == 'tasklist' for call in run.calls)  # OBS is not involved in a preview.
     instance.stop()
+
+
+def test_status_reuses_tool_discovery_but_expires_and_rechecks_configuration(tools, monkeypatch):
+    clock = [0.0]
+    monkeypatch.setattr(camera_module, 'time', SimpleNamespace(monotonic=lambda: clock[0]))
+    calls = []
+    monkeypatch.setattr(camera_module, 'tool_path', lambda name, configured=None: calls.append(name) or tools.scrcpy)
+    workspace = hosted_workspace(v4l2_sink='/dev/video10')
+    instance, _ = make_camera(workspace, FakeAdb())
+    for _ in range(30):
+        assert instance.status()['available']
+    assert calls == ['scrcpy', 'scrcpy']
+    clock[0] = 15.0
+    assert instance.status()['available']
+    instance._status_refresh_thread.join(timeout=2)
+    assert len(calls) == 4
+    workspace.settings['link']['camera']['enabled'] = False
+    status = instance.status()
+    assert not status['available'] and not status['can_preview']
+    assert len(calls) == 4
+
+
+def test_start_revalidates_tools_even_when_status_probe_is_cached(tools, monkeypatch):
+    instance, started = make_camera(hosted_workspace(v4l2_sink='/dev/video10'), FakeAdb())
+    assert instance.status()['available']
+    monkeypatch.setattr(instance, '_prepared', lambda preview=False: (None, 'Synthetic tool removed.'))
+    with pytest.raises(ValueError, match='tool removed'):
+        instance.start(serial='SYNTHUSB01')
+    assert not started
+
+
+def test_periodic_camera_probe_cannot_block_status_or_restore_disabled_config(tools, monkeypatch):
+    import threading
+    clock = [0.0]
+    monkeypatch.setattr(camera_module, 'time', SimpleNamespace(monotonic=lambda: clock[0]))
+    workspace = hosted_workspace(v4l2_sink='/dev/video10')
+    instance, _ = make_camera(workspace, FakeAdb())
+    assert instance.status()['available']
+    prepared = instance._prepared()
+    original = instance._prepared
+    entered, release = threading.Event(), threading.Event()
+    def slow_probe(preview=False):
+        if threading.current_thread() is not threading.main_thread():
+            entered.set()
+            assert release.wait(2)
+            return prepared
+        return original(preview)
+    monkeypatch.setattr(instance, '_prepared', slow_probe)
+    clock[0] = 15.0
+    try:
+        assert instance.status()['available']
+        assert entered.wait(1)
+        assert instance.status()['available']
+        workspace.settings['link']['camera']['enabled'] = False
+        disabled = instance.status()
+        assert not disabled['available'] and not disabled['can_preview']
+        assert instance._status_refresh_thread.is_alive()
+        workspace.settings['link']['camera']['enabled'] = True
+        assert instance.status()['available']
+        replacement = instance._status_probe
+    finally:
+        release.set()
+        instance._status_refresh_thread.join(timeout=2)
+    # Even A-B-A config changes supersede an older A probe.
+    assert instance._status_probe is replacement
+    workspace.settings['link']['camera']['enabled'] = False
+    assert not instance.status()['available']
 
 
 def test_self_hosted_paired_phone_path_is_unchanged(tools):

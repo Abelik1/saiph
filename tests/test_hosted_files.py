@@ -87,6 +87,37 @@ def assert_no_partial(tmp_path):
     assert not list(tmp_path.glob(".orion-receive-*"))
 
 
+@pytest.mark.parametrize('phone', [True, False])
+def test_explicit_cloud_save_records_phone_history_only_after_verified_download(pair, tmp_path, monkeypatch, phone):
+    from types import SimpleNamespace
+    from orion_mini.hosted_runtime import HostedController
+    from orion_mini.storage import Store
+    sender, receiver, _ = pair
+    attachment, source = prepared(pair, tmp_path)
+    relay = BlobRelay()
+    upload_attachment(relay, attachment)
+    profile = SimpleNamespace(root=tmp_path / 'desktop', settings={'hosted': {'enabled': True}},
+                              save=lambda: None, store=Store(tmp_path / 'history'))
+    controller = HostedController(profile)
+    controller.session, controller.transport = receiver, relay
+    event = relay.envelope['header']['id']
+    controller._offers[event] = relay.envelope
+    controller.mailbox = SimpleNamespace(claim=lambda _: None, complete=lambda *_: None)
+    monkeypatch.setattr(controller, '_token_or_error', lambda: 'synthetic-access')
+    monkeypatch.setattr(controller, 'is_phone', lambda device: phone and device == sender.device)
+    saved = controller.save_offer(event, tmp_path / 'downloads')
+    assert __import__('pathlib').Path(saved['path']).read_bytes() == source.read_bytes()
+    rows = profile.store.all('phone_file')
+    if phone:
+        assert len(rows) == 1
+        assert {key: rows[0][key] for key in ('id', 'device_id', 'name', 'path', 'size')} == {
+            'id': event, 'device_id': sender.device, 'name': source.name,
+            'path': saved['path'], 'size': source.stat().st_size}
+    else:
+        assert rows == []
+    assert event not in controller._offers
+
+
 def test_gallery_original_wraps_the_existing_authenticated_streaming_manifest(pair, tmp_path):
     sender, receiver, _ = pair
     attachment, _ = prepared(pair, tmp_path, b"synthetic original", kind="photo", mime="image/jpeg")

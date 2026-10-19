@@ -1,0 +1,6 @@
+bin/
+obj/
+out/
+*.pfx
+*.cer
+*.msix

@@ -31,8 +31,14 @@ the phone is on a call or already placing one.
 
 The computer accepts phone data only from an approved member that advertised
 the matching capability, and contact results, call history or refusals only in
-answer to its own recent request (kept in memory, never stored). MMS pictures,
-group replies and call audio are not defined. These paths still need
+answer to its own recent request (kept in memory, never stored).
+
+Feature parity with a self-hosted Hub (docs/PHONE_LINK_PARITY.md, "Saiph Cloud
+feature parity"): notification buttons and inline replies, MMS pictures and
+group replies are separate event types, gated by names the phone lists in its
+own `phone.features` event (never in `phone.capabilities`, which older desktops
+check name by name). MMS pictures travel as sealed attachments only when this
+computer asks for one. Call audio is not defined. These paths still need
 physical-device acceptance.
 """
 from __future__ import annotations
@@ -43,6 +49,11 @@ import hashlib
 import re
 
 from .hosted_crypto import canonical
+from . import phone_status
+from .phone_status import (  # Status and quick actions: one codec for the Hub and Saiph Cloud.
+    CONTROL_COMMAND, CONTROL_NAMES, MEDIA_COMMAND, MEDIA_STATE, PHONE_DND, PHONE_HOTSPOT, PHONE_MOBILE_DATA, PHONE_RING,
+    PHONE_RINGER, PHONE_STATUS, STATUS_REQUEST, WALLPAPER_REQUEST, ProtocolError,
+)
 
 CLIPBOARD_TEXT = "clipboard.text"
 NOTIFICATION_UPSERT = "notification.upsert"
@@ -67,9 +78,16 @@ CALL_HANDLED = "call.handled"  # First answer/decline won; sent to every subscri
 CALL_REFUSED = "call.refused"  # A later answer/decline, or a dial while busy; requester only.
 CONTACTS_RESULTS = "contacts.results"
 CALLS_LOG = "calls.log"
+SMS_ATTACHMENTS = "sms.attachments"  # MMS parts by name, the Hub's shape; bytes only on request.
 DATA_CAPABILITY = {PHOTOS_ITEM: "photos", PHOTOS_SYNC: "photos", SMS_THREAD: "sms", SMS_MESSAGES: "sms", SMS_REMOVE: "sms", SMS_INDEX: "sms",
-                   CALL_STATE: "calls", CALL_HANDLED: "calls", CONTACTS_RESULTS: "contacts", CALLS_LOG: "call-log"}
-PHONE_DATA = frozenset({PHONE_CAPABILITIES, CALL_REFUSED, *DATA_CAPABILITY})
+                   CALL_STATE: "calls", CALL_HANDLED: "calls", CONTACTS_RESULTS: "contacts", CALLS_LOG: "call-log",
+                   SMS_ATTACHMENTS: "sms-mms"}
+# Status and quick controls (Phone Link's header and quick actions) use the shared
+# codec in phone_status.py; the phone lists the controls it accepts inside
+# phone.status, never in phone.capabilities.
+PHONE_WALLPAPER = phone_status.PHONE_WALLPAPER  # Answers this computer's own wallpaper request only.
+STATUS_DATA = frozenset({PHONE_STATUS, MEDIA_STATE, phone_status.PHONE_SIGNAL, PHONE_WALLPAPER, phone_status.PHONE_RING_STATE})
+PHONE_DATA = frozenset({PHONE_CAPABILITIES, CALL_REFUSED, *DATA_CAPABILITY, *STATUS_DATA})
 
 # Computer -> phone: "send me your texts and calls"; the phone keeps it ten minutes.
 PHONE_SUBSCRIBE = "phone.subscribe"
@@ -86,11 +104,13 @@ CALL_COMMAND = "call.command"
 CALL_DIAL = "call.dial"
 CONTACTS_SEARCH = "contacts.search"
 CALLS_LOG_REQUEST = "calls.log.request"
+SMS_ATTACHMENT_REQUEST = "sms.attachment.request"  # One MMS part; answered with SMS_ATTACHMENT_ORIGINAL.
+SMS_ATTACHMENT_ORIGINAL = "sms.attachment.original"  # Phone -> the asking computer: sealed attachment.
 COMMAND_CAPABILITY = {PHOTO_REQUEST: "photos", SMS_SYNC: "sms", SMS_OPEN: "sms", SMS_SEND: "sms", SMS_COMPOSE: "sms",
                       CALL_COMMAND: "call-control", CALL_DIAL: "call-dial", CONTACTS_SEARCH: "contacts",
-                      CALLS_LOG_REQUEST: "call-log"}
+                      CALLS_LOG_REQUEST: "call-log", SMS_ATTACHMENT_REQUEST: "sms-mms", **CONTROL_COMMAND}
 # Private answers accepted only after this computer asked for them.
-ANSWERS = {CONTACTS_RESULTS: CONTACTS_SEARCH, CALLS_LOG: CALLS_LOG_REQUEST}
+ANSWERS = {CONTACTS_RESULTS: CONTACTS_SEARCH, CALLS_LOG: CALLS_LOG_REQUEST, PHONE_WALLPAPER: WALLPAPER_REQUEST}
 # "files" is the existing encrypted file offer; the rest gate the types above.
 PHONE_CAPABILITY_NAMES = ("files", "photos", "sms", "calls", "call-control", "call-dial", "contacts", "call-log")
 MAX_SMS_TEXT = 4096
@@ -161,6 +181,92 @@ def dismiss_payload(key: str) -> dict:
     return {"type": NOTIFICATION_DISMISS, "key": key}
 
 
+# Notification buttons and replies (feature "notification-actions"). The phone
+# sends `notification.actions` just before the matching `notification.upsert`;
+# `timestamp` ties them together, so actions of an older post are never shown.
+NOTIFICATION_ACTIONS = "notification.actions"  # Phone -> every approved computer.
+NOTIFICATION_ACTION = "notification.action"  # Computer -> phone: press one of its buttons.
+NOTIFICATION_REPLY = "notification.reply"  # Computer -> phone: inline reply.
+NOTIFICATION_OPEN = "notification.open"  # Computer -> phone: open it on the phone.
+NOTIFICATION_COMMANDS = {NOTIFICATION_ACTION: {"key", "index"}, NOTIFICATION_REPLY: {"key", "reply_key", "text"},
+                         NOTIFICATION_OPEN: {"key"}}
+MAX_NOTIFICATION_ACTIONS = 10
+MAX_REPLY_TEXT = 4096
+
+
+def _key(value):
+    if type(value) is not str or not _KEY.fullmatch(value):
+        raise FeatureError()
+    return value
+
+
+def _reply_key(value, *, empty):
+    text = _text(value, 240, empty=empty)
+    if any(ord(c) < 32 or ord(c) == 127 for c in text):
+        raise FeatureError()
+    return text
+
+
+def read_notification_actions(payload) -> dict:
+    """Buttons (index and label) and the inline-reply key ("" when none) of one notification."""
+    _exact(payload, NOTIFICATION_ACTIONS, {"key", "timestamp", "actions", "reply_key"})
+    actions = payload["actions"]
+    if type(actions) is not list or len(actions) > MAX_NOTIFICATION_ACTIONS:
+        raise FeatureError()
+    rows = []
+    for action in actions:
+        if type(action) is not dict or set(action) != {"index", "label"}:
+            raise FeatureError()
+        rows.append({"index": _integer(action["index"], 0, 99), "label": _text(action["label"], 120)})
+    if len({row["index"] for row in rows}) != len(rows):
+        raise FeatureError()
+    return {"key": _key(payload["key"]), "timestamp": _integer(payload["timestamp"], high=_MAX_TIMESTAMP),
+            "actions": rows, "reply_key": _reply_key(payload["reply_key"], empty=True)}
+
+
+def notification_command(kind_: str, body) -> dict:
+    """Build an exact notification action from this computer's own request."""
+    if kind_ not in NOTIFICATION_COMMANDS or type(body) is not dict:
+        raise FeatureError()
+    return read_notification_command({"type": kind_, **body})
+
+
+def read_notification_command(payload) -> dict:
+    kind_ = kind(payload)
+    if kind_ not in NOTIFICATION_COMMANDS:
+        raise FeatureError()
+    _exact(payload, kind_, NOTIFICATION_COMMANDS[kind_])
+    result = {"type": kind_, "key": _key(payload["key"])}
+    if kind_ == NOTIFICATION_ACTION:
+        result["index"] = _integer(payload["index"], 0, 99)
+    elif kind_ == NOTIFICATION_REPLY:
+        text = _text(payload["text"], MAX_REPLY_TEXT, empty=False)
+        if not text.strip():
+            raise FeatureError()
+        result.update(reply_key=_reply_key(payload["reply_key"], empty=False), text=text)
+        if len(canonical(result)) > MAX_PHONE_PAYLOAD_BYTES:
+            raise FeatureError()
+    return result
+
+
+# Features a phone offers beyond `phone.capabilities`. Older desktops ignore this
+# event type; names this desktop does not know are skipped, so later phones can
+# add features here without another event.
+PHONE_FEATURES = "phone.features"
+FEATURE_NAMES = ("notification-actions", "sms-mms", "sms-group")
+MAX_FEATURES = 32
+_FEATURE = re.compile(r"[a-z0-9][a-z0-9-]{0,31}")
+
+
+def read_phone_features(payload) -> list:
+    _exact(payload, PHONE_FEATURES, {"features"})
+    names = payload["features"]
+    if (type(names) is not list or len(names) > MAX_FEATURES
+            or any(type(name) is not str or not _FEATURE.fullmatch(name) for name in names) or len(set(names)) != len(names)):
+        raise FeatureError()
+    return [name for name in names if name in FEATURE_NAMES]
+
+
 def _exact(payload, kind_, keys):
     if type(payload) is not dict or payload.get("type") != kind_ or set(payload) != {"type", *keys}:
         raise FeatureError()
@@ -196,25 +302,7 @@ def _message(value) -> dict:
             "direction": value["direction"], "subscription": _integer(value["subscription"], -1, 2**31 - 1)}
 
 
-def _bounded_jpeg(image: bytes) -> bool:
-    """Read the JPEG frame size without decoding or allocating a pixel buffer."""
-    offset = 2
-    while offset + 4 <= len(image):
-        if image[offset] != 255:
-            return False
-        marker = image[offset + 1]
-        offset += 2
-        length = int.from_bytes(image[offset:offset + 2], "big")
-        if length < 2 or offset + length > len(image):
-            return False
-        if marker in (0xC0, 0xC1, 0xC2):
-            if length < 8:
-                return False
-            height = int.from_bytes(image[offset + 3:offset + 5], "big")
-            width = int.from_bytes(image[offset + 5:offset + 7], "big")
-            return 0 < width <= 128 and 0 < height <= 128
-        offset += length
-    return False
+_bounded_jpeg = phone_status.bounded_jpeg  # Photo thumbnails use the wallpaper's frame-size check.
 
 
 def read_phone_data(payload) -> tuple[str, dict]:
@@ -316,7 +404,33 @@ def read_phone_data(payload) -> tuple[str, dict]:
                          "timestamp": _integer(call["timestamp"], high=_MAX_TIMESTAMP),
                          "duration": _integer(call["duration"], high=10**9), "type": call["type"]})
         return kind_, {"calls": rows}
+    if kind_ == SMS_ATTACHMENTS:
+        _exact(payload, kind_, {"thread", "message", "parts"})
+        parts = payload["parts"]
+        if type(parts) is not list or not 1 <= len(parts) <= 10:
+            raise FeatureError()
+        rows = []
+        for part in parts:
+            if type(part) is not dict or set(part) != {"part", "mime", "name"}:
+                raise FeatureError()
+            rows.append({"part": _integer(part["part"]), "mime": _address(part["mime"]), "name": _text(part["name"], 180)})
+        if len({row["part"] for row in rows}) != len(rows):
+            raise FeatureError()
+        return kind_, {"thread": _integer(payload["thread"]), "message": _integer(payload["message"]), "parts": rows}
+    if kind_ in phone_status.STATUS_EVENTS:
+        body = {key: value for key, value in payload.items() if key != "type"}
+        return kind_, _shared(phone_status.read_event, kind_, body, phone_status.HOSTED)
+    if kind_ == PHONE_WALLPAPER:
+        _exact(payload, kind_, {"preview"})
+        return kind_, _shared(phone_status.read_wallpaper, {"preview": payload["preview"]})
     raise FeatureError()
+
+
+def _shared(reader, *args):
+    try:
+        return reader(*args)
+    except ProtocolError:
+        raise FeatureError() from None
 
 
 def _label(value, *, empty=False):
@@ -354,7 +468,10 @@ def _sms_text(value):
 
 _COMMAND_KEYS = {PHOTO_REQUEST: {"id"}, SMS_SYNC: set(), CALLS_LOG_REQUEST: set(), SMS_OPEN: {"thread"}, SMS_SEND: {"thread", "text"},
                  SMS_COMPOSE: {"addresses", "text"}, CALL_COMMAND: {"operation"}, CALL_DIAL: {"number"},
-                 CONTACTS_SEARCH: {"query"}}
+                 CONTACTS_SEARCH: {"query"}, STATUS_REQUEST: set(), PHONE_RING: set(), PHONE_RINGER: {"mode"},
+                 PHONE_DND: {"active"}, MEDIA_COMMAND: {"source", "action"}, WALLPAPER_REQUEST: set(),
+                 PHONE_HOTSPOT: set(), PHONE_MOBILE_DATA: {"allowed"}, SMS_ATTACHMENT_REQUEST: {"thread", "message", "part"},
+                 phone_status.PHONE_RING_STOP: set()}  # Quick actions: phone_status.read_command.
 
 
 def phone_command(kind_: str, body) -> dict:
@@ -375,10 +492,15 @@ def read_phone_command(payload) -> dict:
         if not re.fullmatch(r"[1-9][0-9]{0,15}", photo_id) or int(photo_id) > _MAX_ID:
             raise FeatureError()
         return {"type": kind_, "id": photo_id}
+    if kind_ in CONTROL_COMMAND:
+        body = {key: value for key, value in payload.items() if key != "type"}
+        return {"type": kind_, **_shared(phone_status.read_command, kind_, body, phone_status.HOSTED)}
     if kind_ in (SMS_SYNC, CALLS_LOG_REQUEST):
         return {"type": kind_}
     if kind_ == SMS_OPEN:
         return {"type": kind_, "thread": _integer(payload["thread"])}
+    if kind_ == SMS_ATTACHMENT_REQUEST:
+        return {"type": kind_, **{key: _integer(payload[key]) for key in ("thread", "message", "part")}}
     if kind_ == CALL_COMMAND:
         if payload["operation"] not in ("answer", "reject"):
             raise FeatureError()
@@ -403,7 +525,145 @@ def read_phone_command(payload) -> dict:
     return result
 
 
+# Device names. A computer introduces itself to the main computer, which shares
+# the names its owner gave each approved device with member computers. Display
+# only: names never authorize anything, and only the main computer's list counts.
+DEVICE_HELLO = "device.hello"
+DEVICE_LABELS = "device.labels"
+DEVICE_KINDS = ("phone", "computer")
+MAX_LABELS = 100
+
+
+def device_hello(name) -> dict:
+    return {"type": DEVICE_HELLO, "kind": "computer", "name": _label(_one_line(name) or "Computer")}
+
+
+def read_device_hello(payload) -> dict:
+    _exact(payload, DEVICE_HELLO, {"kind", "name"})
+    if payload["kind"] != "computer":
+        raise FeatureError()
+    return {"kind": "computer", "name": _label(payload["name"])}
+
+
+def device_labels(rows) -> dict:
+    return read_device_labels({"type": DEVICE_LABELS, "labels": [
+        {"id": row["id"], "label": _label(_one_line(row["label"]) or "Device"), "kind": row["kind"]} for row in rows][:MAX_LABELS]})
+
+
+def read_device_labels(payload) -> dict:
+    _exact(payload, DEVICE_LABELS, {"labels"})
+    rows = payload["labels"]
+    if type(rows) is not list or len(rows) > MAX_LABELS:
+        raise FeatureError()
+    result = []
+    for row in rows:
+        if (type(row) is not dict or set(row) != {"id", "label", "kind"} or type(row["id"]) is not str
+                or not re.fullmatch(r"dev_[a-f0-9]{32}", row["id"]) or row["kind"] not in (*DEVICE_KINDS, None)):
+            raise FeatureError()
+        result.append({"id": row["id"], "label": _label(row["label"]), "kind": row["kind"]})
+    if len({row["id"] for row in result}) != len(result):
+        raise FeatureError()
+    return {"type": DEVICE_LABELS, "labels": result}
+
+
+def _one_line(value) -> str:
+    text = value if type(value) is str else ""
+    return "".join(ch for ch in text if ch.isprintable()).strip()[:MAX_LABEL].strip()
+
+
 def kind(payload) -> str:
     if type(payload) is not dict or type(payload.get("type")) is not str:
         raise FeatureError()
     return payload["type"]
+
+
+# Phone screen and app list (docs/PHONE_SCREEN.md). Kept outside `phone.capabilities`
+# and PHONE_DATA: desktops released before this feature reject unknown capability
+# names, so a phone advertises these in their own event, which older computers ignore.
+SCREEN_CAPABILITIES = "screen.capabilities"  # Phone -> computer, with each capabilities heartbeat.
+APPS_REQUEST = "apps.request"  # Computer -> phone: list launchable apps (capability "apps").
+APPS_LIST = "apps.list"  # Phone -> the requesting computer only, in pages.
+SCREEN_CAPABILITY_NAMES = ("screen", "apps")
+MAX_APP_PAGES = 10
+
+
+def read_screen_capabilities(payload) -> list:
+    _exact(payload, SCREEN_CAPABILITIES, {"capabilities"})
+    names = payload["capabilities"]
+    if (type(names) is not list or len(names) > len(SCREEN_CAPABILITY_NAMES) or len(set(map(str, names))) != len(names)
+            or any(type(name) is not str or name not in SCREEN_CAPABILITY_NAMES for name in names)):
+        raise FeatureError()
+    return list(names)
+
+
+def apps_request_payload() -> dict:
+    return {"type": APPS_REQUEST}
+
+
+def read_apps_list(payload) -> tuple[int, int, list]:
+    """(page, pages, apps) of one bounded page; names and package names only."""
+    from .screen_session import read_apps
+    _exact(payload, APPS_LIST, {"page", "pages", "apps"})
+    pages = _integer(payload["pages"], 1, MAX_APP_PAGES)
+    page = _integer(payload["page"], 0, pages - 1)
+    if type(payload["apps"]) is not list or len(payload["apps"]) > 200:
+        raise FeatureError()
+    try:
+        return page, pages, read_apps(payload["apps"])
+    except ValueError:
+        raise FeatureError() from None
+
+
+# App icons for the Apps grid (docs/PHONE_SCREEN.md). New event types: computers and
+# phones released before them ignore unknown types, and `apps.list` keeps its exact shape.
+APPS_ICONS_REQUEST = "apps.icons.request"  # Computer -> phone: icons for up to 24 packages.
+APPS_ICONS = "apps.icons"  # Phone -> the requesting computer only; several events per request.
+MAX_ICON_ROWS = 24
+MAX_ICON_BASE64 = 16_000  # 12,000 bytes, the per-icon bound in phone_app_library.py.
+
+
+def _icon_package(value):
+    from .session_offer import valid_package
+    if not valid_package(value):
+        raise FeatureError()
+    return value
+
+
+def apps_icons_request_payload(rows) -> dict:
+    """`rows`: [{"package", "version"}], version being the cached one (0 when none)."""
+    if type(rows) is not list or not 0 < len(rows) <= MAX_ICON_ROWS:
+        raise FeatureError()
+    result = []
+    for row in rows:
+        if type(row) is not dict or set(row) != {"package", "version"}:
+            raise FeatureError()
+        result.append({"package": _icon_package(row["package"]), "version": _integer(row["version"])})
+    if len({row["package"] for row in result}) != len(result):
+        raise FeatureError()
+    return {"type": APPS_ICONS_REQUEST, "apps": result}
+
+
+def read_apps_icons(payload) -> tuple[list, list]:
+    """([(package, version, image bytes)], [packages with nothing new]) from one bounded event."""
+    import base64
+    import binascii
+    from .phone_app_library import icon_format
+    _exact(payload, APPS_ICONS, {"icons", "same"})
+    icons, same = payload["icons"], payload["same"]
+    if type(icons) is not list or type(same) is not list or len(icons) + len(same) > MAX_ICON_ROWS:
+        raise FeatureError()
+    result = []
+    for row in icons:
+        if type(row) is not dict or set(row) != {"package", "version", "data"} or type(row["data"]) is not str                 or not 0 < len(row["data"]) <= MAX_ICON_BASE64:
+            raise FeatureError()
+        try:
+            data = base64.b64decode(row["data"], validate=True)
+            icon_format(data)
+        except (binascii.Error, ValueError):
+            raise FeatureError() from None
+        result.append((_icon_package(row["package"]), _integer(row["version"]), data))
+    unchanged = [_icon_package(package) for package in same]
+    packages = [row[0] for row in result] + unchanged
+    if len(set(packages)) != len(packages):
+        raise FeatureError()
+    return result, unchanged

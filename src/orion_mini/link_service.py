@@ -16,11 +16,13 @@ from .enrollment import Invitations
 from .hotspot import Hotspot, validate_options as validate_hotspot_options
 from .remote import Remote, validate_options as validate_remote_options
 from .bt_lock import BluetoothLock, validate_options as validate_bt_lock_options
+from .call_audio import CallAudio, validate_options as validate_call_audio_options
 from .link_operations import CORE_METHODS, LinkOperations
 from .modules import module_state
 from .package_updates import status as update_status
 from .phone import PhoneState
 from .phone_features import PhoneFeatures
+from .phone_screen import PhoneScreen
 from .storage import Store, read_json, write_json
 from .user_presence import status as user_verification
 
@@ -70,6 +72,7 @@ class LinkWorkspace(LinkOperations):
         self._pairing_lock = threading.Lock()
         self._cloud_action_lock = threading.Lock()
         self.show_enrollment = False
+        self.phone_reveal = 0  # Raised when a phone notification is clicked: the page shows Phone.
         self.components = Components()
         self.phone_features = PhoneFeatures(self)
         self.plugins = UninstalledWorkspace()
@@ -78,9 +81,11 @@ class LinkWorkspace(LinkOperations):
         self.hotspot = Hotspot(self.settings)
         self.remote = Remote(self, self._remote_publish)
         self.bt_lock = BluetoothLock(self.settings)
+        self.call_audio = CallAudio(self.settings)  # Bluetooth hands-free only; never through Cloud or a Hub.
         self.settings['link']={**self.settings.get('link',{}),'camera':{'enabled':False,**(self.settings.get('link',{}).get('camera') or {})}}
         self.camera = Camera(self)
         self.microphone = Microphone(self)
+        self.screen = PhoneScreen(self)
 
     def save(self):
         # Do not overwrite the owner's personal feature choices when using Link.
@@ -96,11 +101,12 @@ class LinkWorkspace(LinkOperations):
     def state(self):
         from .usage import app_version
         invitation = self.invitations.status()
+        phone_features = self.phone_features.snapshot()
         return {'app_version': app_version(), 'platform': platform.system().lower(), 'modules': module_state(False), 'settings': self.settings, 'update_status': update_status(self.root), 'cloud_status': self.cloud_status(),
                 'enrollment': {**invitation, 'approved': invitation['id'] is not None and self.enrollment_approved == invitation['id']},
                 'components': self.components.snapshot(), 'phone': self.phone_snapshot(),
-                'phone_features': self.phone_features.snapshot(), 'handoffs': self.store.all('handoff')[:100],
-                'deskflow': {**self.deskflow.status(), 'setup': self.deskflow.setup()}, 'dnd': self.dnd_status(), 'hotspot': self.hotspot.status(), 'remote': self.remote.status(), 'bt_lock': self.bt_lock.status(), 'setup': self.setup_state(), 'camera': self.camera.status(), 'microphone': self.microphone.status(),
+                'phone_features': phone_features, 'call_audio': self.call_audio.status(phone_features.get('calls')), 'handoffs': self.store.all('handoff')[:100],
+                'deskflow': {**self.deskflow.status(), 'setup': self.deskflow.setup()}, 'dnd': self.dnd_status(), 'hotspot': self.hotspot.status(), 'remote': self.remote.status(), 'bt_lock': self.bt_lock.status(), 'setup': self.setup_state(), 'camera': self.camera.status(), 'phone_screen': self.screen.status(), 'phone_reveal': self.phone_reveal, 'microphone': self.microphone.status(),
                 'api': self.api_info, 'hub_inbox': self.hub_inbox(), 'hosted': self.hosted_state(), 'user_verification': user_verification(self), 'usage': self.usage_counter.snapshot(), 'insights': {'enabled': self.insights.enabled()},
                 'projects': [], 'transcripts': [], 'reminders': [], 'tasks': [], 'jobs': [],
                 'messages': [], 'emails': [], 'providers': [], 'skills': [], 'plugins': [], 'ticker': [],
@@ -108,12 +114,28 @@ class LinkWorkspace(LinkOperations):
                 'agenda': {'items': []}, 'backup_status': {'configured': False}}
 
     def setup_state(self):
-        """State is read every second; scanning PATH for the optional tools takes a
-        large part of that second on Windows, so the scan is reused for 10 seconds."""
+        """Refresh optional-tool display data without periodically blocking Qt."""
+        from .companion_tools import locations_fingerprint
         from .setup_guide import status, tools
         cached = getattr(self, '_tools', None)
-        if cached is None or time.monotonic() - cached[0] >= 10:
-            self._tools = cached = (time.monotonic(), tools())
+        if cached is None:
+            self._tools = cached = (time.monotonic(), tools(), locations_fingerprint())
+        elif time.monotonic() - cached[0] >= 10 and not getattr(self, '_tools_refreshing', False):
+            self._tools_refreshing = True
+            def refresh():
+                try:
+                    # A full scan walks PATH for every tool (about 0.5 s); rescan
+                    # only when a folder it searches has changed since the last one.
+                    fingerprint = locations_fingerprint()
+                    found = cached[1] if len(cached) > 2 and fingerprint == cached[2] else tools()
+                    self._tools = (time.monotonic(), found, fingerprint)
+                except (OSError, ValueError):
+                    # A failed display probe retains its last result and retries.
+                    self._tools = (time.monotonic(), *cached[1:])
+                finally:
+                    self._tools_refreshing = False
+            self._tools_refresh_thread = threading.Thread(target=refresh, name='orion-tool-inspection', daemon=True)
+            self._tools_refresh_thread.start()
         return {**status(self), **cached[1]}
 
     def _remote_publish(self, event):
@@ -156,7 +178,7 @@ class LinkWorkspace(LinkOperations):
             args = {**args, 'cloud': {**self.settings.get('cloud', {}), **cloud}}
         if 'link' in args:
             link = args['link']
-            if not isinstance(link, dict) or set(link) - {'focus', 'dnd_sync', 'auto_copy_codes', 'battery_alerts', 'pause_media_on_calls', 'new_photo_notices', 'ring_computer', 'clipboard', 'timezone', 'wake_hour', 'wake_minute', 'camera', 'microphone', 'deskflow', 'hotspot', 'remote', 'bt_lock'}:
+            if not isinstance(link, dict) or set(link) - {'focus', 'dnd_sync', 'auto_copy_codes', 'battery_alerts', 'pause_media_on_calls', 'new_photo_notices', 'ring_computer', 'clipboard', 'timezone', 'wake_hour', 'wake_minute', 'camera', 'microphone', 'deskflow', 'hotspot', 'remote', 'bt_lock', 'call_audio', 'phone'}:
                 raise ValueError('Unknown continuity preference.')
             for flag in ('focus', 'dnd_sync', 'auto_copy_codes', 'battery_alerts', 'pause_media_on_calls', 'new_photo_notices', 'ring_computer', 'clipboard'):
                 if flag in link and type(link[flag]) is not bool:
@@ -178,8 +200,13 @@ class LinkWorkspace(LinkOperations):
                 link = {**link, 'deskflow': {**(self.settings.get('link', {}).get('deskflow') or {}), **options}}
             if 'bt_lock' in link:
                 link = {**link, 'bt_lock': {**(self.settings.get('link', {}).get('bt_lock') or {}), **validate_bt_lock_options(link['bt_lock'])}}
+            if 'call_audio' in link:
+                link = {**link, 'call_audio': {**(self.settings.get('link', {}).get('call_audio') or {}), **validate_call_audio_options(link['call_audio'])}}
             if 'remote' in link:
                 link = {**link, 'remote': validate_remote_options(link['remote'], self.settings.get('link', {}).get('remote') or {})}
+            if 'phone' in link:
+                from .phone_settings import validate as validate_phone_options
+                link = {**link, 'phone': validate_phone_options(link['phone'], self.settings.get('link', {}).get('phone'))}
             if 'hotspot' in link:
                 link = {**link, 'hotspot': {**(self.settings.get('link', {}).get('hotspot') or {}), **validate_hotspot_options(link['hotspot'])}}
             if 'camera' in link:

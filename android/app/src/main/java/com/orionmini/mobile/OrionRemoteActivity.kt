@@ -25,10 +25,14 @@ class OrionRemoteActivity : ComponentActivity() {
     private lateinit var status: TextView
     private var computer: Pair<String, String>? = null
     private var watch: Job? = null
+    /** Where the header arrow and system Back lead from the current page: apps, computers, then out. */
+    private var back: () -> Unit = ::finish
+    private var choices = 0
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
-        root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(22), dp(24), dp(22), dp(32)); setBackgroundColor(Palette.BG) }
-        setContentView(ScrollView(this).apply { setBackgroundColor(Palette.BG); addView(root) })
+        onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() = back()
+        })
         computers()
         lifecycleScope.launch {
             OrionRemote.result.collect { result ->
@@ -36,12 +40,13 @@ class OrionRemoteActivity : ComponentActivity() {
             }
         }
     }
-    private fun screen(title: String) {
-        watch?.cancel(); root.removeAllViews(); root.addView(heading(title))
+    private fun screen(title: String, back: () -> Unit) {
+        watch?.cancel(); this.back = back
+        root = ScreenFrame(this, title, back).content
         status = text("", 14f, Palette.MUTED); root.addView(status)
     }
     private fun computers() {
-        computer = null; screen("Remote")
+        computer = null; screen("Remote", ::finish)
         status.text = "Finding computers that allow phone remote control…"
         lifecycleScope.launch {
             val own = getSharedPreferences("orion", 0).getString("device_id", null)
@@ -55,19 +60,19 @@ class OrionRemoteActivity : ComponentActivity() {
             when {
                 found == null -> status.text = "Saiph is reconnecting. Try again shortly."
                 found.isEmpty() -> status.text = "No computer is offering remote control. On your computer open Saiph Settings → Devices → Phone remote, turn it on and allow this phone."
-                found.size == 1 -> { catalog(found.single()); return@launch }
-                else -> { status.text = "Choose a computer"; found.forEach { device -> root.addView(button(device.second) { catalog(device) }) } }
+                found.size == 1 -> { choices = 1; catalog(found.single()); return@launch }
+                else -> { choices = found.size; status.text = "Choose a computer"
+                    root.addView(settingsList(found.map { device -> settingsRow(sefirah.common.R.drawable.ic_desktop_windows, device.second, null) { catalog(device) } })) }
             }
-            root.addView(button("Back") { finish() })
         }
     }
     private fun catalog(device: Pair<String, String>) {
-        computer = device; screen(device.second)
+        computer = device; screen(device.second, back = { if (choices > 1) computers() else finish() })
         status.text = "Asking ${device.second} for its apps…"
         if (link.status.value != "Online" || !link.publish("remote.catalog.request", JsonObject(emptyMap()), device.first))
             status.text = "Saiph is reconnecting. Try again shortly."
         val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        root.addView(list); root.addView(button("Other computers") { computers() })
+        root.addView(list)
         watch = lifecycleScope.launch {
             OrionRemote.catalogs.collect { catalogs ->
                 val apps = catalogs[device.first] ?: return@collect
@@ -85,7 +90,7 @@ class OrionRemoteActivity : ComponentActivity() {
             "Sending ${control.label}…" else "Saiph is reconnecting. This control has not been sent."
     }
     private fun controls(remote: RemoteApp) {
-        screen(remote.name)
+        screen(remote.name, back = { computer?.let(::catalog) ?: computers() })
         status.text = "Controls go to ${computer?.second}."
         remote.controls.filter { it.kind == "text" }.forEach { control ->
             val input = field(control.label).apply { filters = arrayOf(InputFilter.LengthFilter(control.max)); isSingleLine = true }
@@ -109,7 +114,6 @@ class OrionRemoteActivity : ComponentActivity() {
         remote.controls.filter { it.kind == "button" }.chunked(2).forEach { pair ->
             root.addView(buttonRow(*pair.map { control -> button(control.label) { send(remote, control) } }.toTypedArray()))
         }
-        root.addView(button("All apps") { computer?.let(::catalog) })
     }
     private inner class Pad(val control: RemoteControl) : View(this@OrionRemoteActivity) {
         private var lastX = 0f; private var lastY = 0f; private var dx = 0f; private var dy = 0f

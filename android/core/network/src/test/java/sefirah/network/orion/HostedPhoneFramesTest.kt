@@ -59,7 +59,9 @@ class HostedPhoneFramesTest {
         assertTrue(HostedPhoneFrames.allowed("call.command", root, computers, FeatureAccess(calls = true, callControl = true), true))
         assertFalse(HostedPhoneFrames.allowed("call.dial", root, computers, FeatureAccess(calls = true, callControl = true), true))
         assertFalse(HostedPhoneFrames.allowed("phone.ring", root, computers, everything, true))
-        assertFalse(HostedPhoneFrames.allowed("sms.attachment.request", root, computers, everything, true))
+        // MMS parts follow the texts switch and SMS permission ("sms-mms" in phone.features).
+        assertTrue(HostedPhoneFrames.allowed("sms.attachment.request", root, computers, everything, true))
+        assertFalse(HostedPhoneFrames.allowed("sms.attachment.request", root, computers, everything, false))
         assertTrue(HostedPhoneFrames.mayPublish("call.refused", FeatureAccess(callDial = true), true))
         assertFalse(HostedPhoneFrames.mayPublish("call.refused", everything, false))
         assertFalse(HostedPhoneFrames.mayPublish("call.handled", FeatureAccess(callControl = true), true))
@@ -174,14 +176,17 @@ class HostedPhoneFramesTest {
     @Test fun textsBecomeExactPayloadsThatFitOneSealedEvent() {
         val message = TextMessage(uniqueId = 41, addresses = listOf("+15550100", ""), body = "😀".repeat(2048), timestamp = 123,
             messageType = 1, subscriptionId = -1, attachments = listOf(SmsAttachment("photo.jpg", "image/jpeg", partId = 3)))
-        val thread = HostedPhoneFrames.encode(ConversationInfo(7, listOf("+15550100"), checksum = 99, message = message))!!.single()
+        val (thread, parts) = HostedPhoneFrames.encode(ConversationInfo(7, listOf("+15550100"), checksum = 99, message = message))!!
+        assertEquals("""{"message":41,"parts":[{"mime":"image/jpeg","name":"photo.jpg","part":3}],"thread":7,"type":"sms.attachments"}""",
+            String(HostedEnvelope.canonical(parts), Charsets.UTF_8))
         assertEquals(setOf("type", "thread", "recipients", "message"), keys(thread))
         assertEquals(setOf("id", "addresses", "body", "timestamp", "direction", "subscription"), keys(thread.getValue("message").jsonObject))
         assertEquals(listOf("+15550100"), thread.getValue("message").jsonObject.getValue("addresses").jsonArray.map { it.jsonPrimitive.content })
         assertTrue(HostedPhoneFrames.fits(thread))
         val pages = HostedPhoneFrames.encode(MessageList(7, MessageListKind.Open, List(12) { message.copy(uniqueId = it.toLong()) }))!!
-        assertEquals(10, pages.size)
-        assertTrue(pages.all { HostedPhoneFrames.fits(it) && it.getValue("messages").jsonArray.size == 1 && it.getValue("type").jsonPrimitive.content == "sms.messages" })
+        assertEquals(20, pages.size)  // Ten messages, then each one's MMS parts.
+        assertTrue(pages.take(10).all { HostedPhoneFrames.fits(it) && it.getValue("messages").jsonArray.size == 1 && it.getValue("type").jsonPrimitive.content == "sms.messages" })
+        assertTrue(pages.drop(10).all { it.getValue("type").jsonPrimitive.content == "sms.attachments" })
         val index = HostedPhoneFrames.encode(MessageIndex(7, (1L..1500L).toList()))!!.single()
         assertEquals(1000, index.getValue("ids").jsonArray.size)
         assertEquals(1500L, index.getValue("ids").jsonArray.first().jsonPrimitive.long)

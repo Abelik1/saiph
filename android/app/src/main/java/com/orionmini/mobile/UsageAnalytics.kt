@@ -156,8 +156,15 @@ object UsageAnalytics {
 
     /** Settings controls: the choice, and exactly what would be or was sent. */
     fun settingsViews(activity: ComponentActivity): List<View> {
+        val controls = settingsControls(activity)
+        if (controls.isEmpty()) return emptyList()
+        return listOf(activity.section("Usage statistics"), activity.card().apply { controls.forEach(::addView) })
+    }
+
+    /** The switch, its current meaning and the "what is sent" view, for a Settings page item. */
+    fun settingsControls(activity: ComponentActivity): List<View> {
         if (!available(activity)) return emptyList()
-        val status = activity.text(if (consent(activity) == "granted") "Anonymous daily counts are shared." else "Nothing is counted or sent.", 13f, Palette.MUTED)
+        val status = activity.text(if (consent(activity) == "granted") "Anonymous daily counts are shared." else "Nothing is counted or sent.", UiType.META, Palette.MUTED)
         val toggle = Switch(activity).saiph().apply {
             text = "Share anonymous usage statistics"; setTextColor(Palette.TEXT); isChecked = consent(activity) == "granted"
             setOnCheckedChangeListener { _, checked ->
@@ -175,9 +182,7 @@ object UsageAnalytics {
             AlertDialog.Builder(activity).setTitle("What Saiph sends").setView(android.widget.ScrollView(activity).apply { addView(body) })
                 .setPositiveButton("Close", null).show()
         }
-        return listOf(activity.section("Usage statistics"), activity.card().apply {
-            addView(toggle); addView(status.apply { setPadding(activity.dp(4), 0, 0, 0) }); addView(activity.buttonRow(show))
-        })
+        return listOf(toggle, status.apply { setPadding(activity.dp(4), 0, 0, 0) }, activity.compactActions(show))
     }
 
     /** Called when an activity opens: count it and send anything due, off the main thread. */
