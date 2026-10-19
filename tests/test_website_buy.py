@@ -28,12 +28,13 @@ def test_landing_sells_one_product_with_one_main_button_and_no_downloads():
     assert re.search(r'<a class="btn primary trial-now" data-link="trial-start"[^>]*>Start your free trial</a>', INDEX)
     assert re.search(r'<div class="trial-cta" data-trial-shown hidden>', INDEX)
     assert re.search(r'<a class="btn primary buy-now" data-link="buy"[^>]*>Buy now</a>', INDEX)
-    assert 'nothing is charged automatically' in INDEX
+    assert '<strong data-trial>Free for 30 days, no card needed</strong>' in INDEX
     # The Cloud page's two-price box, as a plan choice with monthly preselected.
     assert re.search(r'id="plan-monthly" value="monthly" checked', INDEX)
     assert 'id="plan-yearly" value="yearly"' in INDEX and 'Save about' in INDEX
     assert '€9.99' in INDEX and '€89.99' in INDEX and 'No VAT is added' in INDEX
-    assert '14 days to withdraw' in INDEX and 'Sign in with Google' in INDEX
+    # Minimal page (owner, 20 Oct 2026): the price line, cancelling and the refund link stay.
+    assert 'Cancel any time' in INDEX and '<a href="refunds.html">14-day full refund</a>' in INDEX
     assert 'href="self-host.html"' in INDEX and 'href="hosted.html"' in INDEX
 
 
@@ -55,6 +56,12 @@ def test_demo_and_comparison_moved_to_the_cloud_page():
     hosted = (ROOT / 'website/hosted.html').read_text(encoding='utf-8')
     assert 'id="features"' in hosted and 'id="compare"' in hosted and 'assets/stage.js' in hosted
     assert 'data-link="buy" data-plan="monthly"' in hosted and 'data-link="buy" data-plan="yearly"' in hosted
+
+
+def test_landing_keeps_the_animated_device_demo_below_the_trial_button():
+    # Owner, 20 Oct 2026: the device animation is important on the landing page too.
+    assert 'class="showcase" id="demo"' in INDEX and 'data-stage' in INDEX and 'assets/stage.js' in INDEX
+    assert INDEX.index('data-link="trial-start"') < INDEX.index('data-stage') < INDEX.index('data-plan-picker')
 
 
 def test_website_csp_allows_only_googles_analytics_hosts_and_spares_the_callback():
