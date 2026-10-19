@@ -23,7 +23,7 @@ from .agent_grants import ensure as ensure_grants
 from .phone_features import MAX_FILE
 from .codes import verification_code
 from .callpause import CallPause
-from .usage import record as record_usage
+from .usage import record as record_usage, record_failure
 from . import phone_status
 
 MESH_ORIGIN = "http://100.64.0.1:8765"
@@ -664,7 +664,8 @@ class PhoneRuntime:
                         self.changed()
                     try:
                         self.client = await asyncio.to_thread(LinkClient, self.workspace.root, identity, mesh["base_url"], event, status,
-                                                             capabilities=capabilities(self.workspace.settings), on_connected=connected)
+                                                             capabilities=capabilities(self.workspace.settings), on_connected=connected,
+                                                             on_failure=lambda: record_failure(self.workspace, 'hub_connection_failed'))
                         running = asyncio.create_task(self.client.run())
                     except (OSError, ValueError, KeyError):
                         self.client = None; running = None

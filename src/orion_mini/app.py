@@ -178,6 +178,8 @@ class MainWindow(QMainWindow):
             # Sends only after the owner agrees; a no-op otherwise.
             counter = getattr(self.workspace, 'usage_counter', None)
             if counter is not None:
+                from .usage import install_crash_counter
+                install_crash_counter(self.workspace)  # Counts by thread kind only, after consent.
                 counter.start()
         self.restart_requested.connect(self.restart_app)
         self.workspace.request_restart = self.restart_requested.emit

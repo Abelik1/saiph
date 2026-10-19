@@ -23,6 +23,16 @@ class HostedHttpTransport private constructor(
     internal fun interface Sender { fun send(request: Request, maximum: Int): ByteArray }
 
     companion object {
+        /** Set by the app for opt-in usage counts; receives only a fixed failure reason code. */
+        @Volatile var failed: ((String) -> Unit)? = null
+
+        /** The published failure reason for a sealed request; null for other routes. */
+        internal fun failureCode(method: String, path: String): String? = when {
+            path == "/v1/sealed/events" -> if (method == "POST") "hosted_send_failed" else "hosted_receive_failed"
+            path.startsWith("/v1/sealed/blobs") -> if (method == "GET") "file_receive_failed" else "file_send_failed"
+            else -> null
+        }
+
         fun create(origin: String, session: HostedSession): HostedHttpTransport = HostedSession.guarded {
             val normalized = checkedOrigin(origin)
             val client = OkHttpClient.Builder().followRedirects(false).followSslRedirects(false)
@@ -128,7 +138,14 @@ class HostedHttpTransport private constructor(
         }
     }
 
-    private fun call(method: String, path: String, body: JsonObject? = null, token: String? = null, maximum: Int = 100_000): JsonObject = HostedSession.guarded {
+    private fun call(method: String, path: String, body: JsonObject? = null, token: String? = null, maximum: Int = 100_000): JsonObject = try {
+        request(method, path, body, token, maximum)
+    } catch (failure: Exception) {
+        failureCode(method, path)?.let { code -> runCatching { failed?.invoke(code) } }
+        throw failure
+    }
+
+    private fun request(method: String, path: String, body: JsonObject?, token: String?, maximum: Int): JsonObject = HostedSession.guarded {
         val raw = if (body == null) ByteArray(0) else HostedEnvelope.canonical(body)
         check(raw.size <= 65_536)
         val request = Request.Builder().url(origin + path).header("Accept", "application/json").header("User-Agent", "Orion-hosted-Android-development")

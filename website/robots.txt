@@ -1,0 +1,4 @@
+User-agent: *
+Disallow: /android/
+
+Sitemap: https://usesaiph.com/sitemap.xml

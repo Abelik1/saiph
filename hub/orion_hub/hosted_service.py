@@ -371,6 +371,7 @@ class SharedHosted:
             if app is None:
                 app = create_app(self.registry.config(account), device_registry=self.registry,
                                  tokens=BoundTokens(self.tokens, self.registry, identifier))
+                app.state.mailbox.observer = self.usage.sealed  # Daily delivery-health totals only.
             self.apps[identifier] = app
             while len(self.apps) > self.cache_size:
                 self.apps.popitem(last=False)
@@ -404,6 +405,14 @@ class SharedHosted:
         finally:
             # Service-wide totals by fixed route name and status class only.
             self.usage.request(scope.get('method', ''), scope['path'], status[0] if status else 0)
+
+    def _active(self, send, account, device=None):
+        """Count the account (and device) as active today once a request succeeds."""
+        async def counted(message):
+            if message['type'] == 'http.response.start' and 200 <= message['status'] < 300:
+                self.usage.active(account['id'], device)
+            await send(message)
+        return counted
 
     async def _http(self, scope, receive, send):
         request = Request(scope, receive=receive)
@@ -453,6 +462,7 @@ class SharedHosted:
                     _, value = await body(request)
                     exact(value, ('artifact',))
                     result = await asyncio.to_thread(self.downloads.issue, identity, value['artifact'])
+                    self.usage.metric('download.ticket', value['artifact'])  # Catalog key, e.g. "windows".
                 else:
                     reject(405)
                 response = JSONResponse(result)
@@ -488,14 +498,14 @@ class SharedHosted:
                 identity = await asyncio.to_thread(self.tokens.principal, request)
                 account = await asyncio.to_thread(self.registry.principal, identity)
                 app = await asyncio.to_thread(self.application, account)
-                return await app(scope, receive, send)
+                return await app(scope, receive, self._active(send, account))
             elif path.startswith('/v1/sealed/'):
                 if (request.headers.get('origin') or request.cookies or request.headers.get('authorization')
                         or len(request.headers.getlist('x-orion-device-id')) != 1):
                     reject(403)
                 account = await asyncio.to_thread(self.registry.device, request.headers.get('x-orion-device-id'))
                 app = await asyncio.to_thread(self.application, account)
-                return await app(scope, receive, send)
+                return await app(scope, receive, self._active(send, account, request.headers.get('x-orion-device-id')))
             elif path == '/v1/usage' and request.method == 'POST':
                 # Anonymous opt-in counts: no account, cookie, origin or query is accepted.
                 if (request.headers.get('origin') or request.cookies or request.headers.get('authorization')

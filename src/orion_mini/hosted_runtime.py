@@ -73,7 +73,7 @@ from .hosted_transfers import MAX_PLAINTEXT, HostedTransfers, no_network
 from .lan_files import LanInbox
 from .session_offer import FILE_REQUEST, SESSION_CLOSE, SESSION_OFFER, SESSION_REFUSE
 from .user_presence import confirm as confirm_user, status as user_verification
-from .usage import record as record_usage
+from .usage import record as record_usage, record_failure
 
 NAMES_SECONDS = 600  # Device names are re-shared at most every ten minutes unless they change.
 JOIN_FLOOD_SECONDS, JOIN_FLOOD_LIMIT = 600, 3  # More than three new devices in ten minutes warns.
@@ -500,6 +500,10 @@ class HostedController:
         session = SealedSession(self.folder / "trust.sqlite3", info.deployment_id, root.signing_key, info.device_id,
                                 signing, encryption)
         self.transport = self._transport_factory(config["service_url"], session)
+        try:
+            self.transport.failed = lambda code: record_failure(self.workspace, code)
+        except AttributeError:
+            pass
         self.session, self.mailbox, self.root, self.info, self.signing = session, DurableMailbox(session), root, info, signing
 
     def _active(self) -> bool:

@@ -1,5 +1,34 @@
 # Public website analytics
 
+19 October 2026 update: besides pageviews, the loader now keeps allow-listed
+campaign tags and counts four kinds of button press. Both are rebuilt from fixed
+lists in `assets/analytics.js`; anything else is dropped.
+
+- **Campaign tags** on pageviews: `utm_source`, `utm_medium` and `utm_campaign`
+  only when the value is on the lists in `analytics.js`, and `utm_content` only
+  when it looks like an ad ID (`01-ecosystem-convenience`). `utm_term`, other
+  parameters and fragments are always removed. To run a new campaign, add its
+  `utm_campaign` name (and any new source) to `analytics.js` in a reviewed change
+  and tag links like
+  `https://usesaiph.com/?utm_source=reddit&utm_medium=paid_social&utm_campaign=2026-10-launch&utm_content=01-ecosystem-convenience`.
+- **Custom events** (Vercel Pro): `download_click` with `platform` (`windows`,
+  `linux`, `android` for the Firebase beta, `android_apk`, `server`),
+  `cloud_click`, `account_click` and `github_click`. Each records which public
+  page it happened on, never the link target. The `beforeSend` hook returns a
+  rebuilt payload for every event, because the provider would otherwise keep its
+  original payload.
+- **Reading them:** Vercel → saiph-landing → Analytics: the UTM panels and the
+  Events panel. The Vercel MCP/API `aggregate_pageviews` / events endpoints give
+  the same data.
+
+The privacy notice (`privacy.html#analytics`) describes both. GPC/Do Not Track,
+the page allow-list and the referrer checks apply to events too.
+
+**Search (owner step):** add `usesaiph.com` to Google Search Console as a Domain
+property (DNS TXT record at the domain's DNS provider), then submit
+`https://usesaiph.com/sitemap.xml`. Import the property into Bing Webmaster
+Tools. Neither adds a script or cookie to the site.
+
 16 October 2026 update: the owner confirmed enabling Web Analytics in the landing
 project dashboard. `landing-settings.json` now opts into public-page analytics
 using `/_vercel/insights/script.js`; unconfigured builds still default to off,

@@ -7,6 +7,7 @@ import { pathToFileURL } from "node:url";
 import pg from "pg";
 import { createBillingStore } from "../lib/billing/store.mjs";
 import { exportMigrationSql, loadMigrations, runMigrations } from "../lib/billing/migrate.mjs";
+import { billingReport } from "../lib/billing/report.mjs";
 
 const databaseUrl = process.env.SAIPH_BILLING_TEST_DATABASE_URL;
 if (databaseUrl) {
@@ -491,5 +492,20 @@ describe("isolated PostgreSQL billing transactions", { skip: !databaseUrl ? "Run
     assert.deepEqual(await store().trialGrantCandidates(), []);
     assert.deepEqual(await store().trialGrantCandidates({ subject: "auth0|nobody" }), []);
     await assert.rejects(store().withTrialGrant("auth0|nobody", async () => 1), { code: "UNKNOWN_TRIAL" });
+  });
+  test("the funnel report runs on the real schema and only counts", async () => {
+    await trial(owner, keyA);
+    await bind();
+    await store().applyEvent(event("evt_report", 200, { type: "customer.subscription.created" }), async () => snapshot("active"));
+    const plans = { monthly: "price_synthetic", yearly: "price_yearly" };
+    const report = await billingReport(pool, { stripeAccountId: accountId, plans, weeks: 4, minCell: 1 });
+    assert.deepEqual(report.subscriptions, { "active/monthly": 1 });
+    assert.deepEqual(report.trialConversion, { trials: 1, paid: 1, rate: 100 });
+    assert.equal(report.checkoutsStarted.length, 1, "the customer was created this week");
+    assert.deepEqual(report.trialsStarted, [], "the synthetic trial started in 1970, outside the window");
+    assert.equal(report.paymentFailing, 0);
+    assert.doesNotMatch(JSON.stringify(report), /auth0\||cus_|sub_|price_/);
+    const shared = await billingReport(pool, { stripeAccountId: accountId, plans });
+    assert.deepEqual(shared.trialConversion, { trials: "<5", paid: "<5", rate: null });
   });
 });

@@ -30,8 +30,10 @@ def mesh_url(base: str) -> str:
 
 
 class LinkClient:
-    def __init__(self, root: Path, device_id: str, base_url: str, on_event, on_status=None, *, capabilities=None, on_connected=None):
+    def __init__(self, root: Path, device_id: str, base_url: str, on_event, on_status=None, *, capabilities=None, on_connected=None,
+                 on_failure=None):
         self.root, self.device_id = root, device_id
+        self.on_failure = on_failure
         self.url = mesh_url(base_url)
         self.on_event = on_event
         self.on_status = on_status or (lambda _: None)
@@ -139,7 +141,11 @@ class LinkClient:
                         delay = 0.25
             except (OSError, WebSocketException, asyncio.TimeoutError):
                 # Errors can contain server replies. Report only a fixed status.
-                pass
+                if self.on_failure is not None:
+                    try:
+                        self.on_failure()
+                    except Exception:
+                        pass
             self.on_status({"op": "reconnecting"})
             try:
                 await asyncio.wait_for(self.wake.wait(), delay + random.uniform(0, delay / 4))

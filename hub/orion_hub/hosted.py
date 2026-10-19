@@ -115,6 +115,8 @@ class Mailbox:
     def __init__(self, config, *, device_registry=None):
         self.config = config
         self.device_registry = device_registry
+        # Optional aggregate delivery-health hook (hosted_usage.UsageStore.sealed).
+        self.observer = None
         config.database.parent.mkdir(parents=True, exist_ok=True)
         with self.connect() as db:
             # Prevent an accidental switch from a legacy Hub database.
@@ -351,6 +353,14 @@ class Mailbox:
                 reject(409)
         return device, roster["version"]
 
+    def observe(self, kind, *values):
+        """Report an event ID, time or size to the aggregate hook; never content, never raises."""
+        if self.observer is not None:
+            try:
+                self.observer(kind, *values)
+            except Exception:
+                pass
+
     def publish(self, source, version, value):
         exact(value, ("header", "ciphertext"))
         header = value["header"]
@@ -390,6 +400,7 @@ class Mailbox:
                 reject(429)
             db.execute("INSERT INTO sealed_events VALUES(?,?,?,?,?,?,?,?)", (header["id"], source, header["target"], version,
                        stable(header).decode(), value["ciphertext"], digest, header["expires_at"]))
+        self.observe("published", header["id"], header["expires_at"])
         return {"accepted": True, "duplicate": False}
 
     def events(self, device, version):
@@ -517,8 +528,10 @@ def create_app(config: HostedConfig, *, tokens=None, device_registry=None):
             with mailbox.connect() as db:
                 if mailbox.latest(db)["version"] != version:
                     reject(409)
-                db.execute("DELETE FROM sealed_events WHERE id=? AND target=? AND version=?", (event_id, device, version))
-        await asyncio.to_thread(remove)
+                return db.execute("DELETE FROM sealed_events WHERE id=? AND target=? AND version=?",
+                                  (event_id, device, version)).rowcount
+        if await asyncio.to_thread(remove):
+            mailbox.observe("acknowledged", event_id)
         return {"ok": True}
 
     app.state.mailbox = mailbox

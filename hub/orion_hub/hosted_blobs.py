@@ -99,6 +99,7 @@ class BlobStore:
             db.execute("INSERT INTO hosted_blobs VALUES(?,?,?,?,?,?,?,?,?,?,0)",
                        (value["id"], deployment, source, value["target"], version, value["roster_hash"],
                         value["expires_at"], value["size"], value["sha256"], digest))
+        self.mailbox.observe("blob", value["size"])
         return {"accepted": True, "duplicate": False}
 
     def _blob(self, db, current, members, blob_id, device, *, recipient=False):

@@ -55,6 +55,15 @@ def strict_json(raw):
     return json.loads(raw.decode("utf-8"), object_pairs_hook=pairs, parse_constant=invalid)
 
 
+def failure_code(method, path):
+    """The published failure reason for a sealed request; None for other routes."""
+    if path == "/v1/sealed/events":
+        return "hosted_send_failed" if method == "POST" else "hosted_receive_failed"
+    if path.startswith("/v1/sealed/blobs"):
+        return "file_receive_failed" if method == "GET" else "file_send_failed"
+    return None
+
+
 class HostedTransport:
     def __init__(self, base_url, session, *, ca_bundle: Path | None = None):
         try:
@@ -79,11 +88,25 @@ class HostedTransport:
         # Server time minus local time from the last HTTPS Date header. Used
         # only to schedule roster renewal; never to accept or verify content.
         self.server_offset = None
+        # Optional failure counter (usage.record_failure); receives a fixed reason code only.
+        self.failed = None
 
     def close(self):
         self.http.close()
 
     def _call(self, method, path, *, token=None, value=None):
+        try:
+            return self._request(method, path, token=token, value=value)
+        except TransportError:
+            code = failure_code(method, path)
+            if code and self.failed is not None:
+                try:
+                    self.failed(code)
+                except Exception:
+                    pass
+            raise
+
+    def _request(self, method, path, *, token=None, value=None):
         raw = wire(value) if value is not None else b""
         headers = {"Accept": "application/json", "Content-Type": "application/json"}
         if token is not None:

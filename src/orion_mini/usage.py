@@ -5,7 +5,9 @@ Nothing is counted or sent until the owner agrees, and declining deletes any
 local counts. Counting happens on this computer; at most one batch per past day
 is sent. A batch has no install or account identifier, no IP-derived data, no
 names, numbers, file names, app names or content: only which features were used,
-in coarse ranges, plus app version, platform and how far setup has progressed.
+in coarse ranges, plus app version, platform and how far setup has progressed,
+the Windows or Linux family, how many of the last seven days Saiph was used,
+which features are switched on, and failure and crash counts by fixed reason.
 Self-hosted and development builds without a packaged Saiph service never send.
 """
 from __future__ import annotations
@@ -18,9 +20,11 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-SCHEMA = 1
+SCHEMA = 2
 KIND = "usage_day"
 KEEP_DAYS = 7  # The service refuses older batches; unsent older counts are dropped.
+# Schema 1 fields; a service that refuses schema 2 still gets these.
+SCHEMA_1_FIELDS = ("schema", "day", "app", "platform", "version", "mode", "install_age", "stage", "features")
 
 # Every countable feature, as published in docs/USAGE_ANALYTICS.md. Counting an
 # unknown name is ignored, so a typo can never invent a new field.
@@ -56,6 +60,22 @@ FEATURES = {
     "screen_apps": "Apps tab opened",
 }
 SCREENS = {name.removeprefix("screen_") for name in FEATURES if name.startswith("screen_")}
+# Failures by fixed reason code. Never the error text, address or file involved.
+FAILURES = {
+    "hosted_send_failed": "Saiph Cloud refused or could not take an encrypted message",
+    "hosted_receive_failed": "Encrypted messages could not be fetched from Saiph Cloud",
+    "file_send_failed": "Part of an encrypted file could not be uploaded",
+    "file_receive_failed": "Part of an encrypted file could not be downloaded",
+    "hub_connection_failed": "The connection to your Hub failed or dropped",
+}
+# Unhandled errors, by the kind of thread they happened on. No message or stack.
+CRASHES = {
+    "main_thread": "Unhandled error in the window",
+    "background_thread": "Unhandled error in background work",
+}
+# Switches reported as on or off; each is a Saiph preference, never content.
+ENABLED = ("notifications", "messages", "photos", "apps", "calls", "wallpaper", "usb_debugging", "your_week")
+GROUPS = {"features": FEATURES, "failures": FAILURES, "crashes": CRASHES}
 
 # Desktop bridge actions mapped to the feature they represent.
 BRIDGE_FEATURES = {
@@ -79,6 +99,23 @@ def bucket(count: int) -> str:
 
 def age_bucket(days: int) -> str:
     return "0" if days <= 0 else "1-6" if days < 7 else "7-29" if days < 30 else "30-89" if days < 90 else "90+"
+
+
+def active_bucket(days: int) -> str:
+    """How many of the last seven days had any use, as a range."""
+    return "0" if days <= 0 else "1" if days == 1 else "2-3" if days <= 3 else "4-6" if days <= 6 else "7"
+
+
+def os_family() -> str:
+    """Windows 10 or 11, or the Linux display system; never a build or distribution."""
+    if sys.platform == "win32":
+        try:
+            return "windows_11" if sys.getwindowsversion().build >= 22000 else "windows_10"
+        except (AttributeError, OSError):
+            return "windows_other"
+    import os
+    session = os.environ.get("XDG_SESSION_TYPE", "").lower()
+    return "linux_wayland" if session == "wayland" else "linux_x11" if session == "x11" else "linux_other"
 
 
 def _day(timestamp: float) -> str:
@@ -124,10 +161,11 @@ def _post(endpoint: str, batch: dict) -> None:
 class UsageCounter:
     """Local counts plus the owner's choice; safe to call from any thread."""
 
-    def __init__(self, workspace, *, endpoint=None, post=_post, clock=time.time, version=None, platform=None):
+    def __init__(self, workspace, *, endpoint=None, post=_post, clock=time.time, version=None, platform=None, os=None):
         self.workspace, self.endpoint, self.post, self.clock = workspace, endpoint, post, clock
         self.version = version or app_version()
         self.platform = platform or ("windows" if sys.platform == "win32" else "linux")
+        self.os = os or os_family()
         self._lock = threading.RLock()
         self._stop = threading.Event()
         self._thread = None
@@ -161,6 +199,7 @@ class UsageCounter:
                     self.workspace.store.delete(KIND, row["id"])
                 usage.pop("last_sent", None)
                 usage.pop("first_day", None)
+                usage.pop("active_days", None)
             self.workspace.settings["usage"] = usage
             self.workspace.save()
         return self.snapshot()
@@ -174,7 +213,17 @@ class UsageCounter:
                 insights.count(feature, amount)
             else:
                 insights.count(feature, amount, generation=generations[1])
-        if feature not in FEATURES or type(amount) is not int or amount < 1:
+        self._add("features", feature, amount, generations=generations)
+
+    def failure(self, code: str) -> None:
+        """Count a failure by its fixed reason code; unknown codes are ignored."""
+        self._add("failures", code, 1)
+
+    def crash(self, thread: str) -> None:
+        self._add("crashes", thread, 1)
+
+    def _add(self, group, name, amount, *, generations=None) -> None:
+        if name not in GROUPS[group] or type(amount) is not int or amount < 1:
             return
         with self._lock:
             if self.consent() != "granted" or (generations is not None and generations[0] != self._generation):
@@ -183,10 +232,18 @@ class UsageCounter:
             try:
                 row = self.workspace.store.get(KIND, day)
             except ValueError:
-                row = {"id": day, "features": {}}
-            features = dict(row.get("features") or {})
-            features[feature] = min(int(features.get(feature, 0)) + amount, 1_000_000)
-            self.workspace.store.save(KIND, {"id": day, "features": features})
+                row = {"id": day}
+            counts = dict(row.get(group) or {})
+            counts[name] = min(int(counts.get(name, 0)) + amount, 1_000_000)
+            self.workspace.store.save(KIND, {**row, "id": day, group: counts})
+            if group == "features":
+                # Days with any use, kept 14 days, for the "active days in the last week" range.
+                usage = self._settings()
+                days = [d for d in usage.get("active_days") or [] if isinstance(d, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", d)]
+                if day not in days:
+                    days = sorted([*days, day])[-14:]
+                    self.workspace.settings["usage"] = {**usage, "active_days": days}
+                    self.workspace.save()
 
     def screen(self, name) -> None:
         if name in SCREENS:
@@ -219,6 +276,22 @@ class UsageCounter:
             return "phone_added"
         return "connected" if setup["connected"] else "installed"
 
+    def _enabled(self) -> dict:
+        try:
+            from .phone_settings import preferences
+            prefs = preferences(self.workspace.settings)
+            values = {**prefs["features"], "wallpaper": prefs["wallpaper"], "usb_debugging": prefs["usb_debugging"]}
+            insights = getattr(self.workspace, "insights", None)
+            values["your_week"] = bool(insights.enabled()) if insights is not None else False
+            return {name: values[name] is True for name in ENABLED}
+        except (OSError, ValueError, TypeError, KeyError, AttributeError):
+            return {}
+
+    def _active_days(self, day: str) -> str:
+        days = self._settings().get("active_days") or []
+        return active_bucket(sum(1 for d in set(days) if isinstance(d, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", d)
+                                 and 0 <= _days_between(d, day) < 7))
+
     def _mode(self) -> str:
         try:
             from .setup_guide import status
@@ -236,12 +309,14 @@ class UsageCounter:
             day = row["id"]
             if day >= today or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", day) or _days_between(day, today) > KEEP_DAYS:
                 continue
-            features = {name: bucket(int(value)) for name, value in sorted((row.get("features") or {}).items())
-                        if name in FEATURES and int(value) > 0}
+            counts = {group: {name: bucket(int(value)) for name, value in sorted((row.get(group) or {}).items())
+                              if name in names and int(value) > 0} for group, names in GROUPS.items()}
             result.append({"schema": SCHEMA, "day": day, "app": "desktop", "platform": self.platform,
                            "version": self.version, "mode": self._mode(),
                            "install_age": age_bucket(max(0, _days_between(first, day))),
-                           "stage": self._stage(), "features": features})
+                           "stage": self._stage(), "features": counts["features"],
+                           "active_days": self._active_days(day), "os": self.os, "enabled": self._enabled(),
+                           "failures": counts["failures"], "crashes": counts["crashes"]})
         return result
 
     def flush(self) -> int:
@@ -258,7 +333,11 @@ class UsageCounter:
                 try:
                     self.post(self.endpoint, batch)
                 except Exception:
-                    break  # Offline or refused (network libraries raise their own types); retry later.
+                    # A service that predates schema 2 refuses it; send the schema 1 subset.
+                    try:
+                        self.post(self.endpoint, {**{key: batch[key] for key in SCHEMA_1_FIELDS}, "schema": 1})
+                    except Exception:
+                        break  # Offline or refused (network libraries raise their own types); retry later.
                 self.workspace.store.delete(KIND, batch["day"])
                 self.workspace.settings["usage"] = {**self._settings(), "last_sent": batch}
                 self.workspace.save()
@@ -299,3 +378,37 @@ def record(workspace, feature: str, amount: int = 1) -> None:
             counter.count(feature, amount)
         except Exception:
             pass
+
+
+def record_failure(workspace, code: str) -> None:
+    """Count a failure by fixed reason code if this workspace has a counter; never raises."""
+    counter = getattr(workspace, "usage_counter", None)
+    if counter is not None:
+        try:
+            counter.failure(code)
+        except Exception:
+            pass
+
+
+def install_crash_counter(workspace) -> None:
+    """Count unhandled errors by thread kind, then hand them to the previous hooks."""
+    previous_sys, previous_thread = sys.excepthook, threading.excepthook
+
+    def count(kind):
+        counter = getattr(workspace, "usage_counter", None)
+        if counter is not None:
+            try:
+                counter.crash(kind)
+            except Exception:
+                pass
+
+    def sys_hook(kind, value, trace):
+        count("main_thread" if threading.current_thread() is threading.main_thread() else "background_thread")
+        previous_sys(kind, value, trace)
+
+    def thread_hook(args):
+        if args.exc_type is not SystemExit:
+            count("background_thread")
+        previous_thread(args)
+
+    sys.excepthook, threading.excepthook = sys_hook, thread_hook
