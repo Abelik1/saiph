@@ -10,8 +10,8 @@ export function UsageExplanation() {
   return <>
     <p>Saiph can send anonymous counts of which features you use, once a day, so we know what to improve. It's off unless you agree.</p>
     <ul className="usage-terms">
-      <li><b>Sent:</b> which features and screens were used that day, in rough ranges (like "2–5 times"), the app version, Windows or Linux, and how far setup got.</li>
-      <li><b>Never sent:</b> your messages, notifications, clipboard, files, contacts, phone numbers, names, app names or anything you type. No account or device ID is attached.</li>
+      <li><b>Sent:</b> which features and screens were used that day, in rough ranges (like "2–5 times"), the app version, Windows 10 or 11 or the Linux display system, how far setup got, how many days you used Saiph this week, which Saiph switches are on, and how often sending, receiving or the app itself failed.</li>
+      <li><b>Never sent:</b> your messages, notifications, clipboard, files, contacts, phone numbers, names, app names, error messages or anything you type. No account or device ID is attached.</li>
       <li>You can see every batch before it's sent and change your mind any time in Settings. Turning it off deletes the counts on this computer.</li>
     </ul>
   </>;

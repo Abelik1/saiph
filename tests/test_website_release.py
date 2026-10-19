@@ -408,7 +408,7 @@ def test_trader_address_reaches_only_the_noindexed_contact_page(tmp_path):
     assert '<span data-trader-address>' + SYNTHETIC_ADDRESS + '</span>' in contact
     assert '<meta name="robots" content="noindex">' in contact
     others = [p for p in (tmp_path / 'with').rglob('*') if p.is_file() and p.name != 'contact.html']
-    assert others and not any('Synthetic Street' in p.read_text(encoding='utf-8') for p in others)
+    assert others and not any(b'Synthetic Street' in p.read_bytes() for p in others)
     site.prepare(ROOT / 'website', tmp_path / 'without', settings)
     assert 'available on request' in (tmp_path / 'without/contact.html').read_text(encoding='utf-8')
     assert 'Synthetic Street' not in (ROOT / 'website/contact.html').read_text(encoding='utf-8')

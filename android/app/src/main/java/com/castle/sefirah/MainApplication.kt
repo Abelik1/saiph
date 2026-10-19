@@ -18,6 +18,10 @@ class MainApplication : Application(), Configuration.Provider {
         com.orionmini.mobile.UpdateCheckWorker.schedule(this)
         // Counts only event types, and only after the owner agrees to anonymous usage statistics.
         sefirah.network.orion.OrionLink.published = { type -> com.orionmini.mobile.UsageAnalytics.event(this, type) }
+        // Failures and crashes by fixed reason only, under the same agreement.
+        sefirah.network.orion.OrionLink.failed = { com.orionmini.mobile.UsageAnalytics.failure(this, "hub_connection_failed") }
+        sefirah.network.orion.HostedHttpTransport.failed = { code -> com.orionmini.mobile.UsageAnalytics.failure(this, code) }
+        com.orionmini.mobile.UsageAnalytics.installCrashCounter(this)
     }
 
     @Inject lateinit var workerFactory: HiltWorkerFactory

@@ -23,30 +23,41 @@ def settings():
                         'hostingTransfers': 'Synthetic transfers', 'contactProcessing': 'Synthetic contact processing'}}
 
 
-def run_loader(config=None, url=ORIGIN + '/', referrer='', events=None, navigator=None):
+def run_loader(config=None, url=ORIGIN + '/', referrer='', events=None, navigator=None, clicks=None):
     node = shutil.which('node')
     if not node:
         pytest.fail('Node 24 is required for analytics privacy-boundary checks')
     harness = r"""
 const fs = require('node:fs'), vm = require('node:vm');
 const input = JSON.parse(fs.readFileSync(0, 'utf8'));
-const inserted = [], status = {textContent: ''};
+const inserted = [], status = {textContent: ''}, listeners = [];
 const window = { ORION_SITE: input.config, location: new URL(input.url), navigator: input.navigator };
 const document = {referrer: input.referrer, querySelectorAll: () => [status],
+  addEventListener: (type, listener) => listeners.push([type, listener]),
   createElement: () => ({dataset: {}}), head: {appendChild: script => inserted.push(script)} };
+// A synthetic link element built from its attributes, used as a click target.
+const link = attrs => { const dataset = {};
+  Object.entries(attrs).forEach(([k, v]) => { if (k.startsWith('data-')) dataset[k.slice(5).replace(/-([a-z])/g, (_, c) => c.toUpperCase())] = v; });
+  const el = {dataset, hasAttribute: name => name in attrs, closest: selector =>
+    (selector.includes('data-download') && 'data-download' in attrs) || (selector.includes('data-link') && 'data-link' in attrs) ? el : null};
+  return el; };
 const source = fs.readFileSync(process.argv[1], 'utf8');
 const context = {window, document, URL, Set};
 vm.runInNewContext(source, context);
 const firstCount = inserted.length;
 const hook = window.vaq && window.vaq.find(([name]) => name === 'beforeSend');
 const events = input.events.map(event => hook ? hook[1](event) : null);
+const queueLength = (window.vaq || []).length;
+input.clicks.forEach(attrs => listeners.filter(([type]) => type === 'click').forEach(([, listener]) => listener({target: link(attrs)})));
+const tracked = (window.vaq || []).slice(queueLength).map(args => Array.from(args));
 vm.runInNewContext(source, context);
-console.log(JSON.stringify({inserted, firstCount, queueLength: (window.vaq || []).length,
-  events, status: status.textContent}));
+console.log(JSON.stringify({inserted, firstCount, queueLength, listeners: listeners.length,
+  events, tracked, status: status.textContent}));
 """
     result = subprocess.run([node, '-e', harness, str(ROOT / 'website/assets/analytics.js')],
                             input=json.dumps({'config': config or {}, 'url': url, 'referrer': referrer,
-                                              'events': events or [], 'navigator': navigator or {}}),
+                                              'events': events or [], 'navigator': navigator or {},
+                                              'clicks': clicks or []}),
                             text=True, capture_output=True, check=True)
     return json.loads(result.stdout)
 
@@ -117,7 +128,7 @@ def test_activation_requires_approved_privacy_and_public_contact():
 def test_nonpublic_routes_hosts_and_local_previews_never_load_provider(url):
     result = run_loader(settings(), url=url)
     assert result['inserted'] == []
-    assert result['status'] == 'Pageview analytics is off for this visit.'
+    assert result['status'] == 'Visit analytics is off for this visit.'
 
 
 @pytest.mark.parametrize('referrer', [ORIGIN + '/auth/callback', ORIGIN + '/?code=secret',
@@ -143,20 +154,21 @@ def test_known_public_pages_queue_filter_before_loading_once(path, referrer):
     assert script['src'] == '/_vercel/insights/script.js'
     assert script['defer'] is True
     assert script['dataset']['viewEndpoint'] == '/_vercel/insights/view'
-    assert result['status'] == 'Cookie-free pageview analytics is enabled.'
+    assert result['status'] == 'Cookie-free visit analytics is enabled.'
 
 
 def test_before_send_removes_sensitive_url_parts_payloads_and_identity():
     events = [{'type': 'pageview', 'url': ORIGIN + '/downloads.html?email=synthetic@example.invalid#secret',
                'payload': {'userId': 'synthetic'}, '__cdp': {'userId': 'synthetic'}},
               {'type': 'event', 'url': ORIGIN + '/', 'payload': {'name': 'checkout'}},
+              {'type': 'event', 'url': ORIGIN + '/', 'payload': None},
               {'type': 'identify', 'url': ORIGIN + '/', 'userId': 'synthetic'},
               {'type': 'pageview', 'url': ORIGIN + '/auth/callback?code=secret'},
               {'type': 'pageview', 'url': 'https://saiph-account-dev.vercel.app/'},
               {'type': 'pageview', 'url': 'https://user:password@private-owner.invalid/'},
               {'type': 'pageview', 'url': 'invalid'}, None]
     result = run_loader(settings(), events=events)
-    assert result['events'] == [{'type': 'pageview', 'url': ORIGIN + '/downloads.html'}, *[None] * 7]
+    assert result['events'] == [{'type': 'pageview', 'url': ORIGIN + '/downloads.html'}, *[None] * 8]
     assert 'secret' not in json.dumps(result)
     assert 'synthetic@example.invalid' not in json.dumps(result)
 
@@ -177,3 +189,66 @@ def test_www_landing_origin_keeps_the_same_public_page_boundary():
         {'type': 'pageview', 'url': origin + '/account'}])
     assert result['firstCount'] == 1
     assert result['events'] == [{'type': 'pageview', 'url': origin + '/privacy.html'}, None, None]
+
+
+def test_only_allow_listed_campaign_tags_survive_on_pageviews():
+    url = (ORIGIN + '/?utm_source=reddit&utm_medium=paid_social&utm_campaign=2026-10-launch'
+           '&utm_content=01-ecosystem-convenience&utm_term=synthetic+search&email=synthetic@example.invalid#secret')
+    result = run_loader(settings(), url=url, events=[
+        {'type': 'pageview', 'url': url},
+        {'type': 'pageview', 'url': ORIGIN + '/?utm_source=synthetic-person&utm_medium=email&utm_campaign=private'},
+        {'type': 'pageview', 'url': ORIGIN + '/?utm_content=Synthetic%20Name&utm_campaign=2026-10-launch'},
+        {'type': 'pageview', 'url': ORIGIN + '/?utm_source=reddit&utm_source=synthetic'},
+        {'type': 'event', 'url': url, 'payload': {'name': 'github_click'}}])
+    assert result['events'] == [
+        {'type': 'pageview', 'url': ORIGIN + '/?utm_source=reddit&utm_medium=paid_social&utm_campaign=2026-10-launch'
+                                             '&utm_content=01-ecosystem-convenience'},
+        {'type': 'pageview', 'url': ORIGIN + '/?utm_medium=email'},
+        {'type': 'pageview', 'url': ORIGIN + '/?utm_campaign=2026-10-launch'},
+        {'type': 'pageview', 'url': ORIGIN + '/?utm_source=reddit'},
+        {'type': 'event', 'url': ORIGIN + '/', 'payload': {'name': 'github_click'}}]
+    text = json.dumps(result['events'])
+    assert 'synthetic' not in text and 'secret' not in text and 'utm_term' not in text
+
+
+def test_custom_events_are_rebuilt_from_the_fixed_list():
+    result = run_loader(settings(), events=[
+        {'type': 'event', 'url': ORIGIN + '/downloads.html',
+         'payload': {'name': 'download_click', 'data': {'platform': 'linux'}}},
+        {'type': 'event', 'url': ORIGIN + '/', 'payload': {'name': 'cloud_click', 'data': None}, '__cdp': {'userId': 'x'}},
+        {'type': 'event', 'url': ORIGIN + '/',
+         'payload': {'name': 'download_click', 'data': {'platform': 'synthetic@example.invalid'}}},
+        {'type': 'event', 'url': ORIGIN + '/', 'payload': {'name': 'download_click', 'data': {'platform': 'linux', 'email': 'x'}}},
+        {'type': 'event', 'url': ORIGIN + '/', 'payload': {'name': 'github_click', 'data': ['x']}},
+        {'type': 'event', 'url': ORIGIN + '/', 'payload': {'name': 'toString'}},
+        {'type': 'event', 'url': ORIGIN + '/account', 'payload': {'name': 'github_click'}},
+        {'type': 'identify', 'url': ORIGIN + '/', 'payload': {'name': 'identify', 'data': {'userId': 'x'}}}])
+    assert result['events'] == [
+        {'type': 'event', 'url': ORIGIN + '/downloads.html',
+         'payload': {'name': 'download_click', 'data': {'platform': 'linux'}}},
+        {'type': 'event', 'url': ORIGIN + '/', 'payload': {'name': 'cloud_click'}}, *[None] * 6]
+
+
+def test_button_clicks_queue_only_known_events_without_link_targets():
+    result = run_loader(settings(), clicks=[
+        {'href': 'https://github.com/synthetic/x/releases/download/v1/a.exe', 'data-download': 'windows'},
+        {'href': 'https://github.com/synthetic/x/releases/download/v1/a.apk', 'data-download': 'android'},
+        {'href': 'https://appdistribution.firebase.dev/i/abcdefgh', 'data-link': 'android-beta'},
+        {'href': 'https://account.dev.usesaiph.com/account', 'data-link': 'subscribe'},
+        {'href': 'https://account.dev.usesaiph.com/account', 'data-link': 'account'},
+        {'href': 'https://github.com/synthetic/x', 'data-link': 'github'},
+        {'data-download': 'linux'},
+        {'href': 'https://example.invalid/', 'data-link': 'releases'},
+        {'href': '#', 'data-download': 'synthetic'}])
+    assert result['listeners'] == 1
+    assert result['tracked'] == [
+        ['event', {'name': 'download_click', 'data': {'platform': 'windows'}}],
+        ['event', {'name': 'download_click', 'data': {'platform': 'android_apk'}}],
+        ['event', {'name': 'download_click', 'data': {'platform': 'android'}}],
+        ['event', {'name': 'cloud_click'}], ['event', {'name': 'account_click'}], ['event', {'name': 'github_click'}]]
+    assert 'github.com' not in json.dumps(result['tracked'])
+
+
+def test_disabled_analytics_adds_no_click_listener():
+    assert run_loader({}, clicks=[{'href': 'x', 'data-link': 'github'}])['listeners'] == 0
+    assert run_loader(settings(), navigator={'doNotTrack': '1'})['listeners'] == 0

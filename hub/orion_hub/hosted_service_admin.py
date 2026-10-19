@@ -22,7 +22,10 @@ def main():
     migrate = commands.add_parser('import-owner')
     migrate.add_argument('--snapshot', type=Path, required=True)
     migrate.add_argument('--until', type=int, required=True)
-    commands.add_parser('usage-report').add_argument('--days', type=int, default=30)
+    report = commands.add_parser('usage-report')
+    report.add_argument('--days', type=int, default=30)
+    report.add_argument('--min-cell', type=int, default=5, help='hide install groups smaller than this (1 shows all)')
+    commands.add_parser('funnel-report').add_argument('--min-cell', type=int, default=5)
     for action in ('suspend', 'reactivate', 'reset-workspace', 'grants'):
         commands.add_parser(action).add_argument('--account', required=True)
     args = parser.parse_args()
@@ -47,7 +50,12 @@ def main():
         elif args.action == 'usage-report':
             # Daily totals only: the store never holds per-install or per-account rows.
             from .hosted_usage import UsageStore
-            print(json.dumps(UsageStore(directory).report(args.days), indent=2))
+            print(json.dumps(UsageStore(directory).report(args.days, min_cell=args.min_cell), indent=2))
+            return
+        elif args.action == 'funnel-report':
+            # Account totals only: no account, subject, device or code is printed.
+            from .hosted_usage import funnel_report
+            print(json.dumps(funnel_report(registry, min_cell=args.min_cell), indent=2))
             return
         elif args.action == 'grants':
             print(json.dumps(registry.grants(args.account), indent=2))

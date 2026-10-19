@@ -17,6 +17,8 @@ class OrionLink @Inject constructor(private val context: Context) {
     companion object {
         /** Set by the app for opt-in usage counts; receives only the event type, never its payload. */
         @Volatile var published: ((String) -> Unit)? = null
+        /** Set by the app for opt-in usage counts; called when the Hub connection fails or drops. */
+        @Volatile var failed: (() -> Unit)? = null
     }
     val status = MutableStateFlow("Waiting for setup")
     private val protocol = LinkProtocol()
@@ -65,7 +67,10 @@ class OrionLink @Inject constructor(private val context: Context) {
                 session(onConnected, onEvent)
                 retry = 1000
             } catch (cancelled: CancellationException) { throw cancelled }
-            catch (_: Exception) { /* Never log headers, keys, frames or exception bodies. */ }
+            catch (_: Exception) {
+                // Never log headers, keys, frames or exception bodies; count only that it failed.
+                runCatching { failed?.invoke() }
+            }
             delay(retry + kotlin.random.Random.nextLong(250))
             retry = (retry * 2).coerceAtMost(15000)
         }

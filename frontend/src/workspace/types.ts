@@ -296,7 +296,8 @@ export type RemoteStatus = {enabled:boolean;devices:string[];adapters:Record<str
 export type HotspotStatus = {profiles:string[];profile:string;auto:boolean;active:string|null;error:string;supported:boolean};
 export type DndStatus = {enabled:boolean;active:boolean;source:string;changed_at:number|null;quiet:boolean};
 /** One anonymous day of counts, exactly as sent (docs/USAGE_ANALYTICS.md). */
-export type UsageBatch = {schema: number; day: string; app: string; platform: string; version: string; mode: string; install_age: string; stage: string; features: Record<string, string>};
+export type UsageBatch = {schema: number; day: string; app: string; platform: string; version: string; mode: string; install_age: string; stage: string; features: Record<string, string>;
+  active_days?: string; os?: string; enabled?: Record<string, boolean>; failures?: Record<string, string>; crashes?: Record<string, string>};
 export type UsageState = {available: boolean; consent: "granted" | "declined" | null; pending: UsageBatch[]; last_sent: UsageBatch | null};
 /** "Your week": calculated on this computer when opened; never sent. */
 export type WeekSummary = {enabled: boolean; from?: string; to?: string; actions: number; days?: {date: string; actions: number}[]; busiest_day: string | null; screen: string | null;

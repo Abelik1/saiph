@@ -20,7 +20,8 @@
     "test:billing-db": "node scripts/test-billing-db.mjs",
     "db:export": "node scripts/export-migration.mjs",
     "billing:keygen": "node scripts/billing-keygen.mjs",
-    "billing:resync": "node scripts/billing-resync.mjs"
+    "billing:resync": "node scripts/billing-resync.mjs",
+    "billing:report": "node scripts/billing-report.mjs"
   },
   "dependencies": {
     "@auth0/nextjs-auth0": "4.31.1",

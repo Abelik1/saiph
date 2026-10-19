@@ -197,7 +197,10 @@ def test_recipient_and_reserved_byte_quota_and_cleanup(setup, monkeypatch):
 
 
 def test_expiry_removes_chunks_before_download(setup, monkeypatch):
-    value = descriptor(setup, b"x", expires_at=int(time.time()) + 1)
+    # Frozen clock: a one-second lifetime must not race the upload on a slow machine.
+    now = int(time.time())
+    monkeypatch.setattr(hosted_blobs.time, "time", lambda: now)
+    value = descriptor(setup, b"x", expires_at=now + 1)
     assert allocate(setup, value).status_code == 200
     assert put(setup, value, b"x").status_code == 200
     assert complete(setup, value).status_code == 200

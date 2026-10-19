@@ -1,0 +1,82 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// The billing funnel report only groups and counts, and hides small groups.
+// Synthetic rows through a recording pool; the SQL itself runs against the
+// isolated database in tests/billing-db.test.mjs (npm run test:billing-db).
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { billingReport, hideSmall } from "../lib/billing/report.mjs";
+
+const plans = { monthly: "price_monthly", yearly: "price_yearly" };
+
+function pool(answers) {
+  const calls = [];
+  return {
+    calls,
+    async query(sql, values) {
+      calls.push({ sql, values });
+      const key = Object.keys(answers).find((name) => sql.includes(name));
+      return { rows: key ? answers[key] : [] };
+    },
+  };
+}
+
+const answers = {
+  "FROM saiph_billing.trials\n": [{ week: "2026-10-05", count: 2 }, { week: "2026-10-12", count: 9 }],
+  "FROM saiph_billing.customers\n": [{ week: "2026-10-12", count: 7 }],
+  "canceled_at IS NOT NULL": [{ week: "2026-10-12", count: 1 }],
+  "GROUP BY 1, 2, 3": [
+    { status: "active", price: "price_monthly", ending: false, count: 6 },
+    { status: "active", price: "price_yearly", ending: false, count: 5 },
+    { status: "active", price: "price_monthly", ending: true, count: 2 },
+    { status: "past_due", price: "price_other", ending: false, count: 1 },
+  ],
+  "AS paid": [{ trials: 20, paid: 6 }],
+  "AS payment_failing": [{ payment_failing: 1, disputes: 0 }],
+};
+
+test("small counts are shown as a range, never exactly", () => {
+  assert.equal(hideSmall(0, 5), 0);
+  assert.equal(hideSmall(1, 5), "<5");
+  assert.equal(hideSmall(4, 5), "<5");
+  assert.equal(hideSmall(5, 5), 5);
+  assert.equal(hideSmall(3, 1), 3);
+});
+
+test("the report groups by week, status and plan and hides small groups", async () => {
+  const db = pool(answers);
+  const report = await billingReport(db, { stripeAccountId: "acct_synthetic", plans, weeks: 4 });
+  assert.deepEqual(report.trialsStarted, [{ week: "2026-10-05", count: "<5" }, { week: "2026-10-12", count: 9 }]);
+  assert.deepEqual(report.checkoutsStarted, [{ week: "2026-10-12", count: 7 }]);
+  assert.deepEqual(report.cancellations, [{ week: "2026-10-12", count: "<5" }]);
+  assert.deepEqual(report.subscriptions, {
+    "active/monthly": 6, "active/monthly/ending": "<5", "active/yearly": 5, "past_due/other": "<5" });
+  assert.deepEqual(report.trialConversion, { trials: 20, paid: 6, rate: 30 });
+  assert.equal(report.paymentFailing, "<5");
+  assert.equal(report.disputes, 0);
+  const raw = await billingReport(pool(answers), { stripeAccountId: "acct_synthetic", plans, minCell: 1 });
+  assert.equal(raw.subscriptions["past_due/other"], 1);
+  // No price IDs in the output: plans are named.
+  assert.doesNotMatch(JSON.stringify(report), /price_/);
+});
+
+test("queries count and group but never select people or Stripe IDs", async () => {
+  const db = pool(answers);
+  await billingReport(db, { stripeAccountId: "acct_synthetic", plans });
+  assert.equal(db.calls.length, 6);
+  for (const { sql, values } of db.calls) {
+    const outer = sql.replace(/EXISTS \([\s\S]*?\)\)\)/, "EXISTS (...)");
+    const selected = outer.slice(outer.indexOf("SELECT") + 6, outer.search(/\bFROM\b/));
+    assert.doesNotMatch(selected, /auth_subject|email_key|stripe_customer_id|stripe_subscription_id|trial_ref/);
+    assert.match(sql, /count\(\*\)/);
+    assert.equal(values[0], "acct_synthetic");
+    assert.equal(values.length, sql.includes("$2") ? 2 : 1);
+  }
+});
+
+test("bad options are refused before any query", async () => {
+  const db = pool(answers);
+  await assert.rejects(billingReport(db, { stripeAccountId: "acct_synthetic", plans, weeks: 0 }));
+  await assert.rejects(billingReport(db, { stripeAccountId: "acct_synthetic", plans, minCell: 0 }));
+  await assert.rejects(billingReport(db, { stripeAccountId: "'; DROP TABLE x; --", plans }));
+  assert.equal(db.calls.length, 0);
+});

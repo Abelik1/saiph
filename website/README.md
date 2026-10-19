@@ -2,8 +2,11 @@
 
 Static product source. The product and operations repositories are private;
 source publication, downloads and Hosted availability are separate launch gates.
-Vercel pageview analytics is enabled in `landing-settings.json`; local previews
-remain untracked. No email collector
+Vercel visit analytics (pageviews, allow-listed campaign tags and four button
+counts) is enabled in `landing-settings.json`; local previews remain untracked.
+`robots.txt`, `sitemap.xml`, canonical and link-preview tags and the share image
+`assets/og-image.png` (rendered from `scripts/public-release/og-image.html`) are
+checked by `tests/test_website_seo.py`. No email collector
 or payment integration is active here. See [analytics activation](ANALYTICS.md).
 
 Build a checked local preview from this worktree (Python 3.12):

@@ -6,8 +6,9 @@ import { SetupWizard } from "./SetupWizard";
 import { UsageSettings } from "./UsageSharing";
 import type { Client, State, UsageBatch, UsageState } from "./types";
 
-const batch: UsageBatch = { schema: 1, day: "2026-10-14", app: "desktop", platform: "windows", version: "0.1.0-beta.5",
-  mode: "hosted", install_age: "7-29", stage: "phone_added", features: { clipboard_sent: "6-20" } };
+const batch: UsageBatch = { schema: 2, day: "2026-10-14", app: "desktop", platform: "windows", version: "0.1.0-beta.5",
+  mode: "hosted", install_age: "7-29", stage: "phone_added", features: { clipboard_sent: "6-20" },
+  active_days: "4-6", os: "windows_11", enabled: { notifications: true }, failures: { hosted_send_failed: "1" }, crashes: {} };
 const ask: UsageState = { available: true, consent: null, pending: [], last_sent: null };
 
 function state(usage: UsageState | undefined, show = false): State {
@@ -67,6 +68,7 @@ describe("Anonymous usage agreement", () => {
     render(<UsageSettings usage={{ available: true, consent: "granted", pending: [batch], last_sent: { ...batch, day: "2026-10-13" } }} client={{ call } as unknown as Client} />);
     fireEvent.click(screen.getByText("See what Saiph sends"));
     expect(screen.getByLabelText("Usage batch for 2026-10-14")).toHaveTextContent('"clipboard_sent": "6-20"');
+    expect(screen.getByLabelText("Usage batch for 2026-10-14")).toHaveTextContent('"hosted_send_failed": "1"');
     expect(screen.getByLabelText("Usage batch for 2026-10-13")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Stop sharing and delete local counts" }));
     await waitFor(() => expect(call).toHaveBeenCalledWith("usage.consent", { granted: false }));
