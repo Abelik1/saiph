@@ -94,6 +94,14 @@ node scripts/desktop-ui.cjs --session build/desktop-ui/my-test/session.json run 
 For Cloud settings and the visible weekly summary, also run
 `node scripts/desktop-ui.cjs --session <session.json> run --script tests/packaging/desktop_layout_smoke.cjs`. This saves an isolated Cloud path, checks native persistence, and toggles the local summary. It does not open Explorer, install file sync or contact an account service.
 
+For desktop rendering changes, run
+`node scripts/desktop-ui.cjs --session <session.json> run --script tests/packaging/desktop_rendering_smoke.cjs`.
+This checks the computed header/footer styles across Phone, Cloud and Settings,
+then verifies the shell and canvas survive idle native refreshes without a page
+reload. It captures a screenshot and records its limits: the default harness
+disables GPU acceleration, so passing does not prove that visible hardware
+rendering is free of flicker. Check that separately in an authorized visible test.
+
 The smoke flow navigates Settings, saves a synthetic name through the real native
 bridge, checks the written profile, returns to Phone, exercises available setup
 choices and captures screenshots/results under the session's `evidence/` folder.
