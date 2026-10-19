@@ -1,11 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Aggregate billing funnel for the owner (docs/USAGE_DATA_RECOMMENDATIONS.md):
 // trials, checkouts, subscriptions by status and plan, cancellations, failed
-// payments and trial-to-paid conversion. Every query groups and counts; none
+// payments, trial-to-paid conversion, and the Buy now funnel (sign-in page,
+// sign-in done, Checkout started, purchase) by plan and price-test variant
+// from the daily counts in migration 0006 (docs/LANDING_CONVERSION.md). Every query groups and counts; none
 // selects a subject, customer, subscription or email. Counts below minCell are
 // shown as "<minCell" so a shared report cannot single anyone out.
 
 const PAID = ["active", "past_due", "canceled", "unpaid", "paused"];
+const STEPS = ["signin_view", "signin_done", "checkout_started", "purchase"];
+const TRIAL_STEPS = ["signin_view", "signin_done", "trial_started"];
 
 /** @param {number} count @param {number} minCell */
 export function hideSmall(count, minCell) {
@@ -14,9 +18,10 @@ export function hideSmall(count, minCell) {
 
 /**
  * @param {{query: (sql: string, values: unknown[]) => Promise<{rows: any[]}>}} pool
- * @param {{stripeAccountId: string, plans: {monthly: string, yearly: string}, weeks?: number, minCell?: number}} options
+ * @param {{stripeAccountId: string, plans: {monthly: string, yearly: string}, testPrices?: Record<string, string>, weeks?: number, minCell?: number}} options
+ *   `testPrices` names price-test prices, e.g. {"price_…": "monthly/b"}.
  */
-export async function billingReport(pool, { stripeAccountId, plans, weeks = 12, minCell = 5 }) {
+export async function billingReport(pool, { stripeAccountId, plans, testPrices = {}, weeks = 12, minCell = 5 }) {
   if (!/^acct_[A-Za-z0-9]+$/.test(stripeAccountId)) throw new Error("A Stripe account ID is required");
   if (!Number.isInteger(weeks) || weeks < 1 || weeks > 104) throw new Error("Choose 1 to 104 weeks");
   if (!Number.isInteger(minCell) || minCell < 1 || minCell > 100) throw new Error("Choose a minimum group size from 1 to 100");
@@ -43,7 +48,12 @@ export async function billingReport(pool, { stripeAccountId, plans, weeks = 12, 
                 AS payment_failing,
                 (SELECT count(*)::int FROM saiph_billing.disputes WHERE stripe_account_id=$1) AS disputes`),
   ]);
-  const plan = (/** @type {string} */ price) => price === plans.monthly ? "monthly" : price === plans.yearly ? "yearly" : "other";
+  // Without migration 0006 there are no funnel counts yet; the rest still reports.
+  const funnelRows = await run(`SELECT ${week("day")} AS week, step, plan, price_test AS test, variant, sum(count)::int AS count
+       FROM saiph_billing.funnel_daily WHERE stripe_account_id=$1 AND day >= (now() - make_interval(weeks => $2::int))::date
+       GROUP BY 1, 2, 3, 4, 5 ORDER BY 1, 2, 3, 4, 5`).catch(() => null);
+  const plan = (/** @type {string} */ price) => price === plans.monthly ? "monthly" : price === plans.yearly ? "yearly"
+    : Object.hasOwn(testPrices, price) ? testPrices[price] : "other";
   const weekly = (/** @type {{week: string, count: number}[]} */ rows) => rows.map((row) => ({ week: row.week, count: hideSmall(row.count, minCell) }));
   const byStatus = new Map();
   for (const row of subscriptions) {
@@ -64,5 +74,42 @@ export async function billingReport(pool, { stripeAccountId, plans, weeks = 12, 
     },
     paymentFailing: hideSmall(problems[0]?.payment_failing || 0, minCell),
     disputes: hideSmall(problems[0]?.disputes || 0, minCell),
+    funnel: funnelRows === null ? null : funnelReport(funnelRows, minCell),
+  };
+}
+
+/**
+ * The two funnels from usesaiph.com: Buy now (monthly and yearly) and Start
+ * your free trial (plan "trial"). Totals per step for the window, the share
+ * that reached each step from the one before, per plan and per price-test
+ * variant. Visits and Buy now presses come from Vercel Web Analytics or GA4,
+ * not from here (website/ANALYTICS.md).
+ * @param {{week: string, step: string, plan: string, test: string, variant: string, count: number}[]} rows
+ * @param {number} minCell
+ */
+export function funnelReport(rows, minCell) {
+  /** @param {(row: typeof rows[number]) => boolean} keep @param {string[]} [list] */
+  const totals = (keep, list = STEPS) => {
+    const sums = Object.fromEntries(list.map((step) => [step, 0]));
+    for (const row of rows) if (keep(row) && Object.hasOwn(sums, row.step)) sums[row.step] += row.count;
+    const steps = Object.fromEntries(list.map((step) => [step, hideSmall(sums[step], minCell)]));
+    // Share of the previous step, only when both counts are large enough to show.
+    const reached = Object.fromEntries(list.slice(1).map((step, index) => {
+      const before = sums[list[index]], after = sums[step];
+      return [step, before >= minCell && after >= minCell ? Math.round((after / before) * 1000) / 10 : null];
+    }));
+    return { steps, reachedFromPreviousPercent: reached };
+  };
+  const buying = rows.filter((row) => row.plan !== "trial");
+  const groups = (/** @type {(row: typeof rows[number]) => string} */ key) =>
+    Object.fromEntries([...new Set(buying.map(key))].sort().map((name) => [name, totals((row) => row.plan !== "trial" && key(row) === name)]));
+  return {
+    total: totals((row) => row.plan !== "trial"),
+    trial: totals((row) => row.plan === "trial", TRIAL_STEPS),
+    byPlan: groups((row) => row.plan),
+    // e.g. "2026-11-price/b"; visitors outside a test are "none/a".
+    byVariant: groups((row) => (row.test || "none") + "/" + row.variant),
+    weekly: rows.map((row) => ({ week: row.week, step: row.step, plan: row.plan, variant: (row.test || "none") + "/" + row.variant,
+      count: hideSmall(row.count, minCell) })),
   };
 }

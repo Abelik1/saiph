@@ -2,14 +2,16 @@
 import {createHash, type KeyObject} from "node:crypto";
 import {readAuthConfig} from "../policy.mjs";
 import {grantKey} from "./grant-push.mjs";
+import {checkPriceTest,type PriceTest} from "./price-test.mjs";
 export type PlanKey="monthly"|"yearly";
-export type Plan={key:PlanKey;priceId:string;amount:number;interval:"month"|"year"};
+/** `variant` is "a" for the standard prices, or a price-test variant (lib/billing/price-test.mjs). */
+export type Plan={key:PlanKey;priceId:string;amount:number;interval:"month"|"year";variant:string};
 /** Owner-approved prices (16 October 2026), in euro cents. Stripe prices must match exactly. */
 export const PLAN_TERMS:Record<PlanKey,{amount:number;interval:"month"|"year"}>={monthly:{amount:999,interval:"month"},yearly:{amount:8999,interval:"year"}};
 export type BillingMode="owner-sandbox"|"live";
 export type BillingConfig = {mode:BillingMode; livemode:boolean; secretKey:string; webhookSecret:string; accountId:string; productId:string;
   plans:Record<PlanKey,Plan>; portalId:string; origin:string; ownerSubject:string; automaticTax:boolean;
-  grant:{origin:string; keyId:string; key:KeyObject; issuer:string}; cronSecret:string|null};
+  grant:{origin:string; keyId:string; key:KeyObject; issuer:string}; cronSecret:string|null; priceTest:PriceTest|null};
 /** HTTPS origin without path, credentials or port, as the Hosted API is configured. */
 export function hostedOrigin(value:unknown):string|null {
   try {
@@ -58,14 +60,19 @@ export function checkBillingConfig(env:NodeJS.ProcessEnv):{config:BillingConfig|
   let key:KeyObject|null=null;
   try {key=grantKey(value("SAIPH_BILLING_GRANT_KEY"));} catch {problems.push("SAIPH_BILLING_GRANT_KEY");}
   if (problems.length || !key || !grantOrigin || !auth.ok || !auth.appBaseUrl || !auth.ownerSubject || !auth.domain) return {config:null,problems};
-  const plan=(planKey:PlanKey,priceId:string):Plan=>({key:planKey,priceId,...PLAN_TERMS[planKey]});
-  return {problems,config:{mode,livemode,secretKey,webhookSecret,accountId,productId,portalId,origin:auth.appBaseUrl,ownerSubject:auth.ownerSubject,
+  const plan=(planKey:PlanKey,priceId:string):Plan=>({key:planKey,priceId,...PLAN_TERMS[planKey],variant:"a"});
+  // A rejected price test is switched off on its own; it never turns billing off.
+  const priceTest=checkPriceTest(env,[monthlyPrice,yearlyPrice]);
+  if (priceTest.problems.length) reportOnce("Price test is off; this setting was rejected: "+priceTest.problems.join(", "));
+  return {problems,config:{priceTest:priceTest.test,mode,livemode,secretKey,webhookSecret,accountId,productId,portalId,origin:auth.appBaseUrl,ownerSubject:auth.ownerSubject,
     plans:{monthly:plan("monthly",monthlyPrice),yearly:plan("yearly",yearlyPrice)},
     automaticTax:env.SAIPH_BILLING_AUTOMATIC_TAX?.trim()==="true",
     grant:{origin:grantOrigin,keyId,key,issuer:"https://"+auth.domain+"/"},cronSecret:cronSecret||null}};
 }
 /** One log line per server instance naming rejected settings; values never appear. */
 let reported=false;
+const reportedMessages=new Set<string>();
+function reportOnce(message:string) {if (!reportedMessages.has(message)) {reportedMessages.add(message);console.error(message);}}
 export function reportBillingConfig(env:NodeJS.ProcessEnv) {
   if (reported) return;
   const {problems}=checkBillingConfig(env);
@@ -75,8 +82,18 @@ export function reportBillingConfig(env:NodeJS.ProcessEnv) {
 export function maySubscribe(config:BillingConfig,subject:unknown):subject is string {
   return typeof subject==="string" && /^[\x21-\x7e]{1,256}$/.test(subject) && (config.livemode || subject===config.ownerSubject);
 }
+/** The plan for a standard or price-test variant; unknown variants get the standard price. */
+export function planFor(config:BillingConfig,key:PlanKey,variant="a"):Plan {
+  const price=config.priceTest?.variants[variant]?.[key];
+  return price ? {key,priceId:price.priceId,amount:price.amount,interval:PLAN_TERMS[key].interval,variant} : config.plans[key];
+}
+/** Every configured price, including price-test variants still in use. */
 export function planForPrice(config:BillingConfig,priceId:unknown):Plan|null {
-  return Object.values(config.plans).find(plan=>plan.priceId===priceId) ?? null;
+  const standard=Object.values(config.plans).find(plan=>plan.priceId===priceId);
+  if (standard) return standard;
+  for (const [variant,plans] of Object.entries(config.priceTest?.variants ?? {}))
+    for (const key of ["monthly","yearly"] as PlanKey[]) if (plans[key].priceId===priceId) return planFor(config,key,variant);
+  return null;
 }
 export const webhookPath="/api/stripe/webhook";
 export const refreshPath="/api/billing/refresh";

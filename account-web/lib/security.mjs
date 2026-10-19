@@ -1,12 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-/** @param {string} nonce @param {boolean} development */
-export function contentSecurityPolicy(nonce, development = false) {
+/** Google Analytics endpoints, allowed only on the Buy pages when GA4 is configured.
+ * The tag itself loads through the nonce ('strict-dynamic'). */
+export const GOOGLE_ANALYTICS_SOURCES = "https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com";
+
+/** @param {string} nonce @param {boolean} development @param {{analytics?: boolean}} [options] */
+export function contentSecurityPolicy(nonce, development = false, {analytics = false} = {}) {
   if (!/^[A-Za-z0-9+/]{22,64}={0,2}$/.test(nonce)) throw new Error("Invalid CSP nonce");
+  const google = analytics ? " " + GOOGLE_ANALYTICS_SOURCES : "";
   return [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${development ? " 'unsafe-eval'" : ""}`,
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data:", "font-src 'self'", "connect-src 'self'",
+    `img-src 'self' data:${google}`, "font-src 'self'", `connect-src 'self'${google}`,
     "object-src 'none'", "base-uri 'none'", "frame-ancestors 'none'",
     // Auth0 and download redirects are top-level navigation, not embedded content.
     // Avoid form-action: hosted Checkout/download POSTs legitimately redirect off-site.

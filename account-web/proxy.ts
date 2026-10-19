@@ -7,10 +7,13 @@ import { expireDeniedSessionCookies } from "./lib/denied-session.mjs";
 import {readAuthConfig} from "./lib/policy.mjs";
 import {canonicalDestination, contentSecurityPolicy, responseReferrerPolicy} from "./lib/security.mjs";
 import {randomBytes} from "node:crypto";
+import {readGaConfig} from "./lib/ga.mjs";
 export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
   const nonce = randomBytes(18).toString("base64");
-  const csp = contentSecurityPolicy(nonce, process.env.NODE_ENV === "development");
+  // Google Analytics may run only on the Buy and trial pages, and only once GA4 is configured.
+  const analytics = /^\/(buy\/(monthly|yearly)|trial)$/.test(path) && readGaConfig(process.env) !== null;
+  const csp = contentSecurityPolicy(nonce, process.env.NODE_ENV === "development", {analytics});
   const responseHeaders = {"Cache-Control": "private, no-store", "Referrer-Policy": responseReferrerPolicy(path), "Content-Security-Policy": csp};
   function secure(response: NextResponse) {
     for (const [name, value] of Object.entries(responseHeaders)) response.headers.set(name, value);

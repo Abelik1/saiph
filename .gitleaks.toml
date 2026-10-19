@@ -47,6 +47,8 @@ paths = [
   '''(^|[\\/])account-web[\\/]tests[\\/]billing-lifecycle\.test\.mjs$''',
   '''(^|[\\/])account-web[\\/]tests[\\/]billing-withdraw\.test\.mjs$''',
   '''(^|[\\/])account-web[\\/]tests[\\/]billing-trial\.test\.mjs$''',
+  '''(^|[\\/])account-web[\\/]tests[\\/]billing-trial-admin\.test\.mjs$''',
+  '''(^|[\\/])account-web[\\/]tests[\\/]buy-funnel\.test\.mjs$''',
   '''(^|[\\/])account-web[\\/]tests[\\/]http-smoke\.mjs$''',
 ]
 regexTarget = "secret"

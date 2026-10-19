@@ -4,13 +4,13 @@
   <meta charset="utf-8">
   <meta name="referrer" content="no-referrer">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Saiph: connect your Android phone to Windows and Linux</title>
-  <meta name="description" content="Clipboard, notifications, texts, calls and files between your Android phone and Windows or Linux computers. End-to-end encrypted. Cloud from €9.99/month, or self-host for free.">
+  <title>Saiph Cloud: your Android phone on your Windows or Linux PC</title>
+  <meta name="description" content="Notifications, texts, calls, clipboard and files between your Android phone and Windows or Linux computers. End-to-end encrypted, nothing to set up. €9.99 a month or €89.99 a year.">
   <link rel="canonical" href="https://usesaiph.com/">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Saiph">
-  <meta property="og:title" content="Saiph: connect your Android phone to Windows and Linux">
-  <meta property="og:description" content="Clipboard, notifications, texts, calls and files between your Android phone and Windows or Linux computers. End-to-end encrypted. Cloud from €9.99/month, or self-host for free.">
+  <meta property="og:title" content="Saiph Cloud: your Android phone on your Windows or Linux PC">
+  <meta property="og:description" content="Notifications, texts, calls, clipboard and files between your Android phone and Windows or Linux computers. End-to-end encrypted, nothing to set up. €9.99 a month or €89.99 a year.">
   <meta property="og:url" content="https://usesaiph.com/">
   <meta property="og:image" content="https://usesaiph.com/assets/og-image.png">
   <meta property="og:image:width" content="1200">
@@ -23,7 +23,7 @@
     "@type": "SoftwareApplication",
     "name": "Saiph",
     "url": "https://usesaiph.com/",
-    "description": "Clipboard, notifications, texts, calls and files between your Android phone and Windows or Linux computers. End-to-end encrypted. Cloud from €9.99/month, or self-host for free.",
+    "description": "Notifications, texts, calls, clipboard and files between your Android phone and Windows or Linux computers. End-to-end encrypted, nothing to set up. €9.99 a month or €89.99 a year.",
     "image": "https://usesaiph.com/assets/og-image.png",
     "applicationCategory": "UtilitiesApplication",
     "operatingSystem": "Windows 10, Windows 11, Linux, Android 8+",
@@ -31,24 +31,24 @@
     "offers": [
       {
         "@type": "Offer",
-        "name": "Self-hosted",
-        "price": "0",
-        "priceCurrency": "EUR",
-        "url": "https://usesaiph.com/self-host.html"
-      },
-      {
-        "@type": "Offer",
         "name": "Saiph Cloud, monthly",
         "price": "9.99",
         "priceCurrency": "EUR",
-        "url": "https://usesaiph.com/hosted.html"
+        "url": "https://usesaiph.com/#buy"
       },
       {
         "@type": "Offer",
         "name": "Saiph Cloud, yearly",
         "price": "89.99",
         "priceCurrency": "EUR",
-        "url": "https://usesaiph.com/hosted.html"
+        "url": "https://usesaiph.com/#buy"
+      },
+      {
+        "@type": "Offer",
+        "name": "Self-hosted",
+        "price": "0",
+        "priceCurrency": "EUR",
+        "url": "https://usesaiph.com/self-host.html"
       }
     ]
   }
@@ -67,216 +67,75 @@
       Saiph
     </a>
     <nav class="nav-links" aria-label="Main">
-      <a class="hide-sm" href="#features">Demo</a>
-      <a class="download-nav" href="#download">Download</a>
+      <a class="hide-sm" href="hosted.html">Features</a>
       <a class="hide-sm" href="self-host.html">Self-host</a>
-      <a class="hide-sm" href="hosted.html">Cloud</a>
-      <a class="hide-sm" data-link="github" href="#" aria-label="Source code on GitHub">GitHub</a>
       <a class="account-nav" data-link="account" href="#" aria-label="Account: sign in or open your dashboard">Account</a>
     </nav>
   </div>
 </header>
 
 <main id="main">
-  <section class="hero">
+  <section class="hero" aria-labelledby="hero-title">
     <div class="wrap center">
-      <h1>Your devices. <em>Connected.</em></h1>
-      <p class="lede">Clipboard, notifications and files across Android, Windows and Linux.</p>
-    </div>
-  </section>
-
-  <section class="showcase" id="features" aria-labelledby="demo-title">
-    <div class="wrap">
-      <h2 id="demo-title" class="sr-only">Illustrated feature preview</h2>
-      <div class="feature-tabs" role="tablist" aria-label="Feature demos">
-        <button role="tab" data-scene="notifications" data-label="Animation: a phone notification appears on a laptop and desktop, and is answered from the desktop.">Notifications</button>
-        <button role="tab" data-scene="clipboard" data-label="Animation: text copied on the laptop is pasted on the phone and appears in the desktop clipboard history.">Clipboard</button>
-        <button role="tab" data-scene="messages" data-label="Animation: a text message is typed on the desktop and sent from the phone.">Texts</button>
-        <button role="tab" data-scene="calls" data-label="Animation: an incoming phone call appears on both computers and is answered from the laptop. The conversation stays on the phone.">Calls</button>
-        <button role="tab" data-scene="files" data-label="Animation: a photo taken on the phone appears on the laptop, and a PDF dropped on the desktop arrives on the phone.">Photos &amp; files</button>
-        <button role="tab" data-scene="webcam" data-label="Animation: the phone camera becomes the desktop webcam in a video call.">Webcam</button>
-        <button role="tab" data-scene="cloud" data-label="Animation: a document saved on the laptop syncs to the desktop.">Cloud</button>
-      </div>
-
-      <div class="stage" data-stage>
-        <div class="stage-inner" role="img" aria-label="Animated demo of Saiph features across a laptop, desktop and phone">
-          <div class="dev dev-laptop" aria-hidden="true">
-            <div class="bezel"><div class="screen"><div class="scr-body"></div><div class="layer"></div></div></div>
-            <div class="base"></div><div class="dev-label">Laptop</div>
-          </div>
-          <div class="dev dev-desktop" aria-hidden="true">
-            <div class="bezel"><div class="screen"><div class="scr-body"></div><div class="layer"></div></div></div>
-            <div class="neck"></div><div class="foot"></div><div class="dev-label">Desktop</div>
-          </div>
-          <div class="dev dev-phone" aria-hidden="true">
-            <div class="bezel"><div class="screen"><div class="scr-body"></div><div class="layer"></div></div></div>
-            <div class="dev-label">Phone</div>
-          </div>
-        </div>
-        <div class="stage-caption">
-          <p data-stage-caption>Your devices, working together.</p>
-        </div>
+      <span class="pill" data-hosted-status data-live-text="Saiph Cloud · beta" data-beta-text="Invite-only beta">Coming soon</span>
+      <h1 id="hero-title">Your Android phone, <em>on your PC.</em></h1>
+      <p class="lede">Notifications, texts, calls, clipboard and files between your Android phone and your Windows or Linux computers. End-to-end encrypted. Nothing to set up: Saiph Cloud runs the connection.</p>
+      <ul class="feature-chips" aria-label="What Saiph does">
+        <li>Notifications</li><li>Texts &amp; calls</li><li>Copy &amp; paste</li><li>Photos &amp; files</li><li>Phone as webcam</li>
+      </ul>
+      <div class="trial-cta" data-trial-shown hidden>
+        <a class="btn primary trial-now" data-link="trial-start" href="#">Start your free trial</a>
+        <p class="trial-terms"><strong data-trial>Free for 30 days, no card needed</strong>. Then <span data-plan-price="monthly">€9.99</span> a month or <span data-plan-price="yearly">€89.99</span> a year if you subscribe; nothing is charged automatically.</p>
       </div>
     </div>
   </section>
 
-  <section class="landing-download" id="download" aria-labelledby="dl-title">
+  <section class="buy" id="buy" aria-labelledby="buy-title">
     <div class="wrap">
-      <h2 id="dl-title">Download</h2>
-      <div class="download-buttons">
-        <a class="btn primary download-btn" data-download="windows" href="#">
-          <div class="os">
-            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 5.5 10.5 4.5v7H3zM11.5 4.3 21 3v8.5h-9.5zM3 12.5h7.5v7L3 18.5zM11.5 12.5H21V21l-9.5-1.3z"/></svg>
-            <div><strong>Windows</strong><span>10 / 11 &middot; x64</span></div>
-          </div>
-          <span class="go">Download for Windows &rarr;</span>
-        </a>
-        <a class="btn primary download-btn" data-download="linux" href="#">
-          <div class="os">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="m6 9 4 3-4 3M12 15h6"/></svg>
-            <div><strong>Linux</strong><span>x86_64 &middot; Ubuntu tested</span></div>
-          </div>
-          <span class="go">Download for Linux &rarr;</span>
-        </a>
-        <a class="btn primary download-btn" data-link="android-beta" rel="noreferrer" href="#">
-          <div class="os">
-            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 10h12v7.5a1.5 1.5 0 0 1-1.5 1.5H16v2.5a1.25 1.25 0 0 1-2.5 0V19h-3v2.5a1.25 1.25 0 0 1-2.5 0V19h-.5A1.5 1.5 0 0 1 6 17.5zM3.75 10A1.25 1.25 0 0 1 5 11.25v5a1.25 1.25 0 0 1-2.5 0v-5A1.25 1.25 0 0 1 3.75 10zm16.5 0a1.25 1.25 0 0 1 1.25 1.25v5a1.25 1.25 0 0 1-2.5 0v-5A1.25 1.25 0 0 1 20.25 10zM6.1 9a6 6 0 0 1 3.2-4.6l-1-1.6a.4.4 0 1 1 .7-.4l1 1.7a6 6 0 0 1 4 0l1-1.7a.4.4 0 1 1 .7.4l-1 1.6A6 6 0 0 1 17.9 9zM9.5 6.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5zm5 0a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5z"/></svg>
-            <div><strong>Android</strong><span>Beta &middot; automatic updates</span></div>
-          </div>
-          <span class="go">Install via Firebase &rarr;</span>
-        </a>
+      <h2 id="buy-title" class="sr-only">Choose how to pay</h2>
+      <p class="buy-lead center" data-trial-shown hidden>Or subscribe now:</p>
+      <div class="plans plan-picker" role="radiogroup" aria-labelledby="buy-title" data-plan-picker>
+        <div class="card plan" data-plan="monthly">
+          <input class="plan-radio" type="radio" name="plan" id="plan-monthly" value="monthly" checked aria-describedby="plan-monthly-price">
+          <h3><label for="plan-monthly">Monthly</label></h3>
+          <div class="price" id="plan-monthly-price"><span data-plan-price="monthly">€9.99</span> <small>/ month</small></div>
+          <ul class="checks">
+            <li>Everything in Saiph Cloud</li>
+            <li>Cancel any time</li>
+          </ul>
+        </div>
+        <div class="card plan" data-plan="yearly">
+          <input class="plan-radio" type="radio" name="plan" id="plan-yearly" value="yearly" aria-describedby="plan-yearly-price">
+          <h3><label for="plan-yearly">Yearly</label> <span class="tag cyan">Save about <span data-plan-saving>25%</span></span></h3>
+          <div class="price" id="plan-yearly-price"><span data-plan-price="yearly">€89.99</span> <small>/ year</small></div>
+          <ul class="checks">
+            <li>Works out at about <span data-plan-per-month>€7.50</span> a month</li>
+            <li>Cancel any time; access runs to the end of the year you paid for</li>
+          </ul>
+        </div>
       </div>
-      <p class="download-note muted" data-android-beta hidden>Android installs through Firebase. Google asks for your email.</p>
-      <div class="download-secondary">
-        <a data-download="android" href="#">Standalone Android APK</a>
-        <a href="downloads.html">All downloads &amp; checksums</a>
+      <div class="buy-action center">
+        <a class="btn primary buy-now" data-link="buy" href="#">Buy now</a>
+        <p class="buy-summary" data-buy-summary aria-live="polite">€9.99 today, then every month. No VAT is added.</p>
+        <p class="buy-test muted" data-price-test-note hidden>We are testing prices. This is the price you will pay, and it stays the same for you.</p>
+        <ul class="assurances" aria-label="How buying works">
+          <li>Sign in with Google</li>
+          <li>Secure payment by Stripe</li>
+          <li>Cancel any time</li>
+          <li>14 days to withdraw, <a href="refunds.html">full refund</a></li>
+        </ul>
       </div>
     </div>
   </section>
 
-  <section class="landing-pricing" id="pricing" aria-labelledby="pricing-title">
+  <section class="landing-more" aria-labelledby="more-title">
     <div class="wrap">
-      <div class="pricing-summary">
-        <div>
-          <h2 id="pricing-title"><a href="hosted.html">Saiph Cloud</a></h2>
-          <p class="muted">No server to run. Cancel any time.</p>
-        </div>
-        <div>
-          <p class="price" data-price>Early access <small>pricing at launch</small></p>
-          <p class="price-note muted" data-price-note hidden></p>
-        </div>
-        <a class="btn primary hosted-cta" data-link="subscribe" data-live-text="Get Saiph Cloud &rarr;" href="#">Early access coming soon</a>
-      </div>
-      <p class="landing-details muted"><a href="self-host.html">Self-host for free</a> &middot; <a href="hosted.html">Features &amp; security</a></p>
-    </div>
-  </section>
-
-  <section class="landing-comparison" id="compare" aria-labelledby="compare-title">
-    <div class="wrap">
-      <h2 id="compare-title">See how Saiph compares.</h2>
-      <p class="muted comparison-intro">Every phone brand, Windows and Linux, open source, and no Apple or Microsoft account.</p>
-      <p class="comparison-scroll muted" id="compare-scroll">Scroll across to compare all three.</p>
-      <div class="table-wrap comparison-scroll-area" role="region" aria-label="Product comparison" aria-describedby="compare-scroll" tabindex="0">
-        <table class="comparison-table">
-          <caption class="sr-only">Current features of Apple Continuity, Microsoft Phone Link and Saiph, on Saiph Cloud or a self-hosted Hub. Saiph is beta software.</caption>
-          <colgroup><col><col><col><col class="saiph-column"></colgroup>
-          <thead>
-            <tr>
-              <th scope="col">What you need</th>
-              <th scope="col">Apple <span>Continuity</span></th>
-              <th scope="col">Microsoft <span>Phone Link</span></th>
-              <th scope="col" class="saiph-heading">Saiph <span>Cloud or self-hosted</span></th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <th scope="row">Computers</th>
-              <td>Mac only</td>
-              <td>Windows only</td>
-              <td><strong>Windows &amp; Linux</strong></td>
-            </tr>
-            <tr>
-              <th scope="row">Phones</th>
-              <td>iPhone only</td>
-              <td>Android &amp; iPhone<small>iPhone: texts, calls &amp; notifications only<sup>2</sup></small></td>
-              <td><strong>Any Android phone</strong><small>Every brand, Android 8 or later</small></td>
-            </tr>
-            <tr>
-              <th scope="row">Phone notifications</th>
-              <td>Through iPhone Mirroring<small>Not in the EU<sup>1</sup></small></td>
-              <td>Yes</td>
-              <td><strong>On every computer</strong><small>See, dismiss and reply<sup>3</sup></small></td>
-            </tr>
-            <tr>
-              <th scope="row">Copy &amp; paste</th>
-              <td>Text &amp; images</td>
-              <td class="comparison-limit">Selected phones only<small>Samsung, HONOR, OPPO and a few others; not iPhone<sup>2</sup></small></td>
-              <td><strong>Every Android brand</strong><small>Text &amp; images<sup>3</sup></small></td>
-            </tr>
-            <tr>
-              <th scope="row">Send photos &amp; files</th>
-              <td>AirDrop</td>
-              <td class="comparison-limit">Selected phones only<small>Drag and drop on Windows 11; not iPhone<sup>2</sup></small></td>
-              <td><strong>Both directions, any phone</strong><small>Plus a recent-photos gallery</small></td>
-            </tr>
-            <tr>
-              <th scope="row">Text from your computer</th>
-              <td>Yes</td>
-              <td>Yes</td>
-              <td><strong>Yes</strong><small>Reply or start a new text, from your number</small></td>
-            </tr>
-            <tr>
-              <th scope="row">Calls from your computer</th>
-              <td>Yes</td>
-              <td>Yes</td>
-              <td><strong>Answer, decline &amp; dial</strong><small>On every approved computer</small></td>
-            </tr>
-            <tr>
-              <th scope="row">Call audio</th>
-              <td>On the Mac</td>
-              <td>On the PC, over Bluetooth</td>
-              <td>On your phone or headset<small>Computer audio in development</small></td>
-            </tr>
-            <tr>
-              <th scope="row">Phone as webcam</th>
-              <td>Continuity Camera</td>
-              <td>Windows 11 &amp; Android 10+</td>
-              <td><strong>Windows &amp; Linux</strong><small>Over USB or local Wi-Fi, video never leaves your network</small></td>
-            </tr>
-            <tr>
-              <th scope="row">Account needed</th>
-              <td class="comparison-limit">Apple Account</td>
-              <td class="comparison-limit">Microsoft account<small>For Android phones</small></td>
-              <td><strong>No Apple or Microsoft account</strong><small>Self-hosted needs no account at all</small></td>
-            </tr>
-            <tr>
-              <th scope="row">Open source</th>
-              <td class="comparison-limit">No</td>
-              <td class="comparison-limit">No</td>
-              <td><strong>Yes</strong><small>Apps and Hub on GitHub, so anyone can check the code</small></td>
-            </tr>
-            <tr>
-              <th scope="row">Run your own server</th>
-              <td class="comparison-limit">Not offered</td>
-              <td class="comparison-limit">Not offered</td>
-              <td><strong>Free self-hosted Hub</strong><small>Or let Saiph Cloud run it, end-to-end encrypted</small></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <p class="comparison-note muted">Saiph is in beta. Texts and calls need phone opt-in and Android permissions; the webcam needs USB or wireless debugging. Availability depends on device, OS version and region.</p>
-      <details class="comparison-sources">
-        <summary>Requirements &amp; sources <span>Checked 18 October 2026</span></summary>
-        <div>
-          <ol>
-            <li>Apple Continuity connects Apple devices signed in to the same Apple Account. Phone notifications on the Mac use iPhone Mirroring, which Apple currently lists as unavailable in the EU. See <a href="https://support.apple.com/en-us/108046" rel="noreferrer">Apple feature requirements</a> and <a href="https://support.apple.com/guide/iphone/intro-to-continuity-iphf5fa30b66/ios" rel="noreferrer">Continuity and regional availability</a>.</li>
-            <li>Phone Link runs on Windows. With an iPhone it offers texts, calls and notifications only; photos, apps, file transfer and copy and paste are Android features. Android needs Android 10 or later and a Microsoft account. Cross-device copy and paste and file drag and drop work on select Samsung, HONOR, OPPO, ASUS, vivo and Xiaomi phones and Surface Duo. Calling uses Bluetooth; the phone camera needs Windows 11. See <a href="https://support.microsoft.com/en-us/windows/apps/phonelink/phone-link-requirements-and-setup" rel="noreferrer">Phone Link requirements</a>, <a href="https://support.microsoft.com/en-us/windows/apps/phonelink/seamlessly-transfer-content-between-your-devices" rel="noreferrer">copy and paste and file sharing</a>, <a href="https://support.microsoft.com/en-us/windows/apps/make-and-receive-phone-calls-from-your-pc" rel="noreferrer">calls</a> and <a href="https://support.microsoft.com/en-US/Windows/Apps/PhoneLink/use-your-mobile-device-s-camera" rel="noreferrer">phone camera</a>.</li>
-            <li>Saiph Cloud and a self-hosted Hub share the same apps and features. Notification replies, image copy and paste, MMS pictures and group replies now work on Saiph Cloud too, as beta features. See <a href="hosted.html">Cloud features</a> and the <a href="self-host.html">self-hosting guide</a>.</li>
-          </ol>
-          <p>Call audio stays on the phone or its headset in both modes. These are beta features, with physical-device acceptance still pending.</p>
-          <p class="comparison-trademarks">Apple, Continuity and AirDrop are trademarks of Apple Inc. Microsoft and Phone Link are Microsoft trademarks. Saiph is independent and is not affiliated with or endorsed by either company.</p>
-        </div>
-      </details>
+      <h2 id="more-title" class="sr-only">More about Saiph</h2>
+      <ul class="more-links">
+        <li><a href="hosted.html">See it work, the security details and how Saiph compares with Phone Link and Apple Continuity <span aria-hidden="true">&rarr;</span></a></li>
+        <li><a href="self-host.html">Prefer your own server? Self-host Saiph for free <span aria-hidden="true">&rarr;</span></a></li>
+      </ul>
+      <p class="landing-note muted">Saiph Cloud is a beta service: expect bugs and occasional downtime. Works with any Android phone (Android 8 or later) and Windows 10, Windows 11 or Linux. Your phone stays the only place that sends texts and takes calls.</p>
     </div>
   </section>
 </main>
@@ -287,8 +146,8 @@
       <strong style="color:var(--text)">Saiph</strong> &middot; &copy; <span data-year>2026</span> Crios
     </div>
     <nav aria-label="Footer">
-      <a href="index.html#features">Demo</a>
-      <a href="index.html#download">Download</a>
+      <a href="hosted.html#features">Demo</a>
+      <a href="downloads.html">Download</a>
       <a href="self-host.html">Self-host</a>
       <a href="hosted.html">Cloud</a>
       <a href="privacy.html">Privacy</a>
@@ -298,13 +157,14 @@
       <a href="contact.html">Contact</a>
       <a href="waitlist.html">Launch updates</a>
       <a data-link="github" href="#">GitHub</a>
+      <button type="button" class="link-button" data-consent-open hidden>Cookie settings</button>
     </nav>
   </div>
 </footer>
 
 <script src="assets/config.js"></script>
+<script src="assets/consent.js"></script>
 <script src="assets/site.js"></script>
 <script src="assets/analytics.js"></script>
-<script src="assets/stage.js"></script>
 </body>
 </html>

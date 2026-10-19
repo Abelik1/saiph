@@ -18,6 +18,15 @@ No schema statement contains deployment secrets or an owner identity.
   start/end and grant delivery state) with the `protect_trial_claim` trigger that
   refuses deleting a row or changing its identity or dates. Additive; until it is
   applied, newer code treats trials as off.
+- `0005_trial_extension.sql` (docs/PAID_HOSTED.md, "Extending a trial"):
+  `trials.extended_until` for owner extensions; the `protect_trial_claim` trigger
+  also refuses shortening or clearing it. Additive; until it is applied, newer code
+  reads trials as before and the admin page asks for the migration.
+- `0006_funnel_counts.sql` (docs/LANDING_CONVERSION.md): `funnel_daily`, daily
+  totals of the Buy now steps (sign-in page, sign-in done, Checkout started,
+  purchase) by plan and price-test variant. No person, session, customer or
+  Stripe identifier. Additive; until it is applied the account site skips
+  counting and `billing:report` shows `funnel: null`.
 - `manifest.json`: SHA-256 of the exact canonical LF SQL bytes.
 - `reviewed-migration.sql`: generated **complete transaction** for the Neon SQL editor.
   It includes schema/ledger creation, an advisory transaction lock, migration
@@ -44,10 +53,10 @@ SELECT
   (SELECT count(*) FROM saiph_billing.processed_events) AS processed_event_count;
 ```
 
-The receipt must show versions 1, 2, 3 and 4 with the manifest checksums
-(`manifest.json`), nine tables (`customer_creation_intents`, `customers`,
-`disputes`, `grant_state`, `processed_events`, `schema_migrations`, `settings`,
-`subscriptions`, `trials`), the indexes `disputes_customer`, `processed_events_customer`,
+The receipt must show versions 1 to 6 with the manifest checksums
+(`manifest.json`), ten tables (`customer_creation_intents`, `customers`,
+`disputes`, `funnel_daily`, `grant_state`, `processed_events`, `schema_migrations`,
+`settings`, `subscriptions`, `trials`), the indexes `disputes_customer`, `processed_events_customer`,
 `processed_events_subscription` and `subscriptions_customer` (plus primary/unique
 keys), and on a fresh database zero business rows. Rerunning the complete
 export is safe. Changed/unknown applied history fails the transaction. If the

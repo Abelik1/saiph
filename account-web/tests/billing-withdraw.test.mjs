@@ -117,7 +117,7 @@ test("checkout shows the beta notice above the pay button",async()=>{
   assert.deepEqual(f.calls.checkout[0].params.custom_text,{submit:{message:BETA_CHECKOUT_NOTICE}});
   assert.match(BETA_CHECKOUT_NOTICE,/beta/);assert.match(BETA_CHECKOUT_NOTICE,/14 days/);
   assert.ok(BETA_CHECKOUT_NOTICE.length<=1200,"Stripe's limit for custom text");
-  assert.match(f.calls.checkout[0].options.idempotencyKey,/^saiph-checkout-v3-/);
+  assert.match(f.calls.checkout[0].options.idempotencyKey,/^saiph-checkout-v4-/);
 });
 
 test("a withdrawal interrupted part-way is shown as unfinished and a retry completes it without refunding twice",async(t)=>{

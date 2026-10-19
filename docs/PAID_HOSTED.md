@@ -88,7 +88,7 @@ records (never from an event payload or a redirect), in
 | `past_due` (payment failed) | first observed failure + 3 days while Stripe retries (owner decision) |
 | `unpaid`, `paused`, `incomplete`, `canceled`, `incomplete_expired` | 0 (access ends) |
 | Open or lost dispute on the customer | 0 until the dispute is won (owner decision) |
-| Free trial (`trial:<ref>`, no Stripe) | the trial end (at most 30 days after it starts), never extended |
+| Free trial (`trial:<ref>`, no Stripe) | the trial end (at most 30 days ahead); only the owner can extend it (admin page) |
 
 Every pushed expiry is also capped at **now + 35 days**. The service rejects
 anything beyond now + 45 days. A yearly subscription is therefore granted 35
@@ -251,7 +251,7 @@ Nothing in Stripe has to change for the no-card trial itself.
 1. **Database:** apply migration 0004. In Neon, open the account database for
    the mode (the development database first) and run the whole regenerated
    `account-web/migrations/reviewed-migration.sql`; the receipt must show
-   versions 1 to 4 (see `account-web/migrations/README.md`). Do this before
+   versions 1 to 5 (see `account-web/migrations/README.md`). Do this before
    deploying the website; without it the trial simply stays off (subscribing and
    the rest of the account page are unaffected).
 2. **Hosted service:** deploy the Hub release containing this change (it accepts
@@ -271,7 +271,11 @@ Nothing in Stripe has to change for the no-card trial itself.
    turn on the reminder email before a trial ends. It applies only to people who
    subscribed during their free trial (Stripe `trialing`, card on file), and
    card network rules expect a reminder before a trial converts to paid.
-5. **Website:** in the same release, set `"hostedTrial": "Free for 14 days, no
+5. **Website:** done on `claude/quirky-mirzakhani-7a7546` for the owner's 30-day
+   decision (`"hostedTrial": "Free for 30 days, no card needed"`; the landing
+   page's main button becomes **Start your free trial**, which opens the account
+   site's `/trial` page: sign in, then the trial starts with no further click).
+   Originally: in the same release, set `"hostedTrial": "Free for 14 days, no
    card needed"` in `website/landing-settings.json` (match `SAIPH_TRIAL_DAYS`);
    it shows the trial line on the Cloud page and turns the main button into
    **Start your free trial**. The terms (`terms.html#trial`), refunds page and
@@ -286,11 +290,49 @@ Nothing in Stripe has to change for the no-card trial itself.
    (`UPDATE access_grants SET expires_at=strftime('%s','now')-60 WHERE kind='trial' AND account=?`),
    then subscribe with the 4242 card and confirm the same devices reconnect.
 
+### Extending a trial (owner, admin page)
+
+Owner request, 19 October 2026: trials last one month (`SAIPH_TRIAL_DAYS=30`) and
+the owner can extend a person's trial when needed. Sign in as the owner and open
+`/account/admin` on the account site (everyone else is sent to their own account;
+with `SAIPH_REQUIRE_MFA=true` it also needs the second factor). Type the email
+address the person signs in with, and either **Look up** (start and end dates) or
+**Extend trial** by 1 to 30 days.
+
+- The address is only turned into the same keyed hash the trial row stores
+  (`SAIPH_TRIAL_SECRET`); it is never stored, logged or put into a URL.
+- Days are added to the current end, or from now if the trial has ended (which
+  restores Cloud access with the same account, devices and data). The new end may be
+  at most 30 days from now, because the Hosted service refuses trial grants further
+  ahead; for a longer extension, extend again later.
+- The new end is pushed at once like any trial grant (next sequence number); if the
+  push fails, the page says so and the daily refresh delivers it. The account page,
+  the apps' days-left notice and the carried trial end at checkout all use it.
+- Storage: migration 0005 adds `trials.extended_until`. The trial's own dates stay
+  permanent, and the trigger refuses shortening or clearing an extension. Until
+  0005 is applied, trials work as before and the admin page asks for the migration.
+
 To stop offering trials: set `SAIPH_TRIAL_DAYS=0` (or a cap at the current
 count) and remove `hostedTrial` from the website settings. Trial rows are kept
 while trials are offered; deleting them later needs a reviewed migration that
 drops the `protect_trial_claim` trigger (the privacy notice promises deletion
 within 12 months after trials stop).
+
+## Buy now from the website (19 October 2026)
+
+usesaiph.com's **Buy now** links to `/buy/monthly` or `/buy/yearly` on the
+account site (with `?offer=<variant>` during a price test). Signed out, that page
+shows the order and one **Continue with Google** button, which starts sign-in
+through `/buy/<plan>/start` with that exact page as the return target; the Auth0
+callback accepts only `/buy/(monthly|yearly)` with an optional offer, and sends
+everything else to `/account` as before. Signed in, the page posts the same
+same-origin `plan` (and `offer`) form to `/api/billing/checkout`, automatically
+with JavaScript or with one button without, so Stripe Checkout opens with no
+extra click. Already-subscribed or not-allowed accounts go to `/account`. The
+checkout endpoint, its Origin check, the customer binding and the webhook are
+unchanged apart from accepting the optional `offer` field. Payments stay bound
+to the signed-in account; there is no Payment Link. Design and research:
+`docs/LANDING_CONVERSION.md`.
 
 ## Configuration
 
@@ -308,6 +350,8 @@ Auth0 and `DATABASE_URL` values:
 | `SAIPH_BILLING_GRANT_KEY` / `SAIPH_BILLING_GRANT_KEY_ID` | from `npm run billing:keygen <id> <new file>` |
 | `CRON_SECRET` | 32+ random URL-safe characters for the daily refresh |
 | `SAIPH_TRIAL_SECRET`, `SAIPH_TRIAL_DAYS`, `SAIPH_TRIAL_CAP` | free trial (see "Free trial on sign-up"); trials are off without the secret |
+| `GA4_MEASUREMENT_ID`, `GA4_API_SECRET` | optional Google Analytics for the Buy pages and server-side Checkout/purchase events, only for visitors who accepted on usesaiph.com (`website/ANALYTICS.md`) |
+| `SAIPH_PRICE_TEST` | optional price test mapping variants to extra Stripe prices; off when unset; an invalid value turns only the test off (`website/ANALYTICS.md`) |
 
 Hosted service (`/etc/saiph-beta/shared.env`): `ORION_BILLING_GRANTS=sandbox`
 (or `live`) and `ORION_BILLING_GRANT_KEYS=<id>:<public key>` printed by the key

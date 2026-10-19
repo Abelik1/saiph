@@ -1,5 +1,6 @@
 import { transaction } from "./transaction.mjs";
 import { disputeBlocks } from "./grant.mjs";
+import { extendableDays, extendedTrialEnd, validEmailKey } from "./trial.mjs";
 
 const EVENT_TYPES = new Set([
   "checkout.session.completed", "checkout.session.async_payment_succeeded",
@@ -14,6 +15,10 @@ const STATUSES = new Set([
 ]);
 const TERMINAL = new Set(["canceled", "incomplete_expired"]);
 const DISPUTE_ID = /^(dp|du)_[A-Za-z0-9]{1,250}$/;
+// Trial row columns; with migration 0005 the end includes an owner extension.
+const TRIAL_COLUMNS = "auth_subject, trial_ref, started_at, ends_at, dirty, pushed_until";
+const TRIAL_COLUMNS_EXTENDED = "auth_subject, trial_ref, started_at, COALESCE(extended_until, ends_at) AS ends_at, dirty, pushed_until";
+const FUNNEL_STEPS = new Set(["signin_view", "signin_done", "checkout_started", "purchase", "trial_started"]);
 
 /** @typedef {{subject: string, customerId: string}} CustomerMapping */
 /** @typedef {{eventId: string, type: string, created: number, customerId: string, livemode: boolean}} BillingEvent */
@@ -123,6 +128,20 @@ export function createBillingStore(pool, { stripeAccountId, livemode = false }) 
       if (rows[0]?.livemode !== livemode) throw new BillingStoreError("MODE_MISMATCH");
       return callback(client);
     });
+  }
+
+  /** Whether migration 0005 (owner trial extensions) is applied; checked once per store.
+   * Until it is, trials read and behave exactly as before. */
+  let extensionColumn = false;
+  /** @param {import("./transaction.mjs").SqlClient} client */
+  async function trialColumns(client) {
+    if (!extensionColumn) {
+      const { rows } = await client.query(
+        `SELECT 1 FROM information_schema.columns
+         WHERE table_schema='saiph_billing' AND table_name='trials' AND column_name='extended_until'`);
+      extensionColumn = rows.length > 0;
+    }
+    return extensionColumn ? TRIAL_COLUMNS_EXTENDED : TRIAL_COLUMNS;
   }
 
   /** @param {import("./transaction.mjs").SqlClient} client @param {string} subject */
@@ -468,6 +487,26 @@ export function createBillingStore(pool, { stripeAccountId, livemode = false }) 
       });
     },
 
+    /**
+     * Add one to today's aggregate funnel count (migration 0006). Only the step,
+     * plan and price-test variant are stored, never who. Rejects without
+     * migration 0006; callers treat counting as optional.
+     * "trial" is the free-trial path (sign-in page, sign-in done, trial started).
+     * @param {{step: "signin_view"|"signin_done"|"checkout_started"|"purchase"|"trial_started", plan: "monthly"|"yearly"|"trial", test?: string | null, variant?: string}} count
+     */
+    async countFunnel({ step, plan, test = null, variant = "a" }) {
+      if (!FUNNEL_STEPS.has(step) || (plan !== "monthly" && plan !== "yearly" && plan !== "trial")
+          || (test !== null && !/^[a-z0-9][a-z0-9-]{0,39}$/.test(test)) || !/^[a-d]$/.test(variant)) {
+        throw new BillingStoreError("INVALID_FUNNEL_COUNT");
+      }
+      await tx((client) => client.query(
+        `INSERT INTO saiph_billing.funnel_daily (stripe_account_id,day,step,plan,price_test,variant,count)
+         VALUES ($1,(now() AT TIME ZONE 'UTC')::date,$2,$3,$4,$5,1)
+         ON CONFLICT (stripe_account_id,day,step,plan,price_test,variant) DO UPDATE SET count=saiph_billing.funnel_daily.count+1`,
+        [stripeAccountId, step, plan, test ?? "", test ? variant : "a"],
+      ));
+    },
+
     /** This subject's trial and what the trial decision needs (lib/billing/trial.mjs).
      * @param {string} subject @param {string | null} emailKey */
     async trialFacts(subject, emailKey) {
@@ -507,13 +546,56 @@ export function createBillingStore(pool, { stripeAccountId, livemode = false }) 
       });
     },
 
+    /** The trial started with this keyed email address (owner admin page), or null.
+     * @param {string} emailKey @returns {Promise<TrialRow | null>} */
+    async trialByEmail(emailKey) {
+      if (!validEmailKey(emailKey)) throw new BillingStoreError("INVALID_TRIAL");
+      return tx(async (client) => {
+        const { rows } = await client.query(
+          `SELECT ${await trialColumns(client)} FROM saiph_billing.trials WHERE stripe_account_id=$1 AND email_key=$2`,
+          [stripeAccountId, emailKey],
+        );
+        return rows[0] ? trialRow(rows[0]) : null;
+      });
+    },
+
+    /**
+     * Owner extension: add `days` to the trial started with this keyed email, from
+     * its current end (or from now if it has ended), at most 30 days ahead. Only the
+     * extension column changes; the trigger refuses shortening it. Marks the grant
+     * for delivery; the caller pushes it.
+     * @param {{emailKey: string, days: number, now: number}} request
+     * @returns {Promise<{outcome: "extended", trial: TrialRow, previousEnd: number}
+     *   | {outcome: "not_found", trial: null} | {outcome: "too_long", trial: TrialRow, extendable: number}>}
+     */
+    async extendTrial({ emailKey, days, now }) {
+      if (!validEmailKey(emailKey) || !Number.isSafeInteger(days) || days < 1 || days > 30) throw new BillingStoreError("INVALID_TRIAL");
+      timestamp(now);
+      return tx(async (client) => {
+        if (await trialColumns(client) !== TRIAL_COLUMNS_EXTENDED) throw new BillingStoreError("MIGRATION_PENDING");
+        const { rows } = await client.query(
+          `SELECT ${TRIAL_COLUMNS_EXTENDED} FROM saiph_billing.trials WHERE stripe_account_id=$1 AND email_key=$2 FOR UPDATE`,
+          [stripeAccountId, emailKey],
+        );
+        if (!rows[0]) return { outcome: "not_found", trial: null };
+        const trial = trialRow(rows[0]);
+        const end = extendedTrialEnd(trial.endsAt, days, now);
+        if (end === null) return { outcome: "too_long", trial, extendable: extendableDays(trial.endsAt, now) };
+        await client.query(
+          "UPDATE saiph_billing.trials SET extended_until=$3, dirty=true WHERE stripe_account_id=$1 AND auth_subject=$2",
+          [stripeAccountId, trial.subject, end],
+        );
+        return { outcome: "extended", trial: { ...trial, endsAt: end, dirty: true }, previousEnd: trial.endsAt };
+      });
+    },
+
     /** Trials whose grant may need a push: undelivered or still running at the service.
      * @param {{subject?: string}} [filter] @returns {Promise<TrialRow[]>} */
     async trialGrantCandidates({ subject } = {}) {
       if (subject !== undefined) subjectValue(subject);
       return tx(async (client) => {
         const { rows } = await client.query(
-          `SELECT auth_subject, trial_ref, started_at, ends_at, dirty, pushed_until FROM saiph_billing.trials
+          `SELECT ${await trialColumns(client)} FROM saiph_billing.trials
            WHERE stripe_account_id=$1 AND ($2::text IS NULL OR auth_subject=$2)
              AND (dirty OR pushed_until IS NULL OR pushed_until > extract(epoch FROM clock_timestamp()))
            ORDER BY auth_subject`,
@@ -530,7 +612,7 @@ export function createBillingStore(pool, { stripeAccountId, livemode = false }) 
       subjectValue(subject);
       return tx(async (client) => {
         const { rows } = await client.query(
-          `SELECT auth_subject, trial_ref, started_at, ends_at, dirty, pushed_until FROM saiph_billing.trials
+          `SELECT ${await trialColumns(client)} FROM saiph_billing.trials
            WHERE stripe_account_id=$1 AND auth_subject=$2 FOR UPDATE`,
           [stripeAccountId, subject],
         );
@@ -551,7 +633,7 @@ export function createBillingStore(pool, { stripeAccountId, livemode = false }) 
   /** @param {import("./transaction.mjs").SqlClient} client @param {string} subject @param {string | null} emailKey */
   async function trialFacts(client, subject, emailKey) {
     const own = await client.query(
-      `SELECT auth_subject, trial_ref, started_at, ends_at, dirty, pushed_until FROM saiph_billing.trials
+      `SELECT ${await trialColumns(client)} FROM saiph_billing.trials
        WHERE stripe_account_id=$1 AND auth_subject=$2`,
       [stripeAccountId, subject],
     );

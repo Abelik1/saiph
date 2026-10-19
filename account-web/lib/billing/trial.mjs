@@ -71,8 +71,18 @@ export function normaliseEmail(email) {
 export function trialEmailKey(claims, config) {
   if (!config || !claims || typeof claims !== "object") return null;
   const { email, email_verified: verified } = /** @type {{email?: unknown, email_verified?: unknown}} */ (claims);
-  const normalised = verified === true ? normaliseEmail(email) : null;
-  if (!normalised) return null;
+  return verified === true ? emailKeyFor(email, config) : null;
+}
+
+/**
+ * The same keyed hash for an address the owner types on the admin page, to find
+ * that person's trial. Null for anything that is not an address.
+ * @param {unknown} email @param {TrialConfig | null} config
+ * @returns {string | null}
+ */
+export function emailKeyFor(email, config) {
+  const normalised = config ? normaliseEmail(email) : null;
+  if (!config || !normalised) return null;
   return createHmac("sha256", config.secret).update("saiph-trial-email-v1\0" + normalised).digest("hex");
 }
 
@@ -129,6 +139,25 @@ export function daysLeft(endsAt, now) {
  * @param {StoredTrial | null} stored @param {number} now */
 export function carriedTrialEnd(stored, now) {
   return stored && stored.endsAt >= now + CARRY_MIN_SECONDS ? stored.endsAt : null;
+}
+
+/**
+ * The end after the owner adds `days` to a trial (admin page): counted from the
+ * current end, or from now when the trial has already ended. Null when the result
+ * would be more than MAX_TRIAL_DAYS ahead, which the Hosted service refuses.
+ * @param {number} currentEnd @param {number} days @param {number} now
+ * @returns {number | null}
+ */
+export function extendedTrialEnd(currentEnd, days, now) {
+  if (!Number.isSafeInteger(days) || days < 1 || days > MAX_TRIAL_DAYS) return null;
+  const end = Math.max(currentEnd, now) + days * 86400;
+  return end <= now + MAX_TRIAL_DAYS * 86400 ? end : null;
+}
+
+/** Whole days that can still be added without passing MAX_TRIAL_DAYS ahead.
+ * @param {number} currentEnd @param {number} now */
+export function extendableDays(currentEnd, now) {
+  return Math.max(0, Math.floor((now + MAX_TRIAL_DAYS * 86400 - Math.max(currentEnd, now)) / 86400));
 }
 
 /** Hosted access a trial grants now: its end while running, otherwise nothing.

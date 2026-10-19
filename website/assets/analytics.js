@@ -30,6 +30,10 @@
   const events = {
     download_click: { platform: new Set(["windows", "linux", "android", "android_apk", "server"]) },
     cloud_click: {},
+    // Start your free trial (landing page main button, or the Cloud page with trials on).
+    trial_click: {},
+    // Buy now on the landing page or a plan button on the Cloud page.
+    buy_click: { plan: new Set(["monthly", "yearly"]) },
     account_click: {},
     github_click: {},
   };
@@ -111,7 +115,12 @@
     if (download) return ["download_click", { platform: download === "android" ? "android_apk" : download }];
     switch (link.dataset.link) {
       case "android-beta": return ["download_click", { platform: "android" }];
-      case "subscribe": return ["cloud_click"];
+      case "trial-start": return ["trial_click"];
+      case "subscribe": return link.dataset.trialPath && link.href.endsWith("/trial") ? ["trial_click"] : ["cloud_click"];
+      case "buy": {
+        const checked = document.querySelector('[data-plan-picker] input[name="plan"]:checked');
+        return ["buy_click", { plan: link.dataset.plan || (checked ? checked.value : "monthly") }];
+      }
       case "account": case "beta-account": return ["account_click"];
       case "github": return ["github_click"];
       default: return null;

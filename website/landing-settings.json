@@ -5,6 +5,14 @@
     "enabled": true,
     "scriptPath": "/_vercel/insights/script.js"
   },
+  "ga4": {
+    "measurementId": ""
+  },
+  "priceTest": {
+    "enabled": false,
+    "id": "",
+    "variants": {}
+  },
   "privacy": {
     "status": "approved",
     "controllerName": "Alexander Belik, operating as Abelik1",
@@ -22,7 +30,8 @@
   "hostedPrice": "€9.99",
   "hostedPeriod": "/ month",
   "hostedPriceNote": "or €89.99 a year, saving about 25%",
-  "hostedTrial": "",
+  "hostedYearlyPrice": "€89.99",
+  "hostedTrial": "Free for 30 days, no card needed",
   "waitlistPrivacyUrl": "privacy.html#waitlist",
   "waitlistNotice": "I agree to receive the Saiph launch announcement and occasional launch updates by email. I can unsubscribe or ask for my email to be deleted at any time.",
   "waitlist": {

@@ -373,7 +373,8 @@ def test_open_subscriptions_link_to_the_account_and_show_hosted_as_available():
     site.validate_settings(settings, 'preview')
     result = render_site_script(settings)
     assert result['subscribe'] == BETA_ACCOUNT and result['subscribeDisabled'] == ''
-    assert result['subscribeText'] == 'Subscribe' and result['hostedStatus'] == 'Available now'
+    # Trials are on (30 days), so the generic subscribe button invites a trial.
+    assert result['subscribeText'] == 'Start your free trial' and result['hostedStatus'] == 'Available now'
     # Subscriptions take precedence over the email list and invitation-only access.
     settings = {**launch_settings(), **SUBSCRIBE, 'betaAccountUrl': BETA_ACCOUNT}
     assert render_site_script(settings)['subscribe'] == SUBSCRIBE['subscribeUrl']
@@ -429,11 +430,13 @@ def test_launch_requires_trader_address(tmp_path):
 
 def test_free_trial_note_is_off_until_set_and_then_shown_with_a_trial_button():
     settings = json.loads((ROOT / 'website/landing-settings.json').read_text(encoding='utf-8'))
-    assert settings['hostedTrial'] == '', 'set only in the release that turns trials on (docs/PAID_HOSTED.md)'
-    off = render_site_script(settings)
+    # Owner decision, 19 October 2026: 30-day trials, no card (SAIPH_TRIAL_DAYS=30).
+    assert settings['hostedTrial'] == 'Free for 30 days, no card needed'
+    off = render_site_script({**settings, 'hostedTrial': ''})
     assert off['trialHidden'] is True and off['subscribeText'] == 'Subscribe'
-    on = render_site_script({**settings, 'hostedTrial': 'Free for 14 days, no card needed'})
-    assert on['trial'] == 'Free for 14 days, no card needed' and on['trialHidden'] is False
+    on = render_site_script(settings)
+    assert on['trial'] == 'Free for 30 days, no card needed' and on['trialHidden'] is False
+    # A subscribe button without a trial path still opens the account page.
     assert on['subscribeText'] == 'Start your free trial' and on['subscribe'] == settings['subscribeUrl']
     # Without open subscriptions there is no trial to start.
     assert render_site_script({'hostedTrial': 'Free for 14 days'})['trialHidden'] is True

@@ -20,6 +20,9 @@ try {
   const report = await billingReport(pool, {
     stripeAccountId: config.accountId,
     plans: { monthly: config.plans.monthly.priceId, yearly: config.plans.yearly.priceId },
+    // Price-test prices are reported as "monthly/b" and so on.
+    testPrices: Object.fromEntries(Object.entries(config.priceTest?.variants ?? {}).flatMap(([variant, prices]) =>
+      Object.entries(prices).map(([plan, price]) => [price.priceId, plan + "/" + variant]))),
     weeks: Number(values.weeks), minCell: Number(values["min-cell"]),
   });
   console.log(JSON.stringify(report, null, 2));

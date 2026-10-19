@@ -389,7 +389,7 @@ describe("isolated PostgreSQL billing transactions", { skip: !databaseUrl ? "Run
       VALUES ($1,'sub_synthetic',$2,'price_synthetic','active',1000,false,null,null,100,'evt_first')`, [accountId, customerId]);
     await pool.query(`INSERT INTO saiph_billing.processed_events (stripe_account_id,stripe_event_id,stripe_customer_id,stripe_subscription_id,event_type,event_created,outcome)
       VALUES ($1,'evt_first',$2,'sub_synthetic','customer.subscription.created',100,'applied')`, [accountId, customerId]);
-    assert.deepEqual(await runMigrations(pool, migrations), [3, 4]);
+    assert.deepEqual(await runMigrations(pool, migrations), [3, 4, 5, 6]);
     assert.deepEqual(await runMigrations(pool, migrations), []);
     const [candidate] = await store().grantCandidates();
     assert.equal(candidate.subscriptionId, "sub_synthetic");
@@ -493,6 +493,32 @@ describe("isolated PostgreSQL billing transactions", { skip: !databaseUrl ? "Run
     assert.deepEqual(await store().trialGrantCandidates({ subject: "auth0|nobody" }), []);
     await assert.rejects(store().withTrialGrant("auth0|nobody", async () => 1), { code: "UNKNOWN_TRIAL" });
   });
+
+  test("the owner can extend a trial only forwards, at most 30 days ahead, and the new end counts everywhere", async () => {
+    const end = 1000 + 14 * 86400;
+    await trial(owner, keyA);
+    await store().withTrialGrant(owner, async (row) => row.endsAt);
+    const extended = await store().extendTrial({ emailKey: keyA, days: 7, now: 2000 });
+    assert.deepEqual([extended.outcome, extended.previousEnd, extended.trial.endsAt], ["extended", end, end + 7 * 86400]);
+    assert.equal((await store().trialByEmail(keyA)).endsAt, end + 7 * 86400);
+    assert.equal((await store().trialFacts(owner, keyA)).stored.endsAt, end + 7 * 86400, "the account page sees the new end");
+    const [candidate] = await store().trialGrantCandidates({ subject: owner });
+    assert.deepEqual([candidate.dirty, candidate.endsAt], [true, end + 7 * 86400], "marked for delivery with the new end");
+    // 1000 + 21 days now; 2000 + 30 days is the limit, so 9 whole days remain.
+    const tooLong = await store().extendTrial({ emailKey: keyA, days: 10, now: 2000 });
+    assert.deepEqual([tooLong.outcome, tooLong.extendable], ["too_long", 9]);
+    assert.deepEqual(await store().extendTrial({ emailKey: keyB, days: 7, now: 2000 }), { outcome: "not_found", trial: null });
+    assert.equal(await store().trialByEmail(keyB), null);
+    await assert.rejects(store().extendTrial({ emailKey: keyA, days: 31, now: 2000 }), { code: "INVALID_TRIAL" });
+    await assert.rejects(store().extendTrial({ emailKey: "nope", days: 7, now: 2000 }), { code: "INVALID_TRIAL" });
+    // The database refuses shortening or clearing an extension; the trial's own dates stay permanent.
+    await assert.rejects(pool.query("UPDATE saiph_billing.trials SET extended_until=extended_until-1"), { code: "23514" });
+    await assert.rejects(pool.query("UPDATE saiph_billing.trials SET extended_until=NULL"), { code: "23514" });
+    await assert.rejects(pool.query("UPDATE saiph_billing.trials SET ends_at=ends_at+1"), { code: "23514" });
+    // An ended trial restarts from the moment it is extended.
+    const later = end + 100 * 86400;
+    assert.equal((await store().extendTrial({ emailKey: keyA, days: 5, now: later })).trial.endsAt, later + 5 * 86400);
+  });
   test("the funnel report runs on the real schema and only counts", async () => {
     await trial(owner, keyA);
     await bind();
@@ -507,5 +533,24 @@ describe("isolated PostgreSQL billing transactions", { skip: !databaseUrl ? "Run
     assert.doesNotMatch(JSON.stringify(report), /auth0\||cus_|sub_|price_/);
     const shared = await billingReport(pool, { stripeAccountId: accountId, plans });
     assert.deepEqual(shared.trialConversion, { trials: "<5", paid: "<5", rate: null });
+  });
+  test("funnel counts are daily totals by step, plan and variant, with nothing about who", async () => {
+    await pool.query("TRUNCATE saiph_billing.funnel_daily");
+    for (let i = 0; i < 3; i++) await store().countFunnel({ step: "signin_view", plan: "monthly" });
+    await store().countFunnel({ step: "purchase", plan: "yearly", test: "2026-11-price", variant: "b" });
+    await store().countFunnel({ step: "signin_done", plan: "monthly", test: null, variant: "c" });
+    await store().countFunnel({ step: "trial_started", plan: "trial" });
+    const { rows } = await pool.query("SELECT step, plan, price_test, variant, count FROM saiph_billing.funnel_daily ORDER BY step");
+    assert.deepEqual(rows, [
+      { step: "purchase", plan: "yearly", price_test: "2026-11-price", variant: "b", count: 1 },
+      { step: "signin_done", plan: "monthly", price_test: "", variant: "a", count: 1 },
+      { step: "signin_view", plan: "monthly", price_test: "", variant: "a", count: 3 },
+      { step: "trial_started", plan: "trial", price_test: "", variant: "a", count: 1 },
+    ]);
+    await assert.rejects(store().countFunnel({ step: "visit", plan: "monthly" }), { code: "INVALID_FUNNEL_COUNT" });
+    await assert.rejects(store().countFunnel({ step: "purchase", plan: "lifetime" }), { code: "INVALID_FUNNEL_COUNT" });
+    const report = await billingReport(pool, { stripeAccountId: accountId, plans: { monthly: "price_synthetic", yearly: "price_yearly" }, minCell: 1 });
+    assert.deepEqual(report.funnel.total.steps, { signin_view: 3, signin_done: 1, checkout_started: 0, purchase: 1 });
+    assert.deepEqual(report.funnel.trial.steps, { signin_view: 0, signin_done: 0, trial_started: 1 });
   });
 });
