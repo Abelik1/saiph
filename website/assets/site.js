@@ -45,7 +45,10 @@
   });
   const betaUrl = /^https:\/\/appdistribution\.firebase\.dev\/i\/[A-Za-z0-9]{8,64}$/.test(cfg.androidBetaUrl || "") ? cfg.androidBetaUrl : "";
   document.querySelectorAll("[data-android-beta]").forEach((el) => { el.hidden = !betaUrl; });
-  document.querySelectorAll('[data-link="android-beta"]').forEach((a) => link(a, betaUrl, "Android beta invitations are not open"));
+  document.querySelectorAll('[data-link="android-beta"]').forEach((a) => {
+    link(a, betaUrl, "Android beta invitations are not open");
+    if (betaUrl) a.dataset.signin = "firebase";
+  });
   const betaAccountUrl = /^https:\/\/[a-z0-9.-]+\/account$/.test(cfg.betaAccountUrl || "") ? cfg.betaAccountUrl : "";
   document.querySelectorAll("[data-beta-access]").forEach((el) => { el.hidden = !betaAccountUrl; });
   document.querySelectorAll('[data-link="beta-account"]').forEach((a) => link(a, betaAccountUrl, "Beta access invitations are not open"));
@@ -60,6 +63,7 @@
       || (["windows", "linux"].includes(a.dataset.download) && betaAccountUrl);
     const url = cfg.downloads && cfg.downloads[a.dataset.download] || fromAccount;
     link(a, url, "Download coming soon");
+    if (url && url === fromAccount) a.dataset.signin = "account";
     const go = a.querySelector(".go");
     if (fromAccount && go && !(cfg.downloads && cfg.downloads[a.dataset.download])) {
       go.textContent = subscribeUrl ? "Download from your account →" : "Get beta access";
@@ -169,6 +173,60 @@
     "release-source": releaseReady ? cfg.githubUrl + "/tree/" + release.sourceCommit : ""};
   Object.entries(releaseLinks).forEach(([name, url]) => {
     document.querySelectorAll('[data-link="' + name + '"]').forEach((a) => link(a, releaseReady ? url : "", "Release not available yet"));
+  });
+
+  // Downloads that start with a sign-in say so before leaving the site.
+  const signInNotes = {
+    account: {title: "Sign in to download",
+      body: "Saiph's installers are in your Saiph account. Next you'll sign in with Google, then choose your download on your account page.",
+      go: "Continue to sign in"},
+    firebase: {title: "Get the Android beta",
+      body: "The Android app installs through Firebase App Distribution. Google will ask you to sign in so it can send you the beta invitation and updates.",
+      go: "Continue to Google"}
+  };
+  let signInDialog;
+  function askToSignIn(a, note) {
+    if (!signInDialog) {
+      signInDialog = document.createElement("dialog");
+      signInDialog.className = "signin-dialog";
+      signInDialog.setAttribute("aria-labelledby", "signin-title");
+      signInDialog.setAttribute("aria-describedby", "signin-body");
+      const title = document.createElement("h2");
+      title.id = "signin-title";
+      const body = document.createElement("p");
+      body.id = "signin-body";
+      body.className = "muted";
+      const row = document.createElement("div");
+      row.className = "btn-row";
+      const go = document.createElement("a");
+      go.className = "btn primary";
+      const cancel = document.createElement("button");
+      cancel.type = "button";
+      cancel.className = "btn";
+      cancel.textContent = "Cancel";
+      cancel.addEventListener("click", () => signInDialog.close());
+      row.append(go, cancel);
+      signInDialog.append(title, body, row);
+      // A click on the backdrop lands on the dialog itself.
+      signInDialog.addEventListener("click", (event) => { if (event.target === signInDialog) signInDialog.close(); });
+      document.body.appendChild(signInDialog);
+    }
+    signInDialog.querySelector("h2").textContent = note.title;
+    signInDialog.querySelector("p").textContent = note.body;
+    const go = signInDialog.querySelector("a");
+    go.textContent = note.go;
+    go.href = a.href;
+    go.rel = a.rel || "";
+    signInDialog.showModal();
+    go.focus();
+  }
+  if (document.addEventListener) document.addEventListener("click", (event) => {
+    const a = event.target.closest && event.target.closest("a[data-signin]");
+    const note = a && a.href && signInNotes[a.dataset.signin];
+    if (!note || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    if (typeof HTMLDialogElement !== "function") return;
+    event.preventDefault();
+    askToSignIn(a, note);
   });
 
   const year = document.querySelector("[data-year]");

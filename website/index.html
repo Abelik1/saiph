@@ -127,87 +127,106 @@
   <section class="landing-comparison" id="compare" aria-labelledby="compare-title">
     <div class="wrap">
       <h2 id="compare-title">See how Saiph compares.</h2>
-      <p class="muted comparison-intro">Everyday phone features, with Linux support and a free self-hosted option.</p>
+      <p class="muted comparison-intro">Every phone brand, Windows and Linux, open source, and no Apple or Microsoft account.</p>
       <p class="comparison-scroll muted" id="compare-scroll">Scroll across to compare all three.</p>
       <div class="table-wrap comparison-scroll-area" role="region" aria-label="Product comparison" aria-describedby="compare-scroll" tabindex="0">
         <table class="comparison-table">
-          <caption class="sr-only">Current features of Apple Continuity, Microsoft Phone Link and Saiph. Saiph Cloud is a beta service; some features require self-hosting.</caption>
+          <caption class="sr-only">Current features of Apple Continuity, Microsoft Phone Link and Saiph, on Saiph Cloud or a self-hosted Hub. Saiph is beta software.</caption>
           <colgroup><col><col><col><col class="saiph-column"></colgroup>
           <thead>
             <tr>
               <th scope="col">What you need</th>
               <th scope="col">Apple <span>Continuity</span></th>
               <th scope="col">Microsoft <span>Phone Link</span></th>
-              <th scope="col" class="saiph-heading">Saiph <span>Cloud beta &amp; self-hosted</span></th>
+              <th scope="col" class="saiph-heading">Saiph <span>Cloud or self-hosted</span></th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <th scope="row">Computer support</th>
-              <td>Mac</td>
-              <td>Windows</td>
+              <th scope="row">Computers</th>
+              <td>Mac only</td>
+              <td>Windows only</td>
               <td><strong>Windows &amp; Linux</strong></td>
             </tr>
             <tr>
-              <th scope="row">Phone support</th>
-              <td>iPhone</td>
-              <td>Android &amp; iPhone</td>
-              <td>Android</td>
+              <th scope="row">Phones</th>
+              <td>iPhone only</td>
+              <td>Android &amp; iPhone<small>iPhone: texts, calls &amp; notifications only<sup>2</sup></small></td>
+              <td><strong>Any Android phone</strong><small>Every brand, Android 8 or later</small></td>
             </tr>
             <tr>
               <th scope="row">Phone notifications</th>
-              <td>iPhone Mirroring<sup>1</sup></td>
+              <td>Through iPhone Mirroring<small>Not in the EU<sup>1</sup></small></td>
               <td>Yes</td>
-              <td>View &amp; dismiss<small>Cloud replies not yet supported</small></td>
+              <td><strong>On every computer</strong><small>See, dismiss and reply<sup>3</sup></small></td>
             </tr>
             <tr>
               <th scope="row">Copy &amp; paste</th>
               <td>Text &amp; images</td>
-              <td>Selected Android phones<sup>2</sup></td>
-              <td>Text &amp; images<small>Including Cloud</small></td>
+              <td class="comparison-limit">Selected phones only<small>Samsung, HONOR, OPPO and a few others; not iPhone<sup>2</sup></small></td>
+              <td><strong>Every Android brand</strong><small>Text &amp; images<sup>3</sup></small></td>
             </tr>
             <tr>
               <th scope="row">Send photos &amp; files</th>
               <td>AirDrop</td>
-              <td>Android on Windows 11<sup>2</sup></td>
-              <td>Both directions</td>
+              <td class="comparison-limit">Selected phones only<small>Drag and drop on Windows 11; not iPhone<sup>2</sup></small></td>
+              <td><strong>Both directions, any phone</strong><small>Plus a recent-photos gallery</small></td>
             </tr>
             <tr>
               <th scope="row">Text from your computer</th>
               <td>Yes</td>
               <td>Yes</td>
-              <td>Yes, including Cloud<small>Enable on your phone</small></td>
+              <td><strong>Yes</strong><small>Reply or start a new text, from your number</small></td>
             </tr>
             <tr>
-              <th scope="row">Answer &amp; decline calls</th>
+              <th scope="row">Calls from your computer</th>
               <td>Yes</td>
               <td>Yes</td>
-              <td>Yes, including Cloud<small>Enable on your phone</small></td>
+              <td><strong>Answer, decline &amp; dial</strong><small>On every approved computer</small></td>
             </tr>
             <tr>
-              <th scope="row">Call audio on computer</th>
-              <td>Yes</td>
-              <td>Yes, over Bluetooth</td>
-              <td class="comparison-limit">Not available<small>Talk on your phone</small></td>
+              <th scope="row">Call audio</th>
+              <td>On the Mac</td>
+              <td>On the PC, over Bluetooth</td>
+              <td>On your phone or headset<small>Computer audio in development</small></td>
+            </tr>
+            <tr>
+              <th scope="row">Phone as webcam</th>
+              <td>Continuity Camera</td>
+              <td>Windows 11 &amp; Android 10+</td>
+              <td><strong>Windows &amp; Linux</strong><small>Over USB or local Wi-Fi, video never leaves your network</small></td>
+            </tr>
+            <tr>
+              <th scope="row">Account needed</th>
+              <td class="comparison-limit">Apple Account</td>
+              <td class="comparison-limit">Microsoft account<small>For Android phones</small></td>
+              <td><strong>No Apple or Microsoft account</strong><small>Self-hosted needs no account at all</small></td>
+            </tr>
+            <tr>
+              <th scope="row">Open source</th>
+              <td class="comparison-limit">No</td>
+              <td class="comparison-limit">No</td>
+              <td><strong>Yes</strong><small>Apps and Hub on GitHub, so anyone can check the code</small></td>
             </tr>
             <tr>
               <th scope="row">Run your own server</th>
-              <td>Not offered</td>
-              <td>Not offered</td>
-              <td><strong>Free self-hosted Hub</strong><small>No Saiph account needed</small></td>
+              <td class="comparison-limit">Not offered</td>
+              <td class="comparison-limit">Not offered</td>
+              <td><strong>Free self-hosted Hub</strong><small>Or let Saiph Cloud run it, end-to-end encrypted</small></td>
             </tr>
           </tbody>
         </table>
       </div>
-      <p class="comparison-note muted">Saiph is in beta. Texts and call controls require phone opt-in and Android permissions. Availability depends on device, OS version and region.</p>
+      <p class="comparison-note muted">Saiph is in beta. Texts and calls need phone opt-in and Android permissions; the webcam needs USB or wireless debugging. Availability depends on device, OS version and region.</p>
       <details class="comparison-sources">
-        <summary>Requirements &amp; sources <span>Checked 16 October 2026</span></summary>
+        <summary>Requirements &amp; sources <span>Checked 18 October 2026</span></summary>
         <div>
           <ol>
-            <li>Apple Continuity connects compatible Apple devices. Phone notifications use iPhone Mirroring, which Apple currently lists as unavailable in the EU. See <a href="https://support.apple.com/en-us/108046" rel="noreferrer">Apple feature requirements</a> and <a href="https://support.apple.com/guide/iphone/intro-to-continuity-iphf5fa30b66/ios" rel="noreferrer">Continuity and regional availability</a>.</li>
-            <li>Phone Link uses Windows; its Android and iPhone features differ. Cross-device clipboard works on selected Android models. File sharing requires Windows 11 and Android 10 or later; calling uses Bluetooth. See <a href="https://support.microsoft.com/en-us/windows/apps/phonelink/phone-link-requirements-and-setup" rel="noreferrer">Phone Link requirements</a>, <a href="https://support.microsoft.com/en-us/windows/apps/phonelink/seamlessly-transfer-content-between-your-devices" rel="noreferrer">clipboard and file sharing</a> and <a href="https://support.microsoft.com/en-us/windows/apps/make-and-receive-phone-calls-from-your-pc" rel="noreferrer">calls</a>.</li>
+            <li>Apple Continuity connects Apple devices signed in to the same Apple Account. Phone notifications on the Mac use iPhone Mirroring, which Apple currently lists as unavailable in the EU. See <a href="https://support.apple.com/en-us/108046" rel="noreferrer">Apple feature requirements</a> and <a href="https://support.apple.com/guide/iphone/intro-to-continuity-iphf5fa30b66/ios" rel="noreferrer">Continuity and regional availability</a>.</li>
+            <li>Phone Link runs on Windows. With an iPhone it offers texts, calls and notifications only; photos, apps, file transfer and copy and paste are Android features. Android needs Android 10 or later and a Microsoft account. Cross-device copy and paste and file drag and drop work on select Samsung, HONOR, OPPO, ASUS, vivo and Xiaomi phones and Surface Duo. Calling uses Bluetooth; the phone camera needs Windows 11. See <a href="https://support.microsoft.com/en-us/windows/apps/phonelink/phone-link-requirements-and-setup" rel="noreferrer">Phone Link requirements</a>, <a href="https://support.microsoft.com/en-us/windows/apps/phonelink/seamlessly-transfer-content-between-your-devices" rel="noreferrer">copy and paste and file sharing</a>, <a href="https://support.microsoft.com/en-us/windows/apps/make-and-receive-phone-calls-from-your-pc" rel="noreferrer">calls</a> and <a href="https://support.microsoft.com/en-US/Windows/Apps/PhoneLink/use-your-mobile-device-s-camera" rel="noreferrer">phone camera</a>.</li>
+            <li>Saiph Cloud and a self-hosted Hub share the same apps and features. Notification replies, image copy and paste, MMS pictures and group replies now work on Saiph Cloud too, as beta features. See <a href="hosted.html">Cloud features</a> and the <a href="self-host.html">self-hosting guide</a>.</li>
           </ol>
-          <p>Saiph Cloud includes notification viewing/dismissal, text and image clipboard, a recent-photo gallery after phone opt-in, sending photos/files, one-to-one SMS replies, new texts, and call controls. Turn on Texts and calls on the phone and grant its Android permissions. Notification replies, MMS pictures and group replies are not yet supported on Cloud; they work with a self-hosted Hub. Call audio stays on the phone in both modes. These are beta features, with full physical-device acceptance still pending. See <a href="hosted.html">Cloud features</a> and the <a href="self-host.html">self-hosting guide</a>.</p>
+          <p>Call audio stays on the phone or its headset in both modes. These are beta features, with physical-device acceptance still pending.</p>
           <p class="comparison-trademarks">Apple, Continuity and AirDrop are trademarks of Apple Inc. Microsoft and Phone Link are Microsoft trademarks. Saiph is independent and is not affiliated with or endorsed by either company.</p>
         </div>
       </details>
