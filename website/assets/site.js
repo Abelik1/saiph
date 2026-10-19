@@ -77,9 +77,70 @@
   // A free trial is started on the account page; the site only says it is offered.
   const trial = subscribeUrl && typeof cfg.hostedTrial === "string" ? cfg.hostedTrial : "";
   document.querySelectorAll("[data-trial]").forEach((el) => { el.textContent = trial; el.hidden = !trial; });
-  document.querySelectorAll('[data-link="subscribe"]').forEach((a) => {
+  // With trials on, Start your free trial is the main button (docs/LANDING_CONVERSION.md):
+  // the account site's /trial signs in and starts the trial; Buy now steps back.
+  const trialUrl = trial ? subscribeUrl.replace(/\/account$/, "/trial") : "";
+  document.querySelectorAll("[data-trial-shown]").forEach((el) => { el.hidden = !trial; });
+  document.querySelectorAll('[data-link="trial-start"]').forEach((a) => link(a, trialUrl, "Free trials are not open"));
+  if (trial) document.querySelectorAll(".buy-now").forEach((a) => { if (a.classList) a.classList.remove("primary"); });
+
+  // Buy now: the chosen plan (and price-test variant, when one runs) goes
+  // straight to the account site's sign-in, which hands over to Stripe Checkout.
+  const offer = (window.saiphConsent && window.saiphConsent.offer) || {variant: "a", test: null, inTest: false};
+  const priceText = (value) => typeof value === "string" && /^€[1-9][0-9]{0,2}(\.[0-9]{2})?$/.test(value) ? value : "";
+  const variantPrices = offer.variant !== "a" && cfg.priceTest && cfg.priceTest.variants && cfg.priceTest.variants[offer.variant] || {};
+  const prices = {
+    monthly: priceText(variantPrices.monthly) || (subscribeUrl && priceText(cfg.hostedPrice)) || "€9.99",
+    yearly: priceText(variantPrices.yearly) || (subscribeUrl && priceText(cfg.hostedYearlyPrice)) || "€89.99",
+  };
+  const euros = (value) => Number(value.slice(1));
+  const money = (amount) => "€" + amount.toFixed(2);
+  const shownVariant = offer.variant !== "a" && priceText(variantPrices.monthly) && priceText(variantPrices.yearly);
+  if (shownVariant) {
+    document.querySelectorAll("[data-plan-price]").forEach((el) => { el.textContent = prices[el.dataset.planPrice] || el.textContent; });
+    document.querySelectorAll("[data-plan-per-month]").forEach((el) => { el.textContent = money(euros(prices.yearly) / 12); });
+    document.querySelectorAll("[data-plan-saving]").forEach((el) => {
+      el.textContent = Math.round((1 - euros(prices.yearly) / (12 * euros(prices.monthly))) * 100) + "%";
+    });
+  }
+  document.querySelectorAll("[data-price-test-note]").forEach((el) => { el.hidden = !shownVariant; });
+  function buyUrl(plan) {
+    if (!subscribeUrl || (plan !== "monthly" && plan !== "yearly")) return "";
+    // The variant goes along only when this page shows its prices.
+    const query = offer.test && offer.inTest && (offer.variant === "a" || shownVariant) ? "?offer=" + offer.variant : "";
+    return subscribeUrl.replace(/\/account$/, "/buy/" + plan) + query;
+  }
+  function chosenPlan() {
+    const checked = document.querySelector && document.querySelector('[data-plan-picker] input[name="plan"]:checked');
+    return checked ? checked.value : "monthly";
+  }
+  function showPlan() {
+    const plan = chosenPlan();
+    document.querySelectorAll("[data-plan-picker] .plan").forEach((card) => {
+      if (card.classList) card.classList.toggle("selected", card.dataset.plan === plan);
+    });
+    document.querySelectorAll("[data-buy-summary]").forEach((el) => {
+      el.textContent = prices[plan] + " today, then every " + (plan === "yearly" ? "year" : "month") + ". No VAT is added.";
+    });
+    document.querySelectorAll('[data-link="buy"]').forEach((a) => {
+      if (subscribeUrl) link(a, buyUrl(a.dataset.plan || plan));
+    });
+  }
+  document.querySelectorAll("[data-plan-picker]").forEach((picker) => {
+    if (picker.addEventListener) picker.addEventListener("change", showPlan);
+  });
+  if (subscribeUrl) showPlan();
+  if (document.addEventListener) document.addEventListener("click", (event) => {
+    const a = event.target.closest && event.target.closest('a[data-link="buy"], a[data-link="trial-start"], a[data-link="subscribe"][data-trial-path]');
+    if (!a || !a.hasAttribute("href") || !window.saiphConsent) return;
+    if (a.dataset.link !== "buy") { if (trial) window.saiphConsent.track("trial_click"); }
+    else window.saiphConsent.track("buy_click", {plan: a.dataset.plan || chosenPlan()});
+  });
+
+  // Until subscriptions open, Buy buttons fall back to what Subscribe offers.
+  [...document.querySelectorAll('[data-link="subscribe"]'), ...(subscribeUrl ? [] : document.querySelectorAll('[data-link="buy"]'))].forEach((a) => {
     if (subscribeUrl) {
-      link(a, subscribeUrl);
+      link(a, trial && a.dataset.trialPath === "/trial" ? trialUrl : subscribeUrl);
       a.textContent = (trial && a.dataset.trialText) || a.dataset.liveText || "Subscribe";
     } else if (waitlistReady) {
       link(a, "waitlist.html");

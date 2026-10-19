@@ -21,6 +21,14 @@ function pool(answers) {
 }
 
 const answers = {
+  "funnel_daily": [
+    { week: "2026-10-12", step: "signin_view", plan: "monthly", test: "", variant: "a", count: 40 },
+    { week: "2026-10-12", step: "signin_done", plan: "monthly", test: "", variant: "a", count: 30 },
+    { week: "2026-10-12", step: "checkout_started", plan: "monthly", test: "", variant: "a", count: 20 },
+    { week: "2026-10-12", step: "purchase", plan: "monthly", test: "", variant: "a", count: 8 },
+    { week: "2026-10-12", step: "signin_view", plan: "yearly", test: "2026-11-price", variant: "b", count: 10 },
+    { week: "2026-10-12", step: "purchase", plan: "yearly", test: "2026-11-price", variant: "b", count: 2 },
+  ],
   "FROM saiph_billing.trials\n": [{ week: "2026-10-05", count: 2 }, { week: "2026-10-12", count: 9 }],
   "FROM saiph_billing.customers\n": [{ week: "2026-10-12", count: 7 }],
   "canceled_at IS NOT NULL": [{ week: "2026-10-12", count: 1 }],
@@ -59,15 +67,31 @@ test("the report groups by week, status and plan and hides small groups", async 
   assert.doesNotMatch(JSON.stringify(report), /price_/);
 });
 
+test("the Buy now funnel shows each step, the share reaching it and the variants", async () => {
+  const report = await billingReport(pool(answers), { stripeAccountId: "acct_synthetic", plans,
+    testPrices: { price_other: "monthly/b" } });
+  assert.deepEqual(report.funnel.total.steps, { signin_view: 50, signin_done: 30, checkout_started: 20, purchase: 10 });
+  assert.deepEqual(report.funnel.total.reachedFromPreviousPercent, { signin_done: 60, checkout_started: 66.7, purchase: 50 });
+  assert.deepEqual(report.funnel.byPlan.yearly.steps, { signin_view: 10, signin_done: 0, checkout_started: 0, purchase: "<5" });
+  assert.equal(report.funnel.byPlan.yearly.reachedFromPreviousPercent.purchase, null, "no rate from hidden counts");
+  assert.deepEqual(Object.keys(report.funnel.byVariant), ["2026-11-price/b", "none/a"]);
+  assert.equal(report.subscriptions["past_due/monthly/b"], "<5", "price-test prices are named by plan and variant");
+  // Without migration 0006 the funnel is simply absent.
+  const old = pool(answers);
+  const query = old.query;
+  old.query = async (sql, values) => { if (sql.includes("funnel_daily")) throw new Error("relation does not exist"); return query(sql, values); };
+  assert.equal((await billingReport(old, { stripeAccountId: "acct_synthetic", plans })).funnel, null);
+});
+
 test("queries count and group but never select people or Stripe IDs", async () => {
   const db = pool(answers);
   await billingReport(db, { stripeAccountId: "acct_synthetic", plans });
-  assert.equal(db.calls.length, 6);
+  assert.equal(db.calls.length, 7);
   for (const { sql, values } of db.calls) {
     const outer = sql.replace(/EXISTS \([\s\S]*?\)\)\)/, "EXISTS (...)");
     const selected = outer.slice(outer.indexOf("SELECT") + 6, outer.search(/\bFROM\b/));
     assert.doesNotMatch(selected, /auth_subject|email_key|stripe_customer_id|stripe_subscription_id|trial_ref/);
-    assert.match(sql, /count\(\*\)/);
+    assert.match(sql, /count\(\*\)|sum\(count\)/);
     assert.equal(values[0], "acct_synthetic");
     assert.equal(values.length, sql.includes("$2") ? 2 : 1);
   }
@@ -79,4 +103,17 @@ test("bad options are refused before any query", async () => {
   await assert.rejects(billingReport(db, { stripeAccountId: "acct_synthetic", plans, minCell: 0 }));
   await assert.rejects(billingReport(db, { stripeAccountId: "'; DROP TABLE x; --", plans }));
   assert.equal(db.calls.length, 0);
+});
+
+test("the free-trial path is reported on its own: sign-in page, sign-in, trial started", async () => {
+  const rows = [
+    { week: "2026-10-19", step: "signin_view", plan: "trial", test: "", variant: "a", count: 50 },
+    { week: "2026-10-19", step: "signin_done", plan: "trial", test: "", variant: "a", count: 40 },
+    { week: "2026-10-19", step: "trial_started", plan: "trial", test: "", variant: "a", count: 30 },
+  ];
+  const report = await billingReport(pool({ ...answers, funnel_daily: [...answers.funnel_daily, ...rows] }), { stripeAccountId: "acct_synthetic", plans });
+  assert.deepEqual(report.funnel.trial.steps, { signin_view: 50, signin_done: 40, trial_started: 30 });
+  assert.deepEqual(report.funnel.trial.reachedFromPreviousPercent, { signin_done: 80, trial_started: 75 });
+  assert.equal(report.funnel.total.steps.signin_view, 50, "the Buy now totals leave trial visits out");
+  assert.equal(Object.hasOwn(report.funnel.byPlan, "trial"), false);
 });

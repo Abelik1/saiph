@@ -23,6 +23,7 @@ Everything below except the owner steps is implemented on branch
 | Billing funnel report | `npm run billing:report` in `account-web` | Done |
 | In-app feedback (rating + text) | — | Not started; needs a design decision on where feedback goes |
 | Google Search Console + Bing | Owner | **Owner step** (DNS TXT record) |
+| Google Analytics 4 with consent banner, Buy now funnel, server-side checkout/purchase events, price test (off) | `website/assets/consent.js`, `account-web/lib/ga.mjs`, `website/ANALYTICS.md`, `docs/LANDING_CONVERSION.md` | Done in source on `claude/quirky-mirzakhani-7a7546`; off until the owner sets the GA4 measurement ID |
 
 Deploy order: the Hosted service first (so it accepts schema 2), then the
 landing site, then desktop and Android releases. Older apps keep working
@@ -48,7 +49,19 @@ Analytics, send anything to Google, or show which searches brought people to the
 site. Pro adds custom events and longer reporting. The site's loader drops custom
 events and UTM tags on purpose, so Pro's extras are unused today.
 
-**Recommendation: don't add Google Analytics 4.**
+**Update, 19 October 2026: the owner asked for Google Analytics 4, and it is
+now built, reversing the recommendation below.** It follows the conditions this
+section set: GA loads only after an explicit Accept on a banner where Decline is
+equally easy, Consent Mode v2 defaults every signal to denied (basic mode, so
+nothing reaches Google before Accept), the site's CSP is opened only to Google's
+analytics hosts, and Vercel Web Analytics stays as the cookie-free baseline for
+everyone. It measures the Buy now funnel end to end, including server-side
+Checkout and purchase events from the account site, with no personal data sent.
+Search terms still come from Search Console. Details, the GA4 funnel recipe and
+the owner steps: `website/ANALYTICS.md`; research: `docs/LANDING_CONVERSION.md`.
+The original reasoning is kept below for the record.
+
+**Original recommendation (superseded): don't add Google Analytics 4.**
 
 - GA4 sets `_ga` cookies and sends a client ID to Google. In Ireland that needs
   a consent banner and opt-in before loading (ePrivacy/Irish DPC guidance).
@@ -107,8 +120,10 @@ Site fixes, all source changes in `website/` and the builder:
   rest. Implemented; see `website/ANALYTICS.md`.
 - **A few custom events (Pro).** Track intent, not people: `download_click`
   with `platform`, `cloud_click`, `account_click` and `github_click`
-  (implemented). The Self-host link is an ordinary page view of
-  `self-host.html`, so it needs no event. No email, account or checkout events.
+  (implemented), plus `buy_click` with `plan` for the Buy now funnel. The
+  Self-host link is an ordinary page view of `self-host.html`, so it needs no
+  event. No email or account events; Checkout and purchase steps are counted on
+  the account site (`billing:report`) and, after Accept, in GA4.
 - **Why referrers are empty.** The site's own `no-referrer` policy hides
   internal navigation, and so far traffic has been direct. Search Console
   (section 2) fills this gap for search traffic.
@@ -182,7 +197,8 @@ These would weaken end-to-end encryption or break the published promise in
   batches across days
 - storing IP addresses or IP-derived location with usage data
 - Firebase Analytics, Crashlytics, GA4 or any third-party SDK in the apps or the
-  desktop web view
+  desktop web view (GA4 on the public website and the account site's buy pages,
+  after Accept, is the one exception, at the owner's request)
 - server-side decryption, or keys held by Saiph, "for diagnostics"
 - telemetry from self-hosted Hubs unless the operator opts in separately
 

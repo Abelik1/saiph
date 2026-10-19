@@ -2,6 +2,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { readBetaConfig } from "../lib/beta-policy.mjs";
+import { readBillingConfig } from "../lib/billing/policy";
 import { Mark } from "./ui";
 import "./site.css";
 // Per-request CSP nonces also cover the privacy and not-found pages.
@@ -9,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: {
-    default: "Saiph account · Development",
+    default: "Saiph account",
     template: "%s · Saiph account",
   },
   description: "Your Saiph account, beta access and Cloud subscription.",
@@ -20,6 +21,8 @@ export default function Layout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   const beta = readBetaConfig(process.env) !== null;
+  // Live payments: no "Development" badge on the page people pay from.
+  const live = readBillingConfig(process.env)?.livemode === true;
   return (
     <html lang="en">
       <body>
@@ -36,7 +39,7 @@ export default function Layout({
               <Link href="/account">Account</Link>
               {beta && <Link href="/setup">Setup<span className="hide-sm">&nbsp;guide</span></Link>}
               <Link className="hide-sm" href="/privacy">Privacy</Link>
-              <span className="pill warn" title="Development site: no real payments"><span>Dev<span className="hide-sm">elopment</span></span></span>
+              {!live && <span className="pill warn" title="Development site: no real payments"><span>Dev<span className="hide-sm">elopment</span></span></span>}
             </nav>
           </div>
         </header>
@@ -49,9 +52,10 @@ export default function Layout({
             <nav aria-label="Footer">
               <a href="https://usesaiph.com">usesaiph.com</a>
               <Link href="/privacy">Privacy</Link>
-              <a href="https://usesaiph.com/terms.html">Cloud terms (draft)</a>
-              <a href="https://usesaiph.com/refunds.html">Refunds (draft)</a>
+              <a href="https://usesaiph.com/terms.html">{live ? "Cloud terms" : "Cloud terms (draft)"}</a>
+              <a href="https://usesaiph.com/refunds.html">{live ? "Refunds" : "Refunds (draft)"}</a>
               <a href="https://usesaiph.com/contact.html">Contact</a>
+              <a href="https://usesaiph.com/privacy.html#cookies">Cookie settings</a>
             </nav>
           </div>
         </footer>

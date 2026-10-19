@@ -95,6 +95,26 @@ try {
  }
  assert.equal((await request("/api/billing/refresh",undefined,"POST",{authorization:"Bearer "+cronSecret})).status,307);checks.push({case:"refresh POST needs a session",status:307});
  const methodResponse=await request("/api/billing/checkout",ownerCookie);assert.equal(methodResponse.status,405);checks.push({case:"checkout GET",status:405});
+ // Buy now (docs/LANDING_CONVERSION.md): the order and one sign-in button, no Google
+ // hosts in the CSP without GA4 configured, and nothing but exact plans.
+ const buy=await request("/buy/yearly");assert.equal(buy.status,200);
+ const buyHtml=await buy.text();
+ assert.match(buyHtml,/€89\.99/);assert.match(buyHtml,/href="\/buy\/yearly\/start"/);assert.match(buyHtml,/Continue with Google/);
+ assert.equal(buyHtml.includes("googletagmanager"),false);assert.doesNotMatch(buy.headers.get("content-security-policy"),/google/);
+ checks.push({case:"buy page signed out shows the order and Google sign-in",status:200});
+ for(const [path,cookie,status,location] of [["/buy/lifetime",undefined,404],["/buy/monthly/start?returnTo=https://evil.test",undefined,400],
+  ["/buy/monthly/start?offer=z",undefined,400],["/buy/monthly/start",ownerCookie,307,"https://account.saiph.test/buy/monthly"],
+  // Signed in but billing storage is unreachable here: the account page explains, no checkout starts.
+  ["/buy/monthly",ownerCookie,307,"/account"],
+  // Trials are off in this environment: /trial says so and offers the plans; sign-in takes no query.
+  ["/trial/start?returnTo=https://evil.test",undefined,400],["/trial/start",ownerCookie,307,"https://account.saiph.test/trial"]]) {
+  const r=await request(path,cookie);assert.equal(r.status,status,path);
+  if(location)assert.equal(r.headers.get("location"),location,path);
+  checks.push({case:path+(cookie?" signed in":""),status:r.status});
+ }
+ const trialOff=await request("/trial");assert.equal(trialOff.status,200);
+ const trialHtml=await trialOff.text();assert.match(trialHtml,/Free trials are not available right now/);assert.match(trialHtml,/href="\/buy\/monthly"/);
+ checks.push({case:"trial page with trials off offers the plans",status:200});
  console.log(JSON.stringify({checks,scope:"Actual Next.js production HTTP + official SDK encrypted synthetic sessions; no real provider login"},null,2));
 } finally {
  child.kill();await Promise.race([once(child,"exit"),delay(3000)]);

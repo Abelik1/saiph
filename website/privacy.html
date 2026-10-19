@@ -5,12 +5,12 @@
   <meta name="referrer" content="no-referrer">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Website privacy · Saiph</title>
-  <meta name="description" content="What the Saiph website collects: cookie-free pageview and button counts, Vercel hosting records, and how to contact the controller or use your privacy rights.">
+  <meta name="description" content="What the Saiph website collects: cookie-free pageview and button counts, Google Analytics only if you accept, Vercel hosting records, and your privacy rights.">
   <link rel="canonical" href="https://usesaiph.com/privacy.html">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Saiph">
   <meta property="og:title" content="Website privacy · Saiph">
-  <meta property="og:description" content="What the Saiph website collects: cookie-free pageview and button counts, Vercel hosting records, and how to contact the controller or use your privacy rights.">
+  <meta property="og:description" content="What the Saiph website collects: cookie-free pageview and button counts, Google Analytics only if you accept, Vercel hosting records, and your privacy rights.">
   <meta property="og:url" content="https://usesaiph.com/privacy.html">
   <meta property="og:image" content="https://usesaiph.com/assets/og-image.png">
   <meta property="og:image:width" content="1200">
@@ -29,8 +29,8 @@
       Saiph
     </a>
     <nav class="nav-links" aria-label="Main">
-      <a class="hide-sm" href="index.html#features">Demo</a>
-      <a class="download-nav" href="index.html#download">Download</a>
+      <a class="hide-sm" href="hosted.html#features">Demo</a>
+      <a class="download-nav" href="downloads.html">Download</a>
       <a class="hide-sm" href="self-host.html">Self-host</a>
       <a class="hide-sm" href="hosted.html">Cloud</a>
       <a class="hide-sm" data-link="github" href="#">GitHub</a>
@@ -45,11 +45,19 @@
 <p class="lede">This notice covers the Saiph landing pages and launch-update signup. Read the separate <a href="account-privacy.html">account and billing privacy information</a> for sign-in, subscriptions and billing on the account site.</p>
 <div class="callout" data-privacy-draft><strong>Launch notice being prepared.</strong> The controller is <span data-privacy-controller>Alexander Belik, operating as Abelik1</span>, <span data-privacy-country>Ireland</span>. The public controller contact and remaining processing details have not been confirmed. Support email setup is deferred. Email signup remains disabled until a working contact for withdrawal and deletion requests is published.</div>
 <div data-privacy-approved hidden><p><strong data-privacy-controller></strong>, <span data-privacy-country></span>, is the controller for this website and the launch-update list. Contact: <a data-privacy-contact></a>.</p><p class="muted">Last reviewed: <span data-privacy-date></span>.</p></div>
-<h2>Visiting this website</h2><p>These landing pages set no application cookies and load no external fonts, advertising scripts or embedded forms. Pageview analytics is described below and respects browser privacy preferences. Vercel hosts the site and processes request metadata, including IP addresses and browser/request information, to deliver and protect it.</p>
+<h2>Visiting this website</h2><p>Unless you press <strong>Accept</strong> on the cookie banner, these landing pages set only one small cookie that remembers your choice, and load no external fonts, advertising scripts or embedded forms. Google Analytics runs only after Accept, as described <a href="#cookies">below</a>. Cookie-free pageview counts are described under <a href="#analytics">optional website analytics</a> and respect browser privacy preferences. Vercel hosts the site and processes request metadata, including IP addresses and browser/request information, to deliver and protect it.</p>
 <p data-privacy-basis>The purpose is website delivery, reliability and abuse prevention. The proposed lawful basis for this processing is legitimate interests in operating a secure website; the controller must confirm its assessment before the final notice is adopted.</p>
 <div data-privacy-approved hidden><p><strong>Hosting retention:</strong> <span data-privacy-hosting-retention></span></p><p><strong>Hosting locations and transfers:</strong> <span data-privacy-hosting-transfers></span></p></div>
 <p>See <a href="https://vercel.com/legal/privacy-policy" rel="noreferrer">Vercel privacy information</a>. A hosting region alone does not establish that all processing stays in that region.</p>
-<h2 id="analytics">Optional website analytics</h2><p><span data-analytics-status>Visit analytics is off for this visit.</span> If enabled after notice review, Vercel Web Analytics measures public-page visits and button presses to help understand website use. It does not use analytics cookies. It processes page paths, referral information and browser/device information; Vercel also receives network metadata when requests reach its service. Cookie-free measurement does not mean no personal data is processed.</p><p>The integration allows only public informational pages and strips fragments and query strings from page addresses. The only exceptions are advertising campaign tags (<code>utm_source</code>, <code>utm_medium</code>, <code>utm_campaign</code> and <code>utm_content</code>), which are kept only when they match a fixed list of our own campaign names. It also counts four kinds of button press: download buttons (by platform: Windows, Linux, Android or the self-hosted server), the Saiph Cloud button, the Account link and the GitHub link. A count records which button was pressed on which public page, never the link it opened or anything you typed. All other custom events are dropped, and measurement is skipped when a referrer could disclose private paths or parameters. Account, login, callback and payment routes are excluded. No device identifiers, email addresses, account subjects, tokens or message content are added to analytics events.</p><p>The proposed lawful basis is legitimate interests in improving these informational pages, subject to the controller's assessment of necessity, visitor rights and applicable ePrivacy rules. Actual analytics retention, provider locations and transfer safeguards must be confirmed before activation. Vercel's visitor-hash lifetime is not the retention period for analytics reports. See <a href="https://vercel.com/docs/analytics/privacy-policy" rel="noreferrer">Vercel Web Analytics privacy information</a>. Changes requiring consent must be gated on consent before measurement starts.</p>
+<h2 id="analytics">Optional website analytics</h2><p><span data-analytics-status>Visit analytics is off for this visit.</span> If enabled after notice review, Vercel Web Analytics measures public-page visits and button presses to help understand website use. It does not use analytics cookies. It processes page paths, referral information and browser/device information; Vercel also receives network metadata when requests reach its service. Cookie-free measurement does not mean no personal data is processed.</p><p>The integration allows only public informational pages and strips fragments and query strings from page addresses. The only exceptions are advertising campaign tags (<code>utm_source</code>, <code>utm_medium</code>, <code>utm_campaign</code> and <code>utm_content</code>), which are kept only when they match a fixed list of our own campaign names. It also counts six kinds of button press: download buttons (by platform: Windows, Linux, Android or the self-hosted server), Start your free trial, Buy now (with the monthly or yearly plan), the Saiph Cloud button, the Account link and the GitHub link. A count records which button was pressed on which public page, never the link it opened or anything you typed. All other custom events are dropped, and measurement is skipped when a referrer could disclose private paths or parameters. Account, login, callback and payment routes are excluded. No device identifiers, email addresses, account subjects, tokens or message content are added to analytics events.</p><p>The proposed lawful basis is legitimate interests in improving these informational pages, subject to the controller's assessment of necessity, visitor rights and applicable ePrivacy rules. Actual analytics retention, provider locations and transfer safeguards must be confirmed before activation. Vercel's visitor-hash lifetime is not the retention period for analytics reports. See <a href="https://vercel.com/docs/analytics/privacy-policy" rel="noreferrer">Vercel Web Analytics privacy information</a>. Changes requiring consent must be gated on consent before measurement starts.</p>
+<h2 id="cookies">Cookies and Google Analytics (only if you accept)</h2>
+<p><strong>Your choice:</strong> <span data-consent-status>Google Analytics is not set up on this site yet.</span> Change it at any time with <strong>Cookie settings</strong> at the bottom of every page; declining is one press, like accepting. A browser Global Privacy Control or Do Not Track signal counts as Decline.</p>
+<p><strong>What Accept allows:</strong> Google Analytics 4 on usesaiph.com and on the buy and free-trial pages of the account site (account.dev.usesaiph.com/buy and /trial), to see how visitors use the pages, where buying stops, and which price works when we test prices. Without Accept the Google script is never loaded, so Google receives nothing from your visit.</p>
+<p><strong>What is collected after Accept:</strong> Google's analytics cookies (<code>_ga</code> and <code>_ga_</code> followed by our property code, on usesaiph.com, for up to six months) with a random client ID; the pages you open (address without query, apart from our campaign tags); events from a fixed list: Start your free trial, Buy now and the plan chosen, reaching the sign-in page, signing in, starting a free trial, starting Stripe Checkout and completing a purchase (plan, price and the price-test variant); and browser, device and approximate location that Google derives from your network address. The account site reports the trial start, Checkout and purchase steps to Google from its server, using only that client ID: never your email address, name, account, payment or Stripe details. Google signals and advertising features are off, and advertising consent is always denied.</p>
+<p><strong>Who and where:</strong> Google Ireland Limited processes the data for us as a processor under Google's data processing terms; processing can take place in the United States under the EU-US Data Privacy Framework and standard contractual clauses. See <a href="https://policies.google.com/privacy" rel="noreferrer">Google's privacy policy</a> and <a href="https://support.google.com/analytics/answer/6004245" rel="noreferrer">how Google Analytics safeguards data</a>. Analytics data is kept for 2 months in Google Analytics, then only aggregated reports remain.</p>
+<p><strong>Your choice cookie:</strong> <code>saiph_consent</code> on usesaiph.com records Accept or Decline and when, so we do not ask on every page; we ask again after six months. It is needed to respect your choice and is set whichever you choose.</p>
+<p><strong>Price tests:</strong> sometimes we test a different price for Saiph Cloud. Visitors are assigned at random, not from anything we know about them. The price you are shown is the price Stripe charges, and the buy page and Stripe show it again before you pay. After Accept we keep your assigned price in this browser for 90 days (<code>saiph_price_test</code> in local storage) so it stays the same for you; without Accept you see the standard price, unless a campaign link you followed carries a test price. Existing subscriptions keep the price they started at, under the <a href="terms.html">Cloud terms</a>.</p>
+<p>Legal basis: your consent (Irish ePrivacy Regulations, regulation 5(3), and GDPR Article 6(1)(a)). Withdrawing it stops future collection; it does not delete what was already collected, which you can ask us to delete.</p>
 <h2 id="waitlist">Launch-update email</h2><p data-waitlist-inactive>Signup is currently disabled. These pages do not collect email addresses or send launch emails.</p>
 <div data-waitlist-details hidden><p><strong>What we collect:</strong> your email address, submission time, the consent checkbox response, consent-notice version and subscription status. The signup provider may process network metadata to prevent abuse; its notice describes that processing.</p>
 <p><strong>Purpose and lawful basis:</strong> consent to receive the Saiph launch announcement and occasional launch updates. Consent is optional and unrelated to purchases or account/device approval. The form requires your email and consent checkbox. This is single opt-in: no confirmation email is sent. Partial submissions are disabled.</p>
@@ -71,8 +79,8 @@
       <strong style="color:var(--text)">Saiph</strong> &middot; &copy; <span data-year>2026</span> Crios
     </div>
     <nav aria-label="Footer">
-      <a href="index.html#features">Demo</a>
-      <a href="index.html#download">Download</a>
+      <a href="hosted.html#features">Demo</a>
+      <a href="downloads.html">Download</a>
       <a href="self-host.html">Self-host</a>
       <a href="hosted.html">Cloud</a>
       <a href="privacy.html">Privacy</a>
@@ -82,10 +90,12 @@
       <a href="contact.html">Contact</a>
       <a href="waitlist.html">Launch updates</a>
       <a data-link="github" href="#">GitHub</a>
+      <button type="button" class="link-button" data-consent-open hidden>Cookie settings</button>
     </nav>
   </div>
 </footer>
 <script src="assets/config.js"></script>
+<script src="assets/consent.js"></script>
 <script src="assets/site.js"></script>
 <script src="assets/analytics.js"></script>
 </body>

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import Stripe from "stripe";
-import {customerIdempotency,disputeEvents,planForPrice,resourceId,stripeUrl,subjectReference,subscriptionEvents,type BillingConfig,type Plan,type PlanKey} from "./policy.ts";
+import {customerIdempotency,disputeEvents,planFor,planForPrice,resourceId,stripeUrl,subjectReference,subscriptionEvents,type BillingConfig,type Plan,type PlanKey} from "./policy.ts";
 import {syncGrants} from "./grant-sync.mjs";
 import type {GrantValue} from "./grant-push.mjs";
 import {carriedTrialEnd,newTrialRef,type TrialConfig} from "./trial.mjs";
@@ -36,8 +36,17 @@ async function assertBinding(stripe:Stripe,config:BillingConfig,mapping:Mapping)
 /** Shown above Stripe's pay button (owner request, 15 October 2026). */
 export const BETA_CHECKOUT_NOTICE="Saiph Cloud is a beta service: expect bugs, missing features and occasional downtime, and features may change. "
   +"You can withdraw within 14 days of subscribing for a full refund from your account page.";
-export async function checkout(stripe:Stripe,store:BillingStore,config:BillingConfig,subject:string,planKey:PlanKey) {
-  const plan=config.plans[planKey];
+/** How this Checkout was reached: the price-test variant (standard "a" when no
+ * test runs) and, only after the visitor's Accept on usesaiph.com, the Google
+ * Analytics client ID used to report the purchase (lib/ga.mjs). */
+export type CheckoutContext={variant?:string;test?:string|null;analyticsClientId?:string|null};
+/** Checkout-session-only metadata for funnel counting; subscriptions and customers never get it. */
+function funnelMetadata(plan:Plan,context:CheckoutContext):Record<string,string> {
+  return {saiph_plan:plan.key,...(context.test?{saiph_price_test:context.test,saiph_variant:plan.variant}:{}),
+    ...(context.analyticsClientId?{saiph_ga:context.analyticsClientId}:{})};
+}
+export async function checkout(stripe:Stripe,store:BillingStore,config:BillingConfig,subject:string,planKey:PlanKey,context:CheckoutContext={}) {
+  const plan=planFor(config,planKey,context.variant);
   await verifyPrice(stripe,config,plan);
   // Subscribing during the free trial keeps the remaining free days: the first
   // charge is taken when the trial ends (Stripe status "trialing" until then).
@@ -69,12 +78,13 @@ export async function checkout(stripe:Stripe,store:BillingStore,config:BillingCo
     }
     const session=await stripe.checkout.sessions.create({mode:"subscription",customer:mapping.customerId,
       line_items:[{price:plan.priceId,quantity:1}],allowed_payment_method_types:["card"],
-      metadata:metadata(config,subject),subscription_data:{metadata:metadata(config,subject),...(trialEnd?{trial_end:trialEnd}:{})},
+      metadata:{...metadata(config,subject),...funnelMetadata(plan,context)},subscription_data:{metadata:metadata(config,subject),...(trialEnd?{trial_end:trialEnd}:{})},
       custom_text:{submit:{message:BETA_CHECKOUT_NOTICE}},
       ...(config.livemode?{consent_collection:{terms_of_service:"required" as const}}:{}),
       ...(config.automaticTax?{automatic_tax:{enabled:true},customer_update:{address:"auto" as const},billing_address_collection:"required" as const}:{}),
       success_url:config.origin+"/account?checkout=returned",cancel_url:config.origin+"/account?checkout=cancelled"},
-      {idempotencyKey:"saiph-checkout-v3-"+subjectReference(config.accountId+":"+mapping.customerId+":"+plan.priceId+":"+Math.floor(Date.now()/1800000)+(trialEnd?":trial:"+trialEnd:""))});
+      {idempotencyKey:"saiph-checkout-v4-"+subjectReference(config.accountId+":"+mapping.customerId+":"+plan.priceId+":"+Math.floor(Date.now()/1800000)+(trialEnd?":trial:"+trialEnd:"")
+        +":"+JSON.stringify(funnelMetadata(plan,context)))});
     if (session.livemode!==config.livemode || resourceId(session.customer,"cus")!==mapping.customerId || !validMetadata(session.metadata,config,subject)) throw new Error("Checkout binding rejected");
     return stripeUrl(session.url,"checkout");
   });
@@ -126,7 +136,8 @@ export function grantPolicy(config:BillingConfig) {
 }
 /** Apply one verified event, then deliver the affected grants. Throws if any
  * grant could not be delivered, so the webhook answers 503 and Stripe retries. */
-export async function processWebhook(stripe:Stripe,store:BillingStore,config:BillingConfig,event:Stripe.Event,push:GrantPush) {
+export async function processWebhook(stripe:Stripe,store:BillingStore,config:BillingConfig,event:Stripe.Event,push:GrantPush,
+  onApplied?:(result:{outcome?:string})=>Promise<void>) {
   const descriptor=eventDescriptor(event,config);if (!descriptor) return {outcome:"ignored"};
   let customerId:string;let result:unknown;
   if (descriptor.kind==="dispute") {
@@ -154,6 +165,8 @@ export async function processWebhook(stripe:Stripe,store:BillingStore,config:Bil
         currentPeriodEnd:item.current_period_end ?? null,cancelAtPeriodEnd:sub.cancel_at_period_end,cancelAt:sub.cancel_at ?? null,canceledAt:sub.canceled_at,endedAt:sub.ended_at,livemode:config.livemode};
     });
   }
+  // Funnel counting runs once per newly applied event and can never fail it.
+  if (onApplied) await onApplied(result as {outcome?:string}).catch(()=>{});
   const delivery=await syncGrants(store,grantPolicy(config),push,{customerId});
   if (delivery.failed) throw new Error("Hosted grant delivery pending");
   return result;

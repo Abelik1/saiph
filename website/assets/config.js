@@ -13,7 +13,8 @@ window.ORION_SITE = {
     android: "", // e.g. ".../releases/download/v0.1.0/orion-android-0.1.0.apk"
     server: ""   // e.g. ".../releases/download/v0.1.0/orion-server-0.1.0.tar.gz"
   },
-  // Cloud plan. Leave subscribeUrl empty until billing is live (e.g. a Stripe Payment Link).
+  // Cloud plan. Leave subscribeUrl empty until billing is live. It is the account
+  // site's /account page; never a Stripe Payment Link (docs/PAID_HOSTED.md).
   // While it is empty, the button collects interest through waitlistUrl, or falls back to GitHub.
   subscribeUrl: "",
   waitlistUrl: "",  // Reviewed Tally URL with consent_version; empty until privacy/contact approval.
@@ -25,6 +26,10 @@ window.ORION_SITE = {
   hostedPrice: "",  // e.g. "€6" — empty shows "Pricing at launch"
   hostedPeriod: "/ month",
   hostedTrial: "", // e.g. "Free for 14 days, no card needed"; only while the account site offers trials
+  hostedYearlyPrice: "", // e.g. "€89.99"
+  ga4: { measurementId: "" }, // Owner's GA4 web stream ID ("G-..."); empty keeps Google Analytics and the cookie banner off.
+  // Off by default. Variants map to Stripe prices held in the account site's SAIPH_PRICE_TEST.
+  priceTest: { enabled: false, id: "", variants: {} }, // e.g. {b: {monthly: "€7.99", yearly: "€69.99"}}
   license: {
     core: "AGPL-3.0-or-later", // desktop app + Hub
     android: "GPL-3.0-only"  // retained upstream grant: Sefirah-Android fork

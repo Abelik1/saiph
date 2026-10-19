@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS saiph_billing.schema_migrations (
     );
 DO $saiph_history$
 BEGIN
-  IF EXISTS (SELECT 1 FROM saiph_billing.schema_migrations WHERE NOT ((version=1 AND file='0001_billing.sql' AND sha256='1dcf27bc1a7e8b5b617dbea9a55afd8fabf1829d2854c9b9dda5072aaca8345f') OR (version=2 AND file='0002_billing_lifecycle.sql' AND sha256='3c11e9eae5bfaae7e7e473dadde4a88c15ff8e078e654d6fd7829d533616c36a') OR (version=3 AND file='0003_paid_hosted.sql' AND sha256='e156e85386e79105f09d5c1c0ad8ca3f9964fd3760aa813c5cb68db479d07e63') OR (version=4 AND file='0004_free_trial.sql' AND sha256='a6d9ff17e8390d9589dbca761fb069c353dd77772a07d7ce7e00860682b886cb'))) THEN
+  IF EXISTS (SELECT 1 FROM saiph_billing.schema_migrations WHERE NOT ((version=1 AND file='0001_billing.sql' AND sha256='1dcf27bc1a7e8b5b617dbea9a55afd8fabf1829d2854c9b9dda5072aaca8345f') OR (version=2 AND file='0002_billing_lifecycle.sql' AND sha256='3c11e9eae5bfaae7e7e473dadde4a88c15ff8e078e654d6fd7829d533616c36a') OR (version=3 AND file='0003_paid_hosted.sql' AND sha256='e156e85386e79105f09d5c1c0ad8ca3f9964fd3760aa813c5cb68db479d07e63') OR (version=4 AND file='0004_free_trial.sql' AND sha256='a6d9ff17e8390d9589dbca761fb069c353dd77772a07d7ce7e00860682b886cb') OR (version=5 AND file='0005_trial_extension.sql' AND sha256='bab9b2353644a505ef0968f3026baea0d8d4151019e95f29f883f937ac7db585') OR (version=6 AND file='0006_funnel_counts.sql' AND sha256='8cd1f424bc238878388176cf682231193941df3ed7b196e83e60d3361fd12d41'))) THEN
     RAISE EXCEPTION 'Applied migration differs from reviewed history';
   END IF;
 END;
@@ -266,4 +266,60 @@ FOR EACH ROW EXECUTE FUNCTION saiph_billing.protect_trial_claim();
   END IF;
 END;
 $saiph_migration_4$;
+DO $saiph_migration_5$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM saiph_billing.schema_migrations WHERE version=5) THEN
+-- Owner extensions of a free trial (docs/PAID_HOSTED.md, "Extending a trial").
+-- Additive: code from 0004 keeps working against it, and newer code reads the
+-- trial end as before until this is applied.
+
+-- The extended end, when the owner has added days. The trial's own dates stay
+-- permanent; this can only move later and never be cleared.
+ALTER TABLE saiph_billing.trials
+    ADD COLUMN extended_until bigint CHECK (extended_until IS NULL OR extended_until > ends_at);
+
+CREATE OR REPLACE FUNCTION saiph_billing.protect_trial_claim() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        RAISE EXCEPTION 'Trial claims are permanent' USING ERRCODE = '23514';
+    END IF;
+    IF ROW(NEW.stripe_account_id, NEW.auth_subject, NEW.email_key, NEW.trial_ref, NEW.started_at, NEW.ends_at)
+       IS DISTINCT FROM ROW(OLD.stripe_account_id, OLD.auth_subject, OLD.email_key, OLD.trial_ref, OLD.started_at, OLD.ends_at) THEN
+        RAISE EXCEPTION 'Trial claims are permanent' USING ERRCODE = '23514';
+    END IF;
+    IF OLD.extended_until IS NOT NULL AND (NEW.extended_until IS NULL OR NEW.extended_until < OLD.extended_until) THEN
+        RAISE EXCEPTION 'A trial extension cannot be shortened' USING ERRCODE = '23514';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+    INSERT INTO saiph_billing.schema_migrations (version,file,sha256) VALUES (5,'0005_trial_extension.sql','bab9b2353644a505ef0968f3026baea0d8d4151019e95f29f883f937ac7db585');
+  END IF;
+END;
+$saiph_migration_5$;
+DO $saiph_migration_6$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM saiph_billing.schema_migrations WHERE version=6) THEN
+-- Aggregate sign-in and checkout funnel counts (docs/LANDING_CONVERSION.md).
+-- Daily totals by step, plan and price-test variant only: no person, session,
+-- customer, Stripe or analytics identifier. Additive; until it is applied the
+-- account site simply skips counting.
+CREATE TABLE saiph_billing.funnel_daily (
+    stripe_account_id text NOT NULL CHECK (stripe_account_id ~ '^acct_[A-Za-z0-9]+$'),
+    day date NOT NULL,
+    step text NOT NULL CHECK (step IN ('signin_view', 'signin_done', 'checkout_started', 'purchase', 'trial_started')),
+    -- "trial" is the free-trial path from Start your free trial.
+    plan text NOT NULL CHECK (plan IN ('monthly', 'yearly', 'trial')),
+    price_test text NOT NULL CHECK (price_test ~ '^([a-z0-9][a-z0-9-]{0,39})?$'),
+    variant text NOT NULL CHECK (variant ~ '^[a-d]$'),
+    count integer NOT NULL CHECK (count > 0),
+    PRIMARY KEY (stripe_account_id, day, step, plan, price_test, variant)
+);
+
+    INSERT INTO saiph_billing.schema_migrations (version,file,sha256) VALUES (6,'0006_funnel_counts.sql','8cd1f424bc238878388176cf682231193941df3ed7b196e83e60d3361fd12d41');
+  END IF;
+END;
+$saiph_migration_6$;
 COMMIT;

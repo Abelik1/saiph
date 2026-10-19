@@ -15,12 +15,13 @@ from urllib.parse import parse_qsl, unquote, urlsplit
 
 FILES = ('index.html', 'self-host.html', 'hosted.html', 'downloads.html', 'waitlist.html', 'privacy.html',
          'account-privacy.html', 'terms.html', 'refunds.html', 'contact.html', 'assets/logo.svg',
-         'assets/site.css', 'assets/site.js', 'assets/stage.js', 'assets/analytics.js',
+         'assets/site.css', 'assets/site.js', 'assets/stage.js', 'assets/analytics.js', 'assets/consent.js',
          '.well-known/assetlinks.json', 'android/oauth2redirect.html', 'robots.txt', 'sitemap.xml',
          'assets/og-image.png')
 PLATFORMS = ('windows', 'linux', 'android', 'server')
 FIELDS = {'sourceVisibility', 'githubUrl', 'releasesUrl', 'downloads', 'subscribeUrl', 'waitlistUrl',
-          'androidBetaUrl', 'betaAccountUrl', 'waitlistPrivacyUrl', 'waitlistNotice', 'hostedPrice', 'hostedPeriod', 'hostedPriceNote', 'hostedTrial', 'license', 'privacy', 'waitlist', 'release', 'analytics'}
+          'androidBetaUrl', 'betaAccountUrl', 'waitlistPrivacyUrl', 'waitlistNotice', 'hostedPrice', 'hostedPeriod', 'hostedPriceNote', 'hostedTrial', 'license', 'privacy', 'waitlist', 'release', 'analytics',
+          'hostedYearlyPrice', 'ga4', 'priceTest'}
 
 
 def public_url(value):
@@ -68,6 +69,31 @@ def trader_address(value):
 
 
 PRICE = re.compile(r'€[1-9][0-9]{0,2}(\.[0-9]{2})?')
+GA4_ID = re.compile(r'G-[A-Z0-9]{4,16}')
+TEST_ID = re.compile(r'[a-z0-9][a-z0-9-]{0,39}')
+
+
+def validate_growth(config):
+    """GA4 and the price test: off unless configured, and never without an approved notice."""
+    approved = config['privacy'].get('status') == 'approved'
+    ga4 = config['ga4']
+    if (not isinstance(ga4, dict) or set(ga4) != {'measurementId'} or not isinstance(ga4['measurementId'], str)
+            or (ga4['measurementId'] and not GA4_ID.fullmatch(ga4['measurementId']))):
+        raise ValueError('GA4 needs only a measurementId such as G-ABC123XYZ; never an API secret')
+    if ga4['measurementId'] and not approved:
+        raise ValueError('GA4 requires an approved public privacy notice before activation')
+    test = config['priceTest']
+    if (not isinstance(test, dict) or set(test) != {'enabled', 'id', 'variants'} or type(test['enabled']) is not bool
+            or not isinstance(test['id'], str) or not isinstance(test['variants'], dict)):
+        raise ValueError('Price test needs enabled, id and variants')
+    if test['id'] and not TEST_ID.fullmatch(test['id']):
+        raise ValueError('Price test id must be short lower-case text such as 2026-11-price')
+    for key, prices in test['variants'].items():
+        if (key not in ('b', 'c', 'd') or not isinstance(prices, dict) or set(prices) != {'monthly', 'yearly'}
+                or not all(isinstance(v, str) and PRICE.fullmatch(v) for v in prices.values())):
+            raise ValueError('Price test variants are b, c or d, each with monthly and yearly euro prices')
+    if test['enabled'] and not (test['id'] and test['variants'] and config['subscribeUrl'] and approved):
+        raise ValueError('A price test needs an id, at least one variant, open subscriptions and an approved privacy notice')
 
 
 def validate_waitlist_url(value, notice_version):
@@ -105,6 +131,7 @@ def validate_settings(settings, mode):
               'downloads': {name: '' for name in PLATFORMS}, 'release': {},
               'subscribeUrl': '', 'waitlistUrl': '', 'androidBetaUrl': '', 'betaAccountUrl': '', 'waitlistPrivacyUrl': '', 'waitlistNotice': '',
               'privacy': {}, 'waitlist': {}, 'analytics': {'enabled': False, 'scriptPath': '/_vercel/insights/script.js'}, 'hostedPrice': '', 'hostedPeriod': '/ month', 'hostedPriceNote': '', 'hostedTrial': '',
+              'hostedYearlyPrice': '', 'ga4': {'measurementId': ''}, 'priceTest': {'enabled': False, 'id': '', 'variants': {}},
               'license': {'core': 'AGPL-3.0-or-later', 'android': 'GPL-3.0-only'}}
     config.update(settings)
     if not isinstance(config['downloads'], dict) or set(config['downloads']) != set(PLATFORMS):
@@ -112,7 +139,7 @@ def validate_settings(settings, mode):
     if config['license'] != {'core': 'AGPL-3.0-or-later', 'android': 'GPL-3.0-only'}:
         raise ValueError('Website licence labels must match the reviewed source licences')
     # Subscriptions are sold on the account site after sign-in; the site only links there.
-    for name in ('subscribeUrl', 'hostedPrice', 'hostedPriceNote', 'hostedTrial'):
+    for name in ('subscribeUrl', 'hostedPrice', 'hostedPriceNote', 'hostedTrial', 'hostedYearlyPrice'):
         if not isinstance(config[name], str):
             raise ValueError('Hosted plan fields must be text')
     if bool(config['subscribeUrl']) != bool(config['hostedPrice']):
@@ -121,6 +148,8 @@ def validate_settings(settings, mode):
         raise ValueError('Subscription link must be the HTTPS account /account page')
     if config['hostedPrice'] and not PRICE.fullmatch(config['hostedPrice']):
         raise ValueError('Hosted price must be a euro amount such as €3.99')
+    if config['hostedYearlyPrice'] and (not config['hostedPrice'] or not PRICE.fullmatch(config['hostedYearlyPrice'])):
+        raise ValueError('Yearly price must be a euro amount and accompany the monthly price')
     if len(config['hostedPriceNote']) > 80 or (config['hostedPriceNote'] and not config['hostedPrice']):
         raise ValueError('Price note must be short and accompany a price')
     # Set only while the account site offers free trials (docs/PAID_HOSTED.md).
@@ -169,6 +198,7 @@ def validate_settings(settings, mode):
         raise ValueError('Analytics requires a boolean enabled and a same-origin Vercel scriptPath; no credentials')
     if analytics['enabled'] and privacy.get('status') != 'approved':
         raise ValueError('Analytics requires an approved public privacy notice before activation')
+    validate_growth(config)
     waitlist = config['waitlist']
     if not isinstance(waitlist, dict) or set(waitlist) - set(WAITLIST_FIELDS):
         raise ValueError('Unknown waitlist fields; no provider secrets')

@@ -5,6 +5,10 @@ import { NextResponse } from "next/server";
 import { accountCookieName, loginParameters, readAuthConfig } from "./policy.mjs";
 import {canUseAccount, completedSecondFactor, readBetaConfig, secondFactorRequired} from "./beta-policy.mjs";
 import {readTrialConfig, trialEmailKey} from "./billing/trial.mjs";
+import {readBillingConfig} from "./billing/policy";
+import {resolveOffer} from "./billing/price-test.mjs";
+import {afterSignIn, parseBuyTarget} from "./buy.mjs";
+import {countStep} from "./funnel";
 let instance: Auth0Client | undefined;
 export function getAuth0() {
   const config = readAuthConfig(process.env);
@@ -21,7 +25,7 @@ export function getAuth0() {
       session: {rolling: false, absoluteDuration: 3600, inactivityDuration: 1800,
         cookie: {name: accountCookieName, secure: true, sameSite: "lax", path: "/", transient: true}},
       transactionCookie: {sameSite: "lax", secure: true},
-      async onCallback(error, _context, session) {
+      async onCallback(error, context, session) {
         if (error) return new NextResponse("Sign-in could not be completed. Please start again.", {status: 400});
         if (secondFactorRequired(process.env) && !completedSecondFactor(session?.user)) {
           return new NextResponse("Two-step verification is required. Turn it on when Saiph asks during sign-in, then sign in again.", {status: 403});
@@ -29,8 +33,15 @@ export function getAuth0() {
         if (!canUseAccount(session?.user.sub, config.ownerSubject, process.env, completedSecondFactor(session?.user))) {
           return new NextResponse("This development account site is restricted to its owner.", {status: 403});
         }
-        // Always use the configured origin and destination, ignoring caller returnTo.
-        return NextResponse.redirect(new URL("/account", config.appBaseUrl));
+        // Always the configured origin: /account, or the exact /buy/<plan> page the
+        // sign-in started from, so a buyer goes straight on to Stripe Checkout.
+        const destination = afterSignIn(context.returnTo, config.appBaseUrl);
+        const bought = parseBuyTarget(context.returnTo, config.appBaseUrl);
+        if (bought) {
+          const {test, variant} = resolveOffer(readBillingConfig(process.env)?.priceTest ?? null, bought.offer);
+          await countStep("signin_done", bought.plan, test, variant);
+        }
+        return NextResponse.redirect(destination);
       },
       async beforeSessionSaved(session) {
         // No profile, email or access token is exposed through a browser API.
