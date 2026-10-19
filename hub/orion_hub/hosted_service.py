@@ -162,13 +162,16 @@ class AccountRegistry:
             return {'entitled': True, 'until': row['expires_at']}
 
     def apply_paid_grant(self, issuer, subject, reference, until, sequence):
-        """Set one subscription's paid grant from a verified website push.
+        """Set one subscription's paid grant, or one free trial, from a verified website push.
 
-        Pushes carry the website's per-subscription sequence; an equal or older
+        Pushes carry the website's per-grant sequence; an equal or older
         sequence is a no-op, so repeats and late deliveries cannot undo a newer
-        decision. A subscription stays bound to the account it first named.
-        Suspended accounts keep their recorded grant but remain blocked.
+        decision. A subscription or trial stays bound to the account it first
+        named, and an account can hold only one trial ever. Suspended accounts
+        keep their recorded grant but remain blocked. Ending a grant never
+        deletes the account, its workspace or its devices.
         """
+        kind = 'trial' if reference.startswith('trial:') else 'paid'
         if issuer != self.auth.issuer or not self.valid_subject(subject):
             reject(403)
         with self.connect() as db:
@@ -184,14 +187,22 @@ class AccountRegistry:
                 reject(409)
             if prior and sequence <= prior['sequence']:
                 return {'applied': False}
+            if kind == 'trial' and db.execute("SELECT 1 FROM paid_grants WHERE account=? AND reference LIKE 'trial:%' AND reference<>?",
+                                              (identifier, reference)).fetchone():
+                reject(409)  # One trial per account, whatever the website sends.
             db.execute('INSERT INTO paid_grants VALUES(?,?,?) ON CONFLICT(reference) DO UPDATE SET sequence=excluded.sequence',
                        (reference, identifier, sequence))
-            db.execute("INSERT INTO access_grants VALUES(?,'paid',?,?,0) ON CONFLICT(kind,reference) DO UPDATE SET expires_at=excluded.expires_at",
-                       (identifier, reference, until))
+            db.execute('INSERT INTO access_grants VALUES(?,?,?,?,0) ON CONFLICT(kind,reference) DO UPDATE SET expires_at=excluded.expires_at',
+                       (identifier, kind, reference, until))
             return {'applied': True}
 
     def access(self, identity):
-        """Like status(), plus which kinds of grant currently provide access."""
+        """Like status(), plus which kinds of grant currently provide access.
+
+        Accounts that ever had a free trial also get ``trial_until`` (its end, even
+        when past), so the apps can show days left or that the trial has ended.
+        Other accounts keep the original three fields.
+        """
         with self.connect() as db:
             row = db.execute('SELECT id FROM accounts WHERE issuer=? AND subject=? AND active=1',
                              (identity['issuer'], identity['subject'])).fetchone()
@@ -200,7 +211,12 @@ class AccountRegistry:
             rows = db.execute('SELECT kind,max(expires_at) AS until FROM access_grants WHERE account=? AND revoked=0 AND expires_at>? GROUP BY kind ORDER BY kind',
                               (row['id'], int(time.time()))).fetchall()
             until = max((r['until'] for r in rows), default=None)
-            return {'entitled': until is not None, 'until': until, 'kinds': [r['kind'] for r in rows]}
+            result = {'entitled': until is not None, 'until': until, 'kinds': [r['kind'] for r in rows]}
+            trial = db.execute("SELECT max(expires_at) FROM access_grants WHERE account=? AND kind='trial' AND revoked=0 AND expires_at>0",
+                               (row['id'],)).fetchone()[0]
+            if trial is not None:
+                result['trial_until'] = trial
+            return result
 
     def status(self, identity):
         with self.connect() as db:
@@ -440,6 +456,32 @@ class SharedHosted:
                 else:
                     reject(405)
                 response = JSONResponse(result)
+            elif path.startswith('/v1/app/desktop/'):
+                # Desktop updates for native account clients (docs/DESKTOP_UPDATES.md). No
+                # catalog: 404, which the desktop explains as "not offered yet".
+                platform, _, action = path.removeprefix('/v1/app/desktop/').partition('/')
+                if self.downloads is None or action not in ('release', 'download'):
+                    reject(404)
+                if request.headers.get('origin') or request.cookies or request.url.query:
+                    reject(403)
+                identity = await asyncio.to_thread(self.tokens.principal, request)
+                if action == 'release' and request.method == 'GET':
+                    raw = await asyncio.to_thread(self.downloads.desktop_release, identity, platform)
+                    response = (Response(status_code=204) if raw is None
+                                else Response(raw, media_type='application/json'))
+                elif action == 'download' and request.method == 'POST':
+                    _, value = await body(request)
+                    exact(value, ())
+                    response = JSONResponse(await asyncio.to_thread(self.downloads.desktop_ticket, identity, platform))
+                else:
+                    reject(405)
+            elif path == '/v1/access' and request.method == 'GET':
+                # The apps' own view of this account's access (trial days left, or
+                # why it is refused). Native tokens only; works without a grant.
+                if request.headers.get('origin') or request.cookies or request.url.query:
+                    reject(403)
+                identity = await asyncio.to_thread(self.tokens.principal, request)
+                response = JSONResponse(await asyncio.to_thread(self.registry.access, identity))
             elif path == '/v1/account' or path.startswith('/v1/devices/'):
                 if request.headers.get('origin') or request.cookies:
                     reject(403)

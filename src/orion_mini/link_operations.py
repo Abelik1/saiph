@@ -18,8 +18,11 @@ from .user_presence import confirm as confirm_user
 # setting is on; with it off, self-hosted behaviour is unchanged.
 HOSTED_METHODS = frozenset({'hosted.configure', 'hosted.enable', 'hosted.sign_in', 'hosted.sign_out', 'hosted.setup_root',
                             'hosted.root_code', 'hosted.request.inspect', 'hosted.approve', 'hosted.revoke', 'hosted.forget',
-                            'hosted.notification.dismiss', 'hosted.file.send', 'hosted.file.save',
-                            'hosted.join.inspect', 'hosted.join', 'hosted.join.request', 'hosted.requests'})
+                            'hosted.notification.dismiss', 'hosted.notification', 'hosted.file.send', 'hosted.file.save', 'hosted.file.retry', 'hosted.file.dismiss',
+                            'hosted.firewall.open', 'hosted.join.inspect', 'hosted.join', 'hosted.join.request', 'hosted.requests',
+                            'hosted.link.start', 'hosted.link.status', 'hosted.link.stop', 'hosted.link.approve',
+                            'hosted.join.account.inspect', 'hosted.join.account', 'hosted.approvals',
+                            'hosted.request.deny', 'hosted.request.block'})
 _HOSTED_OFF = {'available': False, 'enabled': False, 'status': 'off', 'identity': False}
 
 
@@ -30,7 +33,7 @@ def hosted_available() -> bool:
     return all(find_spec(name) is not None for name in ('tink', 'authlib'))
 
 
-CORE_METHODS = frozenset({'cloud.info', 'cloud.setup', 'cloud.client.open', 'cloud.client.install', 'components.sign_in', 'state', 'hub.pair', 'hub.test', 'phone.sms.send', 'continuity.handoff', 'continuity.dnd', 'deskflow.restart', 'hotspot.connect', 'enrollment.import', 'continuity.dismiss', 'enrollment.cancel', 'components.install', 'hub.decide', 'enrollment.export', 'enrollment.qr', 'phone.call', 'phone.ring', 'phone.media', 'phone.contacts.search', 'phone.sms.compose', 'phone.ringer', 'phone.dial', 'phone.calls.log', 'phone.sms.attachment', 'phone.sms.attachment.save', 'phone.photo.prefetch', 'phone.sms.open', 'enrollment.approve', 'phone.photo.save', 'phone.file.send', 'phone.notification', 'hub.refresh', 'usage.consent', 'usage.screen', 'insights.week', 'insights.enable', 'insights.clear'}) | HOSTED_METHODS
+CORE_METHODS = frozenset({'cloud.info', 'cloud.setup', 'cloud.client.open', 'cloud.client.install', 'components.sign_in', 'state', 'hub.pair', 'hub.test', 'phone.sms.send', 'continuity.handoff', 'continuity.dnd', 'deskflow.restart', 'hotspot.connect', 'enrollment.import', 'continuity.dismiss', 'enrollment.cancel', 'components.install', 'hub.decide', 'enrollment.export', 'enrollment.qr', 'phone.call', 'call_audio.refresh', 'call_audio.setup', 'call_audio.remove_setup', 'call_audio.move_here', 'phone.ring', 'phone.media', 'phone.contacts.search', 'phone.sms.compose', 'phone.ringer', 'phone.dial', 'phone.calls.log', 'phone.sms.attachment', 'phone.sms.attachment.save', 'phone.photo.prefetch', 'phone.sms.open', 'enrollment.approve', 'phone.photo.save', 'phone.file.send', 'phone.notification', 'hub.refresh', 'phone.dnd', 'phone.refresh', 'phone.hotspot', 'phone.mobile_data', 'phone.wallpaper', 'usage.consent', 'usage.screen', 'insights.week', 'insights.enable', 'insights.clear'}) | HOSTED_METHODS
 
 class LinkOperations:
     def hosted_controller(self):
@@ -61,7 +64,7 @@ class LinkOperations:
             config = packaged_config()
             return {**_HOSTED_OFF, 'available': True, 'configured': config is not None,
                     'config': config, 'self_hosted_paired': bool((self.settings.get('hub') or {}).get('paired')),
-                    'account': {'status': 'signed_out', 'refresh_tokens': False, 'error': ''}}
+                    'account': {'status': 'signed_out', 'refresh_tokens': bool(config and config.get('refresh_tokens')), 'error': ''}}
         return {'available': True, **self.hosted_controller().snapshot()}
 
     def _active_hosted(self):
@@ -81,14 +84,15 @@ class LinkOperations:
             return None
         return controller.phone_command(device, kind, payload)
 
-    def hosted_phone_file(self, device, path):
+    def hosted_phone_file(self, device, path, notify=False):
         controller = self._active_hosted()
         if controller is None or not controller.is_phone(device):
             return None
-        return controller.send_file(path, device)
+        return controller.send_file(path, device, notify=notify)
 
     def phone_snapshot(self) -> dict:
-        snapshot = self.phone.snapshot()
+        from .phone_settings import flag
+        snapshot = self.phone.snapshot(wallpaper=flag(self.settings, 'wallpaper'))
         hosted = self.hosted_phones()
         return {**snapshot, 'devices': snapshot['devices'] + hosted} if hosted else snapshot
 
@@ -239,8 +243,16 @@ class LinkOperations:
             return result
         if method in {'phone.sms.open', 'phone.sms.send', 'phone.call', 'phone.ring', 'phone.media', 'phone.contacts.search', 'phone.sms.compose',
                       'phone.ringer', 'phone.dial', 'phone.calls.log', 'phone.sms.attachment', 'phone.sms.attachment.save',
-                      'phone.photo.save', 'phone.photo.prefetch', 'phone.file.send'}:
+                      'phone.photo.save', 'phone.photo.prefetch', 'phone.file.send', 'phone.dnd', 'phone.refresh', 'phone.hotspot',
+                      'phone.mobile_data', 'phone.wallpaper', 'phone.ring.stop'}:
             return self.phone_features.dispatch(method, args)
+        if method.startswith('call_audio.'):
+            # Bluetooth hands-free on this computer only; nothing here reaches Saiph Cloud or a Hub.
+            if args:
+                raise ValueError('Unknown call audio action.')
+            audio = self.call_audio
+            return {'call_audio.refresh': audio.refresh, 'call_audio.setup': audio.apply_setup,
+                    'call_audio.remove_setup': audio.remove_setup, 'call_audio.move_here': audio.move_here}[method]()
         if method == 'continuity.handoff':
             if not self.phone_runtime:
                 raise ValueError('Connection is unavailable.')
@@ -392,11 +404,29 @@ class LinkOperations:
         if method == 'hosted.join.inspect':
             return controller.inspect_join(args.get('code'))
         if method == 'hosted.join':
-            return controller.join(args.get('code'), args.get('confirmed'))
+            return controller.join(args.get('code'), args.get('confirmed'), args.get('fingerprint'))
+        if method == 'hosted.join.account.inspect':
+            return controller.inspect_account_root()
+        if method == 'hosted.join.account':
+            return controller.join_account(args.get('fingerprint'), args.get('confirmed'))
+        if method == 'hosted.approvals':
+            return controller.pending_approvals()
+        if method == 'hosted.request.deny':
+            return controller.deny_request(args.get('device_id'))
+        if method == 'hosted.request.block':
+            return controller.block_device(args.get('device_id'))
         if method == 'hosted.join.request':
             return controller.request_code()
         if method == 'hosted.requests':
             return {'requests': controller.offered_requests()}
+        if method == 'hosted.link.start':
+            return controller.lan_link_start()
+        if method == 'hosted.link.status':
+            return controller.lan_link_status()
+        if method == 'hosted.link.stop':
+            return controller.lan_link_stop()
+        if method == 'hosted.link.approve':
+            return controller.lan_link_approve(args.get('code'), args.get('confirmed'))
         if method == 'hosted.request.inspect':
             return controller.inspect_request(args.get('code'))
         if method == 'hosted.approve':
@@ -407,8 +437,17 @@ class LinkOperations:
             return controller.forget(args.get('confirm'))
         if method == 'hosted.notification.dismiss':
             return controller.dismiss_notification(args.get('id'))
+        if method == 'hosted.notification':
+            extra = {key: args[key] for key in ('index', 'text', 'reply_key') if key in args}
+            return controller.notification_command(args.get('id'), args.get('operation'), **extra)
         if method == 'hosted.file.send':
             return controller.send_file(args.get('path'), args.get('target'))
         if method == 'hosted.file.save':
             return controller.save_offer(args.get('id'))
+        if method == 'hosted.file.retry':
+            return controller.retry_transfer(args.get('id'))
+        if method == 'hosted.file.dismiss':
+            return controller.dismiss_transfer(args.get('id'))
+        if method == 'hosted.firewall.open':
+            return controller.open_firewall_settings()
         raise ValueError('Unknown hosted action.')

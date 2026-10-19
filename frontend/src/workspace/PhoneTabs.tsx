@@ -1,12 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { Fragment, useCallback, useContext, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
-import { AppWindow, ArrowDownLeft, ArrowUpRight, FileText, FolderOpen, Image, MessageSquare, PhoneCall, PhoneMissed, Pin, Plus, RefreshCw, Search, Send, Share2, Smartphone, X } from "lucide-react";
-import type { Client } from "./types";
+import { Fragment, memo, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { AppWindow, ArrowDownLeft, ArrowUpRight, FileText, FolderOpen, Image, MessageSquare, PhoneCall, PhoneMissed, Plus, RefreshCw, Search, Send, Share2, Smartphone, X } from "lucide-react";
+import type { CallAudioStatus, Client, HostedState, PhoneScreenStatus } from "./types";
+import { CallAudioSession, CallAudioSetup, callAudioOn } from "./CallAudio";
 import { Action, Empty, Form } from "./ui";
 import { Photos } from "./PhotoGallery";
+import { PhoneScreen } from "./PhoneScreen";
+import { AppGrid, type PhoneApp } from "./PhoneAppGrid";
 import { RetainedView } from "./Navigation";
 import { Handoff, type HandoffItem } from "./Handoff";
 import { CallBanner } from "./callBanner";
+import { CloudTransfers, ReceivedFile, useNow } from "./CloudTransfers";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
@@ -26,10 +30,10 @@ export type PhoneFeatureState = { threads: SmsThread[]; messages: SmsMessage[]; 
   contacts?: { device_id: string; query: string; contacts: { name: string; numbers: string[] }[] }[]; call_logs?: { device_id: string; calls: CallLogEntry[] }[];
   attachments?: { device_id: string; thread: number; message: number; parts: { part: number; mime: string; name: string }[] }[];
   attachment_files?: { id: string; device_id: string; thread: number; message: number; part: number; name: string; mime: string; size: number; preview?: string; ready: boolean }[] };
-type PhoneDevice = { id: string; name: string; online: boolean; capabilities: string[]; hosted?: boolean; call_notice?: string | null };
+type PhoneDevice = { id: string; name: string; online: boolean; capabilities: string[]; screen?: string[]; hosted?: boolean; call_notice?: string | null };
 /** Saiph Cloud phones also need the phone's own Texts and calls switch. */
 const hostedPermission = (permission: string, result: string) =>
-  `Turn on Texts and calls in Saiph Cloud on your phone and allow ${permission} to ${result}.`;
+  `On your phone, tap Allow texts and calls in Saiph and allow ${permission} to ${result}.`;
 const noFeatures: PhoneFeatureState = { threads: [], messages: [], calls: [], photos: [], files: [] };
 
 /** A heading for a tab, with its main action on the right. */
@@ -192,8 +196,8 @@ function Messages({
   }, [active, available, client, threadDevice, threadNumber, requestKey]);
   if (!phone?.capabilities.includes("sms"))
     return (
-      <Empty title={phone?.online ? "Messages aren't shared" : "No saved messages"}>
-        {phone?.online
+      <Empty title={phone?.online || phone?.hosted ? "Messages aren't shared" : "No saved messages"}>
+        {phone?.online || phone?.hosted
           ? phone.hosted ? hostedPermission("SMS", "see conversations and reply here")
             : `${phone.name} isn't sharing text messages. If it can send texts, allow SMS in Saiph on it.`
           : `Reconnect ${phone?.name || "your phone"} to see its messages.`}
@@ -324,8 +328,7 @@ function Messages({
             <small role="status" className="text-[12px] text-status-on">Reply queued for your phone.</small>
           )}
           {!replyable && (
-            <small className="text-[12px] text-muted-foreground">{phone.hosted ? "Group replies stay in your phone's messaging app with Saiph Cloud."
-              : "Group replies stay in your phone's messaging app. Update Saiph on your phone to reply here."}</small>
+            <small className="text-[12px] text-muted-foreground">Group replies stay in your phone's messaging app. Update Saiph on your phone to reply here.</small>
           )}
           {replyable && thread.recipients.length > 1 && <small className="text-[12px] text-muted-foreground">Group replies are sent as MMS.</small>}
         </Form>
@@ -336,7 +339,7 @@ function Messages({
 }
 const callTypes = { incoming: "Incoming", outgoing: "Outgoing", missed: "Missed", rejected: "Declined", other: "Call" };
 const callIcons = { incoming: ArrowDownLeft, outgoing: ArrowUpRight, missed: PhoneMissed, rejected: PhoneMissed, other: PhoneCall };
-function Calls({ info, phone, client }: { info: PhoneFeatureState; phone?: PhoneDevice; client: Client }) {
+function Calls({ info, phone, client, callAudio }: { info: PhoneFeatureState; phone?: PhoneDevice; client: Client; callAudio?: CallAudioStatus }) {
   const [number, setNumber] = useState("");
   const banner = useContext(CallBanner);
   const history = phone?.online && phone.capabilities.includes("call-log");
@@ -347,11 +350,12 @@ function Calls({ info, phone, client }: { info: PhoneFeatureState; phone?: Phone
   const dial = phone.online && phone.capabilities.includes("call-dial");
   const recent = info.call_logs?.find((row) => row.device_id === phone.id)?.calls || [];
   const handled = info.calls.find((r) => r.device_id === phone.id && r.state !== "ringing" && r.handled_by);
+  const here = callAudioOn(callAudio);
   return <>
     <TabHead title="Calls" actions={phone.capabilities.includes("call-dial") && <Form className="flex items-center gap-2" submit={async () => { await client.call("phone.dial", { device_id: phone.id, number }); setNumber(""); }}>
       <Input aria-label="Number to call" placeholder="Number" value={number} inputMode="tel" maxLength={40} onChange={(e) => setNumber(e.target.value)} className="h-9 w-48" />
       <Button type="submit" variant="default" size="sm" className="h-9" disabled={!dial || !number.trim()}><PhoneCall />Call on phone</Button>
-    </Form>}>Call audio stays on your phone.</TabHead>
+    </Form>}>{here ? "Calls you answer here use this computer's microphone and speakers, over Bluetooth." : "Call audio stays on your phone."}</TabHead>
     {handled && <p className="m-0 mb-2 text-[13px] text-muted-foreground">{handled.handled === "reject" ? "Declined" : "Answered"} on {handled.handled_by}</p>}
     {phone.call_notice && <p role="status" className="m-0 mb-4 text-[13px] text-muted-foreground">{phone.call_notice}</p>}
     {call && <section className="string-edge mb-5 flex flex-wrap items-center gap-4 rounded-[14px] border border-secondary-border bg-field/50 px-5 py-4" aria-label="Current call">
@@ -360,8 +364,11 @@ function Calls({ info, phone, client }: { info: PhoneFeatureState; phone?: Phone
         <b className="text-[15px] font-semibold">{call.state === "ringing" ? "Incoming call" : "Call in progress"}</b>
         <span className="text-[13px] text-muted-foreground">{call.name || call.number}</span>
       </div>
-      {call.state === "ringing" && !banner && <div className="flex gap-2"><Action variant="default" disabled={!control} run={() => client.call("phone.call", { device_id: phone.id, operation: "answer" })}>Answer</Action><Action variant="destructive" disabled={!control} run={() => client.call("phone.call", { device_id: phone.id, operation: "reject" })}>Decline</Action></div>}
+      {call.state === "ringing" && !banner && <div className="flex gap-2"><Action variant="default" disabled={!control} run={() => client.call("phone.call", { device_id: phone.id, operation: "answer" })}>{here ? "Answer here" : "Answer"}</Action>
+        {here && <Action variant="secondary" disabled={!control} run={() => client.call("phone.call", { device_id: phone.id, operation: "answer", audio: "phone" })}>Answer on phone</Action>}
+        <Action variant="destructive" disabled={!control} run={() => client.call("phone.call", { device_id: phone.id, operation: "reject" })}>Decline</Action></div>}
       {call.state === "ringing" && !control && <small className="basis-full text-[12px] text-muted-foreground">Answer on your phone, or allow call control in Saiph settings.</small>}
+      <CallAudioSession status={callAudio} live={call.state === "active"} client={client} />
     </section>}
     {recent.length > 0 ? <section aria-label="Recent calls" className="grid gap-1.5">
       <h3 className="m-0 mb-1 text-[13px] font-semibold text-muted-foreground">Recent calls</h3>
@@ -371,9 +378,11 @@ function Calls({ info, phone, client }: { info: PhoneFeatureState; phone?: Phone
         {phone.capabilities.includes("call-dial") && <ItemActions><Action variant="tonal" size="sm" ariaLabel={"Call back " + (row.name || row.number)} disabled={!dial} run={() => client.call("phone.dial", { device_id: phone.id, number: row.number })}>Call back</Action></ItemActions>}
       </Item>; })}
     </section> : !call && <Empty title="No recent calls">{phone.online ? "Incoming calls appear here, and on every page of Saiph while they ring." : "Reconnect your phone to see recent calls."}</Empty>}
+    <CallAudioSetup status={callAudio} client={client} />
   </>;
 }
 type Handoffs = { handoffs: HandoffItem[]; devices: { id: string; name: string; online?: boolean; capabilities?: string[] }[]; currentDeviceId?: string };
+type CloudFiles = { cloudOffers?: HostedState["offers"]; cloudTransfers?: HostedState["transfers"] };
 /** Everything that moves between devices: files to and from the phone, and links and text to any device. */
 function Share({
   info,
@@ -382,15 +391,19 @@ function Share({
   handoffs,
   devices,
   currentDeviceId,
+  cloudOffers,
+  cloudTransfers,
 }: {
   info: PhoneFeatureState;
   phone?: PhoneDevice;
   client: Client;
-} & Handoffs) {
+} & Handoffs & CloudFiles) {
   const available = Boolean(
     phone?.online && phone.capabilities.includes("files"),
   );
   const rows = info.files.filter((r) => r.device_id === phone?.id);
+  const offers = phone?.hosted ? (cloudOffers || []).filter((offer) => offer.source === phone.id) : [];
+  const now = useNow(offers.length > 0);
   return (
     <>
       <TabHead title="Share" actions={<Action variant="default" size="sm" disabled={!available} run={() => client.call("phone.file.choose", { device_id: phone?.id })}><Send />Send a file to {phone?.name || "your phone"}</Action>}>
@@ -405,7 +418,11 @@ function Share({
               : "Allow file sharing in Saiph on your phone to send files."}
         </p>
       )}
+      {phone?.hosted && <CloudTransfers transfers={cloudTransfers} target={phone.id} client={client} />}
       <h3 className="m-0 mb-2 text-[13px] font-semibold text-muted-foreground">Received from {phone?.name || "your phone"}</h3>
+      {offers.length > 0 && <div className="mb-3 grid gap-1.5">
+        {offers.map((offer) => <ReceivedFile key={offer.id} offer={offer} client={client} now={now} cloudReady={available} />)}
+      </div>}
       {rows.length ? (
         <div className="mb-6 grid gap-1.5">
           {rows.map((r) => (
@@ -418,7 +435,7 @@ function Share({
             </Item>
           ))}
         </div>
-      ) : (
+      ) : offers.length === 0 && (
         <p className="m-0 mb-6 text-[12.5px] text-muted-foreground">Nothing yet. On your phone, use Share → Saiph.</p>
       )}
       <h3 className="m-0 mb-3 text-[13px] font-semibold text-muted-foreground">Links and text</h3>
@@ -426,47 +443,98 @@ function Share({
     </>
   );
 }
-type PhoneApp = { package: string; name: string; system: boolean };
-/** Phone apps in their own windows, through scrcpy over the phone's authorised debugging connection. */
-function Apps({ phone, client, active }: { phone: PhoneDevice; client: Client; active: boolean }) {
+type AppList = { apps?: PhoneApp[]; pending?: boolean; unavailable?: boolean; message?: string; refreshing?: boolean;
+  pinned?: string[]; usage?: Record<string, number>; icons?: boolean };
+/**
+ * The phone's screen and apps over the local network (docs/PHONE_SCREEN.md): no cable, adb or scrcpy.
+ * Apps are a grid of icons with Pinned and Most used rows (PhoneAppGrid.tsx).
+ * scrcpy windows over authorised USB/wireless debugging remain under Advanced.
+ */
+function Apps({ phone, client, active, screen, usbDebugging = false }: { phone: PhoneDevice; client: Client; active: boolean; screen?: PhoneScreenStatus; usbDebugging?: boolean }) {
   const [apps, setApps] = useState<PhoneApp[] | null>(null);
-  const [filter, setFilter] = useState("");
+  const [pinned, setPinned] = useState<string[]>([]);
+  const [usage, setUsage] = useState<Record<string, number>>({});
+  const [icons, setIcons] = useState(false);
+  const [waiting, setWaiting] = useState(false);
+  const [unavailable, setUnavailable] = useState("");
+  const [legacy, setLegacy] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
-  const findId = useId();
+  const attempt = useRef(0);
+  const timer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+  const accept = useCallback((result: AppList) => {
+    if (Array.isArray(result.pinned)) setPinned(result.pinned.filter((name) => typeof name === "string"));
+    if (result.usage && typeof result.usage === "object") setUsage(result.usage);
+    setIcons(result.icons === true);
+  }, []);
   const load = useCallback(async () => {
-    setError("");
-    try { setApps((await client.call<{ apps: PhoneApp[] }>("phone.apps", { device_id: phone.id })).apps); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
-  }, [client, phone.id]);
+    setError(""); attempt.current = 0; window.clearTimeout(timer.current);
+    if (legacy) {
+      try { setApps((await client.call<{ apps: PhoneApp[] }>("phone.apps.legacy", { device_id: phone.id })).apps); setUnavailable(""); setIcons(false); }
+      catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
+      return;
+    }
+    // The phone answers over Saiph Cloud (or the live screen session) a moment later; ask again briefly.
+    const ask = async () => {
+      try {
+        const result = await client.call<AppList>("phone.apps", { device_id: phone.id });
+        accept(result);
+        if (result.apps) { setApps(result.apps); setWaiting(false); setUnavailable(""); return; }
+        if (result.unavailable) { setWaiting(false); setUnavailable(result.message || ""); return; }
+        setWaiting(true);
+        if (++attempt.current < 15) timer.current = window.setTimeout(() => void ask(), 2000);
+        else { setWaiting(false); setError("Your phone did not send its apps. Open Saiph on your phone and try again."); }
+      } catch (reason) { setWaiting(false); setError(reason instanceof Error ? reason.message : String(reason)); }
+    };
+    await ask();
+  }, [client, phone.id, legacy, accept]);
   // The list loads the first time the tab is opened, then on request.
   const [asked, setAsked] = useState(false);
   if (active && phone.online && !asked) setAsked(true);
   useEffect(() => { if (asked) void load(); }, [asked, load]);
-  const shown = (apps || []).filter((app) => !filter.trim() || app.name.toLowerCase().includes(filter.trim().toLowerCase()));
+  // A live session can list apps even for phones that cannot over Cloud.
+  const live = screen?.state === "live";
+  useEffect(() => { if (live && unavailable && !legacy) void load(); }, [live, unavailable, legacy, load]);
+  const report = (reason: unknown) => setError(reason instanceof Error ? reason.message : String(reason));
+  const open = async (app: PhoneApp) => {
+    setNotice(""); setError("");
+    setUsage((current) => ({ ...current, [app.package]: (current[app.package] || 0) + 1 }));
+    if (legacy) { await client.call("phone.app.open.legacy", { device_id: phone.id, package: app.package, name: app.name }); return; }
+    const result = await client.call<{ live: boolean }>("phone.app.open", { device_id: phone.id, package: app.package, name: app.name });
+    setNotice(result.live ? `Opening ${app.name} on your phone.` : `Opening ${app.name} once you start sharing on your phone.`);
+  };
+  const pin = async (app: PhoneApp, value: boolean) => {
+    const result = await client.call<{ pinned: string[] }>("phone.app.favorite", { device_id: phone.id, package: app.package, pinned: value });
+    if (Array.isArray(result.pinned)) setPinned(result.pinned);
+  };
+  const shortcut = async (app: PhoneApp) => {
+    await client.call("phone.app.pin", { package: app.package, name: app.name });
+    setNotice(app.name + " was added to your apps menu.");
+  };
   return <>
-    <TabHead title="Phone apps" actions={<Action variant="ghost" size="icon-sm" ariaLabel="Refresh apps" title="Refresh apps" disabled={!phone.online} run={load}><RefreshCw /></Action>}>
-      Open a phone app in its own window on this computer. Needs Android 10 or later and the one-time debugging setup in Settings → Devices.
+    <TabHead title="Phone apps" actions={<Action variant="ghost" size="icon-sm" ariaLabel="Refresh apps" title="Refresh apps" disabled={!phone.online && !live} run={load}><RefreshCw /></Action>}>
+      Use your phone's screen and open its apps on this computer. Both devices need the same Wi-Fi; no cable or debugging setup.
     </TabHead>
+    {!legacy && <div className="mb-5"><PhoneScreen screen={screen} deviceId={phone.id} client={client} /></div>}
     {notice && <p role="status" className="m-0 mb-4 text-[12.5px] text-status-on">{notice}</p>}
     {error && <p role="alert" className="inline-error m-0 mb-4 text-[12.5px]">{error}</p>}
-    {!phone.online && !apps && <Empty title="Phone offline">Reconnect your phone to see its apps.</Empty>}
-    {phone.online && !apps && !error && <p className="m-0 text-[12.5px] text-muted-foreground" role="status">Loading apps…</p>}
-    {apps && <>
-      <Field label="Find an app" htmlFor={findId} className="mb-4 max-w-80">
-        <div className="relative"><Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input id={findId} aria-label="Find a phone app" value={filter} onChange={(e) => setFilter(e.target.value)} className="pl-9" /></div>
-      </Field>
-      <div className="grid gap-1.5">{shown.map((app) => <Item key={app.package} variant="outline" size="sm">
-        <ItemMedia className="size-8"><AppWindow /></ItemMedia>
-        <ItemContent><ItemTitle>{app.name}</ItemTitle><ItemDescription className="truncate">{app.package}</ItemDescription></ItemContent>
-        <ItemActions>
-          <Action variant="tonal" size="sm" ariaLabel={"Open " + app.name} disabled={!phone.online} run={() => client.call("phone.app.open", { device_id: phone.id, package: app.package, name: app.name })}>Open</Action>
-          <Action variant="ghost" size="icon-sm" title={"Pin " + app.name + " to your apps menu"} ariaLabel={"Pin " + app.name} run={async () => { await client.call("phone.app.pin", { package: app.package, name: app.name }); setNotice(app.name + " was added to your apps menu."); }}><Pin /></Action>
-        </ItemActions>
-      </Item>)}</div></>}
+    {!phone.online && !apps && !live && <Empty title="Phone offline">Reconnect your phone to see its apps.</Empty>}
+    {(phone.online || live) && !apps && !error && (unavailable
+      ? <p className="m-0 text-[12.5px] text-muted-foreground" role="status">{unavailable}</p>
+      : <p className="m-0 text-[12.5px] text-muted-foreground" role="status">{waiting ? "Asking your phone for its apps…" : "Loading apps…"}</p>)}
+    {apps && <AppGrid apps={apps} deviceId={phone.id} client={client} icons={icons && !legacy} pinned={pinned} usage={usage} disabled={!phone.online && !live}
+      onOpen={(app) => void open(app).catch(report)} onPin={(app, value) => void pin(app, value).catch(report)} onShortcut={(app) => void shortcut(app).catch(report)} />}
+    {/* Only after the explicit opt-in in Settings → Advanced: nothing here asks to install scrcpy or adb. */}
+    {(usbDebugging || legacy) && <details className="mt-6 text-[12.5px] text-muted-foreground" open={legacy}>
+      <summary className="cursor-pointer select-none">USB debugging: separate app windows</summary>
+      <p className="m-0 mt-2 max-w-[60ch] leading-relaxed">You turned on USB debugging in Settings → Advanced. With scrcpy and authorised debugging, each app can open in its own window instead.</p>
+      <Button className="mt-2" size="sm" variant="ghost" aria-pressed={legacy} onClick={() => { setApps(null); setError(""); setUnavailable(""); setLegacy(!legacy); }}>
+        {legacy ? "Use the phone screen instead" : "Use USB debugging (scrcpy)"}</Button>
+    </details>}
   </>;
 }
+const noTabs: string[] = [];
 const tabs = [
   { name: "Messages", icon: MessageSquare },
   { name: "Photos", icon: Image },
@@ -475,7 +543,7 @@ const tabs = [
   { name: "Apps", icon: AppWindow },
 ];
 
-export function PhoneTabs({
+export const PhoneTabs = memo(function PhoneTabs({
   features = noFeatures,
   phone,
   client,
@@ -484,31 +552,58 @@ export function PhoneTabs({
   handoffs = [],
   devices = [],
   currentDeviceId,
+  cloudOffers,
+  cloudTransfers,
+  hidden = noTabs,
+  screen,
+  showApps = 0,
+  usbDebugging = false,
+  callAudio,
 }: {
   features?: PhoneFeatureState;
   phone?: PhoneDevice;
   client: Client;
   active?: boolean;
   onTab?: (tab: string) => void;
-} & Partial<Handoffs>) {
-  const [tab, setTab] = useState("Messages");
+  /** Tabs turned off in Settings → Phone. */
+  hidden?: string[];
+  screen?: PhoneScreenStatus;
+  /** Raised by the header's Mirror screen: show Phone → Apps, where the phone screen request is. */
+  showApps?: number;
+  /** Settings → Advanced → USB debugging: offer scrcpy app windows in Phone → Apps. */
+  usbDebugging?: boolean;
+  /** Linux: talk through this computer over Bluetooth Hands-Free (Phone → Calls). */
+  callAudio?: CallAudioStatus;
+} & Partial<Handoffs> & CloudFiles) {
+  const shown = useMemo(() => tabs.filter(({ name }) => !hidden.includes(name)), [hidden]);
+  const [chosen, setTab] = useState("Messages");
+  const tab = shown.some(({ name }) => name === chosen) ? chosen : shown[0].name;
   const [composing, setComposing] = useState(false);
   const ringing = features.calls.some((row) => row.device_id === phone?.id && row.state === "ringing");
   const open = useCallback((name: string) => { setTab(name); onTab?.(name); }, [onTab]);
+  // A pinned phone app opened from the Start menu shows its session here.
+  const revealed = useRef(screen?.reveal || 0);
+  useEffect(() => {
+    if ((screen?.reveal || 0) > revealed.current) { revealed.current = screen?.reveal || 0; open("Apps"); }
+  }, [screen?.reveal, open]);
+  const shownApps = useRef(showApps);
+  useEffect(() => {
+    if (showApps > shownApps.current) { shownApps.current = showApps; open("Apps"); }
+  }, [showApps, open]);
   // Ctrl+1 to Ctrl+5 open the tabs; Ctrl+N starts a new message.
   useEffect(() => {
     if (!active) return;
     function onKey(event: KeyboardEvent) {
       if (!(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey) return;
       const index = Number(event.key) - 1;
-      if (index >= 0 && index < tabs.length) { event.preventDefault(); open(tabs[index].name); }
-      else if (event.key.toLowerCase() === "n" && phone?.capabilities.includes("sms")) { event.preventDefault(); open("Messages"); setComposing(true); }
+      if (index >= 0 && index < shown.length) { event.preventDefault(); open(shown[index].name); }
+      else if (event.key.toLowerCase() === "n" && phone?.capabilities.includes("sms") && !hidden.includes("Messages")) { event.preventDefault(); open("Messages"); setComposing(true); }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [active, open, phone]);
+  }, [active, open, phone, shown, hidden]);
   // Each panel mounts on its first visit and then stays, so drafts survive a switch.
-  const panel = (name: string, content: React.ReactNode, fill = false) => (
+  const panel = (name: string, content: React.ReactNode, fill = false) => hidden.includes(name) ? null : (
     <TabsContent value={name} forceMount className={cn("data-[state=inactive]:hidden", fill && "h-full")}>
       <RetainedView active={tab === name} className={fill ? "h-full" : undefined}>{content}</RetainedView>
     </TabsContent>
@@ -516,7 +611,7 @@ export function PhoneTabs({
   return (
     <Tabs value={tab} onValueChange={open} className="h-full min-h-0">
       <TabsList aria-label="Phone features" className="shrink-0">
-        {tabs.map(({ name, icon: Icon }, index) => (
+        {shown.map(({ name, icon: Icon }, index) => (
           <TabsTrigger key={name} value={name} title={`${name} (Ctrl+${index + 1})`}>
             <Icon aria-hidden="true" />
             {name}
@@ -534,12 +629,12 @@ export function PhoneTabs({
           <>
             {panel("Messages", <Messages info={features} phone={phone} client={client} active={active && tab === "Messages"} composing={composing} setComposing={setComposing} />, true)}
             {panel("Photos", <Photos info={features} phone={phone} client={client} active={active && tab === "Photos"} />)}
-            {panel("Calls", <Calls info={features} phone={phone} client={client} />)}
-            {panel("Share", <Share info={features} phone={phone} client={client} handoffs={handoffs} devices={devices} currentDeviceId={currentDeviceId} />)}
-            {panel("Apps", <Apps phone={phone} client={client} active={active && tab === "Apps"} />)}
+            {panel("Calls", <Calls info={features} phone={phone} client={client} callAudio={callAudio} />)}
+            {panel("Share", <Share info={features} phone={phone} client={client} handoffs={handoffs} devices={devices} currentDeviceId={currentDeviceId} cloudOffers={cloudOffers} cloudTransfers={cloudTransfers} />)}
+            {panel("Apps", <Apps phone={phone} client={client} active={active && tab === "Apps"} screen={screen} usbDebugging={usbDebugging} />)}
           </>
         )}
       </div>
     </Tabs>
   );
-}
+});

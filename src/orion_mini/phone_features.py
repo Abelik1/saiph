@@ -17,6 +17,7 @@ from .hub_client import signed_headers
 from .peer import PeerServer, Blobs, mesh_address, NoRedirect
 from .cloud import ensure_layout
 from .models import utc_now
+from .paths import received_dir
 
 MAX_FILE=2*1024**3
 MAX_CAPTURE=32*1024**2  # A phone photo placed on the clipboard, not an arbitrary file.
@@ -49,7 +50,7 @@ def same_file(path,size,sha256):
         return path.is_file() and path.stat().st_size==size and (not sha256 or file_sha256(path)==sha256)
     except OSError:return False
 def display_folder(path):
-    """'Downloads → Orion' for the UI; the full path stays available separately."""
+    """'Downloads → Saiph' for the UI; the full path stays available separately."""
     parent=Path(path).parent
     try:return ' → '.join(parent.relative_to(Path.home()).parts) or str(parent)
     except ValueError:return str(parent)
@@ -354,7 +355,7 @@ class PhoneFeatures:
             if (self.workspace.settings.get('cloud') or {}).get('enabled',True) is False:raise ValueError('Cloud is disabled.')
             return ensure_layout(self.workspace.settings)/'Shared'
         if destination!='downloads':raise ValueError('Unknown file destination.')
-        return self.workspace.root/'phone-originals' if intent and intent['mode'] in {'prefetch','copy'} else Path.home()/'Downloads'/'Orion'
+        return self.workspace.root/'phone-originals' if intent and intent['mode'] in {'prefetch','copy'} else received_dir()
     @staticmethod
     def _photo_key(device,photo):return hashlib.sha256((device+'\0'+str(photo)).encode()).hexdigest()
     def photo_cached(self,device,photo):
@@ -406,10 +407,23 @@ class PhoneFeatures:
                 if old.parent.resolve()==(self.workspace.root/'phone-originals').resolve():old.unlink(missing_ok=True)
         self.changed()
 
+    def cloud_attachment(self,device,thread,message,part,path,manifest):
+        """A Saiph Cloud MMS part, verified and decrypted: shown in the conversation like a Hub one."""
+        key=self._attachment_key(device,thread,message,part)
+        with self.lock:
+            try:previous=self.store.get('phone_attachment_file',key)
+            except ValueError:previous=None
+            self.store.save('phone_attachment_file',{'id':key,'device_id':device,'thread':thread,'message':message,'part':part,
+                'name':safe_name(manifest['name']),'mime':manifest['mime'],'path':str(path),'size':manifest['size'],'sha256':manifest['sha256']})
+            if previous and previous['path']!=str(path):
+                old=Path(previous['path'])
+                if old.parent.resolve()==(self.workspace.root/'sms-attachments').resolve():old.unlink(missing_ok=True)
+        self.changed()
+
     def _save_cached(self,device,photo,cached):
-        """Place a held original in Downloads → Orion, reusing an identical copy already there."""
+        """Place a held original in Downloads → Saiph, reusing an identical copy already there."""
         sha256=cached.get('sha256') or file_sha256(cached['path'])
-        directory=Path.home()/'Downloads'/'Orion';directory.mkdir(parents=True,exist_ok=True)
+        directory=received_dir();directory.mkdir(parents=True,exist_ok=True)
         source=Path(cached['path']);destination=directory/safe_name(cached['name']);file_id=None
         if source.parent==directory:destination=source;file_id=self._file_id(source)  # An earlier save downloaded it here.
         elif same_file(destination,cached['size'],sha256):file_id=self._file_id(destination)
@@ -447,9 +461,9 @@ class PhoneFeatures:
         if not same_file(row['path'],row['size'],row.get('sha256')):raise ValueError('This picture is no longer on this computer. Open it again from the conversation.')
         return row
     def attachment_save(self,args):
-        """Copies a received MMS picture into Downloads → Orion; never overwrites."""
+        """Copies a received MMS picture into Downloads → Saiph; never overwrites."""
         row=self._attachment(args)
-        directory=Path.home()/'Downloads'/'Orion';directory.mkdir(parents=True,exist_ok=True)
+        directory=received_dir();directory.mkdir(parents=True,exist_ok=True)
         destination=directory/safe_name(row['name'])
         if destination.exists():destination=directory/(destination.stem+' '+str(uuid4())[:8]+destination.suffix)
         shutil.copy2(row['path'],destination)
@@ -502,16 +516,29 @@ class PhoneFeatures:
         if not runtime or not runtime.client or not runtime.loop or not self.workspace.phone.connected:raise ValueError('Saiph is offline. This action has not been sent.')
         capability={'sms.open':'sms','sms.send':'sms','photo.request':'photos','call.command':'call-control','file.offer':'files','phone.ring':'ring',
                     'media.command':'media','contacts.search':'contacts','sms.compose':'sms','phone.ringer':'ringer','call.dial':'call-dial','calls.log.request':'call-log',
-                    'sms.attachment.request':'sms'}[kind]
+                    'sms.attachment.request':'sms','phone.dnd':'dnd','phone.status.request':'status','phone.hotspot':'hotspot',
+                    'phone.mobile_data':'mobile_data','phone.wallpaper.request':'wallpaper','phone.ring.stop':'ring'}[kind]
         phone=next((d for d in self.workspace.phone.snapshot()['devices'] if d['id']==device),None)
         # Nothing is queued for an offline device; say so rather than blaming the feature.
         if phone is not None and not phone.get('online'):raise ValueError(f"{phone.get('name') or 'That device'} is offline. Nothing was sent; try again when it reconnects.")
         if phone is None or capability not in phone.get('capabilities',[]):raise ValueError('This feature is unavailable on that device.')
+        from . import phone_status
+        if kind in phone_status.CONTROL_COMMAND:
+            # The same quick-action shapes as Saiph Cloud; Sync over mobile data is a Cloud setting.
+            if not phone_status.carried(kind,phone_status.LINK):raise ValueError('This feature is unavailable on that device.')
+            try:payload=phone_status.read_command(kind,payload,phone_status.LINK)
+            except phone_status.ProtocolError:raise ValueError('This request could not be sent.') from None
+            if kind==phone_status.STATUS_REQUEST and not self.workspace.phone.status_book.refresh_due(device):return {'queued':True}
+            if kind==phone_status.WALLPAPER_REQUEST:
+                from .phone_settings import flag
+                if not flag(self.workspace.settings,'wallpaper'):raise ValueError('Turn on Use phone wallpaper in Settings first.')
+                self.workspace.phone.status_book.wallpaper_asked(device)  # Its answer is accepted for a minute.
         event={'id':str(uuid4()),'type':kind,'ttl_seconds':30 if kind!='file.offer' else 300,'targets':[device],'payload':payload}
         runtime.loop.call_soon_threadsafe(runtime.client.publish,event);return {'queued':True,'id':event['id']}
-    def send_file(self,device,path):
+    def send_file(self,device,path,notify=False):
         hosted=getattr(self.workspace,'hosted_phone_file',None)
-        result=hosted(device,path) if hosted else None
+        # notify: a tray message when a Saiph Cloud send finishes (file manager and tray sends).
+        result=hosted(device,path,notify=notify is True) if hosted else None
         if result is not None:return result
         if self.file_server is None:
             config=dict(self.workspace.settings['hub'])
@@ -526,8 +553,27 @@ class PhoneFeatures:
             path.write_bytes(data);payload=self.file_server.offer_file(path);payload.update(name=safe_name(name),mime=mime)
             return payload
         finally:path.unlink(missing_ok=True)
+    def call(self,args):
+        """Answer or decline: the unchanged call.command to the phone (Saiph Cloud or Hub), plus the
+        Bluetooth hands-free audio route on this computer when it is set up. Call audio itself only ever
+        travels over Bluetooth between the phone and this computer."""
+        operation,audio_choice=args['operation'],args.get('audio','here')
+        if audio_choice not in ('here','phone'):raise ValueError('Choose where to talk: this computer or your phone.')
+        audio=getattr(self.workspace,'call_audio',None)
+        try:result=self.command(args['device_id'],'call.command',{'operation':operation})
+        except ValueError:
+            # The phone app is unreachable; a Bluetooth-connected phone can still answer or decline.
+            fallback=audio.fallback(operation) if audio and audio_choice=='here' else None
+            if fallback is None:raise
+            return fallback
+        if audio and operation=='answer':
+            if audio_choice=='phone':audio.answered_on_phone()
+            else:
+                routed=audio.answered_here()
+                if routed:result={**result,**routed}
+        return result
     def dispatch(self,method,args):
-        if method=='phone.file.send':return self.send_file(args['device_id'],args['path'])
+        if method=='phone.file.send':return self.send_file(args['device_id'],args['path'],args.get('notify') is True)
         if method=='phone.sms.open':return self.command(args['device_id'],'sms.open',{'thread':int(args['thread'])})
         if method=='phone.sms.send':
             thread=next((r for r in self.snapshot()['threads'] if r['device_id']==args['device_id'] and r['thread']==int(args['thread'])),None)
@@ -536,8 +582,9 @@ class PhoneFeatures:
             text=str(args['text'])
             if not text.strip() or len(text)>4096:raise ValueError('Enter a message up to 4096 characters.')
             return self.command(args['device_id'],'sms.send',{'thread':int(args['thread']),'text':text})
-        if method=='phone.call':return self.command(args['device_id'],'call.command',{'operation':args['operation']})
+        if method=='phone.call':return self.call(args)
         if method=='phone.ring':return self.command(args['device_id'],'phone.ring',{})
+        if method=='phone.ring.stop':return self.command(args['device_id'],'phone.ring.stop',{})
         if method=='phone.media':
             payload={'source':str(args['source'])[:240],'action':args.get('action')}
             if payload['action'] not in MEDIA_ACTIONS:raise ValueError('Unknown media control.')
@@ -563,6 +610,16 @@ class PhoneFeatures:
             if not DIAL.fullmatch(number) or not any(c.isdigit() for c in number):raise ValueError('Enter a phone number. Codes with * or # stay on your phone.')
             return self.command(args['device_id'],'call.dial',{'number':number})
         if method=='phone.calls.log':return self.command(args['device_id'],'calls.log.request',{})
+        # Phone Link-style quick actions; Saiph Cloud phones list which ones they accept.
+        if method=='phone.dnd':
+            if type(args.get('active')) is not bool:raise ValueError('Do Not Disturb is on or off.')
+            return self.command(args['device_id'],'phone.dnd',{'active':args['active']})
+        if method=='phone.refresh':return self.command(args['device_id'],'phone.status.request',{})
+        if method=='phone.hotspot':return self.command(args['device_id'],'phone.hotspot',{})
+        if method=='phone.mobile_data':
+            if type(args.get('allowed')) is not bool:raise ValueError('Sync over mobile data is on or off.')
+            return self.command(args['device_id'],'phone.mobile_data',{'allowed':args['allowed']})
+        if method=='phone.wallpaper':return self.command(args['device_id'],'phone.wallpaper.request',{})
         if method=='phone.sms.attachment':
             thread,message,part=(int(args[key]) for key in ('thread','message','part'))
             try:

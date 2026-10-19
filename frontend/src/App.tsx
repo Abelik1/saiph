@@ -22,12 +22,15 @@ import { Cloud } from "./workspace/Cloud";
 import { Settings } from "./workspace/Settings";
 import { SetupWizard } from "./workspace/SetupWizard";
 import { UsagePrompt } from "./workspace/UsageSharing";
+import { DeviceApprovalPrompt } from "./workspace/DeviceApprovalPrompt";
 import { Workspace } from "./workspace/edition";
 import { RetainedView } from "./workspace/Navigation";
-import { SaiphMark, WaveField, WaveLoader, gather } from "./workspace/waves";
+import { SaiphMark, WaveField, WaveLoader, startWaveTicker } from "./workspace/waves";
 import { SettingsNavigation } from "./workspace/settingsNavigation";
 import { CallBanner } from "./workspace/callBanner";
 import { Action } from "./workspace/ui";
+import { UpdateButton } from "./workspace/UpdateButton";
+import { callAudioOn } from "./workspace/CallAudio";
 import type { SettingsTarget } from "./workspace/settingsNavigation";
 
 const workspacePages: Page[] = ["Today", "Assistant", "Library", "Calendar", "Tasks", "Reminders", "Inbox", "Plugins"];
@@ -72,7 +75,7 @@ function IncomingCall({ state, client }: { state: State; client: Client }) {
       <span className="min-w-0 flex-1 text-[13px]"><b className="font-semibold">Incoming call</b> · {call.name || call.number} <span className="text-muted-foreground">on {phone.name}</span></span>
       {control
         ? <div className="flex gap-2">
-            <Action variant="default" size="sm" run={() => client.call("phone.call", { device_id: phone.id, operation: "answer" })}>Answer</Action>
+            <Action variant="default" size="sm" run={() => client.call("phone.call", { device_id: phone.id, operation: "answer" })}>{callAudioOn(state.call_audio) ? "Answer here" : "Answer"}</Action>
             <Action variant="destructive" size="sm" run={() => client.call("phone.call", { device_id: phone.id, operation: "reject" })}>Decline</Action>
           </div>
         : <small className="text-[12px] text-muted-foreground">Answer on your phone, or allow call control in Saiph on it.</small>}
@@ -91,6 +94,8 @@ export function workspaceAvailable(state: State) {
 export default function App({
   providedClient,
 }: { providedClient?: Client } = {}) {
+  // The selected tab's wave keeps moving, on one low-rate timer for the window.
+  useEffect(() => startWaveTicker(), []);
   // One string field for the whole window, so it carries on across screens.
   return (
     <>
@@ -124,6 +129,7 @@ function Screens({ providedClient }: { providedClient?: Client }) {
     if (scroll.current) scroll.current.scrollTop = positions.current[page] || 0;
   }, [page]);
   const fetching = useRef(false),
+    again = useRef(false),
     last = useRef<State | null>(null);
   useEffect(() => {
     if (providedClient) return;
@@ -140,8 +146,12 @@ function Screens({ providedClient }: { providedClient?: Client }) {
     };
   }, [providedClient]);
   const refresh = useCallback(async () => {
-    if (!client || fetching.current) return;
+    if (!client) return;
+    // A change announced mid-fetch may postdate that snapshot: fetch once more
+    // afterwards. A burst of announcements costs at most two snapshots.
+    if (fetching.current) { again.current = true; return; }
     fetching.current = true;
+    again.current = false;
     try {
       // The desktop client answers an unchanged state with the same object.
       const value = await client.call<State>("state");
@@ -155,6 +165,7 @@ function Screens({ providedClient }: { providedClient?: Client }) {
     } finally {
       fetching.current = false;
     }
+    if (again.current) void refresh();
   }, [client]);
   useEffect(() => {
     if (!client) return;
@@ -173,6 +184,22 @@ function Screens({ providedClient }: { providedClient?: Client }) {
     state?.enrollment?.ready,
     state?.settings.hub?.paired,
   ]);
+  // A pinned phone app opened from the Start menu shows the phone screen (Phone → Apps).
+  const revealed = useRef<number | null>(null);
+  useEffect(() => {
+    const reveal = state?.phone_screen?.reveal;
+    if (typeof reveal !== "number") return;
+    if (revealed.current !== null && reveal > revealed.current) setPage("Phone");
+    revealed.current = reveal;
+  }, [state?.phone_screen?.reveal]);
+  // A phone notification toast clicked on the desktop shows the Phone page.
+  const phoneRevealed = useRef<number | null>(null);
+  useEffect(() => {
+    const reveal = state?.phone_reveal;
+    if (typeof reveal !== "number") return;
+    if (phoneRevealed.current !== null && reveal > phoneRevealed.current) setPage("Phone");
+    phoneRevealed.current = reveal;
+  }, [state?.phone_reveal]);
   // Screens are counted for the local "Your week" summary, and shared only after the owner agreed.
   const counting = state?.usage?.consent === "granted" || state?.insights?.enabled === true;
   useEffect(() => {
@@ -189,17 +216,11 @@ function Screens({ providedClient }: { providedClient?: Client }) {
     },
     [hasWorkspace, navigate],
   );
-  const opening = !state || !client;
   const connectPhone = useCallback(() => {
     setPhoneSetupRequest(current => current + 1);
     positions.current.Phone = 0;
     navigate("Phone");
   }, [navigate]);
-  // While connecting, the background strings curl around the mark.
-  useEffect(() => {
-    if (opening && !error)
-      return gather(window.innerWidth / 2, window.innerHeight / 2, 150);
-  }, [opening, error]);
   if (!state || !client)
     return (
       <div className="connection-screen">
@@ -225,6 +246,7 @@ function Screens({ providedClient }: { providedClient?: Client }) {
       <CallBanner.Provider value={true}>
       <div className="workspace-shell link-shell relative z-[1] grid h-dvh min-h-0 grid-rows-[64px_auto_minmax(0,1fr)_28px] bg-transparent">
         {(!state.setup || state.setup.completed || state.phone?.devices.some(device => device.hosted || device.capabilities.includes("battery"))) && state.usage?.available && state.usage.consent === null && <UsagePrompt client={client} />}
+        <DeviceApprovalPrompt hosted={state.hosted} client={client} />
         <header className="link-header relative z-20 flex min-h-0 items-center gap-10 border-b border-border bg-chrome px-8 max-[1100px]:gap-6 max-[1100px]:px-6">
           <div className="flex shrink-0 items-center gap-2.5">
             <span className="grid size-9 place-items-center rounded-[11px] border border-secondary-border bg-[radial-gradient(circle_at_50%_45%,color-mix(in_srgb,var(--wave-1)_16%,transparent),var(--background)_70%)]">
@@ -317,7 +339,10 @@ function Screens({ providedClient }: { providedClient?: Client }) {
         </main>
         <footer className="app-footer flex items-center justify-between gap-4 border-t border-border bg-chrome px-8 text-[10.5px] tracking-[0.02em] text-muted-foreground">
           <span className="flex items-center gap-1.5"><span aria-hidden="true" className={"size-1.5 rounded-full " + status.tone} />{status.text}</span>
-          <span aria-label="Installed Saiph version">Saiph {state.app_version || "development"}</span>
+          <span className="flex items-center gap-3">
+            <UpdateButton update={state.app_update} client={client} />
+            <span aria-label="Installed Saiph version">Saiph {state.app_version || "development"}</span>
+          </span>
         </footer>
       </div>
       </CallBanner.Provider>

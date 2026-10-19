@@ -2,6 +2,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { BluetoothLockSettings } from "./BluetoothLockSettings";
+import { chooseOption } from "../test-helpers";
 import type { Client } from "./types";
 
 const status = { supported: true, enabled: false, device: "", seconds: 30, error: "", windows: false,
@@ -13,7 +14,7 @@ describe("Lock when my phone leaves", () => {
     render(<BluetoothLockSettings status={status} client={{ call } as unknown as Client} />);
     fireEvent.click(screen.getByLabelText("Lock this computer when my phone leaves"));
     expect(screen.getByRole("button", { name: "Save automatic lock" })).toBeDisabled();
-    fireEvent.change(screen.getByLabelText("Phone"), { target: { value: "AA:BB:CC:DD:EE:FF" } });
+    chooseOption("Phone", "Galaxy A55");
     fireEvent.click(screen.getByRole("button", { name: "Save automatic lock" }));
     await waitFor(() => expect(call).toHaveBeenCalledWith("settings.save", { link: { bt_lock: { enabled: true, device: "AA:BB:CC:DD:EE:FF", seconds: 30 } } }));
   });

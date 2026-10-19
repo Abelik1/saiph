@@ -69,15 +69,25 @@ What you get with Cloud:
 
 | | Saiph Cloud | Self-hosted Hub |
 | --- | :---: | :---: |
-| **Notifications** — see and dismiss your phone's notifications on any computer | ✓ | ✓ (and reply) |
-| **Clipboard** — copy on one device, paste on another | ✓ text | ✓ text and images |
-| **Photos & files** — send them either way, without a cable | ✓ | ✓ and browse recent photos |
-| **Texts** — read and reply with a real keyboard, still from your number | ✓ beta, one-to-one | ✓ |
+| **Notifications** — see, dismiss and reply to your phone's notifications on any computer | ✓ (replies beta) | ✓ |
+| **Clipboard** — copy on one device, paste on another | ✓ text and images | ✓ text and images |
+| **Photos & files** — send them either way, without a cable | ✓ up to 19.9 MB through Cloud, any size directly on the same network | ✓ and browse recent photos |
+| **Texts** — read and reply with a real keyboard, still from your number | ✓ beta, with group replies and MMS pictures | ✓ |
 | **Calls** — see who's calling, answer or decline, dial from the computer | ✓ beta, audio on phone | ✓ audio on phone |
+| **Updates** — the desktop app checks every six hours and shows an Update button | ✓ from your account | ✓ from your Hub |
 | **Webcam & microphone** — use your phone's camera in video calls | Over USB or local Wi-Fi | Over USB or local Wi-Fi |
-| **Phone controls** — find your phone, ringer mode, media, Do Not Disturb | | ✓ |
-| **Cloud folder** — a synced folder on storage you choose | | ✓ |
-| **Keyboard and mouse sharing** — with a separately installed [Deskflow](docs/ORION_DESKFLOW.md) | | ✓ |
+| **Phone controls** — find your phone, ringer mode, media, Do Not Disturb | ✓ beta | ✓ |
+| **Cloud folder** — a synced folder on storage you choose | Self-hosted only | ✓ |
+| **Keyboard and mouse sharing** — with a separately installed [Deskflow](docs/ORION_DESKFLOW.md) | Self-hosted only | ✓ |
+
+"Beta" means built and unit-tested on both the computer and the phone, but not yet
+confirmed on real devices. Files of any size go straight between two of your devices
+when they share a network, and only the one-use invitation passes through Saiph Cloud
+([local network files](docs/LAN_FILES.md)). The Cloud folder syncs through storage running on your
+own Hub, and Saiph Cloud stores no files. Keyboard and mouse sharing needs a
+direct, fast connection between your computers, which a self-hosted Hub's private
+network provides; Saiph Cloud relays sealed messages and is too slow for a pointer.
+See [Phone Link parity](docs/PHONE_LINK_PARITY.md#saiph-cloud-feature-parity).
 
 Saiph runs on **Windows 10/11 (x64)**, **Linux (x86_64)** and **Android**.
 Some features depend on your Android version and phone manufacturer.
@@ -118,7 +128,8 @@ project fits your devices best.
 
 ## What's next
 
-- **Texts and calls on Cloud**, matching the self-hosted Hub.
+- **Call audio on the computer** over Bluetooth: a Linux prototype is built; Windows
+  depends on access to Microsoft's phone-call audio API, which is being tested.
 - **Replacing Phone Link** on Windows, and offering the same on Linux, for any
   phone brand: MMS and group texts, phone apps in their own windows, phone
   storage in your file manager. See the [Phone Link replacement plan](docs/PHONE_LINK_PARITY.md).

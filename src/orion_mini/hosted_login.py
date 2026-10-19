@@ -23,6 +23,7 @@ import webbrowser
 
 from authlib.integrations.requests_client import OAuth2Session
 import requests
+from .hosted_login_page import login_page
 
 
 CALLBACK_PATH = "/orion/auth/callback"
@@ -160,13 +161,14 @@ class LoginAttempt:
                 self.respond(code, False)
 
             def respond(self, status, success):
-                body = ("Sign-in complete. You may close this window." if success
-                        else "Sign-in did not complete. Return to Saiph.").encode()
+                body, policy = login_page(success)
                 self.send_response(status)
-                self.send_header("Content-Type", "text/plain; charset=utf-8")
+                self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.send_header("Content-Length", str(len(body)))
                 self.send_header("Cache-Control", "no-store")
                 self.send_header("Referrer-Policy", "no-referrer")
+                self.send_header("Content-Security-Policy", policy)
+                self.send_header("X-Content-Type-Options", "nosniff")
                 self.send_header("Connection", "close")
                 self.end_headers()
                 self.wfile.write(body)

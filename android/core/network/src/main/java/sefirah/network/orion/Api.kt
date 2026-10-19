@@ -39,6 +39,16 @@ object Api {
         if(code !in 200..299) throw IllegalStateException("HTTP $code")
         c.inputStream.use{input->target.outputStream().use{input.copyTo(it)}}
     }
+    /** A signed GET whose body the caller streams and closes. [offset] > 0 asks the Hub to resume. */
+    fun openSigned(context:Context,path:String,offset:Long=0):HttpURLConnection{
+        require(path.startsWith('/') && !path.startsWith("//") && offset>=0)
+        val c=URL(base(context)+path).openConnection() as HttpURLConnection
+        c.instanceFollowRedirects=false; c.connectTimeout=10000; c.readTimeout=60000
+        c.setRequestProperty("Accept-Encoding","identity")
+        if(offset>0)c.setRequestProperty("Range","bytes=$offset-")
+        Security.signedHeaders(context,"GET",path,ByteArray(0)).forEach{(k,v)->c.setRequestProperty(k,v)}
+        return c
+    }
     @Synchronized fun pair(context:Context,baseUrl:String,code:String,name:String,meshLoginServer:String?=null):String {
         val prefs=context.getSharedPreferences("orion",Context.MODE_PRIVATE)
         check(!prefs.contains("device_id")) { "Already paired" }

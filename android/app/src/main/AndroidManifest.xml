@@ -18,6 +18,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- Phone screen on the computer: Android asks the owner each session (docs/PHONE_SCREEN.md). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
@@ -62,6 +64,11 @@
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="market" />
+        </intent>
+        <!-- Launchable apps the computer's Apps tab may list and open. -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
         </intent>
     </queries>
 
@@ -191,10 +198,29 @@
         </receiver>
 
         <activity android:name="com.orionmini.mobile.OrionQrActivity" android:exported="false" />
+        <activity android:name="com.orionmini.mobile.PhoneCameraActivity" android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden" />
+        <activity android:name="com.orionmini.mobile.PhoneScreenActivity" android:exported="false" android:launchMode="singleTop" />
+        <service android:name="com.orionmini.mobile.ScreenShareService" android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
+        <!-- Opt-in control during a live phone screen session; view only without it. -->
+        <service android:name="com.orionmini.mobile.SaiphInputService"
+            android:label="@string/saiph_input_label"
+            android:exported="false"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data android:name="android.accessibilityservice" android:resource="@xml/saiph_input" />
+        </service>
         <activity android:name="com.orionmini.mobile.OrionCaptureActivity" android:exported="false" />
         <activity android:name="com.orionmini.mobile.OrionRemoteActivity" android:exported="false" />
         <activity android:name="com.orionmini.mobile.OrionSketchActivity" android:exported="false" />
         <activity android:name="com.orionmini.mobile.UpdateActivity" android:exported="false" />
+        <!-- Find phone: a full-screen Stop over the lock screen (lock-screen flags are set in code for API 26). -->
+        <activity android:name="com.orionmini.mobile.FindPhoneActivity" android:exported="false"
+            android:launchMode="singleTop" android:excludeFromRecents="true"
+            android:taskAffinity="com.orionmini.mobile.findphone" />
         <receiver android:name="com.orionmini.mobile.DecisionReceiver" android:exported="false" />
         <receiver android:name="sefirah.network.orion.OrionRingReceiver" android:exported="false" />
         <!-- Home-screen widget: the provider only receives the launcher's update broadcast;

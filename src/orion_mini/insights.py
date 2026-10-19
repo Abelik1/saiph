@@ -29,6 +29,7 @@ class Insights:
     def __init__(self, workspace, *, clock=time.time):
         self.workspace, self.clock = workspace, clock
         self._lock = threading.Lock()
+        self._generation = 0
 
     def enabled(self) -> bool:
         value = self.workspace.settings.get("insights")
@@ -38,6 +39,7 @@ class Insights:
         if type(enabled) is not bool:
             raise ValueError("Your week is on or off.")
         with self._lock:
+            self._generation += 1
             self.workspace.settings["insights"] = {"enabled": enabled}
             if not enabled:
                 self._delete()
@@ -46,6 +48,7 @@ class Insights:
 
     def clear(self) -> dict:
         with self._lock:
+            self._generation += 1
             self._delete()
         return {"cleared": True}
 
@@ -53,10 +56,12 @@ class Insights:
         for row in self.workspace.store.all(KIND):
             self.workspace.store.delete(KIND, row["id"])
 
-    def count(self, feature: str, amount: int = 1) -> None:
-        if feature not in FEATURES or type(amount) is not int or amount < 1 or not self.enabled():
+    def count(self, feature: str, amount: int = 1, *, generation=None) -> None:
+        if feature not in FEATURES or type(amount) is not int or amount < 1:
             return
         with self._lock:
+            if not self.enabled() or (generation is not None and generation != self._generation):
+                return
             day = _day(self.clock())
             try:
                 row = self.workspace.store.get(KIND, day)

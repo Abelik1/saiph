@@ -76,8 +76,29 @@ describe("Phone setup", () => {
     fireEvent.click(screen.getByRole("button", { name: "Done" }));
     expect(screen.queryByRole("img", { name: "Cloud computer approval QR code" })).toBeNull();
     expect(screen.getByRole("heading", { name: "My phone" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Connect a phone" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Add a device" })).toBeVisible();
     expect(screen.queryByLabelText("Quick controls")).toBeNull();
+  }, 10000);
+  it("keeps a nearby phone on its six-digit comparison and finishes with its own approval", async () => {
+    let peer: unknown = null;
+    let requests: typeof offered[] = [];
+    const call = vi.fn(async (method: string) => method === "hosted.root_code" ? rootCode : method === "hosted.requests" ? { requests }
+      : method === "hosted.link.start" ? { listening: true, peer: null } : method === "hosted.link.status" ? { listening: true, peer }
+      : method === "hosted.link.approve" ? { approved: offered.device_id, label: "Pixel" } : {});
+    peer = { name: "Pixel", code: "713 284", state: "requested" };
+    render(<Phone state={state(true)} client={client(call)} />);
+    expect(await screen.findByLabelText("Comparison code 713 284")).toBeVisible();
+    // After the phone confirms, its Cloud request is also listed; the wizard stays on the short comparison.
+    const polls = call.mock.calls.filter(([method]) => method === "hosted.requests").length;
+    requests = [offered];
+    await waitFor(() => expect(call.mock.calls.filter(([method]) => method === "hosted.requests").length).toBeGreaterThan(polls), { timeout: 6000 });
+    expect(screen.getByRole("heading", { name: "Scan on your phone" })).toBeVisible();
+    expect(screen.queryByRole("img", { name: "Cloud computer approval QR code" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Codes match, approve" }));
+    expect(await screen.findByRole("heading", { name: "Phone approved" })).toBeVisible();
+    expect(call).toHaveBeenCalledWith("hosted.link.approve", { code: "713 284", confirmed: true });
+    expect(call).toHaveBeenCalledWith("hosted.link.stop");
+    expect(call).not.toHaveBeenCalledWith("hosted.approve", expect.anything());
   }, 10000);
   it("clears a previous comparison when returning to scanning and waits there for a new request", async () => {
     const call = vi.fn(async (method: string) => method === "hosted.root_code" ? rootCode : { requests: [offered] });

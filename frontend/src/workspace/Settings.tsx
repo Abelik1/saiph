@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useState } from "react";
+import { useId, useState } from "react";
 import type { Client, State } from "./types";
 import { Action, Form } from "./ui";
 import { PreferenceCard as Card } from "./PreferenceCard";
@@ -12,11 +12,15 @@ import { DeskflowSettings } from "./DeskflowSettings";
 import { HotspotSettings } from "./HotspotSettings";
 import { RemoteSettings } from "./RemoteSettings";
 import { BluetoothLockSettings } from "./BluetoothLockSettings";
+import { PhoneSettings, UsbDebuggingSettings } from "./PhoneSettings";
+import { HelpFeedback } from "./HelpFeedback";
 import { SettingsLayout } from "./SettingsLayout";
 import { RetainedView } from "./Navigation";
 import { useSettingsNavigation, useSettingsSection } from "./settingsNavigation";
 import { Button } from "@/components/ui/button";
 import { Disclosure } from "@/components/ui/disclosure";
+import { Field } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import { UsageSettings, YourWeekSettings } from "./UsageSharing";
 import { YourWeek } from "./YourWeek";
 
@@ -45,9 +49,32 @@ export function Settings({ state, client, openSetup }: { state: State; client: C
   const [hub, setHub] = useState(state.settings.hub?.base_url || ""),
     [code, setCode] = useState("");
   const [notice, setNotice] = useState("");
+  const hubIds = useId();
+  const hubForm = (
+    <Form
+      className="grid gap-4"
+      submit={async () => {
+        await client.call("hub.pair", {
+          base_url: hub,
+          code,
+          name: state.settings.machine?.name || "Saiph desktop",
+        });
+        setCode("");
+        setNotice("This computer is paired.");
+      }}
+    >
+      <Field label="Hub address" htmlFor={hubIds + "-address"}>
+        <Input id={hubIds + "-address"} aria-label="Saiph Hub address" type="url" required value={hub} onChange={(event) => setHub(event.target.value)} />
+      </Field>
+      <Field label="One-time pairing code" htmlFor={hubIds + "-code"}>
+        <Input id={hubIds + "-code"} aria-label="Saiph Hub pairing code" required value={code} inputMode="numeric" maxLength={8} onChange={(event) => setCode(event.target.value)} />
+      </Field>
+      <Button type="submit" variant="secondary" className="justify-self-start">Pair desktop</Button>
+    </Form>
+  );
   return (
     <SettingsLayout
-      tabs={["General", "Connections", "Devices", "Updates", "Advanced"]}
+      tabs={["General", "Connections", "Phone", "Devices", "Updates", "Advanced", "Help"]}
       selected={tab}
       onSelect={(value) => {
         setTab(value);
@@ -142,12 +169,19 @@ export function Settings({ state, client, openSetup }: { state: State; client: C
           </div>
         )}
       </RetainedView>
+      <RetainedView active={tab === "Phone"}>
+        {() => <PhoneSettings state={state} client={client} openTab={(value) => { setTab(value); setNotice(""); }} />}
+      </RetainedView>
+      <RetainedView active={tab === "Help"}>
+        {() => <HelpFeedback client={client} />}
+      </RetainedView>
       <RetainedView active={tab === "Updates"}>
-        {() => <Updates client={client} status={state.update_status} />}
+        {() => <Updates client={client} status={state.update_status} cloud={state.hosted?.enabled} update={state.app_update} />}
       </RetainedView>
       <RetainedView active={tab === "Connections"}>
         {() => (
           <div className="columns">
+            <HostedSettings hosted={state.hosted} client={client} />
             <ContinuitySettings
               platform={state.platform}
               settings={state.settings}
@@ -155,51 +189,19 @@ export function Settings({ state, client, openSetup }: { state: State; client: C
               client={client}
               workspace={false}
             />
-            <HostedSettings hosted={state.hosted} client={client} />
-            <Disclosure summary="Self-hosted Hub" open={state.settings.hub?.paired || !state.hosted?.enabled || undefined}>
-            <Card title="Saiph Hub">
-              <Form
-                submit={async () => {
-                  await client.call("hub.pair", {
-                    base_url: hub,
-                    code,
-                    name: state.settings.machine?.name || "Saiph desktop",
-                  });
-                  setCode("");
-                  setNotice("This computer is paired.");
-                }}
-              >
-                <label>
-                  Hub address
-                  <input
-                    aria-label="Saiph Hub address"
-                    value={hub}
-                    onChange={(event) => setHub(event.target.value)}
-                  />
-                </label>
-                <label>
-                  One-time pairing code
-                  <input
-                    aria-label="Saiph Hub pairing code"
-                    value={code}
-                    inputMode="numeric"
-                    maxLength={8}
-                    onChange={(event) => setCode(event.target.value)}
-                  />
-                </label>
-                <button>Pair desktop</button>
-              </Form>
-              <p className="muted">
-                {state.settings.hub?.paired
-                  ? "This computer is paired."
-                  : "Pair once using your server invitation."}
-              </p>
-              {state.phone?.error && (
-                <p className="inline-error">{state.phone.error}</p>
-              )}
-            </Card>
-            </Disclosure>
             <HotspotSettings hotspot={state.hotspot} client={client} />
+            {/* Saiph accounts are the default: a server you run yourself stays folded away until it is paired. */}
+            {state.settings.hub?.paired
+              ? <Card title="Self-hosted Hub" subtitle="This computer connects through a Saiph Hub server you manage.">
+                  <p role="status">This computer is paired with your Hub.</p>
+                  <Disclosure summary="Pair with a different Hub">{hubForm}</Disclosure>
+                  {state.phone?.error && <p className="inline-error">{state.phone.error}</p>}
+                </Card>
+              : <Disclosure summary="Self-hosted Hub">
+                  <p className="m-0">Connect through a Saiph Hub server you manage instead of a Saiph account. Use the invitation from your server.</p>
+                  {hubForm}
+                  {state.phone?.error && <p className="inline-error">{state.phone.error}</p>}
+                </Disclosure>}
           </div>
         )}
       </RetainedView>
@@ -225,13 +227,16 @@ export function Settings({ state, client, openSetup }: { state: State; client: C
       </RetainedView>
       <RetainedView active={tab === "Advanced"}>
         {() => (
-          <DeskflowSettings
-            settings={state.settings}
-            error={state.deskflow?.error}
-            status={state.deskflow}
-            client={client}
-            defaultEnabled={false}
-          />
+          <div className="grid gap-5">
+            <DeskflowSettings
+              settings={state.settings}
+              error={state.deskflow?.error}
+              status={state.deskflow}
+              client={client}
+              defaultEnabled={false}
+            />
+            <UsbDebuggingSettings state={state} client={client} />
+          </div>
         )}
       </RetainedView>
     </SettingsLayout>

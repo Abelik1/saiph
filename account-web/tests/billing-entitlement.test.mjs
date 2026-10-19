@@ -73,5 +73,5 @@ test("checkout feedback is separate from the stored billing derivation", async (
   assert.match(view, /deriveEntitlement/);
   // The page reads the return parameter only to choose a notice after loading billing.
   assert.ok(page.indexOf("billingView(") < page.indexOf("searchParams;"));
-  assert.match(page, /const notice = checkout === "returned" \? "returned" : checkout === "cancelled" \? "cancelled" : null;/);
+  assert.match(page, /const notice = checkout === "returned" \? "returned" : checkout === "cancelled" \? "cancelled" : trial === "started" \? "trial" : null;/);
 });

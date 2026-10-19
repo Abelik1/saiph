@@ -29,6 +29,16 @@ def validate(paths):
     return result
 
 
+def describe_files(paths):
+    """The confirmation names what is sent: one file by name, a few by name, many by count."""
+    names = [Path(path).name for path in paths]
+    if len(names) == 1:
+        return f'"{names[0]}"'
+    if len(names) <= 3:
+        return ", ".join(f'"{name}"' for name in names[:-1]) + f' and "{names[-1]}"'
+    return f'"{names[0]}", "{names[1]}" and {len(names) - 2} more files'
+
+
 def targets(state):
     """Online paired devices, other than this computer, that accept files."""
     own = (state.get("settings") or {}).get("hub", {}).get("device_id")

@@ -467,5 +467,112 @@ export function createBillingStore(pool, { stripeAccountId, livemode = false }) 
         return { sequence, until };
       });
     },
+
+    /** This subject's trial and what the trial decision needs (lib/billing/trial.mjs).
+     * @param {string} subject @param {string | null} emailKey */
+    async trialFacts(subject, emailKey) {
+      subjectValue(subject);
+      return tx((client) => trialFacts(client, subject, emailKey));
+    },
+
+    /**
+     * Start this subject's free trial if the rules allow it. One global lock
+     * serializes trial starts, so the optional cap and the one-per-email rule
+     * hold under concurrent sign-ups. Starting again returns the existing trial.
+     * @param {{subject: string, emailKey: string, now: number, days: number, cap: number | null, ref: string}} request
+     * @returns {Promise<{outcome: "started"|"exists"|"subscribed"|"used"|"full", trial: TrialRow | null}>}
+     */
+    async startTrial({ subject, emailKey, now, days, cap, ref }) {
+      subjectValue(subject);
+      if (!/^[a-f0-9]{64}$/.test(emailKey) || !/^[a-f0-9]{32}$/.test(ref)) throw new BillingStoreError("INVALID_TRIAL");
+      timestamp(now);
+      if (!Number.isSafeInteger(days) || days < 1 || days > 30 || cap !== null && (!Number.isSafeInteger(cap) || cap < 0)) {
+        throw new BillingStoreError("INVALID_TRIAL");
+      }
+      return tx(async (client) => {
+        await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+          [JSON.stringify(["saiph-billing-trial", stripeAccountId])]);
+        const facts = await trialFacts(client, subject, emailKey);
+        if (facts.stored) return { outcome: "exists", trial: facts.stored };
+        if (facts.subscribed) return { outcome: "subscribed", trial: null };
+        if (facts.emailUsed) return { outcome: "used", trial: null };
+        if (cap !== null && facts.started >= cap) return { outcome: "full", trial: null };
+        const endsAt = now + days * 86400;
+        await client.query(
+          `INSERT INTO saiph_billing.trials (stripe_account_id,auth_subject,email_key,trial_ref,started_at,ends_at)
+           VALUES ($1,$2,$3,$4,$5,$6)`,
+          [stripeAccountId, subject, emailKey, ref, now, endsAt],
+        );
+        return { outcome: "started", trial: { subject, ref, startedAt: now, endsAt, dirty: true, pushedUntil: null } };
+      });
+    },
+
+    /** Trials whose grant may need a push: undelivered or still running at the service.
+     * @param {{subject?: string}} [filter] @returns {Promise<TrialRow[]>} */
+    async trialGrantCandidates({ subject } = {}) {
+      if (subject !== undefined) subjectValue(subject);
+      return tx(async (client) => {
+        const { rows } = await client.query(
+          `SELECT auth_subject, trial_ref, started_at, ends_at, dirty, pushed_until FROM saiph_billing.trials
+           WHERE stripe_account_id=$1 AND ($2::text IS NULL OR auth_subject=$2)
+             AND (dirty OR pushed_until IS NULL OR pushed_until > extract(epoch FROM clock_timestamp()))
+           ORDER BY auth_subject`,
+          [stripeAccountId, subject ?? null],
+        );
+        return rows.map(trialRow);
+      });
+    },
+
+    /** Push one trial grant under its row lock; same contract as withGrant.
+     * @param {string} subject
+     * @param {(row: TrialRow, sequence: number) => Promise<number>} push */
+    async withTrialGrant(subject, push) {
+      subjectValue(subject);
+      return tx(async (client) => {
+        const { rows } = await client.query(
+          `SELECT auth_subject, trial_ref, started_at, ends_at, dirty, pushed_until FROM saiph_billing.trials
+           WHERE stripe_account_id=$1 AND auth_subject=$2 FOR UPDATE`,
+          [stripeAccountId, subject],
+        );
+        if (!rows[0]) throw new BillingStoreError("UNKNOWN_TRIAL");
+        const sequence = Number((await client.query("SELECT nextval('saiph_billing.grant_sequence') AS value")).rows[0].value);
+        const until = await push(trialRow(rows[0]), sequence);
+        timestamp(until);
+        await client.query(
+          `UPDATE saiph_billing.trials SET dirty=false, pushed_sequence=$3, pushed_until=$4, pushed_at=clock_timestamp()
+           WHERE stripe_account_id=$1 AND auth_subject=$2`,
+          [stripeAccountId, subject, sequence, until],
+        );
+        return { sequence, until };
+      });
+    },
   };
+
+  /** @param {import("./transaction.mjs").SqlClient} client @param {string} subject @param {string | null} emailKey */
+  async function trialFacts(client, subject, emailKey) {
+    const own = await client.query(
+      `SELECT auth_subject, trial_ref, started_at, ends_at, dirty, pushed_until FROM saiph_billing.trials
+       WHERE stripe_account_id=$1 AND auth_subject=$2`,
+      [stripeAccountId, subject],
+    );
+    const email = typeof emailKey === "string" && /^[a-f0-9]{64}$/.test(emailKey)
+      ? await client.query("SELECT 1 FROM saiph_billing.trials WHERE stripe_account_id=$1 AND email_key=$2 AND auth_subject<>$3",
+        [stripeAccountId, emailKey, subject])
+      : { rows: [] };
+    const subscribed = await client.query(
+      `SELECT 1 FROM saiph_billing.subscriptions s JOIN saiph_billing.customers c USING (stripe_account_id,stripe_customer_id)
+       WHERE c.stripe_account_id=$1 AND c.auth_subject=$2 AND s.status NOT IN ('incomplete','incomplete_expired') LIMIT 1`,
+      [stripeAccountId, subject],
+    );
+    const count = await client.query("SELECT count(*) AS started FROM saiph_billing.trials WHERE stripe_account_id=$1", [stripeAccountId]);
+    return { stored: own.rows[0] ? trialRow(own.rows[0]) : null, emailUsed: email.rows.length > 0,
+      subscribed: subscribed.rows.length > 0, started: Number(count.rows[0].started) };
+  }
+}
+
+/** @typedef {{subject: string, ref: string, startedAt: number, endsAt: number, dirty: boolean, pushedUntil: number | null}} TrialRow */
+/** @param {Record<string, any>} row @returns {TrialRow} */
+function trialRow(row) {
+  return { subject: String(row.auth_subject), ref: String(row.trial_ref), startedAt: Number(row.started_at),
+    endsAt: Number(row.ends_at), dirty: Boolean(row.dirty), pushedUntil: row.pushed_until === null ? null : Number(row.pushed_until) };
 }

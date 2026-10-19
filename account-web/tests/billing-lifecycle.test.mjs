@@ -157,7 +157,7 @@ describe("billing lifecycle through HTTP handlers and isolated PostgreSQL", { sk
     await runMigrations(pool, await loadMigrations());
   });
   beforeEach(async () => {
-    await pool.query("TRUNCATE saiph_billing.grant_state, saiph_billing.disputes, saiph_billing.customer_creation_intents, saiph_billing.processed_events, saiph_billing.subscriptions, saiph_billing.customers");
+    await pool.query("TRUNCATE saiph_billing.trials, saiph_billing.grant_state, saiph_billing.disputes, saiph_billing.customer_creation_intents, saiph_billing.processed_events, saiph_billing.subscriptions, saiph_billing.customers");
     hub.grants.clear(); hub.down = false;
   });
   after(async () => { await pool?.end(); });

@@ -29,7 +29,7 @@ class AdbWorker:
         result=subprocess.run([self.adb,*args],capture_output=True,text=True,timeout=10,
                               creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
         return result.stdout if result.returncode==0 else ''
-    def poll(self, paired):
+    def poll(self, paired, *, cloud=(), authorize=None):
         if not self.adb:return
         try:
             attached=self.run('devices')
@@ -38,10 +38,14 @@ class AdbWorker:
                 if len(fields)!=2 or fields[1]!='device':continue
                 serial=fields[0]
                 raw=self.run('-s',serial,'shell','content','call','--uri',f'content://{PACKAGE}.worker.bridge','--method','status')
-                status=dict(re.findall(r'(apk|starter|device_id|worker_alive|watching)=([^,}\s]+)',raw))
+                status=dict(re.findall(r'(apk|starter|device_id|worker_alive|watching|mode)=([^,}\s]+)',raw))
                 # ADB authorization alone does not establish Orion trust.
-                if status.get('device_id') not in paired or status.get('watching')!='true':continue
+                mode = status.get('mode', 'self_hosted')
+                approved = cloud if mode == 'cloud' else paired if mode == 'self_hosted' else ()
+                device = status.get('device_id')
+                if device not in approved or status.get('watching')!='true':continue
                 if status.get('worker_alive')!='true':
+                    if authorize is not None and not authorize(device, mode):continue
                     self.run('-s',serial,'shell',worker_command(status))
                 self.status='Bundled clipboard worker is managed automatically.'
         except (OSError,subprocess.SubprocessError,ValueError):

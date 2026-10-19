@@ -38,6 +38,7 @@ def test_new_session_uses_fresh_profile_and_local_endpoint(tmp_path, monkeypatch
     assert os.environ["QTWEBENGINE_REMOTE_DEBUGGING"].startswith("127.0.0.1:")
     assert "--remote-allow-origins=*" not in os.environ["QTWEBENGINE_CHROMIUM_FLAGS"]
     assert "--no-sandbox" not in os.environ["QTWEBENGINE_CHROMIUM_FLAGS"]
+    assert "--disable-gpu" in os.environ["QTWEBENGINE_CHROMIUM_FLAGS"]
 
 
 def test_existing_directory_is_never_reused_or_modified(tmp_path):
@@ -63,9 +64,39 @@ def test_live_mode_removes_test_bypass_and_offscreen_setting(tmp_path, monkeypat
     assert "ORION_MINI_TEST" not in os.environ
     assert "QT_QPA_PLATFORM" not in os.environ
     assert os.environ["ORION_MINI_DATA_DIR"] == session["profile"]
+    assert "--disable-gpu" not in os.environ["QTWEBENGINE_CHROMIUM_FLAGS"]
 
 
 def test_missing_dashboard_does_not_create_a_profile(tmp_path):
     with pytest.raises(FileNotFoundError):
         desktop_ui.create_session(tmp_path / "session", tmp_path / "missing" / "index.html", live=False)
     assert not (tmp_path / "session").exists()
+
+
+def test_existing_profile_requires_live_and_preserves_settings(tmp_path):
+    profile = tmp_path / "authorized-profile"
+    profile.mkdir()
+    settings = profile / "settings.json"
+    original = '{"machine":{"name":"Synthetic existing desktop"},"start_with_windows":true}'
+    settings.write_text(original, encoding="utf-8")
+    built = dashboard(tmp_path)
+    session_dir = tmp_path / "session"
+    with pytest.raises(ValueError, match="--live"):
+        desktop_ui.create_session(session_dir, built, False, profile)
+    assert not session_dir.exists()
+    session = desktop_ui.create_session(session_dir, built, True, profile)
+    assert session["profile"] == str(profile.resolve())
+    assert session["existing_profile"] is True
+    assert session["mode"] == "live"
+    assert settings.read_text(encoding="utf-8") == original
+    assert list(profile.iterdir()) == [settings]
+    assert not (session_dir / "profile").exists()
+
+
+def test_invalid_existing_profile_never_creates_session(tmp_path):
+    profile = tmp_path / "not-a-profile"
+    profile.mkdir()
+    session_dir = tmp_path / "session"
+    with pytest.raises(ValueError, match="settings.json"):
+        desktop_ui.create_session(session_dir, dashboard(tmp_path), True, profile)
+    assert not session_dir.exists()

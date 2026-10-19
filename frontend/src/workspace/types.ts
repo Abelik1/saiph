@@ -7,7 +7,9 @@ export type AIConfig = {
   ollama_url?: string;
 };
 export type CameraConfig = {enabled?:boolean;facing?:"front"|"back";quality?:"720p"|"1080p";rotation?:"0"|"90"|"180"|"270";v4l2_sink?:string;obs_profile?:string;obs_collection?:string;obs_scene?:string;obs_scene_file?:string;obs_executable?:string;scrcpy_executable?:string};
-export type CameraStatus = {available:boolean;running:boolean;verified:boolean;mode:"linux-v4l2"|"windows-obs"|"preview"|"unavailable";device_id:string|null;serial?:string|null;can_preview?:boolean;message:string;facing?:"front"|"back";quality?:"720p"|"1080p";rotation?:string};
+export type CameraStatus = {available:boolean;running:boolean;verified:boolean;mode:"windows-saiph"|"linux-v4l2"|"windows-obs"|"preview"|"unavailable";device_id:string|null;serial?:string|null;can_preview?:boolean;message:string;facing?:"front"|"back";quality?:"720p"|"1080p";rotation?:string;integrated_available?:boolean;local_state?:"idle"|"waiting"|"connecting"|"live";local_message?:string;local_preview?:boolean;local_preview_available?:boolean;local_resolution?:"720p"|"1080p";local_fps?:15|20|30;local_quality?:"standard"|"high"};
+// The phone's screen over the local network (docs/PHONE_SCREEN.md); `reveal` rises when a pinned app opens it.
+export type PhoneScreenStatus = {state:"idle"|"waiting"|"connecting"|"live";running:boolean;waiting:boolean;message:string;resolution:"720p"|"1080p";fps:15|20|30;quality:"standard"|"high";input:boolean;delivered:boolean;device_id:string|null;launch:string;reveal?:number;window?:"unavailable"|"closed"|"open"};
 // A phone attached to this computer over USB or wireless debugging (no Hub needed).
 export type DebugPhone = {serial:string;state:"ready"|"unauthorized"|"offline"|"no_permission";model:string;connection:"usb"|"wifi"};
 export type MicrophoneConfig = {enabled?:boolean;scrcpy_executable?:string};
@@ -16,7 +18,7 @@ export type DeskflowConfig = {enabled?:boolean;role?:"desktop"|"laptop";desktop?
 export type DeskflowStatus = {error:string;running?:boolean;crashes?:number;exit_code?:number|null;uptime?:number;setup?:{executable:string;certificates:string[];trust_file:string;trusted:boolean;mesh_addresses:string[]}};
 export type Settings = {
   cloud?: {path?:string;enabled?:boolean;recordings?:boolean};
-  link?: {focus?:boolean;dnd_sync?:boolean;auto_copy_codes?:boolean;battery_alerts?:boolean;pause_media_on_calls?:boolean;new_photo_notices?:boolean;ring_computer?:boolean;clipboard?:boolean;timezone?:string;wake_hour?:number;wake_minute?:number;camera?:CameraConfig;microphone?:MicrophoneConfig;deskflow?:DeskflowConfig;hotspot?:{profile?:string;auto?:boolean};remote?:{enabled?:boolean;devices?:string[];adapters?:Record<string,boolean>}};
+  link?: {focus?:boolean;dnd_sync?:boolean;auto_copy_codes?:boolean;battery_alerts?:boolean;pause_media_on_calls?:boolean;new_photo_notices?:boolean;ring_computer?:boolean;clipboard?:boolean;timezone?:string;wake_hour?:number;wake_minute?:number;camera?:CameraConfig;microphone?:MicrophoneConfig;deskflow?:DeskflowConfig;hotspot?:{profile?:string;auto?:boolean};remote?:{enabled?:boolean;devices?:string[];adapters?:Record<string,boolean>};phone?:PhonePreferences};
   projects: string[];
   selected_project: string;
   start_with_windows: boolean;
@@ -266,11 +268,29 @@ export type Transcript = {
   track_labels: Record<string, string>;
 };
 export type HostedConfig = {service_url: string; issuer: string; audience: string; client_id: string; refresh_tokens: boolean};
-export type HostedState = {available: boolean; enabled: boolean; status: string; identity: boolean; configured?: boolean; config?: HostedConfig | null; self_hosted_paired?: boolean; error?: string; account?: {status: string; error: string; refresh_tokens: boolean}; fingerprint?: string | null; role?: "root" | "member" | null; root_fingerprint?: string | null; roster?: {expires_at: number; version: number; clock_warning: boolean; members: {id: string; label: string; root: boolean; self?: boolean; fingerprint: string}[]} | null; offers?: {id: string; name: string; size: number}[]; notifications?: {id: string; app: string; title: string; text: string}[]; user_verification?: UserVerification; security_events?: {id: string; kind: "added" | "removed"; device_id: string; label: string; at: number}[]};
+/** A file this computer is sending with Saiph Cloud (hosted_transfers.py). */
+export type HostedTransfer = {id: string; name: string; size: number; target: string; target_name: string; state: "queued" | "connecting" | "sending" | "retrying" | "failed" | "sent"; error: string; progress: number; attempts: number; retry_in?: number; route?: "lan" | "cloud" | ""};
+/** A file offered to this computer: through Saiph Cloud (save within five minutes), or received over the local network ("lan"). */
+export type HostedOffer = {id: string; name: string; size: number; source?: string; mime?: string; expires_at?: number; route?: "lan"; state?: "receiving" | "ready" | "failed"; progress?: number; error?: string; source_name?: string};
+/** Free trial notice from the service's /v1/access (src/orion_mini/hosted_access.py). */
+export type HostedAccess = {state: "trial" | "trial_ended" | "none" | "active"; days_left: number | null; trial_until: number | null; message: string};
+export type HostedState = {available: boolean; enabled: boolean; status: string; identity: boolean; configured?: boolean; config?: HostedConfig | null; self_hosted_paired?: boolean; error?: string; clipboard_notice?: string; account?: {status: string; error: string; refresh_tokens: boolean}; fingerprint?: string | null; role?: "root" | "member" | null; root_fingerprint?: string | null; roster?: {expires_at: number; version: number; clock_warning: boolean; members: {id: string; label: string; root: boolean; self?: boolean; kind?: "phone" | "computer" | null; fingerprint: string}[]} | null; offers?: HostedOffer[]; notifications?: {id: string; device_id: string; app: string; title: string; text: string; timestamp?: number; actions?: {index: number; label: string}[]; reply_key?: string | null}[]; user_verification?: UserVerification; security_events?: {id: string; kind: "added" | "removed"; device_id: string; label: string; at: number}[]; transfers?: HostedTransfer[]; file_limit?: number; lan_notice?: string; access?: HostedAccess | null};
 /** Whether the operating system confirms the person before a device is added. */
 export type UserVerification = "windows_hello" | "unavailable" | "checking";
 export type SetupStatus = {completed:boolean;connected:boolean;show:boolean;mode:"hub"|"hosted"|null;platform:string;
   tools:Record<string,{found:boolean;purpose:string;link:string}>;linux:Record<string,{found:boolean;package:string;purpose:string}>};
+/** Phone Link-style preferences saved under settings.link.phone; see phonePreferences.ts for defaults. */
+export type PhonePreferences = { features?: Partial<Record<"notifications" | "messages" | "photos" | "apps" | "calls", boolean>>; wallpaper?: boolean; audio_player?: boolean; badges?: boolean; recent?: boolean; usb_debugging?: boolean };
+/** A Saiph Cloud phone's latest phone.status; null fields are unknown or not readable on the phone. */
+/** phone.signal: Wi-Fi bars (null when not connected) and mobile bars (null without service), 0-4 each. */
+export type PhoneSignal = { wifi_level: number | null; cellular_level: number | null };
+export type PhoneStatus = { battery: number | null; charging: boolean; wifi: boolean | null; cellular: boolean | null; metered: boolean; bluetooth: boolean | null; signal: number | null; ringer: "ring" | "vibrate" | "silent" | null; dnd: boolean | null; controls: string[]; mobile_data: boolean; paused: boolean };
+/** Phone calls through this computer over Bluetooth Hands-Free (call_audio.py); Linux only. */
+export type CallAudioStatus = {supported:boolean;platform:string;windows:boolean;enabled:boolean;device:string;
+  readiness:"checking"|"unsupported"|"no-adapter"|"bluetooth-off"|"needs-setup"|"choose-phone"|"not-paired"|"no-calls-profile"|"phone-away"|"ready";
+  message:string;checking:boolean;devices:{address:string;name:string;paired?:boolean;connected?:boolean;gateway?:boolean}[];phone_connected:boolean;
+  versions:{pipewire?:string;wireplumber?:string;bluez?:string};call_control:"hfp"|"app";issues:string[];
+  setup:{action:""|"write"|"restart";file:string;applied:boolean};session:{state:"idle"|"ringing"|"connecting"|"here"|"on-phone"|"failed";message:string;codec:string};error:string};
 export type BluetoothLockStatus = {supported:boolean;enabled:boolean;device:string;seconds:number;devices:{address:string;name:string}[];error:string;windows:boolean};
 export type RemoteStatus = {enabled:boolean;devices:string[];adapters:Record<string,{name:string;enabled:boolean;available:boolean}>;wayland:boolean;last:{device_id:string;app:string;control:string;at:number}|null};
 export type HotspotStatus = {profiles:string[];profile:string;auto:boolean;active:string|null;error:string;supported:boolean};
@@ -281,6 +301,10 @@ export type UsageState = {available: boolean; consent: "granted" | "declined" | 
 /** "Your week": calculated on this computer when opened; never sent. */
 export type WeekSummary = {enabled: boolean; from?: string; to?: string; actions: number; days?: {date: string; actions: number}[]; busiest_day: string | null; screen: string | null;
   top: {feature: string; label: string; count: number}[]; people: {name: string; sent: number; received: number; total: number}[]};
+/** none: nothing to offer; available/ready: the footer's Update button glows. */
+export type AppUpdateState = "none" | "checking" | "available" | "downloading" | "ready" | "installing" | "failed";
+export type UpdateRelease = {schema: number; platform: string; profile: string; build: number; version: string; sha256: string; bytes: number};
+export type AppUpdate = {state: AppUpdateState; release: UpdateRelease | null; version: string | null; bytes: number | null; notes: string; source: "hub" | "cloud" | null; error: string; checked_at: number | null};
 export type State = {
   app_version?: string;
   hosted?: HostedState;
@@ -289,6 +313,8 @@ export type State = {
   user_verification?: UserVerification;
   platform?: string;
   update_status?: {state: string; code: string};
+  /** The desktop update the footer's Update button and Settings → Updates share (update_schedule.py). */
+  app_update?: AppUpdate;
   cloud_status?: {installed: boolean; profile_present: boolean; inspection_complete: boolean; prepared: boolean; selected_libraries: number; state: string; installation_supported?: boolean; management_available?: boolean; service_state?: 'not_managed' | 'reachable' | 'unavailable' | 'needs_attention'};
   modules?: { workspace: { installed: boolean; enabled: boolean } };
   enrollment?: {ready:boolean;id:string|null;expires_at:string|null;custom_mesh:boolean;approved?:boolean};
@@ -298,8 +324,12 @@ export type State = {
   hotspot?: HotspotStatus;
   remote?: RemoteStatus;
   bt_lock?: BluetoothLockStatus;
+  call_audio?: CallAudioStatus;
   setup?: SetupStatus;
   camera?: CameraStatus;
+  phone_screen?: PhoneScreenStatus;
+  /** Raised when a phone notification toast is clicked: the window shows Phone. */
+  phone_reveal?: number;
   microphone?: MicrophoneStatus;
   handoffs?: import("./Handoff").HandoffItem[];
   backup_status?: {configured:boolean;targets:Record<string,{ok?:boolean;completed_at?:number;error?:string}>;error?:string};
@@ -307,7 +337,7 @@ export type State = {
   phone?: {
     status: string;
     error: string;
-    devices: { id: string; name: string; online: boolean; last_seen_at: string | null; capabilities: string[]; hosted?: boolean; call_notice?: string | null; battery?: { battery_level: number; is_charging: boolean; updated_at: number } | null }[];
+    devices: { id: string; name: string; online: boolean; last_seen_at: string | null; capabilities: string[]; screen?: string[]; hosted?: boolean; call_notice?: string | null; battery?: { battery_level: number; is_charging: boolean; updated_at?: number } | null; status?: PhoneStatus | null; signal?: PhoneSignal | null; wallpaper?: string | null; ringing?: boolean }[];
     notifications: PhoneNotification[];
   };
   settings: Settings;
@@ -344,6 +374,13 @@ export type Client = {
   // Only the desktop shell can see a dropped file's real path.
   onDrop?(fn: (files: DroppedFiles) => void): () => void;
   onDragging?(fn: (active: boolean) => void): () => void;
+  // A new live camera or phone-screen picture is ready in the frame feed.
+  onFrame?(fn: (frame: FrameInfo) => void): () => void;
+};
+export type FrameInfo = {
+  source: string; sequence: number; rotation?: number; fps?: number;
+  source_width?: number; source_height?: number; output_width?: number; output_height?: number;
+  width?: number; height?: number;
 };
 export type Page =
   | "Phone"

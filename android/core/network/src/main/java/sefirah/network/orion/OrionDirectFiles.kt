@@ -200,14 +200,8 @@ class OrionDirectFiles @Inject constructor(private val context: Context,private 
     }
     /** One MMS part, after checking it belongs to that message and conversation. */
     fun sendMmsPart(thread: Long,message: Long,part: Long,target: String) { scope.launch { runCatching {
-        val partUri=ContentUris.withAppendedId(Uri.parse("content://mms/part"),part)
-        val (mid,mime,name)=context.contentResolver.query(Uri.parse("content://mms/part"),arrayOf("mid","ct","name","cl"),"_id = ?",arrayOf(part.toString()),null)?.use {
-            require(it.moveToFirst());Triple(it.getLong(0),it.getString(1) ?: "application/octet-stream",it.getString(2) ?: it.getString(3) ?: "attachment_$part")
-        } ?: throw IllegalStateException()
-        require(mid==message)
-        val owner=context.contentResolver.query(ContentUris.withAppendedId(Uri.parse("content://mms"),message),arrayOf("thread_id"),null,null,null)?.use { if(it.moveToFirst())it.getLong(0) else null }
-        require(owner==thread)
-        val value=offer(copyUri(partUri),name,mime)
+        val found=MmsParts.find(context,thread,message,part)
+        val value=offer(copyUri(found.uri),found.name,found.mime)
         link.publish("sms.attachment.file",JsonObject(value+mapOf("thread" to JsonPrimitive(thread),"message" to JsonPrimitive(message),"part" to JsonPrimitive(part))),target)
     } } }
     fun sendOriginal(id: String,target: String) { scope.launch {

@@ -22,6 +22,7 @@
   "hostedPrice": "€9.99",
   "hostedPeriod": "/ month",
   "hostedPriceNote": "or €89.99 a year, saving about 25%",
+  "hostedTrial": "",
   "waitlistPrivacyUrl": "privacy.html#waitlist",
   "waitlistNotice": "I agree to receive the Saiph launch announcement and occasional launch updates by email. I can unsubscribe or ask for my email to be deleted at any time.",
   "waitlist": {

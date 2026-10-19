@@ -26,7 +26,8 @@ def test_repeated_content_after_another_copy_is_delivered_again():
     for value in (b'A',b'B',b'A',b'B',b'A'):
         clock[0]+=1
         assert sender.claim('text/plain',value)
-        assert receiver.claim('text/plain',value)
+        # The queued GUI delivery writes directly; it does not claim first.
+        assert not receiver.contains_digest('text/plain',hashlib.sha256(value).hexdigest())
         receiver.received('text/plain',value)
         # The receiver's own OS change callback is the echo and is suppressed.
         assert receiver.contains_digest('text/plain',hashlib.sha256(value).hexdigest())
@@ -39,7 +40,7 @@ def test_repeated_content_after_another_copy_is_delivered_again():
 def test_reencoded_image_echo_and_crossing_copy_within_window():
     clock=[0];cache=RecentClipboard(lambda:clock[0])
     assert cache.claim('image/jpeg',b'original-jpeg')
-    cache.received('image/png',b'reencoded-png')
+    cache.received('image/png',b'reencoded-png',alias=True)
     assert cache.contains_digest('image/png',hashlib.sha256(b'reencoded-png').hexdigest())
     assert cache.contains_digest('image/jpeg',hashlib.sha256(b'original-jpeg').hexdigest())
     # A local copy replaces the synced value, so the other side's next copy of
@@ -74,3 +75,41 @@ def test_adb_launch_requires_paired_identity_and_fixed_installed_worker(monkeypa
         return ''
     monkeypatch.setattr(worker,'run',run);worker.poll({'paired'})
     assert not any(len(c)>3 and c[2]=='shell' and 'libsefirah' in c[3] for c in calls)
+
+
+@pytest.mark.parametrize('mode,approved,watching,fresh,launch', [
+    ('cloud', True, True, True, True), ('cloud', False, True, True, False),
+    ('cloud', True, False, True, False), ('cloud', True, True, False, False),
+    ('self_hosted', True, True, True, False), ('unexpected', True, True, True, False),
+])
+def test_cloud_worker_requires_matching_mode_current_roster_and_consent(monkeypatch, mode, approved, watching, fresh, launch):
+    apk='/data/app/~~abcd/com.orionmini.mobile-abcd/base.apk'
+    starter=apk.rsplit('/',1)[0]+'/lib/arm64/libsefirah_worker.so'
+    worker=AdbWorker();worker.adb='synthetic-adb';calls=[]
+    def run(*args):
+        calls.append(args)
+        if args==('devices',): return 'List of devices attached\nsynthetic device\n'
+        if 'content' in args: return f'Bundle[{{mode={mode},device_id=cloud-phone,watching={str(watching).lower()},worker_alive=false,apk={apk},starter={starter}}}]'
+        return ''
+    monkeypatch.setattr(worker,'run',run)
+    worker.poll(set(),cloud={'cloud-phone'} if approved else set(),authorize=lambda device,connection:fresh)
+    assert any(len(c)>3 and c[2]=='shell' and 'libsefirah' in c[3] for c in calls) is launch
+
+
+def test_cloud_worker_targets_exclude_expired_account_revoked_roster_and_optout():
+    from types import SimpleNamespace
+    from orion_mini.phone import clipboard_worker_targets
+    from orion_mini.hosted_crypto import EnvelopeError
+    hosted=SimpleNamespace(enabled=lambda:True,status='active',session=object(),account=SimpleNamespace(status='signed_in'),_targets=lambda:['approved-phone'])
+    workspace=SimpleNamespace(settings={'hub':{'paired':False}},_hosted=hosted)
+    state=SimpleNamespace(connected=False,devices=[])
+    assert clipboard_worker_targets(workspace,state)==(set(),{'approved-phone'})
+    hosted.account.status='expired'
+    assert clipboard_worker_targets(workspace,state)==(set(),set())
+    hosted.account.status='signed_in'
+    def invalid(): raise EnvelopeError()
+    hosted._targets=invalid
+    assert clipboard_worker_targets(workspace,state)==(set(),set())
+    hosted._targets=lambda:['approved-phone']
+    workspace.settings['link']={'clipboard':False}
+    assert clipboard_worker_targets(workspace,state)==(set(),set())

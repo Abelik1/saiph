@@ -1,8 +1,11 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Private packaged updates authenticated by the existing paired mesh Hub.
+"""Packaged desktop updates from this computer's own source.
 
-Check and stage never launch code. Only an explicit install() hands off to the
-native installer, waits for this application to exit, and reopens the new build.
+Two feeds: the paired self-hosted mesh Hub, or the signed-in Saiph account on
+the Hosted origin packaged into this build (``CloudFeed``; its routes are in
+hub/orion_hub/hosted_service.py and docs/DESKTOP_UPDATES.md, not deployed yet). Check and stage
+never launch code. Only an explicit install() hands off to the native
+installer, waits for this application to exit, and reopens the new build.
 """
 from __future__ import annotations
 
@@ -42,6 +45,24 @@ LINUX_FILES = frozenset({'package-manifest.json', 'components.json', 'VERSION', 
 VERSION = re.compile(r'[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.-]+)?')
 HASH = re.compile(r'[a-f0-9]{64}')
 _LOCK = threading.RLock()
+# What the Saiph account downloads for each platform: the website's installer
+# files. Linux's .run is a shell wrapper around the unchanged .tar.gz release.
+CLOUD_SUFFIX = {'windows-x86_64': '.exe', 'linux-x86_64': '.run'}
+CLOUD_REASONS = {'cloud_manual', 'cloud_unavailable', 'cloud_signed_out', 'cloud_unofficial'}
+MAX_NOTES = 4000
+_PROGRESS = {'state': 'idle', 'done': 0, 'total': 0}
+_PROGRESS_LOCK = threading.Lock()
+
+
+def progress():
+    """The current download for the Updates panel: idle, downloading, verifying, ready or failed."""
+    with _PROGRESS_LOCK:
+        return dict(_PROGRESS)
+
+
+def _report(state, done=0, total=0):
+    with _PROGRESS_LOCK:
+        _PROGRESS.update(state=state, done=done, total=total)
 
 
 def _build(value, *, current=False):
@@ -129,9 +150,10 @@ def _private_directory(root):
     return folder
 
 
-def _remember(folder, config, release):
-    identity = hashlib.sha256((config['base_url'].rstrip('/') + '\0' + config['device_id'] + '\0' +
-                               release['platform'] + '\0' + release['profile']).encode()).hexdigest()
+def _remember(folder, config, release, *, source=None):
+    """Refuse a feed that later offers an older build, or different bytes under the same number."""
+    source = source or config['base_url'].rstrip('/') + '\0' + config['device_id']
+    identity = hashlib.sha256((source + '\0' + release['platform'] + '\0' + release['profile']).encode()).hexdigest()
     path = folder / (identity + '.seen.json')
     if path.is_symlink():
         raise ValueError('Unsafe update history')
@@ -143,14 +165,139 @@ def _remember(folder, config, release):
                 or not isinstance(previous['sha256'], str) or not HASH.fullmatch(previous['sha256'])):
             raise ValueError('Invalid update history')
         if release['build'] < previous['build'] or (release['build'] == previous['build'] and release['sha256'] != previous['sha256']):
-            raise ValueError('Hub offered an older or conflicting desktop release')
+            raise ValueError('The update source offered an older or conflicting desktop release')
     write_json(path, {key: release[key] for key in ('build', 'sha256')})
 
 
-def check(root, config):
+class CloudFeed:
+    """The Saiph account's desktop releases: only this build's packaged HTTPS origin, with
+    the signed-in account's token. No environment proxy, redirect, cookie or supplied URL."""
+
+    def __init__(self, origin, token, *, http=None):
+        parsed = urlsplit(origin) if isinstance(origin, str) else None
+        if (parsed is None or parsed.scheme != 'https' or not parsed.hostname or parsed.username or parsed.password
+                or parsed.path not in ('', '/') or parsed.query or parsed.fragment or parsed.port not in (None, 443)
+                or not isinstance(token, str) or not 0 < len(token) <= 16384 or any(ord(c) < 33 or ord(c) > 126 for c in token)):
+            raise ValueError('Invalid Saiph account update source')
+        self.origin, self.token = origin.rstrip('/'), token
+        if http is None:
+            import requests
+            http = requests.Session()
+            http.trust_env = False
+        self.http = http
+
+    @property
+    def source(self):
+        return 'cloud\0' + self.origin
+
+    def release(self, platform):
+        """The description's bytes, None when nothing is published, or a reason code."""
+        response = self.http.get(f'{self.origin}/v1/app/desktop/{platform}/release', timeout=(5, 15), allow_redirects=False,
+                                 stream=True, headers={'Accept': 'application/json', 'Authorization': 'Bearer ' + self.token})
+        with response:
+            if response.status_code == 204:
+                return None
+            if response.status_code in (401, 403):
+                return 'cloud_signed_out'
+            if response.status_code == 404:
+                return 'cloud_unavailable'
+            if response.status_code != 200:
+                raise ValueError('Desktop update check failed')
+            return _bounded(response, 16384)
+
+    def download(self, platform):
+        """A fresh five-minute ticket, then the file it names; the ticket is the only credential sent."""
+        response = self.http.post(f'{self.origin}/v1/app/desktop/{platform}/download', data=b'{}', timeout=(5, 15),
+                                  allow_redirects=False, stream=True,
+                                  headers={'Accept': 'application/json', 'Content-Type': 'application/json',
+                                           'Authorization': 'Bearer ' + self.token})
+        with response:
+            if response.status_code != 200:
+                raise ValueError('Desktop download unavailable')
+            ticket = _strict_json(_bounded(response, 1024))
+        if (not isinstance(ticket, dict) or set(ticket) != {'ticket'} or not isinstance(ticket['ticket'], str)
+                or not re.fullmatch(r'[A-Za-z0-9_-]{43}', ticket['ticket'])):
+            raise ValueError('Invalid download ticket')
+        return self.http.get(f"{self.origin}/v1/download/{ticket['ticket']}", timeout=(5, 60), allow_redirects=False,
+                             stream=True, headers={'Accept-Encoding': 'identity'})
+
+
+def _bounded(response, limit):
+    data = bytearray()
+    for part in response.iter_content(4096):
+        data.extend(part)
+        if len(data) > limit:
+            raise ValueError('Update description is too large')
+    return bytes(data)
+
+
+def _strict_json(raw):
+    def pairs(items):
+        if len({key for key, _ in items}) != len(items):
+            raise ValueError('Repeated key')
+        return dict(items)
+
+    def constant(_):
+        raise ValueError('Invalid number')
+    return json.loads(raw.decode('utf-8'), object_pairs_hook=pairs, parse_constant=constant)
+
+
+def validate_cloud_release(raw):
+    """The Saiph account's description: the mesh metadata plus what's new. Returns (release, notes)."""
+    try:
+        value = _strict_json(raw)
+    except (ValueError, UnicodeError, RecursionError):
+        raise ValueError('Invalid desktop release metadata') from None
+    if not isinstance(value, dict) or set(value) != {'schema', 'platform', 'profile', 'build', 'version', 'sha256', 'bytes', 'notes'}:
+        raise ValueError('Invalid desktop release metadata')
+    notes = value.pop('notes')
+    if (not isinstance(notes, str) or len(notes) > MAX_NOTES
+            or any((ord(c) < 32 and c != '\n') or ord(c) == 127 or '‪' <= c <= '‮' or '⁦' <= c <= '⁩' for c in notes)):
+        raise ValueError('Invalid desktop release notes')
+    return validate_release(value), notes.strip()
+
+
+def _check_cloud(root, installed, feed):
+    raw = feed.release(installed['platform'])
+    if isinstance(raw, str):
+        return {'supported': False, 'available': False, 'current': installed, 'release': None, 'reason': raw}
+    release, notes = (None, '') if raw is None else validate_cloud_release(raw)
+    if release is not None:
+        if any(release[key] != installed[key] for key in ('platform', 'profile')):
+            raise ValueError('Saiph account offered another desktop edition or platform')
+        if release['build'] > installed['build'] and release['version'] == installed['version']:
+            raise ValueError('Desktop update must use a new version directory')
+        _remember(_private_directory(root), None, release, source=feed.source)
+    # An older or equal build is never offered; install() refuses it again.
+    return {'supported': True, 'available': release is not None and release['build'] > installed['build'],
+            'current': installed, 'release': release, 'notes': notes, 'source': 'cloud'}
+
+
+def source_for(workspace):
+    """The ``cloud`` argument for this workspace: False for a self-hosted computer, else the
+    Saiph account feed or the reason it cannot be asked."""
+    if not workspace.hosted_blocks_self_hosted():
+        return False
+    try:
+        controller = workspace.hosted_controller()
+    except (ValueError, ImportError):
+        return 'cloud_manual'
+    return controller.update_feed()
+
+
+def check(root, config, *, cloud=False):
+    """``cloud``: False for the mesh Hub, a CloudFeed for the Saiph account, or a reason
+    code (True meaning cloud_manual) when the account cannot be asked."""
     installed = current()
     if installed is None:
         return {'supported': False, 'available': False, 'current': None, 'release': None}
+    if isinstance(cloud, CloudFeed):
+        with _LOCK:
+            return _check_cloud(root, installed, cloud)
+    if cloud:
+        # Retained mesh pairing is inactive under Saiph Cloud and must never become an update source.
+        return {'supported': False, 'available': False, 'current': installed,
+                'release': None, 'reason': cloud if cloud in CLOUD_REASONS else 'cloud_manual'}
     with _LOCK:
         origin = _origin(root, config)
         path = f"/v1/link/desktop/releases/{installed['platform']}/{installed['profile']}"
@@ -166,7 +313,47 @@ def check(root, config):
                 raise ValueError('Desktop update must use a new version directory')
             _remember(_private_directory(root), config, release)
         return {'supported': True, 'available': release is not None and release['build'] > installed['build'],
-                'current': installed, 'release': release}
+                'current': installed, 'release': release, 'notes': '', 'source': 'hub'}
+
+
+def _run_payload(path, release, folder):
+    """Check a Linux .run setup file without running it and write out its release archive.
+
+    The file (scripts/packaging/linux-setup.sh) is a filled template followed by the
+    unchanged .tar.gz release. Its own --text mode only checks and unpacks that archive
+    and runs its install.sh, so the updater does exactly that through the verified
+    archive. Returns the archive and the metadata that describes it, for install().
+    """
+    size = path.stat().st_size
+    with path.open('rb') as source:
+        head = source.read(65536)
+    if not head.startswith(b'#!/bin/sh\n# SPDX-License-Identifier: AGPL-3.0-or-later\n# Saiph '):
+        raise ValueError('Expected a Saiph Linux setup file')
+
+    def field(name, pattern):
+        found = re.findall(rb'^' + name + rb"='(" + pattern + rb")'$", head, re.M)
+        if len(found) != 1:
+            raise ValueError('Invalid Saiph Linux setup file')
+        return found[0].decode('ascii')
+    version = field(rb'version', rb'[0-9A-Za-z.-]{1,100}')
+    archive = field(rb'archive_name', rb'Saiph-[A-Za-z]+-[0-9A-Za-z.-]{1,100}-linux-x86_64\.tar\.gz')
+    payload_bytes = int(field(rb'payload_bytes', rb'[1-9][0-9]{0,11}'))
+    payload_sha256 = field(rb'payload_sha256', rb'[a-f0-9]{64}')
+    if version != release['version'] or not archive.endswith('-' + version + '-linux-x86_64.tar.gz') or not payload_bytes < size:
+        raise ValueError('Linux setup file does not match the offered desktop build')
+    staged = dict(release, sha256=payload_sha256, bytes=payload_bytes)
+    target = folder / (payload_sha256 + PLATFORMS['linux-x86_64'])
+    digest = hashlib.sha256()
+    with path.open('rb') as source, target.open('xb') as output:
+        target.chmod(0o600)
+        source.seek(size - payload_bytes)
+        while chunk := source.read(1024 * 1024):
+            digest.update(chunk); output.write(chunk)
+        output.flush(); os.fsync(output.fileno())
+    if digest.hexdigest() != payload_sha256:
+        raise ValueError('Linux setup file is damaged')
+    path.unlink()
+    return target, staged
 
 
 def _package_metadata(path, release):
@@ -283,9 +470,58 @@ def _verify(path, release):
     _package_metadata(path, release)
 
 
-def stage(root, config, offered):
+def _stream(response, output, release):
+    """Copy exactly the published number of bytes, reporting progress, then check the hash."""
+    size = 0; digest = hashlib.sha256()
+    _report('downloading', 0, release['bytes'])
+    while chunk := response.read(min(1024 * 1024, release['bytes'] + 1 - size)):
+        size += len(chunk)
+        if size > release['bytes']:
+            raise ValueError('Desktop download exceeds its declared size')
+        digest.update(chunk); output.write(chunk)
+        _report('downloading', size, release['bytes'])
+    output.flush(); os.fsync(output.fileno())
+    _report('verifying', size, release['bytes'])
+    if size != release['bytes'] or digest.hexdigest() != release['sha256']:
+        raise ValueError('Desktop download is incomplete or damaged')
+
+
+def _stage_cloud(root, config, release, feed):
+    result = check(root, config, cloud=feed)
+    if not result.get('available') or result['release'] != release:
+        raise ValueError('Desktop release changed; check for updates again')
+    folder = Path(tempfile.mkdtemp(prefix='staged-', dir=_private_directory(root)))
+    target = folder / (release['sha256'] + CLOUD_SUFFIX[release['platform']])
+    try:
+        response = feed.download(release['platform'])
+        with response, target.open('xb') as output:
+            target.chmod(0o600)
+            if response.status_code != 200 or response.headers.get('Content-Length') != str(release['bytes']):
+                raise ValueError('Desktop download headers do not match')
+            response.raw.decode_content = False
+            _stream(response.raw, output, release)
+        staged = release
+        if release['platform'] == 'linux-x86_64':
+            target, staged = _run_payload(target, release, folder)
+        _package_metadata(target, staged)
+        write_json(folder / 'staged.json', staged)
+        _report('ready', release['bytes'], release['bytes'])
+        return {'staged': True, 'path': str(target), 'release': staged}
+    except Exception:
+        # Only this function's fresh ignored staging directory; never owner data.
+        shutil.rmtree(folder)
+        _report('failed')
+        raise ValueError('Desktop update could not be verified. Existing application and data were retained.') from None
+
+
+def stage(root, config, offered, *, cloud=False):
+    """Download and verify; never runs anything. ``cloud`` as for check()."""
     release = validate_release(offered)
     with _LOCK:
+        if isinstance(cloud, CloudFeed):
+            return _stage_cloud(root, config, release, cloud)
+        if cloud:
+            raise ValueError('Sign in to your Saiph account to download desktop updates.')
         result = check(root, config)
         if not result['available'] or result['release'] != release:
             raise ValueError('Desktop release changed; check for updates again')
@@ -301,21 +537,15 @@ def stage(root, config, offered):
                 if (response.status != 200 or response.headers.get('Content-Length') != str(release['bytes'])
                         or response.headers.get('X-Orion-SHA256') != release['sha256']):
                     raise ValueError('Desktop download headers do not match')
-                size = 0; digest = hashlib.sha256()
-                while chunk := response.read(min(1024 * 1024, release['bytes'] + 1 - size)):
-                    size += len(chunk)
-                    if size > release['bytes']:
-                        raise ValueError('Desktop download exceeds its declared size')
-                    digest.update(chunk); output.write(chunk)
-                output.flush(); os.fsync(output.fileno())
-                if size != release['bytes'] or digest.hexdigest() != release['sha256']:
-                    raise ValueError('Desktop download is incomplete or damaged')
+                _stream(response, output, release)
             _package_metadata(target, release)
             write_json(folder / 'staged.json', release)
+            _report('ready', release['bytes'], release['bytes'])
             return {'staged': True, 'path': str(target), 'release': release}
         except (OSError, ValueError, KeyError, urllib.error.URLError, zipfile.BadZipFile, tarfile.TarError):
             # Only this function's fresh ignored staging directory; never owner data.
             shutil.rmtree(folder)
+            _report('failed')
             raise ValueError('Desktop update could not be verified. Existing application and data were retained.') from None
 
 

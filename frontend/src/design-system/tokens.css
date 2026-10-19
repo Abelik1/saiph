@@ -64,12 +64,25 @@
   --status-on-surface: color-mix(in srgb, var(--status-on) 13%, var(--card));
   --status-warn-surface: color-mix(in srgb, var(--status-warn) 13%, var(--card));
   --status-off-surface: color-mix(in srgb, var(--status-off) 13%, var(--card));
+  /* Live capture (the phone's camera or screen on this computer): solid red, never subtle. */
+  --live: #dc2626;
+  --live-foreground: #ffffff;
+  --live-ring: #ef4444;
+  /* Phone app tiles without an icon: a light initial on a hue turned from the brand. */
+  --tile-monogram-foreground: #ffffff;
 
   /* The strings: background field, loaders, progress and the brand mark. */
   --wave-1: var(--primary);
   --wave-2: hsl(var(--hue-cyan) calc(var(--sat-cyan) * 92%) 69%);
   --wave-3: var(--violet);
   --wave-star: hsl(var(--hue-night) calc(var(--sat-night) * 100%) 97%);
+
+  /* App tiles: a phone app without an icon gets one of these tints, chosen from its name. */
+  --app-tint-1: var(--primary);
+  --app-tint-2: hsl(var(--hue-sky) calc(var(--sat-sky) * 90%) 70%);
+  --app-tint-3: var(--violet);
+  --app-tint-4: var(--attention);
+  --app-tint-5: hsl(var(--hue-night) calc(var(--sat-night) * 40%) 76%);
 
 
   /* Shadows are always this one colour at an alpha, through color-mix(). */

@@ -76,3 +76,9 @@ def test_api_route_requires_a_live_window_and_valid_files(tmp_path):
         assert len(received) == 1
     finally:
         server.stop()
+
+
+def test_confirmation_names_the_files():
+    assert send_files.describe_files(["/x/Holiday photo.jpg"]) == '"Holiday photo.jpg"'
+    assert send_files.describe_files(["/x/a.txt", "/x/b.txt"]) == '"a.txt" and "b.txt"'
+    assert send_files.describe_files(["/x/a", "/x/b", "/x/c", "/x/d", "/x/e"]) == '"a", "b" and 3 more files'

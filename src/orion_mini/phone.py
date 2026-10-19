@@ -24,6 +24,7 @@ from .phone_features import MAX_FILE
 from .codes import verification_code
 from .callpause import CallPause
 from .usage import record as record_usage
+from . import phone_status
 
 MESH_ORIGIN = "http://100.64.0.1:8765"
 LOW_BATTERY = 20  # Alert once at or below this level; re-arm after charging or above RECOVERED.
@@ -55,13 +56,36 @@ class PhoneState:
         self.status = "Unpaired"
         self.error = ""
         self.connected = False
+        self.status_book = phone_status.StatusBook(store)
 
-    def snapshot(self):
+    def snapshot(self, wallpaper=False):
+        """[wallpaper]: the owner's Use phone wallpaper setting; otherwise no picture leaves the store."""
         with self.lock:
-            devices = [{**d, "online": self.connected and d.get("online", False)} for d in self.devices]
-            state = {"devices": devices, "status": self.status, "error": self.error}
+            devices = [dict(d) for d in self.devices]
+            state = {"status": self.status, "error": self.error}
+        state = {"devices": [{**d, **self._view(d, wallpaper)} for d in devices], **state}  # Store reads outside the lock.
         notices = [{**n, "code": verification_code(n.get("title"), n.get("text"))} for n in self.store.all("phone_notification")[:1000]]
         return {**state, "notifications": notices}
+
+    def _view(self, device, wallpaper=False):
+        """Online, plus the shared status view: quick actions merged into capabilities.
+
+        Hub phones also send the older `battery` event, which older desktops
+        show; it stays the fallback while no status has arrived.
+        """
+        view = self.status_book.view(device["id"], device.get("capabilities"), self.connected and device.get("online", False))
+        saved = self.status_book.saved(device["id"]) if wallpaper else {}
+        return {**view, "battery": view["battery"] or device.get("battery"), "wallpaper": saved.get("wallpaper") or None}
+
+    def status_event(self, source, kind, body, features=None) -> bool:
+        """A validated phone.status, media.state or wallpaper answer from a paired Hub phone."""
+        with self.lock:
+            device = next((d for d in self.devices if d["id"] == source and "battery" in d.get("capabilities", [])), None)
+        if device is None:
+            return False  # Only phones send status; computers publish their battery alone.
+        if kind == phone_status.PHONE_WALLPAPER:
+            return self.status_book.wallpaper_answer(source, body)  # Only this computer's own recent request.
+        return self.status_book.apply(source, kind, body, time.time(), capabilities=device.get("capabilities", []), features=features)
 
     def restore(self, state: dict):
         current = {notification_id(n["device_id"], n["key"]): n for n in state["notifications"]}
@@ -73,6 +97,19 @@ class PhoneState:
             connection.executemany('INSERT INTO records VALUES(?,?,?) ON CONFLICT(kind,id) DO UPDATE SET data=excluded.data',
                 (('phone_notification',ident,json.dumps({**item,'id':ident,'updated_at':utc_now()})) for ident,item in current.items()))
         with self.lock:self.devices = state["devices"]
+        # A current Hub keeps each phone's latest status; an older one has none to give.
+        for row in state.get("statuses") or []:
+            try:
+                body = phone_status.read_status({k: v for k, v in row.items() if k not in ("device_id", "updated_at")})
+                self.status_book.save(row["device_id"], status=body, status_at=int(row["updated_at"]))
+            except (phone_status.ProtocolError, KeyError, TypeError, ValueError):
+                continue
+        for row in state.get("signals") or []:
+            try:
+                body = phone_status.read_signal({k: v for k, v in row.items() if k not in ("device_id", "updated_at")})
+                self.status_book.save(row["device_id"], signal=body, signal_at=int(row["updated_at"]))
+            except (phone_status.ProtocolError, KeyError, TypeError, ValueError):
+                continue
 
     def event(self, event: dict):
         kind, source, body = event["type"], event["source"], event["payload"]
@@ -114,20 +151,22 @@ class NativeNotifications:
         self.command = command
         self.copy = None  # Set by the runtime: places a verification code on the clipboard.
         self.ids = {}
+        self.groups = {}  # key -> "hub" or "cloud": each path reconciles only its own toasts.
         self.suppressed = set()
 
-    async def show(self, row):
+    async def show(self, row, command=None, group="hub"):
         from desktop_notifier import Button, ReplyField
         key = notification_id(row["device_id"], row["key"])
         await self.clear(key)
+        command = command or self.command
         def invoke(operation, **extra):
             try:
-                self.command(row, operation, **extra)
+                command(row, operation, **extra)
             except ValueError:
                 pass  # Stale/offline native actions never execute later unexpectedly.
         code = verification_code(row.get("title"), row.get("text")) if self.copy else None
         buttons = [Button(title="Copy " + code, on_pressed=lambda: self.copy(code))] if code else []
-        buttons += [Button(title=a["label"], on_pressed=lambda index=a["index"]: invoke("action", index=index)) for a in row["actions"][:4 - len(buttons)]]
+        buttons += [Button(title=a["label"], on_pressed=lambda index=a["index"]: invoke("action", index=index)) for a in (row.get("actions") or [])[:4 - len(buttons)]]
         # All platforms support buttons; Linux inline reply is unavailable. The feed
         # remains the reply editor there, while Windows uses its native input field.
         import sys
@@ -140,9 +179,11 @@ class NativeNotifications:
                                          buttons=buttons, reply_field=reply, on_clicked=lambda: invoke("open"),
                                          on_dismissed=dismissed, thread=key)
         self.ids[key] = (ident, token)
+        self.groups[key] = group
 
     async def clear(self, key):
         old = self.ids.pop(key, None)
+        self.groups.pop(key, None)
         if old:
             self.suppressed.add(old[1])
             await self.notifier.clear(old[0])
@@ -155,9 +196,34 @@ class NativeNotifications:
         await self.notifier.send(title=title, message=message, on_clicked=clicked,
                                  buttons=[Button(title=label, on_pressed=action) for label, action in buttons])
 
-    async def reconcile(self, current):
-        for key in set(self.ids) - current:
+    async def reconcile(self, current, group="hub"):
+        for key in {key for key in self.ids if self.groups.get(key, "hub") == group} - current:
             await self.clear(key)
+
+def _quietly(action, *args):
+    try:
+        action(*args)
+    except Exception:
+        pass  # Already gone, offline or signed out: the phone keeps its notification.
+
+
+def clipboard_worker_targets(workspace, state):
+    """Current trusted targets only; account/roster/consent are checked afresh."""
+    if (workspace.settings.get('link') or {}).get('clipboard') is False:
+        return set(), set()
+    hosted = getattr(workspace, '_hosted', None)
+    if hosted is not None and hosted.enabled():
+        try:
+            if (hosted.status in ('active', 'clock') and hosted.session is not None
+                    and hosted.account is not None and hosted.account.status == 'signed_in'):
+                return set(), set(hosted._targets())
+        except ValueError:
+            pass
+        return set(), set()
+    if (workspace.settings.get('hub') or {}).get('paired') and state.connected:
+        return {device['id'] for device in state.devices}, set()
+    return set(), set()
+
 
 class PhoneRuntime:
     def __init__(self, workspace, changed=lambda: None, notifier_factory=NativeNotifications, clipboard_received=lambda *_: None, worker_factory=AdbWorker):
@@ -187,13 +253,17 @@ class PhoneRuntime:
 
     def battery_notice(self, source, body):
         """A one-time low-battery message for a phone that is draining, or None."""
-        if (self.workspace.settings.get('link') or {}).get('battery_alerts') is False:
-            return None
         with self.state.lock:
             # Computers publish their battery too; only phones raise this alert.
             if not any(d['id'] == source and 'battery' in d.get('capabilities', []) for d in self.state.devices):
                 return None
-        level, charging = body.get('battery_level'), body.get('is_charging')
+            name = next((d['name'] for d in self.state.devices if d['id'] == source), 'Your phone')
+        return self.low_battery_notice(source, name, body.get('battery_level'), body.get('is_charging'))
+
+    def low_battery_notice(self, source, name, level, charging):
+        """Shared by Hub and Saiph Cloud phones: once per discharge, re-armed by charging."""
+        if (self.workspace.settings.get('link') or {}).get('battery_alerts') is False:
+            return None
         if type(level) is not int or not isinstance(charging, bool):
             return None
         if charging or level >= RECOVERED:
@@ -202,9 +272,68 @@ class PhoneRuntime:
         if level > LOW_BATTERY or source in self.low_battery:
             return None
         self.low_battery.add(source)
-        with self.state.lock:
-            name = next((d['name'] for d in self.state.devices if d['id'] == source), 'Your phone')
         return f'{name} battery is low ({level}%). Charge it soon.'
+
+    # ------------------------------------------------- Saiph Cloud phones
+    # The hosted controller runs on its own worker thread. These hooks only hand
+    # work to this runtime's asyncio loop, which owns the native notifier, the
+    # copied-code memory and the low-battery memory, exactly as for Hub phones.
+    def _on_loop(self, make):
+        native, loop = self.native, self.loop
+        if not native or not loop or loop.is_closed():
+            return None
+        return asyncio.run_coroutine_threadsafe(make(native), loop)
+
+    def cloud_notification(self, row):
+        """A new or changed Saiph Cloud notification (as stored; "silent" when it is not new)."""
+        return self._on_loop(lambda native: self._cloud_show(native, row))
+
+    def cloud_reconcile(self, current):
+        """Clear Cloud toasts whose notification is no longer stored (removed or dismissed)."""
+        current = set(current)
+        return self._on_loop(lambda native: native.reconcile(current, group="cloud"))
+
+    def cloud_battery(self, source, name, level, charging):
+        """A Saiph Cloud phone.status: the same one-time low-battery notice as Hub phones."""
+        return self._on_loop(lambda native: self._cloud_battery(native, source, name, level, charging))
+
+    async def _cloud_battery(self, native, source, name, level, charging):
+        notice = self.low_battery_notice(source, name, level, charging)
+        if notice and not self.continuity.focus.quiet:
+            try: await native.announce('Phone battery low', notice)
+            except Exception: pass
+
+    async def _cloud_show(self, native, row):
+        if row.get('silent'):
+            return  # Already on the phone before this computer heard of it: listed, not announced.
+        if (self.workspace.settings.get('link') or {}).get('auto_copy_codes') is True:
+            code = verification_code(row.get('title'), row.get('text'))
+            # Updates to the same notification must not overwrite the clipboard again.
+            if code and (row['id'], code) not in self.copied_codes:
+                self.copied_codes = {*list(self.copied_codes)[-99:], (row['id'], code)}
+                self.copy_code(code)
+        if self.continuity.focus.quiet:
+            return
+        try:
+            await native.show(row, command=self.cloud_command, group="cloud")
+        except Exception:
+            self.state.error = "Native notification delivery failed; the item remains in Saiph."
+            self.changed()
+
+    def cloud_command(self, row, operation, **extra):
+        """Toast callbacks for a Cloud notification: open Saiph, dismiss it on the phone, or
+        press one of its buttons and reply (phones that offer notification actions)."""
+        if operation == 'open':
+            opener = getattr(self.workspace, 'request_open_phone', None)
+            if opener:
+                opener()
+            return
+        hosted = getattr(self.workspace, '_hosted', None)
+        if hosted is None or operation not in {'dismiss', 'action', 'reply'}:
+            return
+        # The controller lock may be held by a network step; never block the loop on it.
+        target = (lambda: hosted.dismiss_notification(row['id'])) if operation == 'dismiss'             else (lambda: hosted.notification_command(row['id'], operation, **extra))
+        threading.Thread(target=_quietly, args=(target,), name='orion-cloud-' + operation, daemon=True).start()
 
     def share_battery(self, reading, now):
         """Publishes this computer's battery on change, and at least every ten minutes."""
@@ -405,7 +534,8 @@ class PhoneRuntime:
         next_config_attempt = 0
         next_enrollment = 0
         component_poll = None
-        worker = self.worker_factory(); next_worker = next_peer = next_focus = next_local = next_auxiliary = next_deskflow = next_dnd = next_hotspot = next_battery = next_bt_lock = 0
+        worker = self.worker_factory(); worker_poll = None
+        next_worker = next_peer = next_focus = next_local = next_auxiliary = next_deskflow = next_dnd = next_hotspot = next_battery = next_bt_lock = 0
         while not self.stop_requested.is_set():
             # A resume or new network leaves a dead socket that the keepalive would
             # take about 30 s to notice; reconnect straight away instead.
@@ -484,6 +614,20 @@ class PhoneRuntime:
                         if remote and await asyncio.to_thread(remote.event,frame):self.changed();return
                         if frame['type'] == 'call.state' and isinstance(frame['payload'], dict):
                             await asyncio.to_thread(self.call_pause.call, frame['payload'].get('state'))
+                            audio = getattr(self.workspace, 'call_audio', None)
+                            if audio is not None: await asyncio.to_thread(audio.call_state, frame['payload'].get('state'))
+                        from .phone_settings import data_allowed
+                        if not data_allowed(self.workspace.settings, frame['type']):return  # Turned off in Settings → Phone.
+                        if frame['type'] in phone_status.STATUS_EVENTS or frame['type']==phone_status.PHONE_WALLPAPER:
+                            # Shared with Saiph Cloud phones; an older Hub relays these types unchecked.
+                            try:body=phone_status.read_event(frame['type'],frame['payload'],phone_status.LINK)
+                            except phone_status.ProtocolError:return
+                            if await asyncio.to_thread(self.state.status_event,frame['source'],frame['type'],body,self.features):self.changed()
+                            from .phone_settings import flag as phone_flag
+                            if frame['type']==phone_status.PHONE_STATUS and self.state.status_book.wallpaper_due(frame['source'],phone_flag(self.workspace.settings,'wallpaper')):
+                                try:await asyncio.to_thread(self.features.dispatch,'phone.wallpaper',{'device_id':frame['source']})
+                                except ValueError:pass  # Offline or no longer offered; the next status asks again.
+                            return
                         if await asyncio.to_thread(self.features.event,frame,mesh):
                             self.changed();return
                         if frame['type'] == 'clipboard':
@@ -551,10 +695,15 @@ class PhoneRuntime:
                 if not self.peer and time.monotonic() >= next_peer:
                     try: self.peer = await asyncio.to_thread(PeerServer,self.workspace.root,dict(config))
                     except (OSError,ValueError): next_peer = time.monotonic() + 15
-                if worker and time.monotonic() >= next_worker:
-                    # Device discovery/launch is isolated from the mesh receive loop.
-                    asyncio.create_task(asyncio.to_thread(worker.poll,{d['id'] for d in self.state.devices}))
-                    next_worker = time.monotonic() + 15
+            if worker and time.monotonic() >= next_worker and (worker_poll is None or worker_poll.done()):
+                paired, cloud = clipboard_worker_targets(self.workspace, self.state)
+                if paired or cloud:
+                    # Never block either transport's receive loop on ADB discovery.
+                    def still_approved(device, mode):
+                        current = clipboard_worker_targets(self.workspace, self.state)
+                        return device in current[1 if mode == 'cloud' else 0]
+                    worker_poll = asyncio.create_task(asyncio.to_thread(worker.poll, paired, cloud=cloud, authorize=still_approved))
+                next_worker = time.monotonic() + 15
             bt_lock = getattr(self.workspace, 'bt_lock', None)
             if bt_lock and time.monotonic() >= next_bt_lock and not os.environ.get('ORION_MINI_TEST'):
                 # Works offline too: it only needs the phone's Bluetooth connection.

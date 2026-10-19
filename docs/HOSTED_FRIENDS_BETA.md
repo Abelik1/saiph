@@ -120,10 +120,11 @@ decline wins, every computer is told at once and later attempts get a plain
 placing a call. A second computer joins as a member: it pins the main
 computer's code after a full fingerprint comparison and the main computer
 approves it; only the main computer approves, removes or renews devices.
-The multi-computer path is unit-tested only until step 12. MMS pictures,
-group replies, call audio through the computer, other remote phone actions
-(ringer, media, ring), clipboard images and photo-library browsing are outside
-the preview. Texts and calls have unit tests only; they need the physical
+The multi-computer path is unit-tested only until step 12. Call audio through
+the computer is outside the preview. Notification replies, image clipboard, MMS
+pictures, group replies and the phone controls (ringer, media, find phone, Do Not
+Disturb) are built and unit-tested, with physical acceptance pending; see
+[Saiph Cloud feature parity](PHONE_LINK_PARITY.md#saiph-cloud-feature-parity). Texts and calls have unit tests only; they need the physical
 acceptance in test steps 10 to 12 before friends are told they work. Once a
 phone shares texts or calls, the desktop polls for sealed events every four
 seconds instead of every fifteen, so a ringing call arrives in time.

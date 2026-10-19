@@ -24,15 +24,23 @@ object HostedAttachments {
         while (true) { val count = input.read(buffer); if (count < 0) break; check(output.size() + count <= maximum); output.write(buffer, 0, count) }
         return output.toByteArray()
     }
-    fun send(session: HostedSession, transport: HostedHttpTransport, input: InputStream, filename: String, mime: String, target: String = session.root.deviceId, photo: String? = null, request: String? = null, authorize: () -> Unit = {}) = HostedSession.guarded {
+    class Prepared internal constructor(val descriptor: JsonObject, val envelope: JsonObject, internal val encrypted: ByteArray)
+    /** [wrap] puts the file manifest inside a request's answer, such as `sms.attachment.original`. */
+    fun send(session: HostedSession, transport: HostedHttpTransport, input: InputStream, filename: String, mime: String, target: String = session.root.deviceId, photo: String? = null, request: String? = null, wrap: ((JsonObject) -> JsonObject)? = null, authorize: () -> Unit = {}) {
+        upload(transport, prepare(session, input, filename, mime, target, photo, request, wrap = wrap, authorize = authorize), authorize)
+    }
+    fun prepare(session: HostedSession, input: InputStream, filename: String, mime: String, target: String = session.root.deviceId, photo: String? = null, request: String? = null, kind: String = "file", ttlSeconds: Int = 300, wrap: ((JsonObject) -> JsonObject)? = null, authorize: () -> Unit = {}): Prepared = HostedSession.guarded {
         authorize()
+        check(kind in listOf("file", "photo", "clipboard.image") && ttlSeconds in 1..300)
+        check(wrap == null || (kind == "file" && photo == null))
+        if (kind == "clipboard.image") check(mime in HostedClipboardImages.extensions && photo == null && ttlSeconds <= 30)
         StreamingAeadConfig.register()
-        val source = bounded(input, LIMIT - 4096)
+        val source = bounded(input, if (kind == "clipboard.image") HostedClipboardImages.MAX_BYTES else LIMIT - 4096)
         val checkpoint = session.pagingCheckpoint(); session.currentMembers().also { check(target in it) }
         val binding = buildJsonObject {
             put("protocol_version", 1); put("deployment_id", session.root.deploymentId); put("id", UUID.randomUUID().toString())
             put("roster_version", checkpoint.version); put("roster_hash", checkpoint.digest); put("source", session.deviceId)
-            put("target", target); put("expires_at", System.currentTimeMillis() / 1000 + 300)
+            put("target", target); put("expires_at", System.currentTimeMillis() / 1000 + ttlSeconds)
         }
         val handle = KeysetHandle.generateNew(StreamingAeadKeyTemplates.AES256_GCM_HKDF_1MB)
         val primitive = handle.getPrimitive(RegistryConfiguration.get(), StreamingAead::class.java)
@@ -40,28 +48,33 @@ object HostedAttachments {
         primitive.newEncryptingStream(output, domain + HostedEnvelope.canonical(binding)).use { it.write(source) }
         val encrypted = output.toByteArray(); check(encrypted.size in 1..LIMIT)
         val payload = buildJsonObject {
-            put("type", "file.encrypted"); put("kind", "file"); put("name", name(filename)); put("mime", mime)
+            put("type", "file.encrypted"); put("kind", kind); put("name", name(filename)); put("mime", mime)
             put("size", source.size); put("sha256", HostedSession.digest(source)); put("blob", binding)
             put("ciphertext_size", encrypted.size); put("ciphertext_sha256", HostedSession.digest(encrypted))
             put("keyset", Base64.getEncoder().encodeToString(TinkProtoKeysetFormat.serializeKeyset(handle, InsecureSecretKeyAccess.get())))
         }
-        val wrapped = if (photo == null) payload else buildJsonObject {
+        val wrapped = if (wrap != null) wrap(payload) else if (photo == null) payload else buildJsonObject {
             check(Regex("[1-9][0-9]{0,15}").matches(photo) && request != null && UUID.fromString(request).toString() == request)
             put("type", "photo.original"); put("photo_id", photo); put("request", request); put("file", payload)
         }
-        val envelope = session.encrypt(target, wrapped, 300)
+        val envelope = session.encrypt(target, wrapped, ttlSeconds)
         val id = binding.getValue("id").jsonPrimitive.content
         val descriptor = buildJsonObject {
             for (key in listOf("id", "target", "roster_version", "roster_hash", "expires_at")) put(key, binding.getValue(key))
             put("size", encrypted.size); put("sha256", HostedSession.digest(encrypted))
         }
-        authorize()
-        check(transport.allocateBlob(descriptor)["accepted"] == JsonPrimitive(true))
+        Prepared(descriptor, envelope, encrypted)
+    }
+    fun upload(transport: HostedHttpTransport, prepared: Prepared, authorize: () -> Unit = {}) = HostedSession.guarded {
+        val descriptor = prepared.descriptor
+        val id = descriptor.getValue("id").jsonPrimitive.content
+        val encrypted = prepared.encrypted
+        authorize(); check(transport.allocateBlob(descriptor)["accepted"] == JsonPrimitive(true))
         var offset = 0
         while (offset < encrypted.size) { authorize(); val end = minOf(offset + 32768, encrypted.size); check(transport.uploadChunk(id, offset / 32768, encrypted.copyOfRange(offset, end))["accepted"] == JsonPrimitive(true)); offset = end }
-        check(transport.completeBlob(id)["ready"] == JsonPrimitive(true))
+        authorize(); check(transport.completeBlob(id)["ready"] == JsonPrimitive(true))
         authorize()
-        check(transport.publishEnvelope(envelope)["accepted"] == JsonPrimitive(true))
+        check(transport.publishEnvelope(prepared.envelope)["accepted"] == JsonPrimitive(true))
     }
     fun receive(session: HostedSession, transport: HostedHttpTransport, envelope: JsonObject, privateFolder: File): File = HostedSession.guarded {
         StreamingAeadConfig.register()
@@ -72,6 +85,7 @@ object HostedAttachments {
         check(Regex("[a-z0-9.+-]{1,63}/[a-z0-9.+-]{1,63}").matches(payload.getValue("mime").jsonPrimitive.content))
         val size = HostedSession.number(payload["size"]); val cipherSize = HostedSession.number(payload["ciphertext_size"])
         check(size in 0..(LIMIT - 4096).toLong() && cipherSize in 1..LIMIT.toLong())
+        if (payload["kind"] == JsonPrimitive("clipboard.image")) check(size in 1..HostedClipboardImages.MAX_BYTES.toLong() && payload["mime"]?.jsonPrimitive?.content in HostedClipboardImages.extensions)
         val binding = payload.getValue("blob").jsonObject; val header = envelope.getValue("header").jsonObject
         check(binding.keys == setOf("protocol_version", "deployment_id", "id", "roster_version", "roster_hash", "source", "target", "expires_at"))
         for (key in listOf("protocol_version", "deployment_id", "roster_version", "roster_hash", "source", "target")) check(binding[key] == header[key])

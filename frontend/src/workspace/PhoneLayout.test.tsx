@@ -31,7 +31,7 @@ describe("Dismissing notifications", () => {
     vi.useFakeTimers();
     const call = vi.fn().mockResolvedValue({});
     render(<Phone state={state()} client={{ call, subscribe: () => () => {} } as Client} />);
-    fireEvent.click(screen.getAllByRole("button", { name: "Dismiss on all devices" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss First note" }));
     expect(screen.queryByText("First note")).toBeNull();
     expect(screen.getByRole("status")).toHaveTextContent("Notification dismissed on all devices.");
     fireEvent.click(screen.getByRole("button", { name: "Undo" }));
@@ -96,5 +96,47 @@ describe("Incoming calls", () => {
     expect(screen.getByRole("alert")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Answer" }));
     await waitFor(() => expect(call).toHaveBeenCalledWith("phone.call", { device_id: "phone", operation: "answer" }));
+  });
+});
+
+describe("Live camera and phone screen", () => {
+  it("marks the Phone header with a red Live badge only while the phone screen or camera is live", () => {
+    const client = { call: vi.fn().mockResolvedValue({}), subscribe: () => () => {} } as unknown as Client;
+    const idle = { state: "idle", running: false, waiting: false, message: "", resolution: "1080p", fps: 20, quality: "high", input: false, delivered: false, device_id: null, launch: "" };
+    const { rerender } = render(<Phone state={{ ...state(), phone_screen: idle } as State} client={client} />);
+    const header = screen.getByRole("banner", { name: "Device" });
+    expect(header.querySelector(".live-badge")).toBeNull();
+    rerender(<Phone state={{ ...state(), phone_screen: { ...idle, state: "live", running: true } } as State} client={client} />);
+    expect(screen.getByRole("status", { name: "Phone screen is live" })).toHaveTextContent("Live · screen");
+    rerender(<Phone state={{ ...state(), phone_screen: { ...idle, state: "live", running: true },
+      camera: { available: true, running: true, local_state: "live" } } as unknown as State} client={client} />);
+    expect(screen.getByRole("status", { name: "Camera and phone screen are live" })).toHaveTextContent("Live · camera + screen");
+    expect(screen.getByLabelText("Live phone camera")).toHaveClass("live-outline");
+  });
+});
+
+describe("Mirror screen", () => {
+  const idle = { state: "idle", running: false, waiting: false, message: "", resolution: "1080p", fps: 20, quality: "high", input: false, delivered: false, device_id: null, launch: "", window: "closed" };
+  it("opens the local-network phone screen and never shows a scrcpy install prompt in the header", async () => {
+    const call = vi.fn(async (method: string) => method === "screen.session"
+      ? { session: "a".repeat(32), modules: Array(29).fill("1".repeat(29)), expires_in: 120, expires_at: new Date(Date.now() + 120000).toISOString(), delivered: true }
+      : method === "phone.mirror" ? Promise.reject(new Error("Install scrcpy once in Settings → Advanced to enable the phone preview.")) : {});
+    const client = { call, subscribe: () => () => {} } as unknown as Client;
+    const cloudPhone = { ...phone, hosted: true, screen: ["screen", "apps"] };
+    const lan = { ...state(), phone: { ...state().phone!, devices: [cloudPhone] }, phone_screen: idle } as unknown as State;
+    const { rerender } = render(<Phone state={lan} client={client} />);
+    const header = screen.getByRole("banner", { name: "Device" });
+    fireEvent.click(screen.getByRole("button", { name: "Mirror screen" }));
+    await waitFor(() => expect(call).toHaveBeenCalledWith("screen.session", { device_id: "phone", resolution: "1080p", fps: 20, quality: "high" }));
+    expect(call.mock.calls.some(([method]) => method === "phone.mirror")).toBe(false);
+    // Phone → Apps opens on the request; the header never shows install or scrcpy text.
+    await waitFor(() => expect(screen.getByRole("tab", { name: /Apps/ })).toHaveAttribute("aria-selected", "true"));
+    expect(header).not.toHaveTextContent(/scrcpy|Install/i);
+    // While live in its own window, Mirror screen brings that window forward instead.
+    rerender(<Phone state={{ ...lan, phone_screen: { ...idle, state: "live", running: true, window: "open" } } as State} client={client} />);
+    fireEvent.click(screen.getByRole("button", { name: "Mirror screen" }));
+    await waitFor(() => expect(call).toHaveBeenCalledWith("screen.window"));
+    expect(screen.getByRole("banner", { name: "Device" })).not.toHaveTextContent(/scrcpy|Install/i);
+    expect(screen.queryByText(/Install scrcpy/)).toBeNull();
   });
 });

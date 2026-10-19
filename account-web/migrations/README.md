@@ -13,6 +13,11 @@ No schema statement contains deployment secrets or an owner identity.
   `processed_events` (exactly one subscription or dispute target), the
   `grant_sequence` sequence and `grant_state` delivery table, backfilled for
   existing subscriptions. Additive: code from 0002 keeps working against it.
+- `0004_free_trial.sql` (docs/PAID_HOSTED.md, "Free trial on sign-up"): `trials`
+  (one row per subject and per keyed email hash, unique random grant reference,
+  start/end and grant delivery state) with the `protect_trial_claim` trigger that
+  refuses deleting a row or changing its identity or dates. Additive; until it is
+  applied, newer code treats trials as off.
 - `manifest.json`: SHA-256 of the exact canonical LF SQL bytes.
 - `reviewed-migration.sql`: generated **complete transaction** for the Neon SQL editor.
   It includes schema/ledger creation, an advisory transaction lock, migration
@@ -39,10 +44,10 @@ SELECT
   (SELECT count(*) FROM saiph_billing.processed_events) AS processed_event_count;
 ```
 
-The receipt must show versions 1, 2 and 3 with the manifest checksums
-(`manifest.json`), eight tables (`customer_creation_intents`, `customers`,
+The receipt must show versions 1, 2, 3 and 4 with the manifest checksums
+(`manifest.json`), nine tables (`customer_creation_intents`, `customers`,
 `disputes`, `grant_state`, `processed_events`, `schema_migrations`, `settings`,
-`subscriptions`), the indexes `disputes_customer`, `processed_events_customer`,
+`subscriptions`, `trials`), the indexes `disputes_customer`, `processed_events_customer`,
 `processed_events_subscription` and `subscriptions_customer` (plus primary/unique
 keys), and on a fresh database zero business rows. Rerunning the complete
 export is safe. Changed/unknown applied history fails the transaction. If the

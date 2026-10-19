@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import sys
 import threading
+import time
 
 from .adb_worker import AdbWorker
 from .companion_tools import tool_path
@@ -128,6 +129,36 @@ class Camera:
         self.capture_options = {}
         self.monitor_stop = None
         self._version_cache = None
+        from .camera_session import CameraSession
+        from .camera_native import NativeCameraSink
+        self.local = CameraSession(NativeCameraSink)
+
+    def start_local(self, preview=False, **options):
+        if type(preview) is not bool:
+            raise ValueError('Choose whether to preview your camera.')
+        if self._config().get('enabled', True) is False:
+            raise ValueError('Turn on Phone camera in Settings → Devices first.')
+        with self.lock:
+            if self.processes:
+                raise ValueError('Stop the current camera first.')
+            return self.local.start(preview, **options)
+
+    def offer_to_phone(self, session, device_id):
+        """Send this waiting camera code to an approved Saiph Cloud phone instead of a scan."""
+        if type(session) is not str or type(device_id) is not str:
+            raise ValueError('Choose a phone for the camera.')
+        controller = getattr(self.workspace, '_active_hosted', lambda: None)()
+        if controller is None:
+            raise ValueError('Sign in to Saiph Cloud on both devices to send the camera to your phone.')
+        result = controller.session_offer(device_id, 'camera', self.local.invitation(session))
+        offer_id = result.get('offer') if isinstance(result, dict) else None
+        if offer_id:
+            # Clear the phone's prompt as soon as this code is answered, cancelled or expires.
+            from .session_offer import watch_offer
+            local = self.local
+            watch_offer(lambda: getattr(local, 'session', None) == session and local.state == 'waiting',
+                        lambda: controller.session_close(device_id, offer_id))
+        return result
 
     def _check_session(self):
         if not self.processes:return
@@ -190,19 +221,55 @@ class Camera:
         with self.lock:
             self._check_session()
             if self._config().get('enabled',True) is False:self.stop()
-            prepared, message = self._prepared()
+            # Discovery can scan thousands of PATH candidates on Windows.
+            # Status is read once a second beside the live preview; reuse only
+            # this display probe. Starting a legacy capture still calls
+            # _prepared() afresh and validates its tools/configuration.
+            config = dict(self._config())
+            cached = getattr(self, '_status_probe', None)
+            now = time.monotonic()
+            if cached is None or cached[0] != config:
+                prepared, message = self._prepared()
+                can_preview = config.get('enabled', True) is not False and self._scrcpy(config)[0] is not None
+                self._status_probe = cached = (config, now, prepared, message, can_preview)
+            elif now - cached[1] >= 15 and not getattr(self, '_status_refreshing', False):
+                # Periodic display discovery must not freeze the dashboard.
+                # Config changes and actual starts still validate synchronously.
+                self._status_refreshing = True
+                def refresh():
+                    try:
+                        prepared, message = self._prepared()
+                        preview = config.get('enabled', True) is not False and self._scrcpy(config)[0] is not None
+                        with self.lock:
+                            if self._status_probe is cached and config == dict(self._config()):
+                                self._status_probe = (config, time.monotonic(), prepared, message, preview)
+                    except (OSError, ValueError):
+                        with self.lock:
+                            if self._status_probe is cached:
+                                self._status_probe = (config, time.monotonic(), *cached[2:])
+                    finally:
+                        self._status_refreshing = False
+                self._status_refresh_thread = threading.Thread(target=refresh, name='orion-camera-inspection', daemon=True)
+                self._status_refresh_thread.start()
+            _, _, prepared, message, can_preview = cached
             running = bool(self.processes) and all(process.poll() is None for process in self.processes)
             if self.processes and not running:
                 self.stop(); self.error = 'Phone camera stopped. Start it again when you are ready.'
-            can_preview = self._config().get('enabled',True) is not False and self._scrcpy(self._config())[0] is not None
             if running and self.mode=='preview':
-                ready = 'The camera preview window is open. Use it to set up OBS, then choose Close camera preview.'
+                ready = 'Your phone camera is open in its own window.'
             elif running:
                 ready = 'Camera processes are running; select the camera in your meeting app.'
             else:
                 ready = 'Ready to start the phone camera.'
-            return {'available':prepared is not None,'running':running,'verified':False,
-                    'mode':(self.mode if running else prepared['mode'] if prepared else 'unavailable'),
+            from .camera_native import available as native_available
+            local = self.local.status()
+            local_active = local['running'] or local['waiting']
+            return {'available':prepared is not None,'running':running or local['running'],'verified':False,
+                    'integrated_available': native_available(), 'local_state': local['state'],
+                    'local_message': local['message'], 'local_preview': local['preview'],
+                    'local_resolution': local['resolution'], 'local_fps': local['fps'], 'local_quality': local['quality'],
+                    'local_preview_available': self._config().get('enabled',True) is not False,
+                    'mode':('windows-saiph' if local_active else self.mode if running else prepared['mode'] if prepared else 'unavailable'),
                     'device_id':self.device_id if running else None,
                     'serial':self.serial if running else None,
                     'can_preview':can_preview,
@@ -245,6 +312,8 @@ class Camera:
         with self.lock:
             if self._config().get('enabled',True) is False:
                 self.stop();raise ValueError('Phone camera is switched off in Settings.')
+            if self.local.status()['state'] != 'idle':
+                raise ValueError('Stop the current phone camera first.')
             if self.processes:
                 if all(process.poll() is None for process in self.processes):
                     if (device_id,serial)!=(self.device_id,None if self.device_id else self.serial) or (self.mode=='preview')!=preview:
@@ -301,6 +370,7 @@ class Camera:
                 self.stop();raise ValueError('Phone camera could not start. Check Settings → Devices.') from None
 
     def stop(self):
+        self.local.stop()
         with self.lock:
             if self.monitor_stop is not None:self.monitor_stop.set()
             for process in reversed(self.processes):

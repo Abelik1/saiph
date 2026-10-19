@@ -33,6 +33,15 @@ Upgrades retain prior releases, application data, pairing keys and an existing
 startup opt-out. Uninstall follows owned manifests and preserves personal data;
 modified or unowned files must not be treated as disposable package content.
 
+Before an update's release becomes current (and on uninstall), the Windows setup
+removes Saiph Camera COM registrations whose DLL is a hash-verified file of one
+of this installation's releases, then re-reads them. Each decision is written to
+`setup.log` beside `orion-install.json` (registry IDs and install paths only); a
+registration that survives removal is also reported on stderr as
+`Saiph installer warning: camera registration survived removal: …`. It does not
+fail the update, because the new release's camera replaces a registration from its
+own installation's `releases` folder (see [PHONE_CAMERA.md](PHONE_CAMERA.md#bundled-windows-component)).
+
 Linux archives include `orion/install.sh`; extract and run it on the target as
 your normal desktop user. Standard shell, tar, sha256sum and `flock` are required.
 Close Saiph before switching versions. Clean-platform installation and upgrade

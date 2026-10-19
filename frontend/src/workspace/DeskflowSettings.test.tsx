@@ -2,6 +2,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { DeskflowSettings } from "./DeskflowSettings";
+import { chooseOption } from "../test-helpers";
 import { Settings as SettingsPage } from "./Settings";
 import type { Client, Settings, State } from "./types";
 
@@ -20,7 +21,7 @@ describe("Deskflow Advanced settings", () => {
     const retained = { enabled: true, role: "laptop" as const, desktop: "100.64.0.2", local: "100.64.0.7", certificate: "/private/deskflow.pem", executable: "/usr/bin/deskflow-core" };
     render(<DeskflowSettings settings={{ link: { deskflow: retained, camera: { enabled: true }, clipboard: true } } as Settings} error="Complete Deskflow's one-time certificate trust setup on both computers." client={{ call } as unknown as Client} />);
     expect(screen.getByRole("status")).toHaveTextContent("one-time certificate trust setup");
-    fireEvent.change(screen.getByLabelText("This computer's role"), { target: { value: "desktop" } });
+    chooseOption("This computer's role", "Desktop · keyboard and mouse host");
     fireEvent.change(screen.getByLabelText("This computer's mesh address"), { target: { value: "100.64.0.2" } });
     fireEvent.click(screen.getByRole("button", { name: "Save sharing preferences" }));
     await waitFor(() => expect(call).toHaveBeenCalledWith("settings.save", { link: { deskflow: { ...retained, role: "desktop", local: "100.64.0.2" } } }));

@@ -29,13 +29,14 @@ class RecentClipboard:
             if key in self._current(now): return None
             self.keys = {key}; self.at = now
         return digest
-    def received(self, mime, data):
-        # Also covers an OS re-encoding of the value just claimed (JPEG -> PNG).
+    def received(self, mime, data, *, alias=False):
+        # Each native write replaces the previous value. Only an explicit
+        # re-encoding of this same write may add a second digest (JPEG -> PNG).
         key = (mime, hashlib.sha256(data).hexdigest())
         with self.lock:
             now = self.now()
             current = self._current(now)
-            self.keys = (current | {key}) if len(current) < 8 else {key}; self.at = now
+            self.keys = (current | {key}) if alias and len(current) < 8 else {key}; self.at = now
     def contains_digest(self, mime, digest):
         with self.lock:
             return (mime, digest) in self._current(self.now())
@@ -48,6 +49,12 @@ class ClipboardChange:
     data: bytes = field(repr=False)
     digest: str = field(repr=False)
     expires: float
+
+
+@dataclass(frozen=True)
+class GuardedClipboardDelivery:
+    data: bytes = field(repr=False)
+    authorized: object = field(repr=False)
 
 
 class PendingClipboard:
@@ -98,6 +105,21 @@ def envelope(mime, data, digest, peer=None):
         payload['blob'] = peer.offer(data)
     return payload
 
+def oriented_png(data, mime='image/jpeg'):
+    """PNG bytes of an encoded image with its EXIF orientation applied, or None.
+
+    Qt's default clipboard decode ignores EXIF, so a portrait phone photo copied
+    on Linux would arrive sideways. Size is checked before decoding."""
+    from PySide6.QtCore import QBuffer, QByteArray, QIODevice
+    from PySide6.QtGui import QImageReader
+    buffer=QBuffer();buffer.setData(QByteArray(bytes(data)));buffer.open(QIODevice.ReadOnly)
+    reader=QImageReader(buffer,mime.split('/',1)[1].encode());reader.setAutoTransform(True);size=reader.size()
+    if not size.isValid() or size.width()*size.height()>40_000_000: return None
+    image=reader.read()
+    if image.isNull(): return None
+    out=QBuffer();out.open(QIODevice.WriteOnly);image.save(out,'PNG')
+    return bytes(out.data())
+
 class QtClipboard:
     """Created and invoked only on Qt's GUI thread, including received writes."""
     def __init__(self, runtime):
@@ -111,28 +133,46 @@ class QtClipboard:
     def changed(self):
         try:
             mime = self.clipboard.mimeData()
-            if mime is None: return
+            hosted = getattr(self.runtime.workspace, '_hosted', None)
+            if mime is None:
+                if hosted is not None: hosted.clear_local_clipboard()
+                return
             if mime.hasImage():
-                data = self.image_bytes(self.clipboard.image()); kind='image/png'
+                # A copied JPEG keeps its orientation; other formats use Qt's own decode.
+                data = oriented_png(mime.data('image/jpeg')) if mime.hasFormat('image/jpeg') else None
+                data = data or self.image_bytes(self.clipboard.image()); kind='image/png'
             elif mime.hasText():data=mime.text().encode();kind='text/plain'
-            else:return
+            else:
+                if hosted is not None: hosted.clear_local_clipboard()
+                return
             self.runtime.local_clipboard(kind,data)
             # Opt-in hosted preview; absent unless its setting was turned on.
-            hosted = getattr(self.runtime.workspace, '_hosted', None)
             if hosted is not None: hosted.local_clipboard(kind,data)
         except Exception: self.runtime.state.error = 'Clipboard sharing is temporarily unavailable.'
     def write(self, mime, data):
+        guarded = isinstance(data, GuardedClipboardDelivery)
+        guard = data.authorized if isinstance(data, GuardedClipboardDelivery) else lambda: True
+        if isinstance(data, GuardedClipboardDelivery): data = data.data
+        if (self.runtime.workspace.settings.get('link') or {}).get('clipboard') is False or not guard(): return
         if mime == 'text/plain':
+            hosted = getattr(self.runtime.workspace, '_hosted', None)
+            if guarded and hosted is not None: hosted.clipboard_cache.received(mime,data)
             self.runtime.clipboard_cache.received(mime,data)
             self.clipboard.setText(data.decode('utf-8'))
         else:
             from PySide6.QtGui import QImageReader
             from PySide6.QtCore import QBuffer, QByteArray, QIODevice
             buffer=QBuffer();buffer.setData(QByteArray(data));buffer.open(QIODevice.ReadOnly)
-            reader=QImageReader(buffer);size=reader.size()
+            reader=QImageReader(buffer);reader.setAutoTransform(True);size=reader.size()
             if not size.isValid() or size.width()*size.height()>40_000_000: raise ValueError('Invalid clipboard image')
             image=reader.read()
             if image.isNull(): raise ValueError('Invalid clipboard image')
+            if not guard(): return
+            hosted = getattr(self.runtime.workspace, '_hosted', None)
+            if guarded and hosted is not None:
+                hosted.clipboard_cache.received(mime,data)
+                hosted.clipboard_cache.received('image/png',self.image_bytes(image),alias=True)
             # OS image formats may re-encode JPEG as PNG. Suppress that echo too.
-            self.runtime.clipboard_cache.received('image/png',self.image_bytes(image))
+            self.runtime.clipboard_cache.received(mime,data)
+            self.runtime.clipboard_cache.received('image/png',self.image_bytes(image),alias=True)
             self.clipboard.setImage(image)

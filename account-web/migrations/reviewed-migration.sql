@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS saiph_billing.schema_migrations (
     );
 DO $saiph_history$
 BEGIN
-  IF EXISTS (SELECT 1 FROM saiph_billing.schema_migrations WHERE NOT ((version=1 AND file='0001_billing.sql' AND sha256='1dcf27bc1a7e8b5b617dbea9a55afd8fabf1829d2854c9b9dda5072aaca8345f') OR (version=2 AND file='0002_billing_lifecycle.sql' AND sha256='3c11e9eae5bfaae7e7e473dadde4a88c15ff8e078e654d6fd7829d533616c36a') OR (version=3 AND file='0003_paid_hosted.sql' AND sha256='e156e85386e79105f09d5c1c0ad8ca3f9964fd3760aa813c5cb68db479d07e63'))) THEN
+  IF EXISTS (SELECT 1 FROM saiph_billing.schema_migrations WHERE NOT ((version=1 AND file='0001_billing.sql' AND sha256='1dcf27bc1a7e8b5b617dbea9a55afd8fabf1829d2854c9b9dda5072aaca8345f') OR (version=2 AND file='0002_billing_lifecycle.sql' AND sha256='3c11e9eae5bfaae7e7e473dadde4a88c15ff8e078e654d6fd7829d533616c36a') OR (version=3 AND file='0003_paid_hosted.sql' AND sha256='e156e85386e79105f09d5c1c0ad8ca3f9964fd3760aa813c5cb68db479d07e63') OR (version=4 AND file='0004_free_trial.sql' AND sha256='a6d9ff17e8390d9589dbca761fb069c353dd77772a07d7ce7e00860682b886cb'))) THEN
     RAISE EXCEPTION 'Applied migration differs from reviewed history';
   END IF;
 END;
@@ -219,4 +219,51 @@ INSERT INTO saiph_billing.grant_state (stripe_account_id, stripe_subscription_id
   END IF;
 END;
 $saiph_migration_3$;
+DO $saiph_migration_4$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM saiph_billing.schema_migrations WHERE version=4) THEN
+-- Free trial of Saiph Cloud on sign-up (docs/PAID_HOSTED.md). Additive: code
+-- from 0003 keeps working against it.
+
+-- One row per person who started a trial. The row is the abuse guard, so it is
+-- never deleted: one trial per sign-in subject and per normalised verified email
+-- (stored only as a keyed hash). Delivery columns mirror grant_state.
+CREATE TABLE saiph_billing.trials (
+    stripe_account_id text NOT NULL CHECK (stripe_account_id ~ '^acct_[A-Za-z0-9]+$'),
+    auth_subject text NOT NULL CHECK (length(auth_subject) BETWEEN 1 AND 255),
+    email_key text NOT NULL CHECK (email_key ~ '^[a-f0-9]{64}$'),
+    trial_ref text NOT NULL CHECK (trial_ref ~ '^[a-f0-9]{32}$'),
+    started_at bigint NOT NULL CHECK (started_at >= 0),
+    ends_at bigint NOT NULL CHECK (ends_at > started_at),
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    dirty boolean NOT NULL DEFAULT true,
+    pushed_sequence bigint CHECK (pushed_sequence > 0),
+    pushed_until bigint CHECK (pushed_until >= 0),
+    pushed_at timestamptz,
+    PRIMARY KEY (stripe_account_id, auth_subject),
+    UNIQUE (stripe_account_id, email_key),
+    UNIQUE (trial_ref)
+);
+
+CREATE FUNCTION saiph_billing.protect_trial_claim() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        RAISE EXCEPTION 'Trial claims are permanent' USING ERRCODE = '23514';
+    END IF;
+    IF ROW(NEW.stripe_account_id, NEW.auth_subject, NEW.email_key, NEW.trial_ref, NEW.started_at, NEW.ends_at)
+       IS DISTINCT FROM ROW(OLD.stripe_account_id, OLD.auth_subject, OLD.email_key, OLD.trial_ref, OLD.started_at, OLD.ends_at) THEN
+        RAISE EXCEPTION 'Trial claims are permanent' USING ERRCODE = '23514';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+CREATE TRIGGER protect_trial_claim
+BEFORE UPDATE OR DELETE ON saiph_billing.trials
+FOR EACH ROW EXECUTE FUNCTION saiph_billing.protect_trial_claim();
+
+    INSERT INTO saiph_billing.schema_migrations (version,file,sha256) VALUES (4,'0004_free_trial.sql','a6d9ff17e8390d9589dbca761fb069c353dd77772a07d7ce7e00860682b886cb');
+  END IF;
+END;
+$saiph_migration_4$;
 COMMIT;

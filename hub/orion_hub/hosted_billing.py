@@ -1,10 +1,11 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Paid Hosted grants pushed by the account website (docs/PAID_HOSTED.md).
+"""Paid and trial Hosted grants pushed by the account website (docs/PAID_HOSTED.md).
 
-The website applies verified Stripe webhooks to its own database and signs the
-resulting grant with an Ed25519 key. This service holds only public keys. A push
-can set or end exactly one ``paid`` grant; it cannot touch beta/admin grants,
-reactivate a suspended account or approve a device.
+The website applies verified Stripe webhooks (and free trial starts) to its own
+database and signs the resulting grant with an Ed25519 key. This service holds
+only public keys. A push can set or end exactly one ``paid`` grant
+(``stripe:sub_...``) or ``trial`` grant (``trial:<32 hex>``); it cannot touch
+beta/admin grants, reactivate a suspended account or approve a device.
 """
 from __future__ import annotations
 
@@ -25,7 +26,9 @@ CLOCK_SKEW = 300
 # leaked key, a forged push or a stopped website grants at most this much access.
 HORIZON = 45 * 86400
 CONTEXT = b'saiph-billing-grant-v1.'
-GRANT = re.compile(r'stripe:sub_[A-Za-z0-9]{1,200}')
+GRANT = re.compile(r'stripe:sub_[A-Za-z0-9]{1,200}|trial:[a-f0-9]{32}')
+# A free trial lasts at most 30 days (website setting); a trial push may not set more.
+TRIAL_HORIZON = 31 * 86400
 KEY_ID = re.compile(r'[a-z0-9-]{1,32}')
 FIELDS = ('issuer', 'subject', 'grant', 'until', 'sequence', 'livemode')
 
@@ -110,6 +113,7 @@ class BillingGrants:
         if (not isinstance(value['issuer'], str) or not isinstance(value['subject'], str)
                 or not isinstance(value['grant'], str) or not GRANT.fullmatch(value['grant'])
                 or type(value['until']) is not int or not 0 <= value['until'] <= now + HORIZON
+                or (value['grant'].startswith('trial:') and value['until'] > now + TRIAL_HORIZON)
                 or type(value['sequence']) is not int or not 1 <= value['sequence'] < 2 ** 62
                 or type(value['livemode']) is not bool):
             reject(400)

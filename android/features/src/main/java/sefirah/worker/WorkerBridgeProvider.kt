@@ -13,6 +13,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
 import sefirah.clipboard.ClipboardFeature
+import sefirah.domain.interfaces.NetworkManager
 
 /**
  * app_process cannot bindService, so the worker hands its [IWorkerService] binder over via [call].
@@ -21,6 +22,7 @@ class WorkerBridgeProvider : ContentProvider() {
 
     private lateinit var workerManager: WorkerManager
     private lateinit var clipboardFeature: ClipboardFeature
+    private lateinit var networkManager: NetworkManager
 
     private val hostBridge = object : IHostBridge.Stub() {
         override fun onClipboardText(text: String?) {
@@ -49,6 +51,7 @@ class WorkerBridgeProvider : ContentProvider() {
         )
         workerManager = entry.workerManager()
         clipboardFeature = entry.clipboardFeature()
+        networkManager = entry.networkManager()
         return true
     }
 
@@ -56,7 +59,8 @@ class WorkerBridgeProvider : ContentProvider() {
         requireShell()
         if (method == "status") return Bundle().apply {
             val app = context!!
-            putString("device_id", app.getSharedPreferences("orion", 0).getString("device_id", ""))
+            putString("device_id", networkManager.clipboardDeviceId().orEmpty())
+            putString("mode", networkManager.clipboardConnectionMode)
             putBoolean("worker_alive", workerManager.isWorkerAlive())
             putBoolean("watching", workerManager.isWatching())
             putString("starter", WorkerStarter.starterFile(app).absolutePath)
@@ -102,6 +106,7 @@ class WorkerBridgeProvider : ContentProvider() {
     interface BridgeEntryPoint {
         fun workerManager(): WorkerManager
         fun clipboardFeature(): ClipboardFeature
+        fun networkManager(): NetworkManager
     }
 
     companion object {

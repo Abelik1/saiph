@@ -148,6 +148,33 @@ class SmsAttachmentFile(File):
     part: int = Field(ge=0)
 class PhotoOriginal(File):
     photo_id: str = Field(pattern='^[0-9]{1,20}$')
+class PhoneStatus(Payload):
+    # Shared with Saiph Cloud (desktop phone_status.py); null is unknown or unreadable.
+    battery: int | None = Field(ge=0,le=100)
+    charging: bool
+    wifi: bool | None
+    cellular: bool | None
+    metered: bool
+    bluetooth: bool | None
+    signal: int | None = Field(ge=0,le=4)
+    ringer: Literal['ring','vibrate','silent'] | None
+    dnd: bool | None
+    controls: list[str] = Field(max_length=16)  # Quick actions this phone accepts now.
+    mobile_data: bool
+    paused: bool
+class PhoneSignal(Payload):
+    # Wi-Fi bars (null when not connected) and mobile bars (null without service), sent with phone.status.
+    wifi_level: int | None = Field(ge=0,le=4)
+    cellular_level: int | None = Field(ge=0,le=4)
+class Dnd(Payload):
+    active: bool
+class RingState(Payload):
+    # Find phone started (seconds left) or stopped (0), relayed to computers and never stored.
+    ringing: bool
+    seconds: int = Field(ge=0,le=120)
+class Wallpaper(Payload):
+    # A small JPEG data URL, or "" when Android does not let Saiph read it. The desktop checks the image itself.
+    preview: str = Field(max_length=16_023,pattern=r'^(data:image/jpeg;base64,[A-Za-z0-9+/=]+)?$')
 
 MODELS={'sms.thread':Conversation,'sms.messages':Messages,'sms.remove':Thread,'sms.index':MessageIndex,
         'sms.open':Thread,'sms.send':SmsSend,'call.state':Call,'call.command':CallCommand,
@@ -156,7 +183,15 @@ MODELS={'sms.thread':Conversation,'sms.messages':Messages,'sms.remove':Thread,'s
         'remote.catalog':RemoteCatalog,'remote.result':RemoteResult,'media.state':MediaState,'media.command':MediaCommand,
         'contacts.search':ContactsSearch,'contacts.results':ContactsResults,'sms.compose':SmsCompose,'ringer.state':Ringer,
         'phone.ringer':Ringer,'call.dial':Dial,'calls.log.request':RemoteRequest,'calls.log':CallLog,
-        'sms.attachments':SmsAttachments,'sms.attachment.request':SmsAttachmentRequest,'sms.attachment.file':SmsAttachmentFile}
+        'sms.attachments':SmsAttachments,'sms.attachment.request':SmsAttachmentRequest,'sms.attachment.file':SmsAttachmentFile,
+        'phone.status':PhoneStatus,'phone.status.request':RemoteRequest,'phone.dnd':Dnd,'phone.hotspot':RemoteRequest,
+        'phone.wallpaper.request':RemoteRequest,'phone.wallpaper':Wallpaper,'phone.signal':PhoneSignal,
+        'phone.ring.state':RingState,'phone.ring.stop':RemoteRequest}
+# Quick actions a phone lists in phone.status count like the capabilities it advertises.
+COMMANDS={'sms.open':'sms','sms.send':'sms','call.command':'call-control','photo.request':'photos','phone.ring':'ring','computer.ring':'ring','media.command':'media',
+          'contacts.search':'contacts','sms.compose':'sms','phone.ringer':'ringer','call.dial':'call-dial','calls.log.request':'call-log','sms.attachment.request':'sms',
+          'phone.status.request':'status','phone.dnd':'dnd','phone.hotspot':'hotspot','phone.wallpaper.request':'wallpaper',
+          'phone.ring.stop':'ring'}
 def ensure(connection):
     connection.execute(SCHEMA)
 def _put(c,device,kind,key,data,now,limit):
@@ -184,6 +219,8 @@ def apply(c,source,event,now):
         if isinstance(value,Photos) and any(p.thumbnail.size>512*1024 for p in value.photos):raise ValueError()
         if isinstance(value,ContactsResults) and any(not n or len(n)>40 for c in value.contacts for n in c.numbers):raise ValueError()
         if isinstance(value,SmsCompose) and any(not a or len(a)>120 or any(ord(ch)<32 for ch in a) for a in value.addresses):raise ValueError()
+        if isinstance(value,PhoneStatus) and (len(set(value.controls))!=len(value.controls) or any(not 0<len(n)<=40 for n in value.controls)):raise ValueError()
+        if isinstance(value,RingState) and (value.seconds>0)!=value.ringing:raise ValueError()
     except (ValueError,TypeError):raise ValueError('Invalid phone feature envelope') from None
     if any(file.destination=='cloud' for file in files):
         if event.type!='file.offer' or not event.targets:raise ValueError('Cloud files require a destination computer')
@@ -197,7 +234,7 @@ def apply(c,source,event,now):
             row=c.execute('SELECT capabilities_json FROM link_devices WHERE device_id=?',(event.targets[0],)).fetchone()
             if not row or 'remote' not in json.loads(row[0]):raise ValueError('Remote control unavailable')
         return
-    if event.type in {'contacts.results','calls.log','sms.attachment.file'}:
+    if event.type in {'contacts.results','calls.log','sms.attachment.file','phone.wallpaper'}:
         # Private answers to one computer's request: relayed, never stored.
         if event.targets is None or len(event.targets)!=1:raise ValueError('Phone answer names one device')
         return
@@ -205,14 +242,13 @@ def apply(c,source,event,now):
         # Names one computer that receives the matching photo offer; never stored.
         if event.targets is None or len(event.targets)!=1:raise ValueError('Capture requires one destination computer')
         return
-    if event.type in {'sms.open','sms.send','call.command','photo.request','phone.ring','computer.ring','media.command','contacts.search','sms.compose','phone.ringer','call.dial','calls.log.request','sms.attachment.request'}:
+    if event.type in COMMANDS:
         if event.targets is None or len(event.targets)!=1:raise ValueError('Phone command requires one owning phone')
         owner=event.targets[0]
         row=c.execute('SELECT capabilities_json FROM link_devices WHERE device_id=?',(owner,)).fetchone()
         caps=json.loads(row[0]) if row else []
-        required={'sms.open':'sms','sms.send':'sms','call.command':'call-control','photo.request':'photos','phone.ring':'ring','computer.ring':'ring','media.command':'media',
-                  'contacts.search':'contacts','sms.compose':'sms','phone.ringer':'ringer','call.dial':'call-dial','calls.log.request':'call-log','sms.attachment.request':'sms'}[event.type]
-        if required not in caps:raise ValueError('Phone capability unavailable')
+        required=COMMANDS[event.type]
+        if required not in caps and required not in (_get(c,owner,'status','current') or {}).get('controls',[]):raise ValueError('Phone capability unavailable')
         if isinstance(value,Thread) and _get(c,owner,'thread',value.thread) is None:raise ValueError('Conversation unavailable')
         if isinstance(value,SmsSend):
             recipients=len((_get(c,owner,'thread',value.thread) or {}).get('recipients',[]))
@@ -242,6 +278,8 @@ def apply(c,source,event,now):
     elif isinstance(value,Call):_put(c,source,'call','current',data,now,1)
     elif isinstance(value,MediaState):_put(c,source,'media','current',data,now,1)
     elif isinstance(value,Ringer):_put(c,source,'ringer','current',data,now,1)
+    elif isinstance(value,PhoneStatus):_put(c,source,'status','current',data,now,1)
+    elif isinstance(value,PhoneSignal):_put(c,source,'signal','current',data,now,1)
     elif isinstance(value,SmsAttachments):_put(c,source,'attachment',f'{value.thread}:{value.message}',data,now,2000)
     elif isinstance(value,Photos):
         for photo in value.photos:_put(c,source,'photo',photo.id,photo.model_dump(),now,100)
@@ -254,7 +292,8 @@ def snapshot(db):
     with db.connect() as c:
         ensure(c)
         rows=c.execute('SELECT * FROM phone_features ORDER BY updated_at DESC').fetchall()
-    result={'threads':[],'messages':[],'calls':[],'photos':[],'media':[],'ringers':[],'attachments':[]}
-    names={'thread':'threads','message':'messages','call':'calls','photo':'photos','media':'media','ringer':'ringers','attachment':'attachments'}
-    for row in rows:result[names[row['kind']]].append({**json.loads(row['data_json']),'device_id':row['device_id']})
+    result={'threads':[],'messages':[],'calls':[],'photos':[],'media':[],'ringers':[],'attachments':[],'statuses':[],'signals':[]}
+    names={'thread':'threads','message':'messages','call':'calls','photo':'photos','media':'media','ringer':'ringers','attachment':'attachments','status':'statuses','signal':'signals'}
+    for row in rows:result[names[row['kind']]].append({**json.loads(row['data_json']),'device_id':row['device_id'],
+                                                       **({'updated_at':row['updated_at']} if row['kind'] in ('status','signal') else {})})
     return result

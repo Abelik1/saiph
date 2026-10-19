@@ -55,7 +55,7 @@ describe("isolated PostgreSQL billing transactions", { skip: !databaseUrl ? "Run
     await runMigrations(pool, migrations);
   });
   beforeEach(async () => {
-    await pool.query("TRUNCATE saiph_billing.grant_state, saiph_billing.disputes, saiph_billing.customer_creation_intents, saiph_billing.processed_events, saiph_billing.subscriptions, saiph_billing.customers");
+    await pool.query("TRUNCATE saiph_billing.trials, saiph_billing.grant_state, saiph_billing.disputes, saiph_billing.customer_creation_intents, saiph_billing.processed_events, saiph_billing.subscriptions, saiph_billing.customers");
   });
   after(async () => { await pool?.end(); });
 
@@ -388,7 +388,7 @@ describe("isolated PostgreSQL billing transactions", { skip: !databaseUrl ? "Run
       VALUES ($1,'sub_synthetic',$2,'price_synthetic','active',1000,false,null,null,100,'evt_first')`, [accountId, customerId]);
     await pool.query(`INSERT INTO saiph_billing.processed_events (stripe_account_id,stripe_event_id,stripe_customer_id,stripe_subscription_id,event_type,event_created,outcome)
       VALUES ($1,'evt_first',$2,'sub_synthetic','customer.subscription.created',100,'applied')`, [accountId, customerId]);
-    assert.deepEqual(await runMigrations(pool, migrations), [3]);
+    assert.deepEqual(await runMigrations(pool, migrations), [3, 4]);
     assert.deepEqual(await runMigrations(pool, migrations), []);
     const [candidate] = await store().grantCandidates();
     assert.equal(candidate.subscriptionId, "sub_synthetic");
@@ -433,5 +433,63 @@ describe("isolated PostgreSQL billing transactions", { skip: !databaseUrl ? "Run
     await pushing; await webhookDone;
     assert.equal((await store().grantCandidates())[0].dirty, true);
     await assert.rejects(store().withGrant("sub_missing", async () => 1), { code: "UNKNOWN_SUBSCRIPTION" });
+  });
+
+  const keyA = "a".repeat(64), keyB = "b".repeat(64);
+  const trial = (subject, emailKey, extra = {}) => store().startTrial({ subject, emailKey, now: 1000, days: 14, cap: null,
+    ref: (subject === owner ? "1" : subject.length.toString(16)).padStart(32, "0"), ...extra });
+
+  test("a trial starts once per subject and once per email, and the row is permanent", async () => {
+    const started = await trial(owner, keyA);
+    assert.equal(started.outcome, "started");
+    assert.deepEqual([started.trial.startedAt, started.trial.endsAt], [1000, 1000 + 14 * 86400]);
+    const again = await trial(owner, keyB, { now: 5000, ref: "f".repeat(32) });
+    assert.equal(again.outcome, "exists", "a new email does not give the same account a second trial");
+    assert.equal(again.trial.endsAt, 1000 + 14 * 86400, "pressing again never extends it");
+    assert.deepEqual(await trial("auth0|second-account", keyA), { outcome: "used", trial: null }, "a second account with the same email");
+    assert.equal((await store().trialFacts("auth0|second-account", keyA)).emailUsed, true);
+    assert.equal((await store().trialFacts(owner, keyA)).emailUsed, false, "one's own trial is not someone else's use");
+    await assert.rejects(pool.query("UPDATE saiph_billing.trials SET ends_at=ends_at+86400"), { code: "23514" });
+    await assert.rejects(pool.query("UPDATE saiph_billing.trials SET email_key=$1", [keyB]), { code: "23514" });
+    await assert.rejects(pool.query("DELETE FROM saiph_billing.trials"), { code: "23514" });
+    await assert.rejects(pool.query(`INSERT INTO saiph_billing.trials (stripe_account_id,auth_subject,email_key,trial_ref,started_at,ends_at)
+      VALUES ($1,'auth0|third',$2,$3,1,1)`, [accountId, keyB, "e".repeat(32)]), { code: "23514" }, "a trial must end after it starts");
+    await assert.rejects(trial(owner, "not-a-key"), { code: "INVALID_TRIAL" });
+    await assert.rejects(trial(owner, keyA, { days: 31 }), { code: "INVALID_TRIAL" });
+  });
+
+  test("the optional cap admits exactly N trials even when sign-ups race", async () => {
+    const subjects = Array.from({ length: 6 }, (_, index) => "auth0|racer-" + index);
+    const results = await Promise.all(subjects.map((subject, index) => store().startTrial({ subject, emailKey: index.toString(16).repeat(64),
+      now: 1000, days: 14, cap: 3, ref: (index + 10).toString(16).padStart(32, "0") })));
+    assert.equal(results.filter((r) => r.outcome === "started").length, 3);
+    assert.equal(results.filter((r) => r.outcome === "full").length, 3);
+    assert.equal((await store().trialFacts("auth0|late", keyB)).started, 3);
+    assert.equal((await trial("auth0|late", keyB, { cap: null, ref: "9".repeat(32) })).outcome, "started", "switching the cap off admits again");
+  });
+
+  test("someone who already subscribed gets no trial; an abandoned checkout does not count", async () => {
+    await bind();
+    await store().applyEvent(event("evt_incomplete", 100), async () => snapshot("incomplete_expired"));
+    assert.equal((await store().trialFacts(owner, keyA)).subscribed, false);
+    await store().applyEvent(event("evt_active", 200, { type: "customer.subscription.created" }), async () => snapshot("active", { subscriptionId: "sub_paid" }));
+    assert.equal((await store().trialFacts(owner, keyA)).subscribed, true);
+    assert.deepEqual(await trial(owner, keyA), { outcome: "subscribed", trial: null });
+  });
+
+  test("trial grant delivery records a fresh sequence and only on success; delivered trials leave the candidate list once over", async () => {
+    await trial(owner, keyA);
+    await assert.rejects(store().withTrialGrant(owner, async () => { throw new Error("service down"); }));
+    let [candidate] = await store().trialGrantCandidates();
+    assert.deepEqual([candidate.subject, candidate.dirty, candidate.pushedUntil], [owner, true, null]);
+    const first = await store().withTrialGrant(owner, async (row, sequence) => { assert.equal(row.ref, "1".padStart(32, "0")); return row.endsAt; });
+    await bind();
+    await store().applyEvent(event(), async () => snapshot());
+    const paid = await store().withGrant("sub_synthetic", async () => 1234);
+    assert.ok(paid.sequence > first.sequence, "trial and paid grants share one increasing sequence");
+    // Its end (1000 + 14 days, long past in real time) is recorded, so nothing is left to deliver.
+    assert.deepEqual(await store().trialGrantCandidates(), []);
+    assert.deepEqual(await store().trialGrantCandidates({ subject: "auth0|nobody" }), []);
+    await assert.rejects(store().withTrialGrant("auth0|nobody", async () => 1), { code: "UNKNOWN_TRIAL" });
   });
 });

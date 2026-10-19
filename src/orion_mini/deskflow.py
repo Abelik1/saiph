@@ -6,6 +6,7 @@ import ipaddress
 import os
 import socket
 import subprocess
+import threading
 import time
 from pathlib import Path
 
@@ -174,12 +175,29 @@ class Deskflow:
                 "uptime": int(self.clock() - self.started_at) if running and self.started_at is not None else 0}
 
     def setup(self):
-        """Cached setup checks for the settings page; refreshed at most every 30 seconds."""
+        """Cached setup checks for the settings page, refreshed every 30 seconds.
+
+        The dashboard snapshot reads this on the GUI thread, and detection walks
+        PATH, so a stale result is refreshed on a worker thread instead of
+        blocking the snapshot. A changed role or executable is checked at once."""
         options = (self.settings.get("link") or {}).get("deskflow") or {}
         key = (options.get("role"), options.get("executable"))
         cached = getattr(self, "_setup", None)
-        if cached is None or cached[0] != key or self.clock() - cached[1] >= 30:
+        if cached is None or cached[0] != key:
             self._setup = cached = (key, self.clock(), detect(self.root, options))
+        elif self.clock() - cached[1] >= 30 and not getattr(self, "_setup_refreshing", False):
+            self._setup_refreshing = True
+            def refresh():
+                try:
+                    found = detect(self.root, options)
+                    if getattr(self, "_setup", None) is cached:
+                        self._setup = (key, self.clock(), found)
+                except (OSError, ValueError):
+                    if getattr(self, "_setup", None) is cached:
+                        self._setup = (key, self.clock(), cached[2])
+                finally:
+                    self._setup_refreshing = False
+            threading.Thread(target=refresh, name="orion-deskflow-inspection", daemon=True).start()
         return cached[2]
 
     def restart(self):

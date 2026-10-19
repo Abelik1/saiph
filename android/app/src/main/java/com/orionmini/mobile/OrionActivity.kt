@@ -46,6 +46,9 @@ class OrionActivity : ComponentActivity() {
     private var shownScreen = ""
     private var poll: Job? = null
     private var screen = "home"
+    /** The open Settings category page; null shows the category list and search. */
+    private var settingsCategory: SettingsCatalog.Category? = null
+    private var settingsQuery = ""
     private var lastRender = ""
     private var pairingInProgress = false
     private var devices: List<LinkDevice> = emptyList()
@@ -54,6 +57,8 @@ class OrionActivity : ComponentActivity() {
     private var showingLock = false
     private val updates by lazy { AppUpdates(this) }
     private lateinit var backupSettings: OrionBackupSettings
+    /** Send a file: pick it, then the share screen chooses the computer, as from any app. */
+    private lateinit var sendFile: androidx.activity.result.ActivityResultLauncher<Array<String>>
     private val enrollmentFile = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null && !prefs.contains("device_id")) lifecycleScope.launch {
             val invite = withContext(Dispatchers.IO) { runCatching {
@@ -71,7 +76,11 @@ class OrionActivity : ComponentActivity() {
     }
     override fun onCreate(state: Bundle?) {
         super.onCreate(state); Api.migrateMesh(this)
-        backupSettings = OrionBackupSettings(this) { if (screen == "advanced") advanced() }
+        backupSettings = OrionBackupSettings(this) { if (screen == "settings" && settingsCategory == SettingsCatalog.Category.PHOTOS) settings(settingsCategory) }
+        sendFile = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            if (uri != null) startActivity(Intent(this, OrionShareActivity::class.java).setAction(Intent.ACTION_SEND)
+                .putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
+        }
         root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(4), dp(18), dp(28)) }
         scroll = ScrollView(this).apply { addView(root); isFillViewport = true }
         header = LinearLayout(this).apply {
@@ -107,6 +116,7 @@ class OrionActivity : ComponentActivity() {
             override fun handleOnBackPressed() {
                 if (showingLock) { finish(); return }
                 if (screen == "pair" && !prefs.contains("device_id")) { backToAccount(); return }
+                if (screen == "settings" && settingsCategory != null) { settings(); return }
                 when (SetupNavigation.back(screen)) {
                     "home" -> leaveForHome()
                     "settings" -> settings()
@@ -159,8 +169,9 @@ class OrionActivity : ComponentActivity() {
         when (SetupNavigation.resume(screen, true, prefs.getBoolean("setup_done", false),
             prefs.getBoolean("setup_deferred", false), requestedSetup, requestedSettings)) {
             "setup" -> setup()
-            "settings" -> settings()
-            "advanced" -> advanced()
+            // Returning from Android's own settings keeps the category page that opened them.
+            "settings" -> settings(if (requestedSettings) null else settingsCategory)
+            "advanced" -> settings(SettingsCatalog.Category.ACCOUNT)
             else -> homeLoop()
         }
     }
@@ -180,10 +191,11 @@ class OrionActivity : ComponentActivity() {
         }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         if (!paired) return
         // Settings stays one tap away from every screen except Settings itself.
-        if (screen != "settings") header.addView(iconButton(R.drawable.saiph_ic_settings, "Settings") { settings() })
+        if (screen != "settings") header.addView(iconButton(R.drawable.saiph_ic_settings, "Settings") { settingsQuery = ""; settings() })
     }
     /** The header's back arrow goes where the system back gesture goes. */
-    private fun goBack() = if (screen == "pair" && !prefs.contains("device_id")) backToAccount() else when (SetupNavigation.back(screen)) {
+    private fun goBack() = if (screen == "pair" && !prefs.contains("device_id")) backToAccount()
+        else if (screen == "settings" && settingsCategory != null) settings() else when (SetupNavigation.back(screen)) {
         "home" -> leaveForHome()
         "settings" -> settings()
         else -> homeLoop()
@@ -430,6 +442,11 @@ class OrionActivity : ComponentActivity() {
                 addView(buttonRow(button("Resume", true) { OrionPause.set(this@OrionActivity, false); network.startService(); homeLoop() }))
             })
         } else if (state != "Online") root.addView(text(state, UiType.META, Palette.MUTED).apply { setPadding(dp(4), 0, 0, dp(4)) })
+        // The features people start, at the top; Photo, Sketch, Remote and Hotspot stay in the dock.
+        root.addView(quickActions(
+            QuickAction(sefirah.common.R.drawable.ic_videocam, "Use as webcam") { startActivity(Intent(this, PhoneCameraActivity::class.java)) },
+            QuickAction(sefirah.common.R.drawable.ic_desktop_windows, "Share screen") { startActivity(Intent(this, PhoneScreenActivity::class.java)) },
+            QuickAction(sefirah.common.R.drawable.ic_upload, "Send a file") { sendFile.launch(arrayOf("*/*")) }))
         devicesSection()
         val all = items?.let { a -> (0 until a.length()).map(a::getJSONObject) }.orEmpty()
         val new = all.filter { it.getString("status") == "new" }
@@ -560,53 +577,63 @@ class OrionActivity : ComponentActivity() {
         sendBroadcast(Intent(this, DecisionReceiver::class.java).putExtra("id", id).putExtra("decision", decision))
         Toast.makeText(this, "Saiph will deliver your decision automatically.", Toast.LENGTH_SHORT).show()
     }
-    private fun settings() {
+    /** Settings: search and a list of categories, or one category's page (SettingsCatalog.SELF_HOSTED). */
+    private fun settings(category: SettingsCatalog.Category? = null, target: String = "") {
         if (screen == "setup" && !prefs.getBoolean("setup_done", false))
             prefs.edit().putBoolean("setup_deferred", true).apply()
-        screen = "settings"; poll?.cancel(); title("Settings")
-        UsageAnalytics.opened(this, "settings")
-        // The two places people look for most often come first.
-        root.addView(buttonRow(button("Setup permissions", tone = Tone.TONAL) { setup() }, button("Advanced", tone = Tone.TONAL) { advanced() }).apply { setPadding(0, 0, 0, dp(4)) })
-        root.addView(section("Saiph"))
-        root.addView(card().apply {
-            addView(switchRow("Saiph is on", "Pause stops all syncing until you turn Saiph back on; pairing and settings are kept. The Saiph widget does the same from your home screen.",
-                !OrionPause.paused(this@OrionActivity)) { on -> OrionPause.set(this@OrionActivity, !on); if (on) network.startService() else network.stopService() })
-        })
-        root.addView(section("Focus"))
-        root.addView(card().apply {
-            addView(switchRow("Share clipboard across my devices", checked = prefs.getBoolean("clipboard_enabled", true)) { checked ->
-                prefs.edit().putBoolean("clipboard_enabled", checked).apply(); network.refreshCapabilities() })
-            addView(switchRow("Follow the shared sleep plan", checked = prefs.getBoolean("focus_enabled", true)) { checked ->
-                prefs.edit().putBoolean("focus_enabled", checked).apply(); lifecycleScope.launch(Dispatchers.IO) { runCatching { OrionContinuity(this@OrionActivity).tick() } } })
-            addView(switchRow("Sync Do Not Disturb with my devices", checked = prefs.getBoolean("dnd_sync", true)) { checked ->
-                prefs.edit().putBoolean("dnd_sync", checked).apply(); lifecycleScope.launch(Dispatchers.IO) { runCatching { OrionContinuity(this@OrionActivity).tick() } } })
-        })
-        root.addView(section("Security"))
-        root.addView(card().apply { addView(lock.toggle()) })
-        UsageAnalytics.settingsViews(this).forEach(root::addView)
-        root.addView(section("Updates"))
-        root.addView(card().apply {
-            addView(text("Saiph ${BuildConfig.VERSION_NAME}. Updates also check automatically.", UiType.BODY, Palette.MUTED))
-            val updateStatus = text("", UiType.BODY, Palette.MUTED)
-            val check = button("Check for updates", tone = Tone.TONAL) {}
-            check.setOnClickListener { updates.checkManual(check, updateStatus) }
-            addView(buttonRow(check))
-            addView(updateStatus)
-        })
-    }
-    private fun advanced() {
-        screen = "advanced"; poll?.cancel(); title("Advanced")
-        UsageAnalytics.opened(this, "advanced")
-        root.addView(card().apply {
-            addView(text("Hub: ${runCatching { Api.base(this@OrionActivity) }.getOrDefault("Invalid saved configuration")}\nDevice: ${prefs.getString("device_id", "Unpaired")}\n${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})", UiType.META, Palette.MUTED))
-            addView(buttonRow(button("Saiph account", tone = Tone.TONAL) { startActivity(Intent(this@OrionActivity, HostedActivity::class.java)) }))
-        })
-        root.addView(section("Tailscale"))
-        root.addView(card().apply {
-            addView(text("Saiph detects its connection automatically. Android's Always-on VPN setting cannot be verified here. In VPN settings, use Always-on on and Block connections without VPN off; use no exit node.", UiType.BODY, Palette.MUTED))
-            addView(buttonRow(button("VPN settings", tone = Tone.TONAL) { openSettings(Intent(Settings.ACTION_VPN_SETTINGS)) },
-                button("Open Tailscale", tone = Tone.TONAL) { openTailscale() }))
-        })
-        root.addView(backupSettings.view())
+        val entries = SettingsCatalog.SELF_HOSTED.filter { it.id != "usage" || UsageAnalytics.available(this) }
+        // A different page opens at its top; redrawing the same page keeps its place.
+        val samePage = screen == "settings" && settingsCategory == category
+        screen = "settings"; settingsCategory = category; poll?.cancel()
+        if (!samePage) shownScreen = ""
+        title(category?.title ?: "Settings")
+        if (category == null) {
+            UsageAnalytics.opened(this, "settings")
+            root.addView(settingsHome(entries, settingsQuery, { settingsQuery = it }, { settings(it) }) { settings(it.category, it.id) })
+            return
+        }
+        val page = SettingsPage(root, entries)
+        fun refresh() = lifecycleScope.launch(Dispatchers.IO) { runCatching { OrionContinuity(this@OrionActivity).tick() } }
+        when (category) {
+            SettingsCatalog.Category.ACCOUNT -> {
+                page.linkItem("saiph_account", "Use a Saiph account on this phone instead of your Hub.") {
+                    startActivity(Intent(this@OrionActivity, HostedActivity::class.java))
+                }
+                page.item("hub_details") {
+                    addView(text("Hub: ${runCatching { Api.base(this@OrionActivity) }.getOrDefault("Invalid saved configuration")}\nDevice: ${prefs.getString("device_id", "Unpaired")}", UiType.META, Palette.MUTED).apply {
+                        setPadding(0, dp(4), 0, 0); setTextIsSelectable(true)
+                    })
+                }
+            }
+            SettingsCatalog.Category.CONNECTION -> {
+                page.switchItem("saiph_on", "Pause stops all syncing until you turn Saiph back on; pairing and settings are kept. The Saiph widget does the same from your home screen.",
+                    !OrionPause.paused(this)) { _, on -> OrionPause.set(this@OrionActivity, !on); if (on) network.startService() else network.stopService() }
+                page.item("tailscale", "Saiph detects its connection automatically. Android's Always-on VPN setting cannot be verified here. In VPN settings, use Always-on on and Block connections without VPN off; use no exit node.") {
+                    addView(compactActions(compactButton("VPN settings") { openSettings(Intent(Settings.ACTION_VPN_SETTINGS)) },
+                        compactButton("Open Tailscale") { openTailscale() }))
+                }
+                page.linkItem("permissions", "Notifications, battery, messages, photos and background clipboard.") { setup() }
+            }
+            SettingsCatalog.Category.NOTIFICATIONS -> {
+                page.switchItem("dnd_sync", "Turn Do Not Disturb on or off together with your other devices.", prefs.getBoolean("dnd_sync", true)) { _, checked ->
+                    prefs.edit().putBoolean("dnd_sync", checked).apply(); refresh() }
+                page.switchItem("sleep_plan", "Quiet this phone during the sleep plan you share across your devices.", prefs.getBoolean("focus_enabled", true)) { _, checked ->
+                    prefs.edit().putBoolean("focus_enabled", checked).apply(); refresh() }
+            }
+            SettingsCatalog.Category.CLIPBOARD -> page.switchItem("clipboard", "Copy on one device and paste on another.", prefs.getBoolean("clipboard_enabled", true)) { _, checked ->
+                prefs.edit().putBoolean("clipboard_enabled", checked).apply(); network.refreshCapabilities() }
+            SettingsCatalog.Category.PHOTOS -> page.item("backups") { backupSettings.controls(this) }
+            SettingsCatalog.Category.STATUS -> page.switchItem("status_sharing", "Battery, Wi-Fi, Bluetooth, signal and sound mode on your computers, and their quick actions: find this phone, sound mode and Do Not Disturb.",
+                sefirah.network.orion.PhoneQuickControls.shared(this)) { _, on -> sefirah.network.orion.PhoneQuickControls.setShared(this@OrionActivity, on) }
+            SettingsCatalog.Category.PRIVACY -> {
+                page.item("app_lock") { addView(lock.toggle()) }
+                if (UsageAnalytics.available(this)) page.item("usage") { UsageAnalytics.settingsControls(this@OrionActivity).forEach(::addView) }
+            }
+            SettingsCatalog.Category.ABOUT -> page.item("updates", "Saiph ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE}). Updates come from your Hub.") {
+                updateSettings().forEach(::addView)
+            }
+            else -> {}
+        }
+        if (target.isNotEmpty()) page.reveal(target, scroll)
     }
 }

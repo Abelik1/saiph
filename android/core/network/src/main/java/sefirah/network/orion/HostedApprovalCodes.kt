@@ -58,10 +58,16 @@ object HostedApprovalCodes {
 
 /** Process-local handoff; the default-off gate is checked before invoking this. */
 object HostedFeatureBridge {
+    @Volatile var clipboardIdentity: (() -> String)? = null
     @Volatile var publish: ((String, JsonObject) -> Boolean)? = null
+    @Volatile var publishClipboardImage: ((String, java.io.File) -> Boolean)? = null
+    fun sendClipboardImage(mime: String, file: java.io.File): Boolean = publishClipboardImage?.invoke(mime, file) ?: false
     /** Texts and calls for one subscribed computer; `delivered` runs after the relay accepted it. */
     @Volatile var publishPhone: ((String, JsonObject, () -> Unit) -> Boolean)? = null
     fun send(type: String, payload: JsonObject): Boolean = publish?.invoke(type, payload) ?: false
     fun sendPhone(target: String, payload: JsonObject, delivered: () -> Unit = {}): Boolean =
         target.isNotEmpty() && publishPhone?.invoke(target, payload, delivered) ?: false
+    /** The merged media sessions changed; the Cloud runtime sends them to each subscribed computer. */
+    @Volatile var onMedia: (() -> Unit)? = null
+    fun mediaChanged() { onMedia?.invoke() }
 }

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Synthetic desktop state for the design preview. Every name, number and message
 // here is made up; nothing comes from a real profile.
-import type { Client, State } from "../workspace/types";
+import type { AppUpdateState, Client, State } from "../workspace/types";
 
 const now = Date.now();
 const minutes = (n: number) => now - n * 60_000;
@@ -15,6 +15,15 @@ function swatch(seed: number) {
 
 const people = ["Ada Byrne", "Niamh Walsh", "Conor Doyle", "+353 87 555 0142", "Sam Okafor", "Lena Fischer"];
 
+/** The footer's Update button: /preview.html?update=available (or checking, downloading, ready, installing, failed). */
+function previewUpdate(): State["app_update"] {
+  const state = new URLSearchParams(window.location.search).get("update") as AppUpdateState | null;
+  if (!state || !["available", "checking", "downloading", "ready", "installing", "failed"].includes(state)) return undefined;
+  const release = { schema: 1, platform: "windows-x86_64", profile: "link", build: 12, version: "0.1.0-beta.12", sha256: "0".repeat(64), bytes: 58_000_000 };
+  return { state, release, version: release.version, bytes: release.bytes, notes: "Faster photo sync.", source: "cloud",
+    error: state === "failed" ? "Desktop download is incomplete or damaged" : "", checked_at: Math.floor(now / 1000) };
+}
+
 export function fixtureState(): State {
   const threads = people.map((name, i) => ({ id: "t" + i, device_id: "phone", thread: i, recipients: [name], message: { body: ["See you at 7?", "Thanks, got it", "Can you send the slides", "Your code is 482913", "Running 5 min late", "Lovely photo!"][i], timestamp: minutes(i * 37 + 3) } }));
   const messages = Array.from({ length: 14 }, (_, i) => ({
@@ -25,6 +34,8 @@ export function fixtureState(): State {
   const photos = Array.from({ length: 18 }, (_, i) => ({ id: "p" + i, photo_id: String(i), device_id: "phone", name: `IMG_20261012_${1000 + i}.jpg`, timestamp: minutes(i * 90), preview: swatch(i) }));
   return {
     platform: "windows",
+    app_version: "0.1.0-beta.11",
+    app_update: previewUpdate(),
     modules: { workspace: { installed: false, enabled: false } },
     settings: {
       machine: { name: "Studio desktop", features: { sleep_plan: false, activity_breaks: false, calendar: false } },
@@ -41,13 +52,16 @@ export function fixtureState(): State {
     phone: {
       status: "Online", error: "",
       devices: [
-        { id: "phone", name: "Pixel 8", online: true, last_seen_at: null, capabilities: ["battery", "notifications", "sms", "sms-group", "photos", "calls", "call-log", "call-dial", "call-control", "files", "ring", "ringer", "media", "contacts", "clipboard"], battery: { battery_level: 76, is_charging: true, updated_at: 1 } },
+        { id: "phone", name: "Pixel 8", online: true, last_seen_at: null, capabilities: ["battery", "notifications", "sms", "sms-group", "photos", "calls", "call-log", "call-dial", "call-control", "files", "ring", "ringer", "media", "contacts", "clipboard", "status", "dnd", "hotspot", "mobile_data"], battery: { battery_level: 76, is_charging: true, updated_at: 1 },
+          status: { battery: 76, charging: true, wifi: true, cellular: false, metered: false, bluetooth: true, signal: 3, ringer: "vibrate", dnd: false,
+            controls: ["status", "ring", "ringer", "dnd", "media", "hotspot", "mobile_data"], mobile_data: true, paused: false } },
         { id: "tablet", name: "Galaxy Tab", online: false, last_seen_at: new Date(minutes(300)).toISOString(), capabilities: ["battery", "photos"], battery: { battery_level: 41, is_charging: false, updated_at: 1 } },
       ],
       notifications: [
         { id: "n1", device_id: "phone", key: "k1", app: "Messages", package: "msg", title: "Ada Byrne", text: "See you at 7?", timestamp: minutes(3), actions: [{ index: 0, label: "Mark as read" }], reply_key: "r1" },
         { id: "n2", device_id: "phone", key: "k2", app: "Bank", package: "bank", title: "Sign-in code", text: "Your code is 482913. It expires in 10 minutes.", timestamp: minutes(9), actions: [], code: "482913" },
         { id: "n3", device_id: "phone", key: "k3", app: "Calendar", package: "cal", title: "Team sync in 15 minutes", text: "Room 2 · Video link in invite", timestamp: minutes(14), actions: [{ index: 1, label: "Snooze" }] },
+        { id: "n4", device_id: "phone", key: "k4", app: "Messages", package: "msg", title: "Liam Walsh", text: "Running a bit late. The train is stuck outside the station and nobody knows how long it will be, so start without me and I'll catch up when I get there. Save me a seat near the back!", timestamp: minutes(26), actions: [], reply_key: "r4" },
       ],
     },
     phone_features: {
@@ -74,8 +88,13 @@ export function fixtureClient(): Client {
     async call<T>(method: string): Promise<T> {
       if (method === "state") return state as T;
       await new Promise((resolve) => setTimeout(resolve, 600));
+      if (method === "app.update.progress") return { state: "downloading", done: 29_000_000, total: 58_000_000 } as T;
       if (method === "insights.week") return { enabled: true, actions: 42, busiest_day: "Tuesday", screen: "messages", top: [{ feature: "sms", label: "Messages sent", count: 18 }], people: [] } as T;
-      if (method === "phone.apps") return { apps: [{ package: "com.example.maps", name: "Maps", system: false }, { package: "com.example.notes", name: "Notes", system: false }] } as T;
+      if (method === "phone.apps") return {
+        apps: ["Calendar", "Camera", "Chat", "Clock", "Files", "Fitness", "Maps", "Music", "Notes", "Photos", "Podcasts", "Weather", "Wallet", "Video calls"]
+          .map((name) => ({ package: "com.example." + name.toLowerCase().replace(/\s+/g, ""), name, system: false })),
+        pinned: ["com.example.chat", "com.example.maps"], usage: { "com.example.music": 9, "com.example.notes": 4, "com.example.photos": 2 }, icons: false,
+      } as T;
       return { ok: true } as T;
     },
     subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },

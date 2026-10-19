@@ -12,6 +12,10 @@ class MainApplication : Application(), Configuration.Provider {
     override fun onCreate() {
         super.onCreate()
         com.orionmini.mobile.OrionBackupWorker.schedule(this)
+        // Camera and phone screen requests pop up inside Saiph while it is open.
+        com.orionmini.mobile.ForegroundActivity.register(this)
+        // A daily check that only notifies; it honours Settings > Version and updates.
+        com.orionmini.mobile.UpdateCheckWorker.schedule(this)
         // Counts only event types, and only after the owner agrees to anonymous usage statistics.
         sefirah.network.orion.OrionLink.published = { type -> com.orionmini.mobile.UsageAnalytics.event(this, type) }
     }

@@ -16,6 +16,10 @@ interface NetworkManager {
     fun refreshCapabilities() {}
     /** Direct mesh clipboard/image offer; local file ownership passes to the transport. */
     fun sendClipboardFile(mime: String, file: java.io.File): Boolean = false
+    val clipboardFileLimit: Long get() = 2L * 1024 * 1024 * 1024
+    /** Current approved identity for the already authorized debugging worker. */
+    fun clipboardDeviceId(): String? = null
+    val clipboardConnectionMode: String get() = "self_hosted"
     /** @return false if there is no live connection */
     fun sendMessage(deviceId: String, message: SocketMessage): Boolean
     suspend fun approveDeviceConnection(deviceId: String)

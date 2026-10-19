@@ -10,7 +10,6 @@ import type { AriaRole, FormEvent, ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import { LoaderCircle, X } from "lucide-react";
 import type { Features, Job, Reminder } from "./types";
-import { useGather } from "./waves";
 import { Button, type ButtonProps } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -111,8 +110,6 @@ export function Action({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const button = useRef<HTMLButtonElement>(null);
-  // While it works, the background strings knot around the button.
-  useGather(button, pending);
   // A switch drawn by its own stylesheet keeps that look rather than a button's.
   const look = variant ? { variant, size } : role === "switch" ? null : variantFor(className);
   const props = {

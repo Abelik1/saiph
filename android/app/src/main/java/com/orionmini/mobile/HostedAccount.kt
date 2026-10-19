@@ -58,11 +58,25 @@ class HostedAccount private constructor(private val context: Context) {
         return request
     }
     suspend fun complete(response: AuthorizationResponse) = tokenLock.withLock {
-        val epoch = consume(response)
+        val epoch = try { consume(response) } catch (_: IllegalStateException) {
+            throw HostedSignInException(HostedSignInIssue.CALLBACK)
+        }
         val grant = exchange(response.createTokenExchangeRequest(), epoch)
         // Re-authenticate approved phones with the method that established their
         // account. Legacy profiles default to their original provider picker.
-        accept(grant, epoch, requireRefresh = false, google = response.request.additionalParameters["connection"] == "google-oauth2")
+        try {
+            accept(grant, epoch, requireRefresh = prefs.getBoolean("refresh_tokens", false), google = response.request.additionalParameters["connection"] == "google-oauth2")
+        } catch (failure: HostedSignInException) {
+            throw failure
+        } catch (_: java.security.GeneralSecurityException) {
+            throw HostedSignInException(HostedSignInIssue.STORAGE)
+        } catch (_: java.io.IOException) {
+            throw HostedSignInException(HostedSignInIssue.STORAGE)
+        } catch (_: SecurityException) {
+            throw HostedSignInException(HostedSignInIssue.STORAGE)
+        } catch (_: IllegalStateException) {
+            throw HostedSignInException(HostedSignInIssue.RESPONSE)
+        }
     }
     /** Consume only the originating browser attempt, before any network exchange. */
     @Synchronized internal fun consume(response: AuthorizationResponse): Int {
@@ -95,19 +109,24 @@ class HostedAccount private constructor(private val context: Context) {
                         if (exception?.error == "invalid_grant") signOut()
                     }
                 }
-                continuation.resumeWith(Result.failure(IllegalStateException(error)))
+                val issue = when (exception?.error) {
+                    "invalid_grant" -> HostedSignInIssue.GRANT
+                    "invalid_client", "unauthorized_client", "invalid_scope" -> HostedSignInIssue.CONFIGURATION
+                    else -> HostedSignInIssue.UNAVAILABLE
+                }
+                continuation.resumeWith(Result.failure(HostedSignInException(issue)))
             } else continuation.resume(response)
         }
     }
-    @Synchronized private fun accept(grant: TokenResponse, epoch: Int, requireRefresh: Boolean, google: Boolean? = null) {
-        check(epoch == generation && prefs.getBoolean("enabled", false))
+    @Synchronized internal fun accept(grant: TokenResponse, epoch: Int, requireRefresh: Boolean, google: Boolean? = null) {
+        if (epoch != generation || !prefs.getBoolean("enabled", false)) throw HostedSignInException(HostedSignInIssue.CALLBACK)
         val value = grant.accessToken ?: error("Sign-in did not return an access token.")
         check(value.length in 1..16384 && value.all { it.code in 33..126 } && grant.tokenType.equals("Bearer", true))
         val expiry = grant.accessTokenExpirationTime ?: error("Sign-in did not return an expiry.")
         check(expiry in System.currentTimeMillis() + 1000..System.currentTimeMillis() + 86_400_000)
         if (prefs.getBoolean("refresh_tokens", false)) {
             val refresh = grant.refreshToken
-            check(!requireRefresh || refresh != null)
+            if (requireRefresh && refresh == null) throw HostedSignInException(HostedSignInIssue.PERSISTENT_SESSION)
             if (refresh != null) {
                 check(refresh.length in 1..4096 && refresh.all { it.code in 33..126 })
                 if (!AndroidKeystore.hasKey(alias)) {

@@ -3,6 +3,7 @@ import Stripe from "stripe";
 import {customerIdempotency,disputeEvents,planForPrice,resourceId,stripeUrl,subjectReference,subscriptionEvents,type BillingConfig,type Plan,type PlanKey} from "./policy.ts";
 import {syncGrants} from "./grant-sync.mjs";
 import type {GrantValue} from "./grant-push.mjs";
+import {carriedTrialEnd,newTrialRef,type TrialConfig} from "./trial.mjs";
 export type Mapping={subject:string;customerId:string};
 export type Snapshot={subscriptionId:string;customerId:string;priceId:string;status:string;currentPeriodEnd:number|null;cancelAtPeriodEnd:boolean;cancelAt:number|null;canceledAt:number|null;endedAt:number|null;livemode:boolean};
 export type DisputeSnapshot={disputeId:string;customerId:string;status:string;livemode:boolean};
@@ -38,6 +39,10 @@ export const BETA_CHECKOUT_NOTICE="Saiph Cloud is a beta service: expect bugs, m
 export async function checkout(stripe:Stripe,store:BillingStore,config:BillingConfig,subject:string,planKey:PlanKey) {
   const plan=config.plans[planKey];
   await verifyPrice(stripe,config,plan);
+  // Subscribing during the free trial keeps the remaining free days: the first
+  // charge is taken when the trial ends (Stripe status "trialing" until then).
+  // A database without migration 0004 has no trials to carry; subscribing still works.
+  const trialEnd=carriedTrialEnd(await store.trialFacts(subject,null).then(facts=>facts.stored,()=>null),Math.floor(Date.now()/1000));
   await store.getOrCreateCustomer(subject,async()=>{
     const customer=await stripe.customers.create({metadata:metadata(config,subject)},{idempotencyKey:customerIdempotency(config.accountId,subject)});
     assertCustomer(customer,config,subject);return customer.id;
@@ -64,12 +69,12 @@ export async function checkout(stripe:Stripe,store:BillingStore,config:BillingCo
     }
     const session=await stripe.checkout.sessions.create({mode:"subscription",customer:mapping.customerId,
       line_items:[{price:plan.priceId,quantity:1}],allowed_payment_method_types:["card"],
-      metadata:metadata(config,subject),subscription_data:{metadata:metadata(config,subject)},
+      metadata:metadata(config,subject),subscription_data:{metadata:metadata(config,subject),...(trialEnd?{trial_end:trialEnd}:{})},
       custom_text:{submit:{message:BETA_CHECKOUT_NOTICE}},
       ...(config.livemode?{consent_collection:{terms_of_service:"required" as const}}:{}),
       ...(config.automaticTax?{automatic_tax:{enabled:true},customer_update:{address:"auto" as const},billing_address_collection:"required" as const}:{}),
       success_url:config.origin+"/account?checkout=returned",cancel_url:config.origin+"/account?checkout=cancelled"},
-      {idempotencyKey:"saiph-checkout-v3-"+subjectReference(config.accountId+":"+mapping.customerId+":"+plan.priceId+":"+Math.floor(Date.now()/1800000))});
+      {idempotencyKey:"saiph-checkout-v3-"+subjectReference(config.accountId+":"+mapping.customerId+":"+plan.priceId+":"+Math.floor(Date.now()/1800000)+(trialEnd?":trial:"+trialEnd:""))});
     if (session.livemode!==config.livemode || resourceId(session.customer,"cus")!==mapping.customerId || !validMetadata(session.metadata,config,subject)) throw new Error("Checkout binding rejected");
     return stripeUrl(session.url,"checkout");
   });
@@ -173,7 +178,9 @@ async function withdrawalFacts(stripe:Stripe,config:BillingConfig,mapping:Mappin
   const latest=subscriptions.data.filter(s=>s.livemode===config.livemode && validMetadata(s.metadata,config,mapping.subject))
     .sort((a,b)=>b.created-a.created)[0];
   if (!latest) return {status:{state:"none"},subscription:null,outstanding:[]};
-  const deadline=latest.start_date+WITHDRAWAL_SECONDS;
+  // A subscription taken during the free trial is first charged when the trial
+  // ends; the 14 days then run from that first paid day (owner policy: generous).
+  const deadline=Math.max(latest.start_date,latest.trial_end ?? 0)+WITHDRAWAL_SECONDS;
   const listed=await stripe.charges.list({customer:mapping.customerId,created:{gte:latest.start_date},limit:100});
   if (listed.has_more) throw new Error("Charge reconciliation required");
   const charges=listed.data.filter(c=>c.livemode===config.livemode && c.paid && c.status==="succeeded");
@@ -220,4 +227,21 @@ export async function withdraw(stripe:Stripe,store:BillingStore,config:BillingCo
     }
     return {at,refunded,currency:outstanding[0]?.currency ?? "eur"};
   });
+}
+/** The rules refused a trial; `state` says why (lib/billing/trial.mjs). */
+export class TrialUnavailable extends Error {
+  state:"subscribed"|"used"|"full";
+  constructor(state:"subscribed"|"used"|"full") {super("Trial unavailable");this.state=state;}
+}
+/**
+ * Start the signed-in person's free trial and deliver its Hosted grant at once.
+ * Pressing again is safe: an existing trial is returned and re-delivered if an
+ * earlier push failed. Throws if delivery fails, so the page can ask for a retry.
+ */
+export async function startTrial(store:BillingStore,config:BillingConfig,trial:TrialConfig,subject:string,emailKey:string,push:GrantPush,now=Math.floor(Date.now()/1000)) {
+  const result=await store.startTrial({subject,emailKey,now,days:trial.days,cap:trial.cap,ref:newTrialRef()});
+  if (!result.trial) throw new TrialUnavailable(result.outcome as "subscribed"|"used"|"full");
+  const delivery=await syncGrants(store,grantPolicy(config),push,{subject});
+  if (delivery.failed) throw new Error("Hosted grant delivery pending");
+  return {startedAt:result.trial.startedAt,endsAt:result.trial.endsAt};
 }

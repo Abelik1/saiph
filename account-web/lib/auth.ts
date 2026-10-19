@@ -4,6 +4,7 @@ import { Auth0Client } from "@auth0/nextjs-auth0/server";
 import { NextResponse } from "next/server";
 import { accountCookieName, loginParameters, readAuthConfig } from "./policy.mjs";
 import {canUseAccount, completedSecondFactor, readBetaConfig, secondFactorRequired} from "./beta-policy.mjs";
+import {readTrialConfig, trialEmailKey} from "./billing/trial.mjs";
 let instance: Auth0Client | undefined;
 export function getAuth0() {
   const config = readAuthConfig(process.env);
@@ -33,8 +34,11 @@ export function getAuth0() {
       },
       async beforeSessionSaved(session) {
         // No profile, email or access token is exposed through a browser API.
-        // Only whether this sign-in used a second factor is kept.
-        return {...session, user: {sub: session.user.sub, mfa: completedSecondFactor(session.user)}};
+        // Only whether this sign-in used a second factor is kept, and for the
+        // one-trial-per-person rule a keyed hash of the verified email (never the
+        // address itself; lib/billing/trial.mjs).
+        const trialKey = trialEmailKey(session.user, readTrialConfig(process.env));
+        return {...session, user: {sub: session.user.sub, mfa: completedSecondFactor(session.user), ...(trialKey ? {trialKey} : {})}};
       }
     });
   }

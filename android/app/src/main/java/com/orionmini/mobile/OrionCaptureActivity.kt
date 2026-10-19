@@ -39,7 +39,8 @@ class OrionCaptureActivity : ComponentActivity() {
     }
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
-        status = TextView(this).apply { text = "Choose a computer"; setPadding(40, 48, 40, 48); textSize = 18f }; setContentView(status)
+        status = text("Choose a computer").apply { setPadding(dp(2), dp(8), 0, 0) }
+        ScreenFrame(this, "Photo", back = ::finish).content.addView(status)
         target = state?.getString("target"); photo = state?.getString("photo")?.let(::File)
         if (state != null) return // The camera result is delivered to the restored activity.
         lifecycleScope.launch {

@@ -218,3 +218,93 @@ def test_signature_made_by_the_account_website_verifies():
     assert value['grant'] == 'stripe:sub_vector1' and value['sequence'] == 7
     with pytest.raises(HTTPException):
         grants.verify(header, body.replace(b'"sequence":7', b'"sequence":8'), now=1800000000)
+
+
+TRIAL = 'trial:' + 'a' * 32
+
+
+def test_trial_grant_admits_like_a_subscription_and_reports_its_end(hosted):
+    end = int(time.time()) + 14 * 86400
+    assert hosted['push'](grant=TRIAL, until=end).json() == {'applied': True}
+    assert hosted['access']() == {'entitled': True, 'until': end, 'kinds': ['trial'], 'trial_until': end}
+    assert hosted['client'].get('/v1/account', headers=hosted['token']('auth0|payer')).status_code == 200
+    account = hosted['registry'].principal({'issuer': ISSUER, 'subject': 'auth0|payer'})
+    hosted['registry'].claim_devices(account['id'], ['dev_' + 'c' * 32])
+    assert hosted['registry'].device('dev_' + 'c' * 32)['id'] == account['id']
+    assert [g['kind'] for g in hosted['registry'].grants(account['id'])['grants']] == ['trial']
+
+
+def test_trial_expiry_blocks_access_without_deleting_anything_and_a_subscription_restores_it(hosted):
+    registry, now = hosted['registry'], int(time.time())
+    hosted['push'](grant=TRIAL, until=now + 14 * 86400)
+    account = registry.principal({'issuer': ISSUER, 'subject': 'auth0|payer'})
+    registry.claim_devices(account['id'], ['dev_' + 'd' * 32])
+    assert hosted['client'].get('/v1/account', headers=hosted['token']('auth0|payer')).status_code == 200
+    workspace = registry.config(account).database
+    # Fourteen days pass (the stored end moves into the past): the trial runs out
+    # by itself, with no push from the website.
+    end = now - 60
+    with registry.connect() as db:
+        db.execute("UPDATE access_grants SET expires_at=? WHERE kind='trial'", (end,))
+    assert hosted['client'].get('/v1/account', headers=hosted['token']('auth0|payer')).status_code == 403
+    with pytest.raises(HTTPException) as denied:
+        registry.device('dev_' + 'd' * 32)
+    assert denied.value.status_code == 403
+    assert hosted['access']() == {'entitled': False, 'until': None, 'kinds': [], 'trial_until': end}
+    # Non-destructive: the account, its device binding and workspace are kept.
+    assert workspace.is_file()
+    with registry.connect() as db:
+        assert db.execute('SELECT account FROM devices WHERE id=?', ('dev_' + 'd' * 32,)).fetchone()[0] == account['id']
+    # Subscribing pushes a paid grant; the same account and devices work again.
+    assert hosted['push'](sequence=2).json() == {'applied': True}
+    assert registry.principal({'issuer': ISSUER, 'subject': 'auth0|payer'})['id'] == account['id']
+    assert registry.device('dev_' + 'd' * 32)['id'] == account['id']
+    assert hosted['access']()['kinds'] == ['paid'] and hosted['access']()['trial_until'] == end
+
+
+def test_one_trial_per_account_and_a_trial_stays_with_its_first_account(hosted):
+    hosted['push'](grant=TRIAL, sequence=1)
+    assert hosted['push'](grant='trial:' + 'b' * 32, sequence=2).status_code == 409, 'a second trial for the same account'
+    assert hosted['access']()['kinds'] == ['trial']
+    assert hosted['push'](subject='auth0|other', grant=TRIAL, sequence=3).status_code == 409, 'the same trial for another account'
+    assert hosted['access']('auth0|other')['entitled'] is False
+    # The website may still end or re-deliver its own trial.
+    assert hosted['push'](grant=TRIAL, until=0, sequence=4).json() == {'applied': True}
+    assert hosted['access']() == {'entitled': False, 'until': None, 'kinds': []}, 'an ended (0) trial has no end date to show'
+
+
+def test_trial_pushes_are_limited_to_thirty_days_and_a_strict_reference(hosted):
+    now = int(time.time())
+    for grant, until in ((TRIAL, now + 32 * 86400), ('trial:' + 'A' * 32, now + 86400), ('trial:' + 'a' * 31, now + 86400),
+                         ('trial:auth0|payer', now + 86400)):
+        assert hosted['push'](grant=grant, until=until).status_code == 400, grant
+    assert hosted['access']()['entitled'] is False
+    assert hosted['push'](grant=TRIAL, until=now + 30 * 86400).status_code == 200
+
+
+def test_accounts_without_a_trial_keep_the_original_access_shape(hosted):
+    hosted['push']()
+    assert set(hosted['access']()) == {'entitled', 'until', 'kinds'}
+    code = hosted['registry'].issue_code(int(time.time()) + 86400)
+    hosted['registry'].redeem({'issuer': ISSUER, 'subject': 'auth0|tester'}, code)
+    assert set(hosted['access']('auth0|tester')) == {'entitled', 'until', 'kinds'}
+
+
+def test_apps_read_their_own_access_with_native_tokens_even_without_a_grant(hosted):
+    client, token = hosted['client'], hosted['token']
+    assert client.get('/v1/access', headers=token('auth0|newcomer')).json() == {'entitled': False, 'until': None, 'kinds': []}
+    end = int(time.time()) + 3 * 86400
+    hosted['push'](subject='auth0|newcomer', grant=TRIAL, until=end)
+    assert client.get('/v1/access', headers=token('auth0|newcomer', 'android')).json() == {
+        'entitled': True, 'until': end, 'kinds': ['trial'], 'trial_until': end}
+    assert client.get('/v1/access').status_code == 401
+    assert client.get('/v1/access', headers=token('auth0|newcomer', 'website')).status_code == 401, 'web tokens are not app tokens'
+    assert client.get('/v1/access?x=1', headers=token('auth0|newcomer')).status_code == 403
+    assert client.get('/v1/access', headers={**token('auth0|newcomer'), 'Origin': 'https://evil.test'}).status_code == 403
+    assert client.post('/v1/access', headers=token('auth0|newcomer')).status_code == 404
+    # Reading access never creates an account or a grant.
+    with hosted['registry'].connect() as db:
+        assert db.execute("SELECT count(*) FROM accounts WHERE subject='auth0|stranger'").fetchone()[0] == 0
+    client.get('/v1/access', headers=token('auth0|stranger'))
+    with hosted['registry'].connect() as db:
+        assert db.execute("SELECT count(*) FROM accounts WHERE subject='auth0|stranger'").fetchone()[0] == 0

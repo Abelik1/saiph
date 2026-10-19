@@ -3,6 +3,7 @@
 import base64
 import hashlib
 import json
+import re
 import socket
 import threading
 from urllib.error import HTTPError, URLError
@@ -116,6 +117,17 @@ def test_real_loopback_pkce_exchange_returns_only_memory_token(harness, config, 
     assert status == 200
     assert b"synthetic" not in body
     assert headers["Cache-Control"] == "no-store" and headers["Referrer-Policy"] == "no-referrer"
+    assert headers["Content-Type"] == "text/html; charset=utf-8"
+    assert b"history.replaceState" in body and b"window.close()" in body
+    assert b'<main class="success">' in body and b'id="close-tab"' in body
+    # Only these exact static assets can execute; no remote resources or
+    # callback values are needed to render the handoff page.
+    for tag, directive in ((b"script", "script-src"), (b"style", "style-src")):
+        content = re.search(b"<" + tag + b">(.*?)</" + tag + b">", body, re.S).group(1)
+        digest = base64.b64encode(hashlib.sha256(content).digest()).decode()
+        assert f"{directive} 'sha256-{digest}'" in headers["Content-Security-Policy"]
+    assert "default-src 'none'" in headers["Content-Security-Policy"]
+    assert headers["X-Content-Type-Options"] == "nosniff"
     assert attempt.wait() == "synthetic-api-token"
     assert sessions[0].token is None
     assert attempt._access_token is None and attempt._verifier == attempt._state == attempt._nonce == ""
@@ -172,6 +184,7 @@ def test_callback_error_finishes_without_echo_or_exchange(harness):
     target = CALLBACK_PATH + "?" + urlencode({"state": attempt._state, "error": "access_denied", "error_description": "private-detail"})
     status, body, _ = get("http://" + urlsplit(attempt.redirect_uri).netloc + target)
     assert status == 400 and b"private-detail" not in body and b"access_denied" not in body
+    assert b'<main class="error">' in body and b"window.close()" not in body
     with pytest.raises(LoginError):
         attempt.wait()
     assert transport.calls == []

@@ -36,6 +36,55 @@ class DownloadLimits:
             raise ValueError('Download limits must be positive integers')
 
 
+# Desktop update feed (docs/DESKTOP_UPDATES.md): a catalog may describe the Windows
+# installer and the Linux .run for native Saiph account clients. Each description is
+# checked against its installer when the service starts, so a mismatched catalog
+# never loads. Keys: platform -> (description entry, installer entry).
+DESKTOP_RELEASES = {'windows-x86_64': ('windows_release', 'windows'), 'linux-x86_64': ('linux_release', 'linux')}
+DESCRIPTION_KEYS = {'schema', 'platform', 'profile', 'build', 'version', 'sha256', 'bytes', 'notes'}
+VERSION = re.compile(r'[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.-]+)?')
+MAX_DESCRIPTION = 16384
+MAX_NOTES = 4000
+
+
+def _strict(raw):
+    def pairs(items):
+        if len({key for key, _ in items}) != len(items):
+            raise ValueError('Repeated key')
+        return dict(items)
+
+    def constant(_):
+        raise ValueError('Invalid number')
+    return json.loads(raw.decode('utf-8'), object_pairs_hook=pairs, parse_constant=constant)
+
+
+def desktop_description(raw, platform, installer):
+    """The exact bytes a desktop client will accept for this installer, else ValueError.
+
+    Mirrors the client's rules (orion_mini.package_updates.validate_cloud_release) so a
+    description the desktop would refuse is refused here first, when the service starts.
+    """
+    try:
+        value = _strict(raw) if len(raw) <= MAX_DESCRIPTION else None
+    except (ValueError, UnicodeError, RecursionError):
+        value = None
+    path, sha256 = installer
+    notes = value.get('notes') if isinstance(value, dict) else None
+    if (not isinstance(value, dict) or set(value) != DESCRIPTION_KEYS
+            or type(value['schema']) is not int or value['schema'] != 1
+            or value['platform'] != platform
+            or value['profile'] not in ('link', 'workspace')
+            or type(value['build']) is not int or not 1 <= value['build'] <= 2 ** 53 - 1
+            or not isinstance(value['version'], str) or len(value['version']) > 100 or not VERSION.fullmatch(value['version'])
+            or value['sha256'] != sha256
+            or type(value['bytes']) is not int or value['bytes'] != path.stat().st_size
+            or not isinstance(notes, str) or len(notes) > MAX_NOTES
+            or any((ord(c) < 32 and c != '\n') or ord(c) == 127 or '‪' <= c <= '‮' or '⁦' <= c <= '⁩'
+                   for c in notes)):
+        raise ValueError(f'Desktop release description for {platform} does not match its installer')
+    return raw
+
+
 class LimitedFileResponse(FileResponse):
     """Keep the durable stream lease until completion, error or cancellation."""
     def __init__(self, *args, release, lease, seconds, **kwargs):
@@ -80,6 +129,16 @@ class Downloads:
                 if hashlib.file_digest(source, 'sha256').hexdigest() != entry['sha256']:
                     raise ValueError('Release checksum mismatch')
             self.files[key] = (path, entry['sha256'])
+        # Release descriptions are small metadata, not downloads: kept in memory, never ticketed.
+        self.desktop = {}
+        for platform, (description, installer) in DESKTOP_RELEASES.items():
+            if description in self.files:
+                if installer not in self.files:
+                    raise ValueError(f'Desktop release description for {platform} has no installer')
+                path, _ = self.files.pop(description)
+                self.desktop[platform] = desktop_description(path.read_bytes(), platform, self.files[installer])
+        if not self.files:
+            raise ValueError('Invalid release catalog')
         self.largest_file = max(path.stat().st_size for path, _ in self.files.values())
         with registry.connect() as db:
             db.execute('''CREATE TABLE IF NOT EXISTS download_tickets(
@@ -111,6 +170,19 @@ class Downloads:
             db.execute('INSERT INTO download_tickets VALUES(?,?,?,?,?)',
                        (hashlib.sha256(ticket.encode()).hexdigest(), account['id'], artifact, self.files[artifact][1], now + 300))
         return {'ticket': ticket}
+
+    def desktop_release(self, identity, platform):
+        """Native Saiph account clients: this platform's description bytes, or None."""
+        if platform not in DESKTOP_RELEASES:
+            reject(404)
+        self.registry.principal(identity)  # Active, entitled account only.
+        return self.desktop.get(platform)
+
+    def desktop_ticket(self, identity, platform):
+        """A ticket for the installer a description is published for; nothing else."""
+        if platform not in self.desktop:
+            reject(404)
+        return self.issue(identity, DESKTOP_RELEASES[platform][1])
 
     def _limited(self):
         raise HTTPException(429, 'Hosted download limit reached',

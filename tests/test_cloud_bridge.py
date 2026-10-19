@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """One-time Cloud setup accepts destinations only from the native folder picker."""
 import json
+import pytest
 from types import SimpleNamespace
 
 from orion_mini.desktop_bridge import DesktopBridge
@@ -51,3 +52,23 @@ def test_cloud_installation_refuses_web_supplied_commands_or_urls():
     obj,packets,calls,background=bridge()
     DesktopBridge.request(obj,'request','cloud.client.install',json.dumps({'url':'https://untrusted.invalid/client.exe'}))
     assert packets[0]['ok'] is False and not calls and not background
+
+
+def test_cloud_update_check_uses_the_account_source_and_restart_needs_a_download(monkeypatch, tmp_path):
+    obj, packets, calls, background = bridge()
+    workspace = obj.window.workspace
+    workspace.root = tmp_path
+    workspace.settings = {'hub': {'paired': True}}
+    workspace.hosted_blocks_self_hosted = lambda: True
+    workspace.hosted_controller = lambda: SimpleNamespace(update_feed=lambda: 'cloud_unavailable')
+    from orion_mini.update_schedule import DesktopUpdates
+    obj.updates = DesktopUpdates(workspace)
+    checks = []
+    monkeypatch.setattr('orion_mini.package_updates.check',
+        lambda root, config, **kwargs: checks.append(kwargs) or {'reason': 'cloud_unavailable'})
+    DesktopBridge.request(obj, 'check', 'app.update.check', '{}')
+    background.pop()()
+    assert checks == [{'cloud': 'cloud_unavailable'}]
+    DesktopBridge.request(obj, 'restart', 'app.update.restart', '{}')
+    with pytest.raises(ValueError, match='Download the update first'):
+        background.pop()()

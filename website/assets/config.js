@@ -24,6 +24,7 @@ window.ORION_SITE = {
   waitlistNotice: "", // Visible beside each waitlist link before collecting emails.
   hostedPrice: "",  // e.g. "€6" — empty shows "Pricing at launch"
   hostedPeriod: "/ month",
+  hostedTrial: "", // e.g. "Free for 14 days, no card needed"; only while the account site offers trials
   license: {
     core: "AGPL-3.0-or-later", // desktop app + Hub
     android: "GPL-3.0-only"  // retained upstream grant: Sefirah-Android fork

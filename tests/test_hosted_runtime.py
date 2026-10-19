@@ -93,7 +93,8 @@ def test_clock_blocked_scheduler_cannot_sync_even_with_a_locally_valid_roster(tm
     monkeypatch.setattr(controller.identity, "exists", lambda: True)
     monkeypatch.setattr(controller, "_token", lambda: "synthetic-access")
     monkeypatch.setattr(controller, "_open", lambda: None)
-    monkeypatch.setattr(controller, "_refresh", lambda token: None)
+    monkeypatch.setattr(controller, "_refresh", lambda token, **options: None)
+    monkeypatch.setattr(controller, "_load_access", lambda token, **options: None)
     monkeypatch.setattr(controller, "_active", lambda: True)
     controller.session = SimpleNamespace(roster={"expires_at": now + 12 * 3600})
     controller.transport = SimpleNamespace(server_offset=3601)
@@ -249,6 +250,8 @@ def test_root_approval_clipboard_restart_and_revocation_use_real_crypto_offline(
         def _call(self, method, path, *, token=None, value=None):
             if token is not None:
                 assert token == "synthetic-access"
+            if method == "GET" and path == "/v1/access":
+                return {"entitled": True, "until": int(time.time()) + 30 * 86400, "kinds": ["paid"]}
             if method == "GET" and path == "/v1/account":
                 return {"deployment_id": deployment, "device_trust_required": True}
             if method == "GET" and path.startswith("/v1/devices/rosters/page?"):

@@ -15,6 +15,8 @@ sealed interface HostedPhoneCommand {
     data class Dial(val number: String) : HostedPhoneCommand
     data class ContactsSearch(val query: String) : HostedPhoneCommand
     data object CallsLog : HostedPhoneCommand
+    /** One MMS part for the asking computer only, as a sealed attachment (feature "sms-mms"). */
+    data class SmsPart(val thread: Long, val message: Long, val part: Long) : HostedPhoneCommand
 }
 
 /**
@@ -27,7 +29,9 @@ sealed interface HostedPhoneCommand {
  * the last ten minutes, only while the owner's "Texts and calls" switch for Hosted
  * is on, and only with the matching Android permission. Phone data is published
  * under the same switch and permissions. Calls are first come, first served (see
- * [HostedCallRace]). MMS pictures, group replies and call audio are not part of Hosted.
+ * [HostedCallRace]). MMS pictures (announced by name, sent on request) and group
+ * replies are features listed in `phone.features`, never in `phone.capabilities`,
+ * which older desktops check name by name. Call audio is not part of Hosted.
  */
 object HostedPhoneFrames {
     /** Below the sealed 24,000-byte plaintext limit, leaving room for the signature. */
@@ -38,12 +42,75 @@ object HostedPhoneFrames {
     const val SUBSCRIBE = "phone.subscribe"
     /** A subscription lasts this long; computers renew it with each capabilities heartbeat. */
     const val SUBSCRIPTION_MILLIS = 600_000L
+    // MMS parts and group replies need "sms": the phone lists "sms-mms" and "sms-group" exactly when it offers texts.
     val COMMAND_CAPABILITY = mapOf("photo.request" to "photos", "sms.sync" to "sms", "sms.open" to "sms", "sms.send" to "sms", "sms.compose" to "sms",
-        "call.command" to "call-control", "call.dial" to "call-dial", "contacts.search" to "contacts", "calls.log.request" to "call-log")
+        "call.command" to "call-control", "call.dial" to "call-dial", "contacts.search" to "contacts", "calls.log.request" to "call-log",
+        "sms.attachment.request" to "sms")
     val DATA_CAPABILITY = mapOf("photos.item" to "photos", "photos.sync" to "photos", "sms.thread" to "sms", "sms.messages" to "sms", "sms.remove" to "sms", "sms.index" to "sms",
-        "call.state" to "calls", "call.handled" to "calls", "contacts.results" to "contacts", "calls.log" to "call-log")
+        "call.state" to "calls", "call.handled" to "calls", "contacts.results" to "contacts", "calls.log" to "call-log", "sms.attachments" to "sms")
+    /** The asking computer's MMS part, wrapped around a sealed file manifest. */
+    const val SMS_ATTACHMENT_ORIGINAL = "sms.attachment.original"
+
+    /**
+     * Features beyond `phone.capabilities` (Hub parity): their own event, which older
+     * desktops ignore, while a current desktop skips names it does not know.
+     */
+    const val FEATURES = "phone.features"
+    fun features(access: FeatureAccess, textsAndCalls: Boolean): List<String> = buildList {
+        if (access.notifications) add("notification-actions")
+        if (textsAndCalls && access.sms) { add("sms-mms"); add("sms-group") }
+    }
+    fun featuresPayload(names: List<String>) = buildJsonObject {
+        put("type", FEATURES); put("features", JsonArray(names.map(::JsonPrimitive)))
+    }
+    /** Wraps the part's file manifest; the desktop accepts it only for its own recent request. */
+    fun smsAttachmentOriginal(thread: Long, message: Long, part: Long, request: String): (JsonObject) -> JsonObject {
+        require(thread in 0..MAX_SAFE && message in 0..MAX_SAFE && part in 0..MAX_SAFE && java.util.UUID.fromString(request).toString() == request)
+        return { file -> buildJsonObject {
+            put("type", SMS_ATTACHMENT_ORIGINAL); put("thread", thread); put("message", message); put("part", part)
+            put("request", request); put("file", file)
+        } }
+    }
     /** Sent only to the computer whose answer, decline or dial was overtaken. */
     const val REFUSED = "call.refused"
+
+    /**
+     * Phone screen and app list (docs/PHONE_SCREEN.md). Advertised in their own event:
+     * desktops released before this feature reject unknown names in `phone.capabilities`
+     * and ignore unknown event types, so they keep working with this phone.
+     */
+    const val SCREEN_CAPABILITIES = "screen.capabilities"
+    /** Phone screen offers themselves use the shared `session.offer` event (SessionOffer.kt). */
+    val SCREEN_COMMANDS = mapOf("apps.request" to "apps", "apps.icons.request" to "apps")
+    const val APPS_LIST = "apps.list"
+    private const val MAX_APP_PAGES = 10
+    private const val MAX_APPS_PER_PAGE = 200
+
+    fun screenCapabilities(allowed: Boolean): List<String> = if (allowed) listOf("screen", "apps") else emptyList()
+    fun screenCapabilitiesPayload(names: List<String>) = buildJsonObject {
+        put("type", SCREEN_CAPABILITIES); put("capabilities", JsonArray(names.map(::JsonPrimitive)))
+    }
+    /** An app-list request from a subscribed approved computer, while the owner allows it. */
+    fun screenAllowed(type: String, source: String, subscribers: Set<String>, allowed: Boolean): Boolean =
+        type in SCREEN_COMMANDS && source in subscribers && SCREEN_COMMANDS.getValue(type) in screenCapabilities(allowed)
+    fun appsRequest(payload: JsonObject): Boolean = payload == buildJsonObject { put("type", "apps.request") }
+
+    /** Launchable apps in pages that each fit one sealed event; at most ten pages. */
+    fun appsPages(rows: JsonArray): List<JsonObject> {
+        fun page(items: List<JsonElement>, index: Int, total: Int) = buildJsonObject {
+            put("type", APPS_LIST); put("page", index); put("pages", total); put("apps", JsonArray(items))
+        }
+        val pages = mutableListOf<MutableList<JsonElement>>(mutableListOf())
+        for (row in rows) {
+            val current = pages.last()
+            // Measure with the widest page numbers so renumbering never overflows.
+            if (current.size >= MAX_APPS_PER_PAGE || !fits(page(current + row, MAX_APP_PAGES - 1, MAX_APP_PAGES))) {
+                if (pages.size == MAX_APP_PAGES) break
+                pages += mutableListOf(row)
+            } else current += row
+        }
+        return pages.mapIndexed { index, items -> page(items, index, pages.size) }
+    }
 
     /** "files" is the existing encrypted file offer; the rest need the owner's switch. */
     fun capabilities(access: FeatureAccess, textsAndCalls: Boolean, photos: Boolean = false): List<String> = buildList {
@@ -97,7 +164,7 @@ object HostedPhoneFrames {
 
     /** Actions with an effect outside Saiph; each runs at most once per event. */
     fun isEffect(command: HostedPhoneCommand) = command is HostedPhoneCommand.SmsSend || command is HostedPhoneCommand.SmsCompose ||
-        command is HostedPhoneCommand.Call || command is HostedPhoneCommand.Dial
+        command is HostedPhoneCommand.Call || command is HostedPhoneCommand.Dial || command is HostedPhoneCommand.SmsPart
 
     /** Well-formed UTF-16 of at most [max] units: lone surrogates become U+FFFD, pairs are never split. */
     fun clean(value: String, max: Int): String {
@@ -143,16 +210,30 @@ object HostedPhoneFrames {
     fun carries(value: SocketMessage) = value is ConversationInfo || value is MessageList || value is RemoveConversation ||
         value is MessageIndex || value is CallInfo
 
+    /** MMS parts by name and type, the Hub's `sms.attachments` shape; the bytes follow only on request. */
+    fun attachments(thread: Long, m: TextMessage): JsonObject? {
+        val (_, body) = PhoneFeatureFrames.attachments(thread, m) ?: return null
+        val parts = body.getValue("parts").jsonArray.map { it.jsonObject }.filter { it.getValue("part").jsonPrimitive.long in 0..MAX_SAFE }
+            .distinctBy { it.getValue("part").jsonPrimitive.long }.mapNotNull { part ->
+                val mime = address(part.getValue("mime").jsonPrimitive.content)
+                if (mime.isEmpty()) null else buildJsonObject {
+                    put("part", part.getValue("part")); put("mime", mime); put("name", clean(part.getValue("name").jsonPrimitive.content, 180))
+                }
+            }
+        if (parts.isEmpty()) return null
+        return buildJsonObject { put("type", "sms.attachments"); put("thread", id(thread)); put("message", id(m.uniqueId)); put("parts", JsonArray(parts)) }
+    }
+
     /** Phone data for a subscribed computer; null for messages that are not texts or calls. */
     fun encode(value: SocketMessage): List<JsonObject>? = when (value) {
         is ConversationInfo -> listOfNotNull(fitted { limit -> buildJsonObject {
             put("type", "sms.thread"); put("thread", id(value.threadId)); put("recipients", addresses(value.recipients))
             put("message", message(value.message, limit))
-        } })
+        } }, attachments(value.threadId, value.message))
         // One message per event: each fits the sealed limit even when full of emoji.
         is MessageList -> value.messages.take(10).mapNotNull { m -> fitted { limit -> buildJsonObject {
             put("type", "sms.messages"); put("thread", id(value.threadId)); put("messages", JsonArray(listOf(message(m, limit))))
-        } } }
+        } } } + value.messages.take(10).mapNotNull { attachments(value.threadId, it) }
         is RemoveConversation -> listOf(buildJsonObject { put("type", "sms.remove"); put("thread", id(value.threadId)) })
         // Newest message IDs; the computer keeps only recent messages anyway.
         is MessageIndex -> listOf(buildJsonObject {
@@ -228,6 +309,8 @@ object HostedPhoneFrames {
             "photo.request" -> { keys("id"); text(payload, "id").takeIf { Regex("[1-9][0-9]{0,15}").matches(it) && it.toLong() <= MAX_SAFE }?.let(HostedPhoneCommand::PhotoRequest) }
             "sms.sync" -> { keys(); HostedPhoneCommand.SmsSync }
             "calls.log.request" -> { keys(); HostedPhoneCommand.CallsLog }
+            "sms.attachment.request" -> { keys("thread", "message", "part")
+                HostedPhoneCommand.SmsPart(number(payload, "thread"), number(payload, "message"), number(payload, "part")) }
             "sms.open" -> { keys("thread"); HostedPhoneCommand.SmsOpen(number(payload, "thread")) }
             "sms.send" -> { keys("thread", "text"); HostedPhoneCommand.SmsSend(number(payload, "thread"), smsText(payload)) }
             "sms.compose" -> {

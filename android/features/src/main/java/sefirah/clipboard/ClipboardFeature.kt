@@ -221,7 +221,7 @@ class ClipboardFeature @Inject constructor(
                     while (true) {
                         val count = input.read(buffer); if (count < 0) break
                         total += count
-                        if (total > 2L * 1024 * 1024 * 1024) throw IOException("Clipboard file exceeds transfer limit")
+                        if (total > networkManager.clipboardFileLimit) throw IOException("Clipboard file exceeds transfer limit")
                         output.write(buffer, 0, count)
                     }
                 } }

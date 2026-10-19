@@ -7,6 +7,8 @@ import { Enrollment } from "./Enrollment";
 import { HostedApproveDevice, HostedRootCode } from "./HostedSettings";
 import { HostedJoin } from "./HostedJoin";
 import { HostedSignIn } from "./HostedSignIn";
+import { NearbyPhone } from "./NearbyPhone";
+import { useWizardOpen } from "./pairingWizard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Disclosure } from "@/components/ui/disclosure";
 import { Button } from "@/components/ui/button";
@@ -27,10 +29,15 @@ function PhonePairingSteps({ hosted, client, phones = [], onApproved, onDone }: 
   hosted: HostedState; client: Client; phones?: ConnectedPhone[]; onApproved?: (label: string) => void; onDone?: () => void;
 }) {
   const headingId = useId();
+  useWizardOpen();
   const [step, setStep] = useState<"scan" | "approve" | "approved">("scan");
   const [approvedLabel, setApprovedLabel] = useState("");
   // Requests already on the list when the owner goes back to scanning: they wait for an explicit Continue.
   const ignored = useRef<string[]>([]);
+  // A phone comparing codes over the local network: its Cloud request must not pull the wizard to the fingerprint list.
+  const [nearby, setNearby] = useState(false);
+  const nearbyRef = useRef(false);
+  const nearbyActive = (value: boolean) => { nearbyRef.current = value; setNearby(value); };
   const heading = useRef<HTMLHeadingElement>(null);
   const firstRender = useRef(true);
   useEffect(() => {
@@ -43,7 +50,7 @@ function PhonePairingSteps({ hosted, client, phones = [], onApproved, onDone }: 
     let alive = true;
     const look = () => client.call<{ requests: Offered[] }>("hosted.requests").then(value => {
       const requests = Array.isArray(value?.requests) ? value.requests : [];
-      if (alive && requests.some(item => !ignored.current.includes(item.device_id))) setStep("approve");
+      if (alive && !nearbyRef.current && requests.some(item => !ignored.current.includes(item.device_id))) setStep("approve");
     }).catch(() => undefined);
     void look();
     const timer = window.setInterval(look, 4000);
@@ -61,8 +68,10 @@ function PhonePairingSteps({ hosted, client, phones = [], onApproved, onDone }: 
         {step === "scan" ? "Scan on your phone" : step === "approve" ? "Approve your phone" : connected ? "Phone connected" : "Phone approved"}
       </h3>
       {step === "scan" ? <>
-        <p className="m-0 text-sm leading-relaxed text-muted-foreground">Open Saiph on your phone, sign in with the same account and tap Scan the code on your computer. This screen moves on by itself once your phone has scanned.</p>
-        <HostedRootCode hosted={hosted} client={client} autoShow compact />
+        <p className="m-0 text-sm leading-relaxed text-muted-foreground">Open Saiph on your phone and sign in with the same account. Then tap Find my computer, or scan the code below. This screen moves on by itself.</p>
+        <NearbyPhone client={client} onActive={nearbyActive}
+          onApproved={label => { nearbyActive(false); setApprovedLabel(label); setStep("approved"); onApproved?.(label); }} />
+        {!nearby && <HostedRootCode hosted={hosted} client={client} autoShow compact />}
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
           <p role="status" className="m-0 text-sm text-muted-foreground">Waiting for your phone…</p>
           <Button variant="secondary" onClick={() => setStep("approve")}>Continue to approval</Button>
@@ -104,13 +113,13 @@ export function HostedPhoneSetup({ hosted, client, phones, onApproved, onDone }:
   if (hosted.role === "member") return <ConnectionStep step={1}>{hosted.status === "awaiting_approval"
     ? <HostedJoin client={client} waiting />
     : <div className="grid gap-3"><h3 className="m-0 text-lg font-semibold">Use your main computer to add a phone</h3>
-      <p className="m-0 text-muted-foreground">Phones are added on your main computer. Open its Phone tab and choose Connect a phone. After approval, your phone can connect to this computer too.</p></div>}</ConnectionStep>;
+      <p className="m-0 text-muted-foreground">Phones are added on your main computer. Open its Phone tab and choose Add a device. After approval, your phone can connect to this computer too.</p></div>}</ConnectionStep>;
   if (!hosted.identity) return <ConnectionStep step={1}><div className="grid gap-4">
     <p className="m-0 flex items-center gap-2 text-status-on"><Check className="size-4" />You're signed in</p>
     <h3 className="m-0 text-lg font-semibold">Set up your main computer</h3>
     <p className="m-0 text-muted-foreground">This computer will approve your phone and other devices. Keep it online regularly so they stay connected.</p>
     <div><Action variant="default" run={() => client.call("hosted.setup_root")}>Set up this computer</Action></div>
-    <Disclosure summary="Already use Saiph on another computer?"><HostedJoin client={client} waiting={false} /></Disclosure>
+    <Disclosure summary="Join as another computer"><HostedJoin client={client} waiting={false} /></Disclosure>
   </div></ConnectionStep>;
   return <PhonePairingSteps hosted={hosted} client={client} phones={phones} onApproved={onApproved} onDone={onDone} />;
 }

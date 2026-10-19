@@ -38,21 +38,50 @@ public class Pad extends Activity {
         }
         return true;
     }
+    static Bitmap alphaImage() {
+        Bitmap b=Bitmap.createBitmap(240,160,Bitmap.Config.ARGB_8888);
+        for(int y=0;y<160;y++)for(int x=0;x<240;x++) {
+            int alpha=(x/80)*127; if(x>=160)alpha=255;
+            b.setPixel(x,y,Color.argb(alpha,40,180,(y/20)%2==0?200:80));
+        }
+        return b;
+    }
+    static boolean matchesAlpha(Bitmap b) {
+        if(b==null||b.getWidth()!=240||b.getHeight()!=160)return false;
+        Bitmap expected=alphaImage();boolean match=true;
+        for(int y=0;y<160&&match;y++)for(int x=0;x<240;x++) {
+            int a=b.getPixel(x,y),e=expected.getPixel(x,y);
+            if(Color.alpha(a)!=Color.alpha(e)||Color.alpha(e)>0&&(Math.abs(Color.red(a)-Color.red(e))>1||Math.abs(Color.green(a)-Color.green(e))>1||Math.abs(Color.blue(a)-Color.blue(e))>1)){match=false;break;}
+        }
+        expected.recycle();return match;
+    }
     static File file(Context c,String name) throws Exception {
-        if(!name.matches("ORION-[A-Za-z0-9._-]+")) throw new IllegalArgumentException("Fixture filename required");
+        if(name==null || !name.startsWith("ORION-") || name.length()>180 || name.chars().anyMatch(ch -> ch<32 || "/\\:*?\"<>|#".indexOf(ch)>=0)) throw new IllegalArgumentException("Fixture filename required");
         return new File(c.getFilesDir(),name);
     }
     static File makeFile(Context c,String name) throws Exception {
         File f=file(c,name);
         try(FileOutputStream out=new FileOutputStream(f)) {
-            if(name.endsWith(".png")) { Bitmap b=image(); b.compress(Bitmap.CompressFormat.PNG,100,out);b.recycle(); }
+            if(name.endsWith(".empty.txt")) { /* Deliberately zero bytes. */ }
+            else if(name.endsWith(".malformed.png"))out.write("ORION deliberately invalid synthetic image".getBytes(StandardCharsets.US_ASCII));
+            else if(name.endsWith(".alpha.png")) { Bitmap b=alphaImage();b.compress(Bitmap.CompressFormat.PNG,100,out);b.recycle(); }
+            else if(name.endsWith(".webp")) { Bitmap b=image();b.compress(Bitmap.CompressFormat.WEBP_LOSSLESS,100,out);b.recycle(); }
+            else if(name.endsWith(".jpg")) { Bitmap b=image();b.compress(Bitmap.CompressFormat.JPEG,95,out);b.recycle(); }
+            else if(name.endsWith(".png")) { Bitmap b=image(); b.compress(Bitmap.CompressFormat.PNG,100,out);b.recycle(); }
             else out.write("Orion phone to laptop acceptance fixture\nSynthetic content only.\n".getBytes(StandardCharsets.UTF_8));
+        }
+        if(name.endsWith(".rotated.jpg")) {
+            android.media.ExifInterface exif=new android.media.ExifInterface(f.getAbsolutePath());
+            exif.setAttribute(android.media.ExifInterface.TAG_ORIENTATION,String.valueOf(android.media.ExifInterface.ORIENTATION_ROTATE_90));exif.saveAttributes();
         }
         prefs(c).edit().putString("fixture_name",name).putString("fixture_sha256",hash(java.nio.file.Files.readAllBytes(f.toPath()))).apply();
         return f;
     }
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
+        // Only this visible disposable endpoint stays awake during a fixture
+        // round. This never unlocks the device or changes its lock settings.
+        getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         current=this;
         LinearLayout layout=new LinearLayout(this);layout.setOrientation(LinearLayout.VERTICAL);layout.setPadding(25,25,25,25);
         TextView title=new TextView(this);title.setText("Saiph Acceptance Pad — synthetic tests");layout.addView(title);
@@ -71,20 +100,28 @@ public class Pad extends Activity {
             String value=i.getStringExtra("value");
             switch(action) {
                 case "copy_text":
-                    if(value==null || !value.startsWith("ORION-") || value.length()>4096)throw new IllegalArgumentException("Synthetic text required");
+                    if(value==null || !value.startsWith("ORION-") || value.length()>20000)throw new IllegalArgumentException("Synthetic text required");
                     editor.setText(value);editor.selectAll();editor.onTextContextMenuItem(android.R.id.copy);break;
+                case "clear_clipboard":clip.clearPrimaryClip();break;
                 case "paste_text":
                     editor.setText("");editor.onTextContextMenuItem(android.R.id.paste);
                     prefs(this).edit().putString("text_sha256",hash(editor.getText().toString().getBytes(StandardCharsets.UTF_8))).putBoolean("text_match",editor.getText().toString().equals(value)).apply();break;
                 case "copy_image": {
-                    String name="ORION-PHONE-CLIPBOARD.png";makeFile(this,name);
+                    String variant=i.getStringExtra("variant");if(variant==null)variant="checker";
+                    String suffix;
+                    switch(variant){case "checker":suffix=".png";break;case "alpha":suffix=".alpha.png";break;case "webp":suffix=".webp";break;case "rotated_jpeg":suffix=".rotated.jpg";break;case "malformed":suffix=".malformed.png";break;default:throw new IllegalArgumentException("Known image fixture required");}
+                    String name="ORION-PHONE-CLIPBOARD"+suffix;makeFile(this,name);
                     clip.setPrimaryClip(ClipData.newUri(getContentResolver(),"Synthetic checkerboard",Uri.parse("content://"+AUTHORITY+"/"+name)));break;
                 }
                 case "paste_image": {
                     ClipData data=clip.getPrimaryClip();Bitmap b=null;
+                    prefs(this).edit().putBoolean("clipboard_has_uri",data!=null && data.getItemCount()>0 && data.getItemAt(0).getUri()!=null)
+                        .putBoolean("clipboard_has_text",data!=null && data.getItemCount()>0 && data.getItemAt(0).getText()!=null)
+                        .putString("clipboard_mime",data!=null && data.getDescription().getMimeTypeCount()>0?data.getDescription().getMimeType(0):"none").apply();
                     if(data!=null && data.getItemCount()>0 && data.getItemAt(0).getUri()!=null)
                         try(InputStream in=getContentResolver().openInputStream(data.getItemAt(0).getUri())) { b=BitmapFactory.decodeStream(in); }
-                    prefs(this).edit().putBoolean("image_match",matches(b)).putInt("image_width",b==null?0:b.getWidth()).putInt("image_height",b==null?0:b.getHeight()).apply();
+                    boolean match="alpha".equals(i.getStringExtra("variant"))?matchesAlpha(b):matches(b);
+                    prefs(this).edit().putBoolean("image_match",match).putInt("image_width",b==null?0:b.getWidth()).putInt("image_height",b==null?0:b.getHeight()).apply();
                     if(b!=null) { ImageView view=new ImageView(this);view.setImageBitmap(b);((LinearLayout)editor.getParent()).addView(view); }break;
                 }
                 case "share_file": {
@@ -105,10 +142,14 @@ public class Pad extends Activity {
                         .addAction(new Notification.Action.Builder(android.R.drawable.ic_menu_add,"Mark fixture",mark).build()).addAction(replyAction).build());break;
                 }
                 case "publish_photo": {
-                    String name=i.getStringExtra("name");ContentValues values=new ContentValues();values.put(MediaStore.Images.Media.DISPLAY_NAME,name);values.put(MediaStore.Images.Media.MIME_TYPE,"image/png");values.put(MediaStore.Images.Media.RELATIVE_PATH,"Pictures/OrionAcceptance");
+                    String name=i.getStringExtra("name");file(this,name);ContentValues values=new ContentValues();values.put(MediaStore.Images.Media.DISPLAY_NAME,name);values.put(MediaStore.Images.Media.MIME_TYPE,"image/png");values.put(MediaStore.Images.Media.RELATIVE_PATH,"Pictures/OrionAcceptance");
                     Uri uri=getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,values);
                     try(OutputStream out=getContentResolver().openOutputStream(uri)) { Bitmap b=image();b.compress(Bitmap.CompressFormat.PNG,100,out);b.recycle(); }
-                    prefs(this).edit().putString("photo_uri",uri.toString()).putString("photo_name",name).putString("photo_id",uri.getLastPathSegment()).apply();break;
+                    String digest;try(InputStream input=getContentResolver().openInputStream(uri);ByteArrayOutputStream bytes=new ByteArrayOutputStream()) {
+                        byte[] buffer=new byte[8192];int count;while((count=input.read(buffer))!=-1) { bytes.write(buffer,0,count);if(bytes.size()>1048576)throw new IOException("Fixture exceeds expected size"); }
+                        digest=hash(bytes.toByteArray());
+                    }
+                    prefs(this).edit().putString("photo_uri",uri.toString()).putString("photo_name",name).putString("photo_id",uri.getLastPathSegment()).putString("photo_sha256",digest).apply();break;
                 }
                 case "cleanup": {
                     String uri=prefs(this).getString("photo_uri",null);if(uri!=null)getContentResolver().delete(Uri.parse(uri),null,null);

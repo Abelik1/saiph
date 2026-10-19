@@ -54,6 +54,15 @@ not block Saiph's basic setup. Bundling ADB/scrcpy, restic or Deskflow later
 requires adding exact binary hashes and their Apache/BSD/GPL source obligations
 to this distribution inventory first.
 
+Windows now bundles Saiph's own camera filters built from the pinned
+UnityCapture filter source under `native/camera/upstream/`, with its MIT notice,
+Microsoft DirectShow copyright headers, explicit Saiph adaptations and a matching
+source/build/hash receipt. These are separate from the MIT SDK. No Unity runtime,
+OBS Studio or scrcpy is required by the integrated camera session. Their optional
+legacy paths remain available. Package inventories verify the exact component
+bytes; actual registration, meeting-app interoperability and independent source
+and licensing review remain release acceptance work.
+
 External friend distribution is pending completed native notices/matching source,
 publisher signing, clean installation, upgrade, permission and recovery checks.
 This artifact is explicitly an internal preview, not an externally reviewed

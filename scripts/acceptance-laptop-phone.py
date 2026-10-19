@@ -17,6 +17,7 @@ import shlex
 import subprocess
 import time
 import xml.etree.ElementTree as ET
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -77,7 +78,17 @@ class Run:
         self.results = []
 
     def shell(self, *args):
-        result = subprocess.run([self.args.adb, '-s', self.args.serial, 'shell', shlex.join(map(str, args))], capture_output=True, text=True, timeout=25)
+        # Qt owns these synthetic Windows clipboard images via delayed native
+        # rendering. Keep its GUI alive while ADB operates the phone; otherwise
+        # Saiph can time out requesting pixels from this blocked fixture owner.
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(subprocess.run,
+                [self.args.adb, '-s', self.args.serial, 'shell', shlex.join(map(str, args))],
+                capture_output=True, text=True, encoding='utf-8', timeout=25)
+            while not future.done():
+                self.app.processEvents()
+                time.sleep(.01)
+            result = future.result()
         if result.returncode or 'SecurityException' in result.stdout or 'Error:' in result.stdout:
             raise RuntimeError('ADB fixture command failed')
         return result.stdout
@@ -101,7 +112,11 @@ class Run:
 
     def pad(self, command, **extras):
         before = self.status().get('completed_at', 0)
-        self.shell('am', 'start', '-W', '-n', PACKAGE + '/.Pad')
+        # A prior share gesture can leave Saiph's chooser above this activity in
+        # the helper's task. Delivering an intent to the covered Pad still runs
+        # copy commands, but Android correctly denies its background paste/read.
+        # Return to the visible native endpoint before issuing any new command.
+        self.shell('am', 'start', '-W', '--activity-clear-top', '-n', PACKAGE + '/.Pad')
         self.shell('content', 'call', '--uri', f'content://{PACKAGE}.fixtures', '--method', 'command', '--arg', json.dumps({'command': command, **extras}))
         def completed():
             s = self.status()

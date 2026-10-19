@@ -11,17 +11,21 @@ export function checkedAccess(value) {
   return /** @type {BetaAccess} */ (value);
 }
 
-/** @typedef {BetaAccess & {kinds: ("admin"|"beta"|"paid")[]}} HostedAccess */
+/** @typedef {BetaAccess & {kinds: ("admin"|"beta"|"paid"|"trial")[], trialUntil: number | null}} HostedAccess */
 /** /v1/billing/access: the same consistency rules plus which grant kinds apply.
+ * A service with free trials adds `trial_until` for accounts that had one.
  * @param {unknown} value @returns {HostedAccess} */
 export function checkedHostedAccess(value) {
+  const keys = value && typeof value === "object" ? Object.keys(value).sort().join(",") : "";
   if (!value || typeof value !== "object" || !("kinds" in value) || !Array.isArray(value.kinds)
-    || Object.keys(value).sort().join(",") !== "entitled,kinds,until"
-    || value.kinds.some((kind) => !["admin", "beta", "paid"].includes(kind))
+    || (keys !== "entitled,kinds,until" && keys !== "entitled,kinds,trial_until,until")
+    || value.kinds.some((kind) => !["admin", "beta", "paid", "trial"].includes(kind))
     || new Set(value.kinds).size !== value.kinds.length
     || (value.kinds.length > 0) !== ("entitled" in value && value.entitled === true)) throw new Error("Access response rejected");
-  const {kinds, ...access} = /** @type {{kinds: ("admin"|"beta"|"paid")[], entitled: unknown, until: unknown}} */ (value);
-  return {...checkedAccess(access), kinds};
+  const {kinds, trial_until: trialUntil = null, ...access} =
+    /** @type {{kinds: ("admin"|"beta"|"paid"|"trial")[], trial_until?: unknown, entitled: unknown, until: unknown}} */ (value);
+  if (trialUntil !== null && (!Number.isSafeInteger(trialUntil) || Number(trialUntil) <= 0)) throw new Error("Access response rejected");
+  return {...checkedAccess(access), kinds, trialUntil: /** @type {number | null} */ (trialUntil)};
 }
 
 /** Browser input supplies only a code. Identity comes from the SDK session/token.

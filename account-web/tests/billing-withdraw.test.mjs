@@ -38,9 +38,10 @@ function fixture({startedAgo=86400,status="active"}={}) {
     checkout:{sessions:{list:async()=>({has_more:false,data:[]}),create:async(params,options)=>{calls.checkout.push({params,options});
       return {...params,id:"cs_test_synthetic",livemode:false,url:"https://checkout.stripe.com/c/pay/cs_test_synthetic"};}}},
   };
-  let mapping={subject:owner,customerId:"cus_synthetic"};
+  let mapping={subject:owner,customerId:"cus_synthetic"};let trial=null;
   const store={findCustomer:async()=>mapping,withCustomer:async(subject,callback)=>callback(mapping),
-    getOrCreateCustomer:async()=>mapping,setMapping:(value)=>{mapping=value;}};
+    getOrCreateCustomer:async()=>mapping,setMapping:(value)=>{mapping=value;},setTrial:(value)=>{trial=value;},
+    trialFacts:async()=>({stored:trial,emailUsed:false,subscribed:false,started:trial?1:0})};
   const deps={env,getSession:async()=>({user:{sub:owner}}),createStripe:()=>stripe,pushGrant:async()=>true,
     withStore:async(cfg,callback)=>callback(store)};
   return {stripe,store,calls,sub,charges,deps};

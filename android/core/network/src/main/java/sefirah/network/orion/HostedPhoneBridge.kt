@@ -21,6 +21,7 @@ import sefirah.communication.sms.SMSHelper
 import sefirah.communication.sms.SmsFeature
 import sefirah.communication.utils.ContactsHelper
 import sefirah.domain.model.*
+import sefirah.media.PlaybackFeature
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -73,7 +74,7 @@ class HostedSmsKnown(context: Context, private val device: String) {
  */
 @Singleton
 class HostedPhoneBridge @Inject constructor(private val context: Context, private val sms: SmsFeature,
-                                            private val calls: CallStateFeature) {
+                                            private val calls: CallStateFeature, private val playback: PlaybackFeature) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val mutex = Mutex()
     private val race = HostedCallRace.shared
@@ -81,10 +82,19 @@ class HostedPhoneBridge @Inject constructor(private val context: Context, privat
     private val callDevices = mutableSetOf<String>()
     private val lastSync = mutableMapOf<String, Long>()
     private var contactCache: Pair<Long, List<ContactInfo>>? = null
+    private var mediaEnabled = false
 
-    /** Match the features to the switch, permissions and subscribers; resume unfinished syncs. */
-    suspend fun refresh(textsAndCalls: Boolean, connected: Boolean, subscribers: Set<String>) = mutex.withLock {
+    /**
+     * Match the features to the switches, permissions and subscribers; resume
+     * unfinished syncs. Media sessions are read through notification access, only
+     * while [media] (the owner's status switch) is on and a computer subscribed.
+     */
+    suspend fun refresh(textsAndCalls: Boolean, connected: Boolean, subscribers: Set<String>, media: Boolean = false) = mutex.withLock {
         val access = OrionPermissions.read(context)
+        val playing = media && access.notifications && subscribers.isNotEmpty()
+        if (playing && !mediaEnabled) { playback.enable(""); mediaEnabled = true }
+        if (!playing && mediaEnabled) { playback.disable(""); mediaEnabled = false; OrionPhoneFeatures.media.retain(emptySet()); HostedFeatureBridge.mediaChanged() }
+        if (mediaEnabled) OrionPhoneFeatures.media.retain(playback.getActivePackageNames())?.let { HostedFeatureBridge.mediaChanged() }
         val messages = if (textsAndCalls && access.sms) subscribers else emptySet()
         (smsDevices - messages).forEach { sms.disable(it); smsDevices.remove(it); lastSync.remove(it) }
         (messages - smsDevices).forEach { sms.enable(it); smsDevices.add(it) }
@@ -103,6 +113,7 @@ class HostedPhoneBridge @Inject constructor(private val context: Context, privat
 
     suspend fun stop() = mutex.withLock {
         smsDevices.forEach { sms.disable(it) }; callDevices.forEach { calls.disable(it) }
+        if (mediaEnabled) { playback.disable(""); mediaEnabled = false; OrionPhoneFeatures.media.retain(emptySet()) }
         smsDevices.clear(); callDevices.clear(); lastSync.clear(); contactCache = null
     }
 
@@ -117,7 +128,7 @@ class HostedPhoneBridge @Inject constructor(private val context: Context, privat
                 send: (String, JsonObject) -> Boolean, everyone: () -> Collection<String>) {
         val unique = UUID.fromString(id).leastSignificantBits and Long.MAX_VALUE
         when (command) {
-            is HostedPhoneCommand.PhotoRequest -> Unit // Handled by the app's encrypted gallery transport.
+            is HostedPhoneCommand.PhotoRequest, is HostedPhoneCommand.SmsPart -> Unit // Sealed attachments: sent by the app's runtime.
             HostedPhoneCommand.SmsSync -> {
                 // The full list goes only to the computer that asked.
                 HostedSmsKnown(context, source).clear()
@@ -126,8 +137,8 @@ class HostedPhoneBridge @Inject constructor(private val context: Context, privat
             is HostedPhoneCommand.SmsOpen -> if (source in smsDevices) sms.handleMessagesRequest(source, MessagesRequest(command.thread))
             is HostedPhoneCommand.SmsSend -> {
                 val recipients = SMSHelper.getThreadRecipients(context, command.thread)
-                // One-to-one replies only: group replies need MMS and stay on the phone.
-                require(recipients.size == 1)
+                // Group replies (feature "sms-group") go out as MMS through upstream's group setting, as on the Hub.
+                require(recipients.size in 1..10)
                 val subscription = SMSHelper.getNewestMessageRef(context, command.thread)
                     ?.let { SMSHelper.getMessagesByRefs(context, listOf(it)).firstOrNull()?.subscriptionID } ?: 0
                 sms.sendTextMessage("", TextMessage(uniqueId = unique, addresses = recipients, body = command.text, subscriptionId = subscription))
@@ -163,6 +174,25 @@ class HostedPhoneBridge @Inject constructor(private val context: Context, privat
                 send(source, HostedPhoneFrames.contacts(command.query, all))
             }
             HostedPhoneCommand.CallsLog -> send(source, HostedPhoneFrames.callLog(CallLogHelper.getCallLogs(context)))
+        }
+    }
+
+    /**
+     * One quick action from a subscribed computer. The runtime has checked the
+     * sender and that the control is listed in this phone's current status;
+     * Android permissions are checked again here. [answer] reaches the sender only.
+     */
+    fun control(command: PhoneControlCommand, answer: (JsonObject) -> Boolean, setMobileData: (Boolean) -> Unit) {
+        if (PhoneQuickControls.apply(context, command)) return // Ring, ringer, Do Not Disturb, hotspot: shared with the Hub.
+        when (command) {
+            is PhoneControlCommand.Media -> {
+                check(mediaEnabled && command.source in playback.getActivePackageNames())
+                val type = when (command.action) { "play" -> MediaActionType.Play; "pause" -> MediaActionType.Pause; "next" -> MediaActionType.Next; else -> MediaActionType.Previous }
+                scope.launch { playback.handlePlaybackAction("", MediaAction(type, command.source, null)) }
+            }
+            PhoneControlCommand.Wallpaper -> answer(PhoneStatusFrames.wallpaper(PhoneQuickControls.wallpaper(context)))
+            is PhoneControlCommand.MobileData -> setMobileData(command.allowed)
+            else -> Unit // Status: the runtime resends it itself.
         }
     }
 }

@@ -10,7 +10,7 @@ button:focus-visible, summary:focus-visible, .phone-photo-image:focus-visible { 
 .link-header nav > button, .workspace-navigation > summary { height: 100%; padding: 0 4px; border: 0; border-radius: 0; background: transparent; color: var(--muted-foreground); font-size: 13px; font-weight: 500; gap: 9px; position: relative; }
 .link-header nav > button:hover, .workspace-navigation > summary:hover { color: #f3f5f9; }
 .link-header nav > button[aria-current], .workspace-navigation > summary.active { color: #f3f5f9; }
-.link-header nav > button[aria-current]::after, .workspace-navigation > summary.active::after { content: ""; position: absolute; width: 26px; height: 3px; border-radius: 4px; background: var(--primary); bottom: 17px; left: 50%; transform: translateX(-50%); }
+.link-header nav > button[aria-current]:not([data-slot="nav-item"])::after, .workspace-navigation > summary.active::after { content: ""; position: absolute; width: 26px; height: 3px; border-radius: 4px; background: var(--primary); bottom: 17px; left: 50%; transform: translateX(-50%); }
 .workspace-navigation { position: relative; margin: 0; }
 .workspace-navigation > summary { list-style: none; display: flex; cursor: pointer; }
 .workspace-navigation > summary::-webkit-details-marker { display: none; }

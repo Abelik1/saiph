@@ -11,10 +11,10 @@ module.exports = async ({page,expect,session}) => {
   await page.screenshot({path:path.join(out,'cloud.png')});
   await page.getByRole('button',{name:'Cloud settings',exact:true}).click();
   await expect(page.getByRole('tab',{name:'Connections',exact:true})).toHaveAttribute('aria-selected','true');
-  await expect(page.getByRole('heading',{name:'Cloud settings',exact:true})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Cloud folders',exact:true})).toBeVisible();
   await page.getByLabel('Cloud folder',{exact:true}).fill(path.join(session.profile,'Synthetic Cloud'));
-  await page.getByRole('button',{name:'Save preferences',exact:true}).click();
-  await expect(page.getByText('Preferences saved.',{exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Save folder',exact:true}).click();
+  await expect(page.getByText('Cloud folder saved.',{exact:true})).toBeVisible();
   expect(JSON.parse(fs.readFileSync(path.join(session.profile,'settings.json'),'utf8')).cloud.path).toBe(path.join(session.profile,'Synthetic Cloud'));
   await page.screenshot({path:path.join(out,'cloud-settings.png')});
   // Synthetic activity in this disposable profile, read through the real

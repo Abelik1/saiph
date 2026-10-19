@@ -246,13 +246,14 @@ function element() {
     appendChild() {}, insertAdjacentElement() {} };
 }
 const form = element(), details = element(), inactive = element(), contact = element(), subscribe = element();
-const beta = element(), betaBox = element(), status = element(), account = element();
+subscribe.dataset = {liveText: 'Subscribe', trialText: 'Start your free trial'};
+const beta = element(), betaBox = element(), status = element(), account = element(), trial = element();
 const elements = {
   '[data-link="android-beta"]': [beta], '[data-android-beta]': [betaBox],
   '[data-link="waitlist"]': [form], '[data-waitlist-details]': [details],
   '[data-waitlist-inactive]': [inactive], '[data-privacy-contact]': [contact],
   '[data-link="subscribe"]': [subscribe], '[data-hosted-status]': [status],
-  '[data-link="account"]': [account]
+  '[data-link="account"]': [account], '[data-trial]': [trial]
 };
 const document = { querySelectorAll: selector => elements[selector] || [],
   querySelector: () => null, createElement: element, createTextNode: text => ({textContent: text}) };
@@ -261,7 +262,8 @@ console.log(JSON.stringify({form: form.href || '', disabled: form.attributes['ar
   hidden: details.hidden, inactiveHidden: inactive.hidden, contact: contact.href || '',
   subscribe: subscribe.href || '', subscribeText: subscribe.textContent, subscribeDisabled: subscribe.attributes['aria-disabled'] || '',
   hostedStatus: status.textContent, beta: beta.href || '', betaHidden: betaBox.hidden,
-  account: account.href || '', accountDisabled: account.attributes['aria-disabled'] || ''}));
+  account: account.href || '', accountDisabled: account.attributes['aria-disabled'] || '',
+  trial: trial.textContent, trialHidden: trial.hidden}));
 """
     result = subprocess.run([node, '-e', script, str(ROOT / 'website/assets/site.js')],
                             input=json.dumps(settings), text=True, capture_output=True, check=True)
@@ -423,3 +425,31 @@ def test_trader_address_must_be_one_plain_line(tmp_path, value):
 def test_launch_requires_trader_address(tmp_path):
     with pytest.raises(ValueError, match='SAIPH_TRADER_ADDRESS'):
         site.prepare(ROOT / 'website', tmp_path / 'launch', launch_settings(), 'launch')
+
+
+def test_free_trial_note_is_off_until_set_and_then_shown_with_a_trial_button():
+    settings = json.loads((ROOT / 'website/landing-settings.json').read_text(encoding='utf-8'))
+    assert settings['hostedTrial'] == '', 'set only in the release that turns trials on (docs/PAID_HOSTED.md)'
+    off = render_site_script(settings)
+    assert off['trialHidden'] is True and off['subscribeText'] == 'Subscribe'
+    on = render_site_script({**settings, 'hostedTrial': 'Free for 14 days, no card needed'})
+    assert on['trial'] == 'Free for 14 days, no card needed' and on['trialHidden'] is False
+    assert on['subscribeText'] == 'Start your free trial' and on['subscribe'] == settings['subscribeUrl']
+    # Without open subscriptions there is no trial to start.
+    assert render_site_script({'hostedTrial': 'Free for 14 days'})['trialHidden'] is True
+    assert site.validate_settings({**SUBSCRIBE, 'hostedTrial': 'Free for 14 days, no card needed'}, 'preview')['hostedTrial']
+
+
+@pytest.mark.parametrize('settings', [{'hostedTrial': 'Free for 14 days'}, {**SUBSCRIBE, 'hostedTrial': 'x' * 81},
+                                      {**SUBSCRIBE, 'hostedTrial': '<b>Free</b>'}, {**SUBSCRIBE, 'hostedTrial': 14}])
+def test_bad_trial_notes_fail(settings):
+    with pytest.raises(ValueError):
+        site.validate_settings(settings, 'preview')
+
+
+def test_cloud_terms_and_privacy_describe_the_free_trial():
+    terms = (ROOT / 'website/terms.html').read_text(encoding='utf-8')
+    assert 'id="trial"' in terms and 'One free trial per person' in terms and 'Nothing is charged automatically' in terms
+    assert 'within 14 days of your first payment' in terms
+    privacy = (ROOT / 'website/account-privacy.html').read_text(encoding='utf-8')
+    assert 'keyed hash of your verified email address' in privacy and 'Free trial records' in privacy

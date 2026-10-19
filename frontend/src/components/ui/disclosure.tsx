@@ -7,14 +7,16 @@ import { cn } from "@/lib/utils";
  * Something you can open: a bordered row with a chevron, built on <details> so it
  * needs no script and keyboard and screen readers treat it as a disclosure. Use it
  * for options and extra detail; use Select for a choice and Tabs for places.
+ * `meta` sits beside the chevron for a short count or status, such as a Badge.
  */
 function Disclosure({
   summary,
   icon,
+  meta,
   className,
   children,
   ...props
-}: Omit<React.ComponentProps<"details">, "summary"> & { summary: React.ReactNode; icon?: React.ReactNode }) {
+}: Omit<React.ComponentProps<"details">, "summary"> & { summary: React.ReactNode; icon?: React.ReactNode; meta?: React.ReactNode }) {
   return (
     <details
       data-slot="disclosure"
@@ -27,6 +29,7 @@ function Disclosure({
       >
         {icon}
         <span className="min-w-0 flex-1">{summary}</span>
+        {meta}
         <span aria-hidden="true" className="disclosure-chevron" />
       </summary>
       <div className="grid gap-3 text-[13px] text-muted-foreground">{children}</div>

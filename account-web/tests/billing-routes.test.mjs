@@ -23,7 +23,7 @@ function fixture() {
  const sub={id:"sub_synthetic",customer:customer.id,livemode:false,metadata,status:"active",cancel_at_period_end:false,canceled_at:null,ended_at:null,items:{has_more:false,data:[{quantity:1,current_period_end:2000000000,price:{id:monthly,livemode:false,product:config.productId}}]}};
  const dispute={id:"dp_synthetic",livemode:false,status:"needs_response",charge:{id:"ch_synthetic",livemode:false,customer:customer.id}};
  async function lock(callback) {let release;const previous=queue;queue=new Promise(r=>release=r);await previous;try{return await callback();}finally{release();}}
- const store={getOrCreateCustomer:(subject,create)=>lock(async()=>{if(!mapping)mapping={subject,customerId:await create()};return mapping;}),findCustomer:async()=>mapping,
+ const store={trialFacts:async()=>({stored:null,emailUsed:false,subscribed:false,started:0}),trialGrantCandidates:async()=>[],getOrCreateCustomer:(subject,create)=>lock(async()=>{if(!mapping)mapping={subject,customerId:await create()};return mapping;}),findCustomer:async()=>mapping,
   withCustomer:(subject,callback)=>lock(async()=>callback(mapping)),
   applyEvent:async(event,callback)=>{calls.apply++;return lock(async()=>{if(!mapping||event.customerId!==mapping.customerId)throw Error("UNKNOWN_CUSTOMER");const snapshot=await callback(mapping);candidates.push(snapshot.subscriptionId);return {outcome:"applied",snapshot};});},
   applyDisputeEvent:async(event,callback)=>{calls.disputes++;return lock(async()=>{if(!mapping||event.customerId!==mapping.customerId)throw Error("UNKNOWN_CUSTOMER");return {outcome:"applied",dispute:await callback(mapping)};});},

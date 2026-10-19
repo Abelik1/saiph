@@ -19,13 +19,15 @@
 .link-header .brand b { background: linear-gradient(90deg, #e7f6ff, #9fe9f7 60%, #c4b5fd); -webkit-background-clip: text; background-clip: text; color: transparent; font-weight: 600; }
 
 /* Shell surfaces: translucent, so the strings move faintly behind them. */
-.link-header { background: rgba(5, 11, 26, 0.72); border-bottom-color: rgba(103, 232, 249, 0.1); backdrop-filter: blur(14px); }
-.link-header nav > button[aria-current]::after, .workspace-navigation > summary.active::after {
-  width: 30px; height: 6px; border-radius: 0; background: var(--wave-squiggle) repeat-x 0 0 / 12px 6px; animation: wave-slide 1.2s linear infinite;
+/* No backdrop blur: it re-blurs the whole bar for every frame of the tab wave inside it.
+   The strings behind are still, so a slightly denser tint gives the same calm bar. */
+.link-header { background: rgba(5, 11, 26, 0.86); border-bottom-color: rgba(103, 232, 249, 0.1); }
+.link-header nav > button[aria-current]:not([data-slot="nav-item"])::after, .workspace-navigation > summary.active::after {
+  width: 30px; height: 6px; border-radius: 0; background: var(--wave-squiggle) repeat-x 0 0 / 12px 6px; animation: wave-slide 1.2s steps(12) infinite;
 }
 .link-header nav > button:hover, .link-header nav > button[aria-current] { color: #e9fbff; }
-.phone-tabs > button[aria-current]::after { width: 30px; height: 6px; border-radius: 0; background: var(--wave-squiggle) repeat-x 0 0 / 12px 6px; animation: wave-slide 1.2s linear infinite; }
-.app-footer { background: rgba(5, 11, 26, 0.78); border-top-color: rgba(103, 232, 249, 0.1); box-shadow: none; color: var(--muted-foreground); backdrop-filter: blur(14px); }
+.phone-tabs > button[aria-current]::after { width: 30px; height: 6px; border-radius: 0; background: var(--wave-squiggle) repeat-x 0 0 / 12px 6px; animation: wave-slide 1.2s steps(12) infinite; }
+.app-footer { background: rgba(5, 11, 26, 0.88); border-top-color: rgba(103, 232, 249, 0.1); box-shadow: none; color: var(--muted-foreground); }
 .settings-sidebar button[aria-selected="true"] { background: rgba(34, 211, 238, 0.1); border-color: rgba(103, 232, 249, 0.3); color: #e9fbff; box-shadow: inset 2px 0 0 var(--primary); }
 .settings-sidebar button:hover { background: rgba(34, 211, 238, 0.05); }
 .workspace-nav-menu { background: rgba(9, 18, 38, 0.96); border-color: var(--border); }

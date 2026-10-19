@@ -2,9 +2,12 @@
 import {Notice} from "../ui";
 
 /** Feedback after Stripe Checkout. Wording only: access comes from the signed webhook alone. */
-export function CheckoutNotice({notice}: {notice: "returned" | "cancelled" | null}) {
+export function CheckoutNotice({notice}: {notice: "returned" | "cancelled" | "trial" | null}) {
   if (notice === "returned") return <Notice title="Thanks. Stripe is confirming your payment.">
     Access appears here once Stripe confirms it, usually within a minute. <a href="/account">Reload to check</a>.
+  </Notice>;
+  if (notice === "trial") return <Notice title="Your free trial has started.">
+    Sign in to Saiph on your computer and phone with this same account to connect them.
   </Notice>;
   if (notice === "cancelled") return <Notice tone="neutral" title="Checkout was closed.">
     Nothing was charged. You can subscribe whenever you like.

@@ -40,12 +40,15 @@ class OrionSketchActivity : ComponentActivity() {
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
         canvas = SketchView(this)
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Palette.BG); setPadding(dp(12), dp(24), dp(12), dp(16)) }
-        root.addView(buttonRow(button("Black") { canvas.color = Color.BLACK }, button("Red") { canvas.color = Color.RED }, button("Blue") { canvas.color = Color.BLUE }))
-        root.addView(buttonRow(button("Undo") { canvas.undo() }, button("Clear") { canvas.clear() }, button("Mark up a photo") { pickPhoto.launch("image/*") }))
-        root.addView(canvas, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f).apply { topMargin = dp(8); bottomMargin = dp(8) })
-        root.addView(buttonRow(button("Send to computer", true) { send() }, button("Cancel") { finish() }))
-        setContentView(root)
+        // Back in the header leaves without sending; the tools stay compact so the canvas gets the room.
+        val frame = ScreenFrame(this, "Sketch", back = ::finish, scrolling = false)
+        val root = frame.content
+        root.addView(buttonRow(compactButton("Black", Tone.SECONDARY) { canvas.color = Color.BLACK }, compactButton("Red", Tone.SECONDARY) { canvas.color = Color.RED },
+            compactButton("Blue", Tone.SECONDARY) { canvas.color = Color.BLUE }).apply { setPadding(0, 0, 0, 0) })
+        root.addView(buttonRow(compactButton("Undo") { canvas.undo() }, compactButton("Clear") { canvas.clear() }, compactButton("Mark up a photo") { pickPhoto.launch("image/*") })
+            .apply { setPadding(0, dp(8), 0, 0) })
+        root.addView(canvas, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f).apply { topMargin = dp(8) })
+        frame.dockActions(button("Send to computer", true) { send() })
     }
     private fun send() {
         if (canvas.empty()) { Toast.makeText(this, "Draw something first.", Toast.LENGTH_SHORT).show(); return }

@@ -19,7 +19,7 @@ FILES = ('index.html', 'self-host.html', 'hosted.html', 'downloads.html', 'waitl
          '.well-known/assetlinks.json', 'android/oauth2redirect.html')
 PLATFORMS = ('windows', 'linux', 'android', 'server')
 FIELDS = {'sourceVisibility', 'githubUrl', 'releasesUrl', 'downloads', 'subscribeUrl', 'waitlistUrl',
-          'androidBetaUrl', 'betaAccountUrl', 'waitlistPrivacyUrl', 'waitlistNotice', 'hostedPrice', 'hostedPeriod', 'hostedPriceNote', 'license', 'privacy', 'waitlist', 'release', 'analytics'}
+          'androidBetaUrl', 'betaAccountUrl', 'waitlistPrivacyUrl', 'waitlistNotice', 'hostedPrice', 'hostedPeriod', 'hostedPriceNote', 'hostedTrial', 'license', 'privacy', 'waitlist', 'release', 'analytics'}
 
 
 def public_url(value):
@@ -103,7 +103,7 @@ def validate_settings(settings, mode):
     config = {'sourceVisibility': 'private', 'githubUrl': '', 'releasesUrl': '',
               'downloads': {name: '' for name in PLATFORMS}, 'release': {},
               'subscribeUrl': '', 'waitlistUrl': '', 'androidBetaUrl': '', 'betaAccountUrl': '', 'waitlistPrivacyUrl': '', 'waitlistNotice': '',
-              'privacy': {}, 'waitlist': {}, 'analytics': {'enabled': False, 'scriptPath': '/_vercel/insights/script.js'}, 'hostedPrice': '', 'hostedPeriod': '/ month', 'hostedPriceNote': '',
+              'privacy': {}, 'waitlist': {}, 'analytics': {'enabled': False, 'scriptPath': '/_vercel/insights/script.js'}, 'hostedPrice': '', 'hostedPeriod': '/ month', 'hostedPriceNote': '', 'hostedTrial': '',
               'license': {'core': 'AGPL-3.0-or-later', 'android': 'GPL-3.0-only'}}
     config.update(settings)
     if not isinstance(config['downloads'], dict) or set(config['downloads']) != set(PLATFORMS):
@@ -111,7 +111,7 @@ def validate_settings(settings, mode):
     if config['license'] != {'core': 'AGPL-3.0-or-later', 'android': 'GPL-3.0-only'}:
         raise ValueError('Website licence labels must match the reviewed source licences')
     # Subscriptions are sold on the account site after sign-in; the site only links there.
-    for name in ('subscribeUrl', 'hostedPrice', 'hostedPriceNote'):
+    for name in ('subscribeUrl', 'hostedPrice', 'hostedPriceNote', 'hostedTrial'):
         if not isinstance(config[name], str):
             raise ValueError('Hosted plan fields must be text')
     if bool(config['subscribeUrl']) != bool(config['hostedPrice']):
@@ -122,6 +122,9 @@ def validate_settings(settings, mode):
         raise ValueError('Hosted price must be a euro amount such as €3.99')
     if len(config['hostedPriceNote']) > 80 or (config['hostedPriceNote'] and not config['hostedPrice']):
         raise ValueError('Price note must be short and accompany a price')
+    # Set only while the account site offers free trials (docs/PAID_HOSTED.md).
+    if len(config['hostedTrial']) > 80 or (config['hostedTrial'] and not config['hostedPrice']) or any(c in config['hostedTrial'] for c in '<>'):
+        raise ValueError('Trial note must be short plain text and accompany a price')
     for name in ('githubUrl', 'releasesUrl', 'waitlistPrivacyUrl', 'betaAccountUrl'):
         if not isinstance(config[name], str):
             raise ValueError('Public link fields must be text')

@@ -24,6 +24,35 @@ def default_sdk_roots():
     return [str(Path.home() / "Android" / "Sdk"), str(Path.home() / "Library" / "Android" / "sdk")]
 
 
+def locations_fingerprint():
+    """Modification times of every folder a tool lookup searches.
+
+    A running app's PATH never changes, so a newly installed tool can only
+    appear by one of these folders changing. Comparing a few dozen folder times
+    costs milliseconds; a full lookup walks PATH for each tool (about 0.5 s)."""
+    folders = [entry for entry in os.environ.get("PATH", "").split(os.pathsep) if entry]
+    folders += [str(Path(value) / "platform-tools") for value in
+                (os.environ.get("ANDROID_HOME"), os.environ.get("ANDROID_SDK_ROOT"), *default_sdk_roots()) if value]
+    if os.name == "nt":
+        tools = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData/Local")) / "OrionMini" / "tools"
+        folders.append(str(tools))
+        for package in ("scrcpy", "deskflow"):
+            root = tools / package
+            folders.append(str(root))
+            try:
+                folders += sorted(str(version) for version in root.iterdir() if version.is_dir())
+            except OSError:
+                pass
+        folders.append(str(Path(os.environ.get("ProgramFiles", "C:/Program Files")) / "Deskflow"))
+    fingerprint = []
+    for folder in folders:
+        try:
+            fingerprint.append((folder, os.stat(folder).st_mtime_ns))
+        except OSError:
+            fingerprint.append((folder, None))
+    return tuple(fingerprint)
+
+
 def tool_path(name, configured=None):
     if name not in {"adb", "restic", "scrcpy", "deskflow-core", "deskflow"}:
         raise ValueError("Unknown Saiph companion tool.")

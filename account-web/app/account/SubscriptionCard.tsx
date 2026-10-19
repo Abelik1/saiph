@@ -2,6 +2,7 @@
 import type {Entitlement} from "../../lib/billing/entitlement.mjs";
 import type {BillingView} from "../../lib/billing/view";
 import {Icon, Notice} from "../ui";
+import TrialCard from "./TrialCard";
 
 const standingText: Record<Entitlement["state"], string> = {
   none: "No subscription yet", active: "Active", ending: "Active, cancellation scheduled",
@@ -20,7 +21,8 @@ const day = (seconds: number) => new Intl.DateTimeFormat("en-IE", {day: "numeric
  * The checkout return notice is shown by the page, never derived here. */
 export default function SubscriptionCard({view}: {view: BillingView | "unavailable"}) {
   const test = view !== "unavailable" && view.mode === "owner-sandbox";
-  return <section className="card" aria-labelledby="subscription-title">
+  const trialShown = view !== "unavailable" && view.trial.state !== "off" && view.trial.state !== "subscribed";
+  return <>{view !== "unavailable" && <TrialCard trial={view.trial} />}<section className={trialShown ? "card after" : "card"} aria-labelledby="subscription-title">
     <div className="card-head">
       <div>
         <p className="eyebrow">Saiph Cloud subscription</p>
@@ -73,5 +75,5 @@ export default function SubscriptionCard({view}: {view: BillingView | "unavailab
       <p className="fine after">{test ? "Test mode: use Stripe test card details only. No real money is charged." : "Cancel any time in Manage billing; access continues to the end of the paid period."}</p>
     </>}
     <div className="card-foot"><Icon name="lock" /><span>Paying gives your account Cloud access. You still approve devices on your own computer, and signing in never unlocks your content.</span></div>
-  </section>;
+  </section></>;
 }

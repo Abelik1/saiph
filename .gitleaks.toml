@@ -46,9 +46,23 @@ paths = [
   '''(^|[\\/])account-web[\\/]tests[\\/]billing-routes\.test\.mjs$''',
   '''(^|[\\/])account-web[\\/]tests[\\/]billing-lifecycle\.test\.mjs$''',
   '''(^|[\\/])account-web[\\/]tests[\\/]billing-withdraw\.test\.mjs$''',
+  '''(^|[\\/])account-web[\\/]tests[\\/]billing-trial\.test\.mjs$''',
   '''(^|[\\/])account-web[\\/]tests[\\/]http-smoke\.mjs$''',
 ]
 regexTarget = "secret"
 # rk_live_/sk_live_synthetic123 test that live mode needs a live restricted key
 # (docs/PAID_HOSTED.md); they are not keys and cannot authenticate.
 regexes = ['''^rk_test_synthetic123$''', '''^whsec_synthetic123$''', '''^rk_live_synthetic123$''', '''^sk_live_synthetic123$''']
+
+# Fixed vectors for the local-network link and TLS tests: a test-only MAC key and
+# the synthetic WebSocket handshake nonce base64("synthetic-key-12").
+[[allowlists]]
+description = "Synthetic local-network test vectors"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = [
+  '''(^|[\\/])android[\\/]app[\\/]src[\\/]test[\\/]resources[\\/]lan-link-vectors\.json$''',
+  '''(^|[\\/])tests[\\/]lan_tls\.py$''',
+]
+regexTarget = "secret"
+regexes = ['''^8412554c50a796fe48300851acfcd4b9a5ab990ec4bb68cae5b09fb1dd4e24a0$''', '''^c3ludGhldGljLWtleS0xMg==$''']

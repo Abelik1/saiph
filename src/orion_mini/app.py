@@ -11,20 +11,28 @@ from random import randrange
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from PySide6.QtCore import QEvent, QProcess, QTimer, QUrl, Qt, QLockFile, Signal
-from PySide6.QtGui import QAction, QCursor, QIcon
-from PySide6.QtWebChannel import QWebChannel
-from PySide6.QtWebEngineCore import QWebEnginePage
-from PySide6.QtWebEngineWidgets import QWebEngineView
+from PySide6.QtGui import QAction, QColor, QCursor, QIcon, QPalette
 from PySide6.QtWidgets import QApplication, QDialog, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMenu, QPushButton, QSystemTrayIcon, QVBoxLayout
 from .api import ApiServer, replay_inbox
 from .automation import Automation
 from .db_health import check as check_databases
 from .modules import edition
+from .dashboard_view import dashboard_view, prepare_web_engine
 from .desktop_bridge import DesktopBridge
+from .frame_feed import SCHEME as FRAME_SCHEME, frame_handler
 from .paths import app_data_dir
 from .platform import beep, qt_platform_for_background_clipboard, set_startup
 from .updater import start_update
 APP_MODEL_ID = 'OrionMini.Desktop'
+# The dashboard's darkest ground (--background). Qt paints it wherever the page
+# has not drawn yet, so resizing or first show never flashes white.
+DASHBOARD_GROUND = '#040916'
+# A safety-net refresh for state nothing announced. Phone, Cloud, camera, screen
+# and every bridge action announce their own changes immediately.
+REFRESH_TICKS = 3
+# Moving or resizing the window holds periodic refreshes until it settles, so
+# a full snapshot never stalls the GUI thread under the pointer.
+SETTLE_MS = 400
 
 def resource_root():
     return Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parents[2]))
@@ -42,83 +50,6 @@ def claim_taskbar_identity() -> None:
     except (AttributeError, OSError):
         pass
 
-class LocalPage(QWebEnginePage):
-
-    def acceptNavigationRequest(self, url, navigation_type, is_main_frame):
-        return url.isLocalFile() or url.scheme() in {'qrc', 'about'}
-
-class DashboardView(QWebEngineView):
-    """A web page cannot see a Windows file path, and Chromium answers a dropped
-    file by navigating away from the dashboard. So Qt takes the drop first and
-    hands the real paths to the page over the same channel everything else uses."""
-    files_dropped = Signal(list)
-    drag_changed = Signal(bool)
-    DRAG_EVENTS = {QEvent.DragEnter, QEvent.DragMove, QEvent.DragLeave, QEvent.Drop}
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setAcceptDrops(True)
-        self.render_widget = None
-        self.dragging = False
-        self.loadFinished.connect(lambda _ok: self.watch_render_widget())
-
-    def watch_render_widget(self):
-        """Chromium renders into a child widget that owns its own drop handling,
-        and replaces it across loads, so re-attach whenever it changes."""
-        widget = self.focusProxy()
-        if widget is not None and widget is not self.render_widget:
-            self.render_widget = widget
-            widget.installEventFilter(self)
-
-    def event(self, event):
-        if event.type() in {QEvent.ChildAdded, QEvent.ChildPolished}:
-            self.watch_render_widget()
-        return super().event(event)
-
-    @staticmethod
-    def local_files(mime) -> list[str]:
-        return [url.toLocalFile() for url in mime.urls() if url.isLocalFile()] if mime.hasUrls() else []
-
-    def set_dragging(self, active: bool) -> None:
-        """Hovering repeats a move event many times a second; the page only needs
-        to hear when the answer actually changes."""
-        if active != self.dragging:
-            self.dragging = active
-            self.drag_changed.emit(active)
-
-    def handle_drag(self, event) -> bool:
-        """Answer one drag event; True means Chromium never sees it."""
-        if event.type() == QEvent.DragLeave:
-            self.set_dragging(False)
-            return False
-        files = self.local_files(event.mimeData())
-        if not files:
-            return False
-        event.setDropAction(Qt.CopyAction)
-        event.accept()
-        dropping = event.type() == QEvent.Drop
-        self.set_dragging(not dropping)
-        if dropping:
-            self.files_dropped.emit(files)
-        return True
-
-    def eventFilter(self, watched, event):
-        if watched is self.render_widget and event.type() in self.DRAG_EVENTS and self.handle_drag(event):
-            return True
-        return super().eventFilter(watched, event)
-
-    def dragEnterEvent(self, event):
-        self.handle_drag(event)
-
-    def dragMoveEvent(self, event):
-        self.handle_drag(event)
-
-    def dragLeaveEvent(self, event):
-        self.handle_drag(event)
-
-    def dropEvent(self, event):
-        self.handle_drag(event)
-
 def apply_startup_setting(workspace):
     """Re-apply start at sign-in; a refusal is reported, never fatal at launch.
 
@@ -134,6 +65,7 @@ def apply_startup_setting(workspace):
 class MainWindow(QMainWindow):
     phone_changed = Signal()
     clipboard_received = Signal(str, object)
+    cloud_sign_in_completed = Signal()
     update_checked = Signal(str)
     restart_requested = Signal()
     automation_requested = Signal(object)
@@ -142,6 +74,7 @@ class MainWindow(QMainWindow):
     send_files_requested = Signal(object)
     open_phone_app_requested = Signal(str)
     ring_requested = Signal(str)
+    open_phone_requested = Signal()
 
     def __init__(self, data_dir=None, bootstrap=True):
         super().__init__()
@@ -157,21 +90,34 @@ class MainWindow(QMainWindow):
         self.popups = {}
         self.preview_popup = None
         self.closing = False
+        self.cloud_sign_in_completed.connect(self.return_from_cloud_sign_in)
         if bootstrap:
             self.workspace.bootstrap()
             apply_startup_setting(self.workspace)
         for job in self.workspace.store.all('job'):
             if job['status'] == 'running':
                 self.workspace.store.save('job', {**job, 'status': 'interrupted', 'progress': 'Stopped during the previous session; resume when ready.'})
-        self.view = DashboardView(self)
-        self.view.setPage(LocalPage(self.view))
-        self.channel = QWebChannel(self.view.page())
+        ground = QColor(DASHBOARD_GROUND)
+        palette = self.palette()
+        palette.setColor(QPalette.ColorRole.Window, ground)
+        self.setPalette(palette)
         self.bridge = DesktopBridge(self)
-        self.channel.registerObject('orionMini', self.bridge)
+        # Chromium in its own natively composited child window (dashboard_view.py),
+        # with the bridge as the web channel's only object.
+        self.view = dashboard_view(self.bridge, DASHBOARD_GROUND, self)
+        # Live camera and phone-screen pictures travel as bytes (frame_feed.py).
+        self.frame_handler = frame_handler(self.bridge.feeds, self)
+        profile = self.view.profile()
+        previous = profile.urlSchemeHandler(FRAME_SCHEME)
+        if previous is not None:
+            profile.removeUrlSchemeHandler(previous)
+        profile.installUrlSchemeHandler(FRAME_SCHEME, self.frame_handler)
         self.phone_changed.connect(self.bridge.changed)
         from .phone import PhoneRuntime
         self.phone_runtime = PhoneRuntime(self.workspace, self.phone_changed.emit, clipboard_received=self.clipboard_received.emit)
         self.workspace.phone_runtime = self.phone_runtime
+        if getattr(self.workspace, 'call_audio', None) is not None:
+            self.workspace.call_audio.changed = self.phone_changed.emit
         from .cloud_client import CloudSupervisor
         self.cloud_supervisor = CloudSupervisor(self.workspace.root / 'cloud-client')
         if not os.environ.get('ORION_MINI_TEST'):
@@ -179,10 +125,9 @@ class MainWindow(QMainWindow):
             self.clipboard_adapter = QtClipboard(self.phone_runtime)
             self.clipboard_received.connect(self.clipboard_adapter.write)
             self.phone_runtime.start()
-        self.view.page().setWebChannel(self.channel)
         self.view.files_dropped.connect(self.handle_dropped_files)
         self.view.drag_changed.connect(self.bridge.dragging)
-        self.setCentralWidget(self.view)
+        self.setCentralWidget(self.view.widget)
         dashboard = self.dashboard_path()
         if not dashboard.exists():
             self.view.setHtml('<h1>Saiph needs its dashboard build</h1><p>Run npm --prefix frontend run build, then reopen Saiph.</p>')
@@ -206,6 +151,9 @@ class MainWindow(QMainWindow):
         self.tray.activated.connect(lambda reason: self.showNormal() if reason == QSystemTrayIcon.Trigger else None)
         if not os.environ.get('ORION_MINI_TEST'):
             self.tray.show()
+        # The live phone screen opens in its own window; the tray turns red while camera or screen is live.
+        from .phone_screen_window import PhoneScreenWindowController
+        self.phone_screen_window = PhoneScreenWindowController(self.workspace, self.tray, self.windowIcon(), self)
         # Device-list changes are announced from the hosted worker thread; the
         # signal delivers them to the tray on the GUI thread.
         self.security_alert.connect(lambda message: self.tray.showMessage('Saiph security', message, QSystemTrayIcon.Warning, 15000))
@@ -219,6 +167,13 @@ class MainWindow(QMainWindow):
             from .user_presence import UserPresence
             window_handle = int(self.winId())
             self.workspace.user_presence = UserPresence(lambda: window_handle)
+            if sys.platform == 'win32':
+                # Unread phone notifications on the taskbar button (Settings → Phone → Taskbar badge).
+                from .taskbar_badge import TaskbarBadge, unread_count
+                self.taskbar_badge = TaskbarBadge(window_handle)
+                self.badge_timer = QTimer(self)
+                self.badge_timer.timeout.connect(lambda: self.taskbar_badge.show(unread_count(self.workspace.store, self.workspace.settings)))
+                self.badge_timer.start(5000)
             threading.Thread(target=self.workspace.user_presence.status, name='orion-user-presence', daemon=True).start()
             # Sends only after the owner agrees; a no-op otherwise.
             counter = getattr(self.workspace, 'usage_counter', None)
@@ -232,11 +187,20 @@ class MainWindow(QMainWindow):
         self.open_phone_app_requested.connect(self.open_phone_app)
         self.ring_requested.connect(self.ring_computer)
         self.workspace.ring_requested = self.ring_requested.emit
+        # A clicked Saiph Cloud notification toast, from the notifier's thread.
+        self.open_phone_requested.connect(self.open_phone_page)
+        self.workspace.request_open_phone = self.open_phone_requested.emit
         self.workspace.request_open_phone_app = self.open_phone_app_requested.emit
         self.automation_requested.connect(self.run_automation)
         self.workspace.automation_call = Automation(self.workspace, self.run_on_gui, self.bridge.changed.emit)
         self.api = ApiServer(self.workspace, 0 if os.environ.get('ORION_MINI_TEST') else None)
         self.workspace.api_info = self.api.start()
+        self.ticks = 0
+        self.settling = QTimer(self)
+        self.settling.setSingleShot(True)
+        self.settling.setInterval(SETTLE_MS)
+        # Once a move settles, Chromium learns the view's new screen position (popups).
+        self.settling.timeout.connect(self.view.window_moved)
         self.tick = QTimer(self)
         self.tick.timeout.connect(self.on_tick)
         self.tick.start(1000)
@@ -253,6 +217,14 @@ class MainWindow(QMainWindow):
         self.hub_timer.timeout.connect(self.refresh_hub)
         self.hub_timer.start(60 * 1000)
         QTimer.singleShot(4000, self.refresh_hub)
+        if not os.environ.get('ORION_MINI_TEST'):
+            # Look for a desktop update soon after start-up, then every six hours.
+            # Idle cost is one timer; a found update lights the footer's Update button.
+            from .update_schedule import CHECK_INTERVAL_MS, FIRST_CHECK_MS
+            self.update_timer = QTimer(self)
+            self.update_timer.timeout.connect(self.bridge.updates.start_background_check)
+            self.update_timer.start(CHECK_INTERVAL_MS)
+            QTimer.singleShot(FIRST_CHECK_MS, self.bridge.updates.start_background_check)
         self.scan()
         self.pump_jobs()
 
@@ -296,9 +268,23 @@ class MainWindow(QMainWindow):
         # One echo/repeat cache for Link and hosted clipboard deliveries.
         controller.clipboard_cache = self.phone_runtime.clipboard_cache
         controller.clipboard_sink = self.clipboard_received.emit
-        controller.call_state = self.phone_runtime.call_pause.call  # Same media pause as Link calls.
+        controller.sign_in_completed = self.cloud_sign_in_completed.emit
+        from .clipboard import GuardedClipboardDelivery
+        controller.clipboard_dispatch = lambda mime, data, guard: self.clipboard_received.emit(mime, GuardedClipboardDelivery(data, guard))
+        audio = getattr(self.workspace, 'call_audio', None)
+        def call_state(state, pause=self.phone_runtime.call_pause.call):
+            pause(state)  # Same media pause as Link calls.
+            if audio is not None:
+                audio.call_state(state)  # Bluetooth audio route on this computer; nothing goes to the Cloud.
+        controller.call_state = call_state
         controller.changed = self.bridge.changed.emit
         controller.start()
+
+    def return_from_cloud_sign_in(self):
+        if not self.closing:
+            self.showNormal()
+            self.raise_()
+            self.activateWindow()
 
     def on_tick(self):
         if not os.environ.get('ORION_MINI_TEST'):
@@ -309,7 +295,59 @@ class MainWindow(QMainWindow):
             self.showNormal()
             self.raise_()
             self.activateWindow()
-        self.bridge.changed.emit()
+        self.ticks += 1
+        if self.ticks % REFRESH_TICKS == 0 and self.dashboard_visible() and not self.settling.isActive():
+            self.bridge.changed.emit()
+
+    def dashboard_visible(self):
+        """A hidden or minimised dashboard needs no periodic refresh; it gets one on return."""
+        return self.isVisible() and not self.isMinimized()
+
+    def hold_refresh(self):
+        settling = getattr(self, 'settling', None)  # Absent while the window is still being built.
+        if settling is not None:
+            settling.start()
+
+    def refresh_now(self):
+        bridge = getattr(self, 'bridge', None)
+        if bridge is not None:
+            bridge.changed.emit()
+
+    def dashboard_shown(self, shown: bool) -> None:
+        """Hidden or minimised, the page is told it is hidden (its timers stop) and
+        the bridge holds change notices; on return, one refresh catches up."""
+        view, bridge = getattr(self, 'view', None), getattr(self, 'bridge', None)
+        if view is not None:
+            view.set_shown(shown)
+        if shown and bridge is not None:
+            bridge.resume()
+
+    def moveEvent(self, event):
+        self.hold_refresh()
+        super().moveEvent(event)
+
+    def resizeEvent(self, event):
+        self.hold_refresh()
+        super().resizeEvent(event)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        view = getattr(self, 'view', None)
+        if view is not None:
+            view.widget.setFocus()  # Keys reach the page without a first click.
+        self.dashboard_shown(not self.isMinimized())
+        self.refresh_now()
+
+    def hideEvent(self, event):
+        super().hideEvent(event)
+        self.dashboard_shown(False)
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() == QEvent.WindowStateChange:
+            self.dashboard_shown(self.isVisible() and not self.isMinimized())
+            if not self.isMinimized():
+                self.refresh_now()
 
     def preview_urgent_popup(self, stage=0):
         raise ValueError('This action requires the private Workspace edition.')
@@ -332,6 +370,11 @@ class MainWindow(QMainWindow):
         start_update()
         QTimer.singleShot(400, self.quit_app)
         return {'ok': True}
+
+    def open_phone_page(self):
+        self.workspace.phone_reveal = getattr(self.workspace, 'phone_reveal', 0) + 1  # The page switches to Phone.
+        self.showNormal(); self.raise_(); self.activateWindow()
+        self.bridge.changed.emit()
 
     def ring_computer(self, phone_name):
         """Find this computer: an alert sound for up to 30 seconds and a window with Stop."""
@@ -359,8 +402,31 @@ class MainWindow(QMainWindow):
         box.open(); ring(); timer.start()
 
     def open_phone_app(self, package, attempts=0):
-        """A pinned phone app: open it from the first online phone over authorised debugging."""
-        phones = [d for d in (self.workspace.state().get('phone') or {}).get('devices', []) if d.get('online') and 'battery' in d.get('capabilities', [])]
+        """A pinned phone app: mirror it over the local network (docs/PHONE_SCREEN.md).
+
+        Phones that offer the phone screen get a Cloud-delivered session offer that
+        launches the app; other online phones get the same local session with a code to
+        scan. scrcpy over authorised debugging is used only in the opt-in USB debugging
+        mode (Settings → Advanced)."""
+        from .phone_settings import flag
+        devices = (self.workspace.state().get('phone') or {}).get('devices', [])
+        online = [d for d in devices if d.get('online')]
+        screens = [d for d in online if 'screen' in (d.get('screen') or [])]
+        usb = flag(self.workspace.settings, 'usb_debugging')
+        if not screens and not usb:
+            # No scrcpy unless the owner opted in: any online phone gets a local session (QR in Phone → Apps).
+            screens = online[:1]
+        if screens:
+            self.workspace.screen.reveal += 1  # The page opens Phone → Apps for this session.
+            self.showNormal(); self.raise_(); self.activateWindow()
+            def mirror():
+                try:
+                    self.workspace.screen.open_app(screens[0]['id'], package)
+                except Exception as error:
+                    self.update_checked.emit(str(error))
+            threading.Thread(target=mirror, name='orion-phone-screen', daemon=True).start()
+            return
+        phones = [d for d in online if 'battery' in d.get('capabilities', [])] if usb else []
         if not phones:
             if attempts < 7:
                 QTimer.singleShot(4000, lambda: self.open_phone_app(package, attempts + 1))
@@ -380,7 +446,7 @@ class MainWindow(QMainWindow):
     def confirm_send_files(self, paths, attempts=0):
         """The owner chooses the phone and confirms; nothing is sent before that."""
         from PySide6.QtWidgets import QInputDialog, QMessageBox
-        from .send_files import targets, validate
+        from .send_files import describe_files, targets, validate
         try:
             paths = validate(list(paths))
         except (ValueError, OSError) as error:
@@ -394,21 +460,21 @@ class MainWindow(QMainWindow):
         if not devices:
             self.tray.showMessage('Saiph', 'Your phone is offline. Nothing was sent.', QSystemTrayIcon.Warning, 10000)
             return
-        count = f'{len(paths)} file' + ('' if len(paths) == 1 else 's')
+        what = describe_files(paths)
         if len(devices) == 1:
             device = devices[0]
-            if QMessageBox.question(self, 'Send to phone', f'Send {count} to {device["name"]}?') != QMessageBox.StandardButton.Yes:
+            if QMessageBox.question(self, 'Send to phone', f'Send {what} to {device["name"]}?') != QMessageBox.StandardButton.Yes:
                 return
         else:
             names = [d['name'] for d in devices]
-            name, chosen = QInputDialog.getItem(self, 'Send to phone', f'Send {count} to:', names, 0, False)
+            name, chosen = QInputDialog.getItem(self, 'Send to phone', f'Send {what} to:', names, 0, False)
             if not chosen:
                 return
             device = devices[names.index(name)]
         def run():
             for path in paths:
                 try:
-                    self.workspace.dispatch('phone.file.send', {'device_id': device['id'], 'path': path})
+                    self.workspace.dispatch('phone.file.send', {'device_id': device['id'], 'path': path, 'notify': True})
                 except Exception as error:
                     self.update_checked.emit(f'{Path(path).name}: {error}')
         threading.Thread(target=run, name='orion-send-files', daemon=True).start()
@@ -428,12 +494,14 @@ class MainWindow(QMainWindow):
                 action.triggered.connect(lambda _checked=False, m=method, a=args: self.tray_phone_action(m, a))
 
     def tray_phone_action(self, method, args):
+        if method == 'window.show':
+            self.showNormal(); self.activateWindow(); return
         if method == 'phone.file.choose':
             from PySide6.QtWidgets import QFileDialog
             path, _ = QFileDialog.getOpenFileName(self, 'Send a file to your phone')
             if not path:
                 return
-            method, args = 'phone.file.send', {**args, 'path': path}
+            method, args = 'phone.file.send', {**args, 'path': path, 'notify': True}
         def run():
             try:
                 self.workspace.dispatch(method, args)
@@ -442,14 +510,20 @@ class MainWindow(QMainWindow):
         threading.Thread(target=run, name='orion-tray-phone', daemon=True).start()
 
     def update_from_tray(self):
-        from .package_updates import current, check
+        from .package_updates import current
         if current():
             self.showNormal()
 
             def check_package():
                 try:
-                    result = check(self.workspace.root, dict(self.workspace.settings['hub']))
-                    message = f"Saiph {result['release']['version']} is available. Open Settings to install it." if result['available'] else 'You have the latest build available on your server.'
+                    result = self.bridge.updates.check()  # Also lights the footer's Update button.
+                    reason = result.get('reason')
+                    message = ('Sign in to your Saiph account to check for updates.' if reason == 'cloud_signed_out'
+                               else 'Your Saiph account does not offer desktop updates yet. Download the latest version from your account.'
+                               if reason in ('cloud_unavailable', 'cloud_manual', 'cloud_unofficial')
+                               else f"Saiph {result['release']['version']} is available. Select Update at the bottom of the Saiph window to install it." if result['available']
+                               else 'You have the latest version.' if result.get('source') == 'cloud'
+                               else 'You have the latest build available on your server.')
                 except (OSError, ValueError, RuntimeError):
                     message = 'Updates are temporarily unavailable. Check Settings when your server is reachable.'
                 self.update_checked.emit(message)
@@ -491,6 +565,8 @@ class MainWindow(QMainWindow):
     def quit_app(self):
         self.closing = True
         self.workspace.camera.stop()
+        self.workspace.screen.stop()
+        self.phone_screen_window.shutdown()
         self.workspace.microphone.stop()
         self.phone_runtime.stop()
         hosted = getattr(self.workspace, '_hosted', None)
@@ -549,6 +625,7 @@ def main():
     qt_platform = qt_platform_for_background_clipboard()
     if qt_platform:
         os.environ['QT_QPA_PLATFORM'] = qt_platform
+    prepare_web_engine(app_data_dir())
     app = QApplication(sys.argv)
     app.setApplicationName('Orion Mini')
     app.setApplicationDisplayName('Saiph')

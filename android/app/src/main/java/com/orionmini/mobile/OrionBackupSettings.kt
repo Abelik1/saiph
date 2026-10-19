@@ -34,12 +34,14 @@ class OrionBackupSettings(private val activity: ComponentActivity, private val c
         addView(activity.section("Automatic backups"))
         addView(activity.card().apply { content() })
     }
+    /** The backup controls alone, for the Photos & files settings page. */
+    fun controls(into: LinearLayout) = into.content()
     private fun LinearLayout.content() {
         addView(Switch(activity).saiph().apply {
             text = "Back up Saiph received files and selected folders"; isChecked = preferences.getBoolean("enabled", true)
             setOnCheckedChangeListener { _, enabled -> preferences.edit().putBoolean("enabled", enabled).apply(); OrionBackupWorker.schedule(activity) }
         })
-        addView(activity.text("Runs daily while charging, using unmetered network by default. Android only allows Saiph's own received files and folders you grant here; other apps' private data and Saiph's credentials are excluded.", 14f, Palette.MUTED))
+        addView(activity.text("Runs daily while charging, using unmetered network by default. Android only allows Saiph's own received files and folders you grant here; other apps' private data and Saiph's credentials are excluded.", UiType.META, Palette.MUTED))
         addView(Switch(activity).saiph().apply {
             text = "Allow backup over mobile data"; isChecked = preferences.getBoolean("mobile_data", false)
             setOnCheckedChangeListener { _, enabled -> preferences.edit().putBoolean("mobile_data", enabled).apply(); OrionBackupWorker.schedule(activity) }
@@ -52,18 +54,18 @@ class OrionBackupSettings(private val activity: ComponentActivity, private val c
             "storage" -> "Waiting for enough free phone storage to stage selected content."
             else -> "Waiting for charging and network. Connection failures retry automatically."
         }
-        addView(activity.text(state, 14f, Palette.MUTED))
-        addView(activity.buttonRow(activity.button("Choose backup folder", tone = Tone.TONAL) { picker.launch(null) }))
+        addView(activity.text(state, UiType.META, Palette.MUTED))
+        addView(activity.compactActions(activity.compactButton("Choose backup folder") { picker.launch(null) }))
         val folders = preferences.getStringSet("folders", emptySet()).orEmpty().toSet()
         folders.forEachIndexed { index, uri ->
-            addView(activity.buttonRow(activity.button("Remove folder ${index + 1}") {
+            addView(activity.compactActions(activity.compactButton("Remove folder ${index + 1}", Tone.SECONDARY) {
                 preferences.edit().putStringSet("folders", folders - uri).apply()
                 runCatching { activity.contentResolver.releasePersistableUriPermission(android.net.Uri.parse(uri), Intent.FLAG_GRANT_READ_URI_PERMISSION) }
                 changed()
             }))
         }
-        addView(activity.text("Bundled restic 0.19.1 (BSD 2-Clause). Android runtime: ResticDroid, GPL v3 or later. Licenses are bundled in Saiph; matching source is provided with the release artifacts.", 13f, Palette.MUTED))
-        addView(activity.buttonRow(activity.button("Backup licenses") {
+        addView(activity.text("Bundled restic 0.19.1 (BSD 2-Clause). Android runtime: ResticDroid, GPL v3 or later. Licenses are bundled in Saiph; matching source is provided with the release artifacts.", UiType.META, Palette.MUTED))
+        addView(activity.compactActions(activity.compactButton("Backup licenses", Tone.SECONDARY) {
             val licenseIds = listOf(io.github.resticdroid.restic.R.raw.resticdroid_notice,
                 io.github.resticdroid.restic.R.raw.restic_license,
                 io.github.resticdroid.restic.R.raw.resticdroid_license)
