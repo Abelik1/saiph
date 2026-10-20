@@ -79,13 +79,45 @@
     <div class="wrap center">
       <span class="pill" data-hosted-status data-live-text="Saiph Cloud · beta" data-beta-text="Invite-only beta">Coming soon</span>
       <h1 id="hero-title">Your Android phone, <em>on your PC.</em></h1>
-      <p class="lede">Notifications, texts, calls, clipboard and files between your Android phone and your Windows or Linux computers. End-to-end encrypted. Nothing to set up: Saiph Cloud runs the connection.</p>
-      <ul class="feature-chips" aria-label="What Saiph does">
-        <li>Notifications</li><li>Texts &amp; calls</li><li>Copy &amp; paste</li><li>Photos &amp; files</li><li>Phone as webcam</li>
-      </ul>
+      <p class="lede">End-to-end encrypted. Nothing to set up.</p>
       <div class="trial-cta" data-trial-shown hidden>
         <a class="btn primary trial-now" data-link="trial-start" href="#">Start your free trial</a>
-        <p class="trial-terms"><strong data-trial>Free for 30 days, no card needed</strong>. Then <span data-plan-price="monthly">€9.99</span> a month or <span data-plan-price="yearly">€89.99</span> a year if you subscribe; nothing is charged automatically.</p>
+        <p class="trial-terms"><strong data-trial>Free for 30 days, no card needed</strong></p>
+      </div>
+    </div>
+  </section>
+
+  <section class="showcase" id="demo" aria-labelledby="demo-title">
+    <div class="wrap">
+      <h2 id="demo-title" class="sr-only">See it work</h2>
+      <div class="feature-tabs" role="tablist" aria-label="Feature demos">
+        <button role="tab" data-scene="notifications" data-label="Animation: a phone notification appears on a laptop and desktop, and is answered from the desktop.">Notifications</button>
+        <button role="tab" data-scene="clipboard" data-label="Animation: text copied on the laptop is pasted on the phone and appears in the desktop clipboard history.">Clipboard</button>
+        <button role="tab" data-scene="messages" data-label="Animation: a text message is typed on the desktop and sent from the phone.">Texts</button>
+        <button role="tab" data-scene="calls" data-label="Animation: an incoming phone call appears on both computers and is answered from the laptop. The conversation stays on the phone.">Calls</button>
+        <button role="tab" data-scene="files" data-label="Animation: a photo taken on the phone appears on the laptop, and a PDF dropped on the desktop arrives on the phone.">Photos &amp; files</button>
+        <button role="tab" data-scene="webcam" data-label="Animation: the phone camera becomes the desktop webcam in a video call.">Webcam</button>
+        <button role="tab" data-scene="cloud" data-label="Animation: a document saved on the laptop syncs to the desktop.">Cloud</button>
+      </div>
+
+      <div class="stage" data-stage>
+        <div class="stage-inner" role="img" aria-label="Animated demo of Saiph features across a laptop, desktop and phone">
+          <div class="dev dev-laptop" aria-hidden="true">
+            <div class="bezel"><div class="screen"><div class="scr-body"></div><div class="layer"></div></div></div>
+            <div class="base"></div><div class="dev-label">Laptop</div>
+          </div>
+          <div class="dev dev-desktop" aria-hidden="true">
+            <div class="bezel"><div class="screen"><div class="scr-body"></div><div class="layer"></div></div></div>
+            <div class="neck"></div><div class="foot"></div><div class="dev-label">Desktop</div>
+          </div>
+          <div class="dev dev-phone" aria-hidden="true">
+            <div class="bezel"><div class="screen"><div class="scr-body"></div><div class="layer"></div></div></div>
+            <div class="dev-label">Phone</div>
+          </div>
+        </div>
+        <div class="stage-caption">
+          <p data-stage-caption>Your devices, working together.</p>
+        </div>
       </div>
     </div>
   </section>
@@ -99,19 +131,11 @@
           <input class="plan-radio" type="radio" name="plan" id="plan-monthly" value="monthly" checked aria-describedby="plan-monthly-price">
           <h3><label for="plan-monthly">Monthly</label></h3>
           <div class="price" id="plan-monthly-price"><span data-plan-price="monthly">€9.99</span> <small>/ month</small></div>
-          <ul class="checks">
-            <li>Everything in Saiph Cloud</li>
-            <li>Cancel any time</li>
-          </ul>
         </div>
         <div class="card plan" data-plan="yearly">
           <input class="plan-radio" type="radio" name="plan" id="plan-yearly" value="yearly" aria-describedby="plan-yearly-price">
           <h3><label for="plan-yearly">Yearly</label> <span class="tag cyan">Save about <span data-plan-saving>25%</span></span></h3>
           <div class="price" id="plan-yearly-price"><span data-plan-price="yearly">€89.99</span> <small>/ year</small></div>
-          <ul class="checks">
-            <li>Works out at about <span data-plan-per-month>€7.50</span> a month</li>
-            <li>Cancel any time; access runs to the end of the year you paid for</li>
-          </ul>
         </div>
       </div>
       <div class="buy-action center">
@@ -119,23 +143,10 @@
         <p class="buy-summary" data-buy-summary aria-live="polite">€9.99 today, then every month. No VAT is added.</p>
         <p class="buy-test muted" data-price-test-note hidden>We are testing prices. This is the price you will pay, and it stays the same for you.</p>
         <ul class="assurances" aria-label="How buying works">
-          <li>Sign in with Google</li>
-          <li>Secure payment by Stripe</li>
           <li>Cancel any time</li>
-          <li>14 days to withdraw, <a href="refunds.html">full refund</a></li>
+          <li><a href="refunds.html">14-day full refund</a></li>
         </ul>
       </div>
-    </div>
-  </section>
-
-  <section class="landing-more" aria-labelledby="more-title">
-    <div class="wrap">
-      <h2 id="more-title" class="sr-only">More about Saiph</h2>
-      <ul class="more-links">
-        <li><a href="hosted.html">See it work, the security details and how Saiph compares with Phone Link and Apple Continuity <span aria-hidden="true">&rarr;</span></a></li>
-        <li><a href="self-host.html">Prefer your own server? Self-host Saiph for free <span aria-hidden="true">&rarr;</span></a></li>
-      </ul>
-      <p class="landing-note muted">Saiph Cloud is a beta service: expect bugs and occasional downtime. Works with any Android phone (Android 8 or later) and Windows 10, Windows 11 or Linux. Your phone stays the only place that sends texts and takes calls.</p>
     </div>
   </section>
 </main>
@@ -166,5 +177,6 @@
 <script src="assets/consent.js"></script>
 <script src="assets/site.js"></script>
 <script src="assets/analytics.js"></script>
+<script src="assets/stage.js"></script>
 </body>
 </html>
