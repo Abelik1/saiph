@@ -172,8 +172,14 @@ def test_approved_controller_ships_without_enabling_collection(tmp_path):
     assert result['privacy']['status'] == 'approved'
     assert result['privacy']['contactEmail'] == 'support@usesaiph.com'
     assert result['waitlistUrl'] == ''
-    assert result['release'] == {}
-    assert not any(result['downloads'].values())
+    # Before the first public release nothing is offered; afterwards every
+    # download is an asset of exactly the published release tag.
+    if result['release']:
+        prefix = 'https://github.com/Abelik1/saiph/releases/download/' + result['release']['tag'] + '/'
+        assert all(url.startswith(prefix) for url in result['downloads'].values())
+        assert set(result['downloads']) >= {'windows', 'linux', 'android', 'server'}
+    else:
+        assert not any(result['downloads'].values())
     settings['privacy']['secret'] = 'must-not-ship'
     with pytest.raises(ValueError):
         site.prepare(ROOT / 'website', tmp_path / 'bad', settings)
