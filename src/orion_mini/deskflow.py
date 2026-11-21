@@ -12,6 +12,7 @@ from pathlib import Path
 
 from .storage import write_text
 from .companion_tools import tool_path
+from . import child_process
 
 SERVER_CONFIG = """section: screens
     desktop:
@@ -106,7 +107,7 @@ def detect(root, options=None, *, addresses=mesh_addresses):
 
 
 class Deskflow:
-    def __init__(self, root, settings, *, popen=subprocess.Popen, clock=time.monotonic, default_enabled=True):
+    def __init__(self, root, settings, *, popen=child_process.popen, clock=time.monotonic, default_enabled=True):
         self.root, self.settings, self.popen, self.clock = Path(root), settings, popen, clock
         self.process = None
         self.next_attempt = 0

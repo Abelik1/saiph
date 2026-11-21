@@ -7,6 +7,8 @@ import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.provider.Settings
 import android.net.Uri
@@ -27,6 +29,8 @@ import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.Executors
 import kotlin.math.sqrt
@@ -51,6 +55,12 @@ class PhoneCameraActivity : ComponentActivity() {
     /** Allow was chosen in the request pop-up or notification: verify once this page is resumed. */
     private var confirmAfterResume = false
     @Volatile private var generation = 0
+    /** The computer asked to accept this phone as its webcam (id to name), while waiting for Accept. */
+    private var asking: Pair<String, String>? = null
+    private val handler = Handler(Looper.getMainLooper())
+    private val unanswered = Runnable {
+        asking?.let { (_, name) -> stopAsking(); show("$name didn't answer. Check that Saiph is open on it, then try again.") }
+    }
     private val scan = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val code = result.data?.getStringExtra(OrionQrActivity.CAMERA_CODE) ?: return@registerForActivityResult
         offer = runCatching { CameraOffer.parse(code) }.getOrNull(); computer = null
@@ -92,6 +102,30 @@ class PhoneCameraActivity : ComponentActivity() {
         // Allow in the pop-up or notification goes straight to confirming it's you.
         if (allow) { if (resumed && !AppLock.locked(this)) confirmStart() else confirmAfterResume = true }
     }
+    /** Ask an approved computer through Saiph Cloud; it shows Accept, and accepting sends the session here. */
+    private fun ask(id: String, name: String) {
+        if (AppLock.locked(this)) return
+        if (!HostedRuntime.get(this).enqueueRemote(id, buildJsonObject { put("type", CameraAsk.TYPE) })) {
+            show("$name can't be reached right now. Check that both devices are online, or scan the code instead."); return
+        }
+        CameraAsk.ask(id); asking = id to name
+        CameraAsk.listener = ::answered
+        CameraAsk.offListener = {
+            stopAsking()
+            show("Phone camera is off on $name. Turn on Allow phone camera in Saiph's Settings there, under Devices, then try again.")
+        }
+        handler.removeCallbacks(unanswered); handler.postDelayed(unanswered, CameraAsk.WAIT_SECONDS * 1000)
+        show()
+    }
+    private fun stopAsking() { CameraAsk.cancel(); CameraAsk.listener = null; CameraAsk.offListener = null; asking = null; handler.removeCallbacks(unanswered) }
+    /** The computer accepted: its offer is already here, so go straight to confirming it's you. */
+    private fun answered(id: String) {
+        stopAsking()
+        val pending = SessionOffers.take(id) ?: return show("That camera request expired. Try again.")
+        offer = pending.offer.camera; computer = pending.computer
+        show()
+        if (resumed && !AppLock.locked(this)) confirmStart() else confirmAfterResume = true
+    }
     /** Owner verification (screen lock required), then Android camera access, then start. */
     private fun confirmStart() {
         lock.confirm(computer?.let { "Share your camera with $it" } ?: "Share your camera with the computer you scanned", requireScreenLock = true,
@@ -115,7 +149,29 @@ class PhoneCameraActivity : ComponentActivity() {
         page(scrolling = true)
         status = text(message, UiType.BODY, Palette.MUTED).apply { setPadding(dp(2), dp(4), 0, dp(8)) }
         root.addView(status)
-        if (offer == null) {
+        val waiting = asking
+        val cloud = HostedRuntime.get(this).let { if (it.enabled()) it.computers().filterValues { name -> name.isNotBlank() } else emptyMap() }
+        if (offer == null && waiting != null) {
+            status.text = "Accept the request on ${waiting.second} to start."
+            root.addView(stepGuide(Step(StepPicture.APPROVE, "On ${waiting.second}, choose Accept."),
+                Step(StepPicture.VERIFY, "Confirm it's you on this phone."),
+                Step(StepPicture.STREAM, "Your computer receives this phone's camera. Audio stays off.")))
+            frame.dockActions(button("Cancel") { stopAsking(); show() })
+        }
+        else if (offer == null && cloud.isNotEmpty()) {
+            // One tap: the computer asks its owner to accept, then sends the session back.
+            root.addView(stepGuide(Step(StepPicture.COMPUTER_TAB, "Tap Use as webcam below."),
+                Step(StepPicture.APPROVE, "Accept on your computer."),
+                Step(StepPicture.VERIFY, "Confirm it's you on this phone."),
+                Step(StepPicture.STREAM, "Your computer receives this phone's camera. Audio stays off.")))
+            frame.dockActions(*cloud.entries.take(3).mapIndexed { index, (id, name) ->
+                button(if (cloud.size == 1) "Use as webcam" else "Use as webcam on $name", primary = index == 0) { ask(id, name) }
+            }.toTypedArray())
+            frame.dock.addView(buttonRow(setupLink("Scan a code instead") {
+                if (!AppLock.locked(this)) scan.launch(OrionQrActivity.cameraSession(this))
+            }))
+        }
+        else if (offer == null) {
             // One main action, so the screen shows what happens around it.
             root.addView(stepGuide(Step(StepPicture.COMPUTER_TAB, "On your computer, open Saiph → Phone → Webcam."),
                 Step(StepPicture.SCAN_CODE, "Scan the code your computer shows."),
@@ -252,5 +308,5 @@ class PhoneCameraActivity : ComponentActivity() {
     }
     override fun onPause() { resumed = false; if (active) { stop(); show("Camera stopped when you left this screen.") }; super.onPause() }
     override fun onStop() { lock.stopped(); super.onStop() }
-    override fun onDestroy() { stop(); executor.shutdownNow(); super.onDestroy() }
+    override fun onDestroy() { stopAsking(); stop(); executor.shutdownNow(); super.onDestroy() }
 }

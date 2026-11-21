@@ -41,13 +41,18 @@ object SettingsCatalog {
         entry("own_hub", Category.ACCOUNT, "Your own Hub", "self-hosted", "self host", "hub", "server", "switch"),
         entry("this_phone", Category.ACCOUNT, "This phone", "fingerprint", "security code", "device", "approval", "request code", "fresh request"),
         entry("remove_phone", Category.ACCOUNT, "Remove this phone", "retire", "delete", "unpair", "forget", "remove"),
+        // Google Play User Data policy: in both builds, opens <account origin>/account/delete.
+        entry("delete_account", Category.ACCOUNT, "Delete account", "delete my account", "erase", "close account", "remove account", "my data", "gdpr", "privacy"),
         entry("sync", Category.CONNECTION, "Sync", "pause", "turn off", "resume", "on", "off", "connection", "cloud"),
+        entry("mobile_data", Category.CONNECTION, "Sync over mobile data", "mobile data", "cellular", "metered", "wifi only", "data"),
         entry("background", Category.CONNECTION, "Background activity", "battery", "optimisation", "optimization", "restrictions", "doze"),
         entry("notification_access", Category.NOTIFICATIONS, "Phone notifications", "notification access", "listener", "mirror", "share notifications"),
         entry("saiph_alerts", Category.NOTIFICATIONS, "Saiph alerts", "status alerts", "connection notifications", "app notifications"),
         entry("texts_and_calls", Category.MESSAGES, "Texts and calls", "sms", "messages", "text", "calls", "phone", "dial", "answer", "contacts"),
         entry("photo_gallery", Category.PHOTOS, "Photo gallery", "photos", "pictures", "images", "gallery", "media", "photo access"),
         entry("clipboard", Category.CLIPBOARD, "Clipboard sharing", "copy", "paste", "clipboard"),
+        entry("clipboard_bubble", Category.CLIPBOARD, "Clipboard bubble", "bubble", "floating", "overlay", "over other apps", "send clipboard", "button"),
+        entry("clipboard_auto", Category.CLIPBOARD, "Send automatically", "automatic", "accessibility", "auto", "background clipboard", "every copy"),
         entry("webcam", Category.CAMERA, "Phone as webcam", "camera", "webcam", "video"),
         entry("camera_access", Category.CAMERA, "Camera access", "camera permission", "android camera"),
         entry("status_sharing", Category.STATUS, "Status and quick controls", "battery", "wifi", "bluetooth", "signal", "ring", "find my phone", "sound mode", "do not disturb", "media", "quick actions"),
@@ -68,12 +73,19 @@ object SettingsCatalog {
         entry("dnd_sync", Category.NOTIFICATIONS, "Do Not Disturb sync", "dnd", "do not disturb", "focus", "silence"),
         entry("sleep_plan", Category.NOTIFICATIONS, "Shared sleep plan", "sleep", "bedtime", "focus", "plan"),
         entry("clipboard", Category.CLIPBOARD, "Clipboard sharing", "copy", "paste", "clipboard"),
+        entry("clipboard_bubble", Category.CLIPBOARD, "Clipboard bubble", "bubble", "floating", "overlay", "over other apps", "send clipboard", "button"),
+        entry("clipboard_auto", Category.CLIPBOARD, "Send automatically", "automatic", "accessibility", "auto", "background clipboard", "every copy"),
         entry("backups", Category.PHOTOS, "Backups", "backup", "restic", "files", "photos", "restore"),
         entry("status_sharing", Category.STATUS, "Status and quick controls", "battery", "wifi", "bluetooth", "signal", "ring", "find my phone", "sound mode", "do not disturb", "media", "quick actions"),
         entry("app_lock", Category.PRIVACY, "App lock", "fingerprint", "face", "pin", "biometric", "lock", "unlock"),
         entry("usage", Category.PRIVACY, "Usage statistics", "analytics", "anonymous", "telemetry", "statistics"),
         entry("updates", Category.ABOUT, "Version and updates", "update", "version", "upgrade", "about", "release"),
     )
+
+    /** The entries this build offers. */
+    fun forBuild(entries: List<Entry>, playStore: Boolean): List<Entry> = entries.filter { !playStore || it.id !in PLAY_HIDDEN }
+    /** Not in the Google Play build: automatic clipboard sending, and plans bought outside Google Play. */
+    private val PLAY_HIDDEN = setOf("clipboard_auto", "subscription")
 
     /** Categories with at least one item, in their fixed order. */
     fun categories(entries: List<Entry>): List<Category> = Category.entries.filter { category -> entries.any { it.category == category } }

@@ -68,6 +68,13 @@ def test_link_never_starts_saved_optional_capture_or_deskflow(tmp_path):
     workspace.save()
     assert read_json(tmp_path / 'settings.json')['link']['deskflow']['enabled'] is True
 
+
+def test_link_dispatches_find_phone_stop(tmp_path, monkeypatch):
+    workspace = LinkWorkspace(tmp_path)
+    monkeypatch.setattr(workspace.phone_features, 'dispatch', lambda method, args: (method, args))
+    args = {'device_id': 'synthetic-phone'}
+    assert workspace.dispatch('phone.ring.stop', args) == ('phone.ring.stop', args)
+
 def test_camera_is_optional_in_link_without_personal_workspace(tmp_path):
     workspace = LinkWorkspace(tmp_path)
     assert workspace.settings['link']['camera']['enabled'] is False
@@ -275,3 +282,45 @@ def test_phone_with_unspecified_workspace_edition_does_not_issue_grants(tmp_path
     monkeypatch.setattr(phone, "signed", lambda *args: {})
     monkeypatch.setattr(phone, "ensure_grants", lambda *args: pytest.fail("Missing edition must fail closed"))
     assert asyncio.run(runtime.refresh_auxiliary({"base_url": "https://hub.example.invalid"}))
+
+
+def test_startup_threads_share_one_hosted_controller(monkeypatch):
+    # The window's first state request and the background tick both ask for it at startup.
+    # A second controller would never start, leaving the window signed out with phones offline.
+    import threading
+    import time
+    from orion_mini import hosted_runtime, link_operations
+
+    made = []
+
+    class SlowController:
+        def __init__(self, workspace):
+            made.append(self)
+            time.sleep(0.2)
+
+    monkeypatch.setattr(link_operations, "hosted_available", lambda: True)
+    monkeypatch.setattr(hosted_runtime, "HostedController", SlowController)
+    workspace, results = link_operations.LinkOperations(), []
+    threads = [threading.Thread(target=lambda: results.append(workspace.hosted_controller())) for _ in range(4)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(5)
+    assert len(made) == 1
+    assert len(results) == 4 and all(result is made[0] for result in results)
+
+
+def test_every_page_command_has_a_handler():
+    """A command only the pages know fails with a confusing "install Workspace" error."""
+    import re
+    from orion_mini.link_operations import CORE_METHODS, HOSTED_METHODS
+    root = Path(__file__).resolve().parents[1]
+    desktop = "".join((root / "src/orion_mini" / name).read_text(encoding="utf-8")
+                      for name in ("desktop_actions.py", "electron_runtime.py", "electron_service.py"))
+    called = set()
+    for path in (root / "frontend/src").rglob("*.ts*"):
+        if ".test." not in path.name and "preview" not in path.parts:
+            called |= set(re.findall(r'\.call(?:<[^>]*>)?\(\s*"([a-z_][a-z_.]+)"', path.read_text(encoding="utf-8")))
+    assert len(called) > 50
+    handled = lambda method: method in CORE_METHODS or method in HOSTED_METHODS or f"'{method}'" in desktop or f'"{method}"' in desktop
+    assert sorted(method for method in called if not handled(method)) == []

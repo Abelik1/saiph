@@ -72,7 +72,7 @@ export default function SubscriptionCard({view}: {view: BillingView | "unavailab
         <span className="fine">Change plan, update your card or cancel, in Stripe.</span>
       </div>}
       {view.hasCustomer && <p className="fine"><a href="/account/withdraw">Withdraw from contract here</a>: within 14 days of subscribing, with a full refund.</p>}
-      <p className="fine after">{test ? "Test mode: use Stripe test card details only. No real money is charged." : "Cancel any time in Manage billing; access continues to the end of the paid period."}</p>
+      <p className="fine after">{test ? "Test mode: use Stripe test card details only. No real money is charged." : "Cancel any time in Manage billing. During a trial, cancel before its end to avoid the first charge; access continues to the scheduled trial or paid-period end."}</p>
     </>}
     <div className="card-foot"><Icon name="lock" /><span>Paying gives your account Cloud access. You still approve devices on your own computer, and signing in never unlocks your content.</span></div>
   </section></>;

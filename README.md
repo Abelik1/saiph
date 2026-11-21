@@ -173,7 +173,8 @@ python scripts/build-native.py --profile link
 ```
 
 The native bundle is in `dist/Saiph/` (`dist/saiph/` on Linux), and its
-executable is `Saiph.exe` (`saiph`). Linux also needs the Qt/WebEngine system
+executable is `Saiph.exe` (`saiph`). Link uses Electron with a Qt-free Python service;
+see [desktop setup](desktop/README.md). Linux also needs the Chromium system
 libraries. To preview the desktop interface on synthetic data, run
 `npm --prefix frontend run dev` and open `/preview.html`. The
 [testing guide](docs/TESTING.md) covers the desktop, Hub and Cloud suites.

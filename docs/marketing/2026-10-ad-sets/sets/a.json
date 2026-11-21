@@ -1,0 +1,279 @@
+{
+  "name": "Set A: Never pick up your phone",
+  "group": "Phone on your PC",
+  "angle": "Breadth: everything the phone asks for, handled on the PC while the phone sits untouched",
+  "features": [
+    "Sign-in codes and notifications",
+    "Texts (beta)",
+    "Calls (beta)",
+    "Screen mirroring",
+    "Phone camera as webcam"
+  ],
+  "duration": 26,
+  "captions": [
+    {
+      "from": 0.15,
+      "to": 4.65,
+      "text": "Sign-in code?<br>It's already on your PC."
+    },
+    {
+      "from": 4.75,
+      "to": 8.4,
+      "text": "A text?<br>Reply from your keyboard."
+    },
+    {
+      "from": 8.45,
+      "to": 9.95,
+      "text": "Sent from your phone."
+    },
+    {
+      "from": 10.05,
+      "to": 14.5,
+      "text": "A call?<br>Decline it here."
+    },
+    {
+      "from": 14.65,
+      "to": 19.3,
+      "text": "Your phone's screen,<br>in a window."
+    },
+    {
+      "from": 19.45,
+      "to": 23.3,
+      "text": "Its camera is<br>your webcam."
+    }
+  ],
+  "tally": {
+    "from": 0.3,
+    "to": 23.3,
+    "label": "Never pick up your phone",
+    "value": ""
+  },
+  "beta": [
+    {
+      "from": 4.75,
+      "to": 14.5,
+      "text": "Texts and calls are in beta on Saiph Cloud"
+    },
+    {
+      "from": 14.65,
+      "to": 23.3,
+      "text": "Screen and camera work over USB or the same Wi-Fi"
+    }
+  ],
+  "end": {
+    "from": 23.4,
+    "tag": "Your phone,<br>on your PC."
+  },
+  "stills": {
+    "portrait": {
+      "time": 16.9,
+      "caption": "Your phone's screen,<br>in a window.",
+      "capLines": 2,
+      "tally": true
+    },
+    "square": {
+      "time": 3.2,
+      "caption": "Sign-in code?<br>It's already on your PC.",
+      "capLines": 2,
+      "tally": false
+    }
+  },
+  "cuts": [
+    {
+      "id": "code",
+      "feature": "Sign-in codes",
+      "parts": [
+        [
+          0,
+          4.7
+        ],
+        [
+          23.4,
+          26
+        ]
+      ]
+    },
+    {
+      "id": "text",
+      "feature": "Texts (beta)",
+      "parts": [
+        [
+          4.7,
+          10
+        ],
+        [
+          23.4,
+          26
+        ]
+      ]
+    },
+    {
+      "id": "call",
+      "feature": "Calls (beta)",
+      "parts": [
+        [
+          10,
+          14.6
+        ],
+        [
+          23.4,
+          26
+        ]
+      ]
+    },
+    {
+      "id": "mirror",
+      "feature": "Screen mirroring",
+      "parts": [
+        [
+          14.6,
+          19.4
+        ],
+        [
+          23.4,
+          26
+        ]
+      ]
+    },
+    {
+      "id": "camera",
+      "feature": "Phone camera as webcam",
+      "parts": [
+        [
+          19.4,
+          26
+        ]
+      ]
+    }
+  ],
+  "audio": {
+    "voice": "pFZP5JQG7iQjIQuC4Bku",
+    "lines": [
+      {
+        "at": 0.3,
+        "text": "Sign-in code? It's already on your PC."
+      },
+      {
+        "at": 4.85,
+        "text": "A text? Reply from your keyboard."
+      },
+      {
+        "at": 8.5,
+        "text": "Sent from your phone."
+      },
+      {
+        "at": 10.15,
+        "text": "A call? Decline it here."
+      },
+      {
+        "at": 14.75,
+        "text": "Your phone's screen, in a window."
+      },
+      {
+        "at": 19.55,
+        "text": "And its camera is your webcam."
+      },
+      {
+        "at": 23.42,
+        "text": "Never pick up your phone. Fourteen days free."
+      }
+    ],
+    "sfx": [
+      {
+        "at": [
+          0.4,
+          5
+        ],
+        "prompt": "a very soft, muffled, low phone vibration hum on a wooden desk, gentle and quiet, distant, short",
+        "seconds": 0.7,
+        "gain": -18
+      },
+      {
+        "at": 10,
+        "prompt": "a soft, gentle modern phone ringtone, quiet warm marimba notes, muffled, heard from across a desk",
+        "seconds": 3,
+        "gain": -17
+      },
+      {
+        "at": [
+          1.5,
+          5.1
+        ],
+        "prompt": "a soft modern desktop notification chime, two gentle notes, clean",
+        "seconds": 0.8,
+        "gain": -8
+      },
+      {
+        "at": 2.3,
+        "prompt": "fast typing of six digits on a laptop keyboard, close-up, crisp",
+        "seconds": 0.9,
+        "gain": -4
+      },
+      {
+        "at": 6.3,
+        "prompt": "quick typing of a short sentence on a laptop keyboard, close-up, crisp",
+        "seconds": 1.7,
+        "gain": -5
+      },
+      {
+        "at": [
+          3.2,
+          6.25,
+          8.3,
+          12.9,
+          15.2,
+          16.45,
+          19.8
+        ],
+        "prompt": "a single crisp computer mouse click, close-up, clean, short",
+        "seconds": 0.5,
+        "gain": -6
+      },
+      {
+        "at": [
+          1.45,
+          5.5,
+          8.75,
+          10.5,
+          13.35,
+          15.9,
+          16.9,
+          20.5
+        ],
+        "prompt": "a soft airy glowing whoosh ending in a gentle bright ping, subtle modern user interface transition",
+        "seconds": 0.8,
+        "gain": -12
+      },
+      {
+        "at": [
+          15.35,
+          20.35
+        ],
+        "prompt": "a soft smooth whoosh of a window opening on a computer, airy, modern",
+        "seconds": 0.7,
+        "gain": -10
+      },
+      {
+        "at": 19.9,
+        "prompt": "a bright soft camera on chime, modern, short",
+        "seconds": 0.7,
+        "gain": -9
+      },
+      {
+        "at": 23.3,
+        "prompt": "one soft warm felt piano chord ringing out naturally in a quiet room, calm and pleasant, acoustic, no synth, no whoosh",
+        "seconds": 2.4,
+        "gain": -9
+      }
+    ],
+    "music": {
+      "prompt": "Upbeat minimal electronic for a modern tech product ad: warm synth plucks, soft kick and claps, gentle sub bass, confident and light, 112 bpm, clean mix, no vocals",
+      "gain": -17
+    }
+  },
+  "copy": {
+    "primary": "Sign-in codes, texts, calls, your phone's screen and its camera, all on the PC you're already using.",
+    "headline": "Never pick up your phone",
+    "description": "14 days free, then €9.99/month"
+  }
+}

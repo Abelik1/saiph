@@ -110,15 +110,11 @@ def oriented_png(data, mime='image/jpeg'):
 
     Qt's default clipboard decode ignores EXIF, so a portrait phone photo copied
     on Linux would arrive sideways. Size is checked before decoding."""
-    from PySide6.QtCore import QBuffer, QByteArray, QIODevice
-    from PySide6.QtGui import QImageReader
-    buffer=QBuffer();buffer.setData(QByteArray(bytes(data)));buffer.open(QIODevice.ReadOnly)
-    reader=QImageReader(buffer,mime.split('/',1)[1].encode());reader.setAutoTransform(True);size=reader.size()
-    if not size.isValid() or size.width()*size.height()>40_000_000: return None
-    image=reader.read()
-    if image.isNull(): return None
-    out=QBuffer();out.open(QIODevice.WriteOnly);image.save(out,'PNG')
-    return bytes(out.data())
+    from .images import png_bytes
+    try:
+        return png_bytes(bytes(data))
+    except (OSError, ValueError):
+        return None
 
 class QtClipboard:
     """Created and invoked only on Qt's GUI thread, including received writes."""

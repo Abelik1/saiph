@@ -4,7 +4,7 @@ import {getAuth0} from "../../../lib/auth";
 export const dynamic = "force-dynamic";
 
 /** "Continue with Google" on /trial: sign in and come back to /trial, which
- * starts the trial (lib/buy.mjs allows exactly this return path). */
+ * hands off to Stripe trial checkout (lib/buy.mjs allows exactly this return path). */
 export async function GET(request: NextRequest) {
   const auth0 = getAuth0();
   if (request.nextUrl.search) {

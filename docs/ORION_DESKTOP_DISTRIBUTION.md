@@ -1,3 +1,8 @@
+> Link now builds Electron with a frozen Qt-free Python service. The installer,
+> manifests, legacy executable aliases and data-path contracts below remain in use.
+> See [desktop/README.md](../desktop/README.md) for current build commands; statements
+> about replaceable Qt libraries apply to the explicit legacy/Workspace Qt path.
+
 # Saiph desktop distribution
 
 The public edition is Link. Build natively on the target operating system with

@@ -20,6 +20,7 @@ import sefirah.Feature
 import sefirah.common.R
 import sefirah.common.notifications.AppNotifications
 import sefirah.common.notifications.NotificationCenter
+import sefirah.common.util.canUseFullScreenAlerts
 import sefirah.domain.interfaces.DeviceManager
 import sefirah.domain.interfaces.NetworkManager
 import sefirah.domain.model.DevicePreferences
@@ -172,7 +173,7 @@ class PlaySoundFeature @Inject constructor(
         ) {
             setContentTitle(context.getString(R.string.play_sound_notification_title, deviceName))
             setContentIntent(stopPendingIntent)
-            setFullScreenIntent(activityPendingIntent, true)
+            if (canUseFullScreenAlerts(context)) setFullScreenIntent(activityPendingIntent, true)
             setOngoing(true)
             setAutoCancel(true)
             setCategory(NotificationCompat.CATEGORY_ALARM)

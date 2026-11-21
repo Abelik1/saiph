@@ -1,5 +1,7 @@
 @file:Suppress("UnstableApiUsage")
 
+import java.net.URI
+
 plugins {
     alias(libs.plugins.sefirah.android.application)
     alias(libs.plugins.compose.compiler)
@@ -24,6 +26,13 @@ val hasPush = hasFirebase && (pushOption ?: (!independent).toString()) == "true"
 require(pushOption != "true" || hasFirebase) { "orionPush=true requires a Firebase-enabled build" }
 // Optional beta signing key, supplied only through the environment, never committed.
 val betaKeystore = providers.environmentVariable("SAIPH_ANDROID_KEYSTORE").orNull
+// Public account origin, supplied by the distributor; independent builds leave automatic trials off.
+val accountOrigin = providers.gradleProperty("orionAccountOrigin").orNull ?: ""
+require(accountOrigin.isEmpty() || runCatching {
+    val uri = URI(accountOrigin)
+    uri.scheme == "https" && !uri.host.isNullOrBlank() && uri.rawUserInfo == null &&
+        uri.port == -1 && uri.rawPath.isNullOrEmpty() && uri.rawQuery == null && uri.rawFragment == null
+}.getOrDefault(false)) { "orionAccountOrigin must be a canonical HTTPS origin" }
 
 android {
     namespace = "com.castle.sefirah"
@@ -36,16 +45,24 @@ android {
     defaultConfig {
         applicationId = "com.orionmini.mobile"
         manifestPlaceholders["appAuthRedirectScheme"] = "com.orionmini.mobile.hosted"
+        manifestPlaceholders["authRedirectPath"] = "/android/oauth2redirect"
+        buildConfigField("String", "AUTH_REDIRECT", "\"https://usesaiph.com/android/oauth2redirect\"")
         minSdk = 26
+        // The bundled restic runtime is built and checked for these two ABIs.
+        // Do not advertise 32-bit installs whose nativeLibraryDir lacks restic.
+        ndk {
+            abiFilters += listOf("arm64-v8a", "x86_64")
+        }
         buildConfigField("boolean", "HAS_FIREBASE", hasFirebase.toString())
         buildConfigField("boolean", "HAS_FIREBASE_PUSH", hasPush.toString())
         buildConfigField("boolean", "INDEPENDENT", independent.toString())
+        buildConfigField("String", "ACCOUNT_ORIGIN", "\"$accountOrigin\"")
         manifestPlaceholders["orionFirebaseEnabled"] = hasFirebase.toString()
         manifestPlaceholders["orionFirebasePushEnabled"] = hasPush.toString()
 
         versionCode = providers.gradleProperty("orionVersionCode").orNull?.toInt()
             ?: ((System.currentTimeMillis() / 60000L) - 26297280L).toInt()
-        versionName = "0.9.7"
+        versionName = "0.9.8"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         externalNativeBuild {
@@ -74,10 +91,13 @@ android {
         debug {
             buildConfigField("boolean", "HAS_APP_DISTRIBUTION", hasFirebase.toString())
         }
+        // Store and website releases: the same code as beta, signed with the owner's release key
+        // from the environment (docs/ANDROID_DISTRIBUTION.md). R8 stays off until it is accepted on devices.
         release {
-            isMinifyEnabled = true
-            isShrinkResources = true
+            isMinifyEnabled = false
+            isShrinkResources = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.findByName("beta")
             buildConfigField("boolean", "HAS_APP_DISTRIBUTION", "false")
         }
         // Outside beta testers: not debuggable, same code as debug (R8 minification is
@@ -92,9 +112,33 @@ android {
             buildConfigField("boolean", "HAS_APP_DISTRIBUTION", hasFirebase.toString())
         }
     }
+    // Public deployment defaults are placed here by the distributor, never committed.
+    sourceSets.getByName("release").assets.directories.add("src/beta/assets")
+
+    // Two apps (docs/ANDROID_DISTRIBUTION.md): "Saiph" on Google Play and "Saiph Unlocked" from
+    // usesaiph.com. Separate app IDs and sign-in callbacks, so one phone can have both.
+    flavorDimensions += "store"
+    productFlavors {
+        // Downloaded from usesaiph.com: every feature, and Saiph installs its own updates.
+        create("direct") {
+            dimension = "store"
+            applicationIdSuffix = ".unlocked"
+            resValue("string", "app_name", "Saiph Unlocked")
+            manifestPlaceholders["appAuthRedirectScheme"] = "com.orionmini.mobile.unlocked.hosted"
+            manifestPlaceholders["authRedirectPath"] = "/android/unlocked/oauth2redirect"
+            buildConfigField("String", "AUTH_REDIRECT", "\"https://usesaiph.com/android/unlocked/oauth2redirect\"")
+            buildConfigField("boolean", "PLAY_STORE", "false")
+        }
+        // Google Play: within Play's permission policies (src/play/AndroidManifest.xml); Play installs updates.
+        create("play") {
+            dimension = "store"
+            buildConfigField("boolean", "PLAY_STORE", "true")
+        }
+    }
 
     buildFeatures {
         compose = true
+        resValues = true  // The direct flavor names itself Saiph Unlocked.
     }
 
     packaging {
@@ -114,6 +158,13 @@ android {
         cmake {
             path = file("src/main/jni/CMakeLists.txt")
         }
+    }
+}
+
+// Beta builds are direct downloads for testers; Play has its own testing tracks.
+androidComponents {
+    beforeVariants { variant ->
+        if (variant.buildType == "beta" && variant.productFlavors.contains("store" to "play")) variant.enable = false
     }
 }
 

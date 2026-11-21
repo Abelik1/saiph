@@ -4,7 +4,7 @@ import {withBillingStore} from "./db";
 import {deriveEntitlement,type Entitlement} from "./entitlement.mjs";
 import {maySubscribe,planForPrice,readBillingConfig,reportBillingConfig,type BillingMode} from "./policy";
 import {subscriptionSummary} from "./presentation.mjs";
-import {readTrialConfig,trialDecision,type TrialState} from "./trial.mjs";
+import {readCardTrialConfig,trialDecision,type TrialState} from "./trial.mjs";
 
 type StoredRow={status:string;priceId:string;currentPeriodEnd:number|null;cancelAtPeriodEnd:boolean};
 export type TrialView={state:TrialState;days:number;endsAt:number|null;daysLeft:number|null};
@@ -25,11 +25,12 @@ export async function billingView(subject:unknown,trialKey?:unknown):Promise<Bil
       const disputed=customer?await store.hasBlockingDispute(subject):false;
       const now=Math.floor(Date.now()/1000);
       const standing=deriveEntitlement(snapshots,now,{disputed});
-      const trialConfig=readTrialConfig(process.env);
+      const trialConfig=readCardTrialConfig(process.env);
       const emailKey=typeof trialKey==="string"?trialKey:null;
       // Without migration 0004 the trial is simply off; the rest of the page still works.
       const facts=await store.trialFacts(subject,emailKey).catch(()=>null);
-      const decision=facts ? trialDecision({config:trialConfig,stored:facts.stored,emailKey,emailUsed:facts.emailUsed,subscribed:facts.subscribed,started:facts.started,now})
+      const decision=facts?.subscribed ? {state:"subscribed" as const,endsAt:null,daysLeft:null}
+        : facts ? trialDecision({config:facts.cardReady?trialConfig:null,stored:facts.stored,emailKey,emailUsed:facts.emailUsed,subscribed:facts.subscribed,started:facts.started,now})
         : {state:"off" as const,endsAt:null,daysLeft:null};
       return {mode:config.mode,standing,hasCustomer:Boolean(customer),trial:{...decision,days:trialConfig?.days ?? 0},
         // Checkout refuses while any subscription is not finished; mirror that here.

@@ -35,8 +35,27 @@ jobs:
         run: python scripts/build-restic.py --android-root . --sdk "$env:ANDROID_HOME"
       - name: Verify resolved Maven security floors
         run: ./gradlew.bat verifyDependencySecurity :build-logic:verifyDependencySecurity --init-script ../scripts/android/dependency-review.init.gradle -PorionFirebase=false -PorionIndependent=true -PorionPush=false -PorionVersionCode=1 --no-configuration-cache --stacktrace
-      - name: Compile, test and lint independent Android build
-        run: ./gradlew.bat :app:assembleDebug :app:assembleBeta :app:testDebugUnitTest :core:network:testDebugUnitTest :restic-android:testDebugUnitTest :app:lintDebug :app:lintBeta -PorionPush=false -PorionFirebase=false -PorionIndependent=true -PorionVersionCode=1 --no-configuration-cache --stacktrace
+      - name: Compile, test and lint both Android apps
+        run: ./gradlew.bat :app:assembleDirectDebug :app:assembleDirectBeta :app:assemblePlayDebug :app:testDirectDebugUnitTest :app:testPlayDebugUnitTest :core:network:testDebugUnitTest :restic-android:testDebugUnitTest :app:lintDirectDebug :app:lintDirectBeta :app:lintPlayDebug -PorionPush=false -PorionFirebase=false -PorionIndependent=true -PorionVersionCode=1 --no-configuration-cache --stacktrace
+      - name: Build unsigned public release candidates
+        run: ./gradlew.bat :app:assembleDirectRelease :app:assemblePlayRelease :app:bundlePlayRelease -PorionPush=false -PorionFirebase=false -PorionIndependent=true -PorionVersionCode=1 --no-configuration-cache --stacktrace
+      - name: Verify launcher labels, package IDs and Play permissions
+        run: |
+          $aapt = Get-ChildItem (Join-Path $env:ANDROID_HOME 'build-tools') -Filter aapt2.exe -Recurse | Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName
+          $apps = @{direct=@('Saiph Unlocked', 'com\.orionmini\.mobile\.unlocked'); play=@('Saiph', 'com\.orionmini\.mobile')}
+          foreach ($flavor in $apps.Keys) {
+            $apk = "app/build/outputs/apk/$flavor/release/app-$flavor-release-unsigned.apk"
+            $badging = & $aapt dump badging $apk
+            if ($LASTEXITCODE) { throw "Unable to read $flavor APK metadata." }
+            if ($badging -notcontains "application-label:'$($apps[$flavor][0])'" -or
+                -not ($badging -match "^package: name='$($apps[$flavor][1])' versionCode='1' ") -or
+                ($badging -match '^application-debuggable')) {
+              throw "$flavor APK has unexpected launcher branding, package identity or debug state."
+            }
+            if ($flavor -eq 'play' -and ($badging -match "^uses-permission(?:-sdk-\d+)?: name='android\.permission\.(REQUEST_INSTALL_PACKAGES|QUERY_ALL_PACKAGES|MANAGE_EXTERNAL_STORAGE|ACCESS_BACKGROUND_LOCATION|USE_FULL_SCREEN_INTENT|RECEIVE_SENSITIVE_NOTIFICATIONS)'")) {
+              throw 'A direct-only permission was found in the Play APK.'
+            }
+          }
   dependency-graph:
     # Publishes Android dependencies to GitHub's dependency graph so vulnerability
     # alerts cover Gradle. Never runs for pull requests.

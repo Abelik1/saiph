@@ -13,14 +13,14 @@ from datetime import date
 from pathlib import Path
 from urllib.parse import parse_qsl, unquote, urlsplit
 
-FILES = ('index.html', 'self-host.html', 'hosted.html', 'downloads.html', 'waitlist.html', 'privacy.html',
+FILES = ('index.html', 'self-host.html', 'hosted.html', 'downloads.html', 'install-android.html', 'waitlist.html', 'privacy.html',
          'account-privacy.html', 'terms.html', 'refunds.html', 'contact.html', 'assets/logo.svg',
-         'assets/site.css', 'assets/site.js', 'assets/stage.js', 'assets/analytics.js', 'assets/consent.js',
-         '.well-known/assetlinks.json', 'android/oauth2redirect.html', 'robots.txt', 'sitemap.xml',
+         'assets/site.css', 'assets/site.js', 'assets/stage.js', 'assets/analytics.js', 'assets/consent.js', 'assets/legal.js',
+         '.well-known/assetlinks.json', 'android/oauth2redirect.html', 'android/unlocked/oauth2redirect.html', 'robots.txt', 'sitemap.xml',
          'assets/og-image.png')
 PLATFORMS = ('windows', 'linux', 'android', 'server')
 FIELDS = {'sourceVisibility', 'githubUrl', 'releasesUrl', 'downloads', 'subscribeUrl', 'waitlistUrl',
-          'androidBetaUrl', 'betaAccountUrl', 'waitlistPrivacyUrl', 'waitlistNotice', 'hostedPrice', 'hostedPeriod', 'hostedPriceNote', 'hostedTrial', 'license', 'privacy', 'waitlist', 'release', 'analytics',
+          'androidBetaUrl', 'androidPlayUrl', 'betaAccountUrl', 'waitlistPrivacyUrl', 'waitlistNotice', 'hostedPrice', 'hostedPeriod', 'hostedPriceNote', 'hostedTrial', 'license', 'privacy', 'waitlist', 'release', 'analytics',
           'hostedYearlyPrice', 'ga4', 'priceTest'}
 
 
@@ -129,7 +129,7 @@ def validate_settings(settings, mode):
         raise ValueError('Unknown website settings; do not copy deployment credentials into site config')
     config = {'sourceVisibility': 'private', 'githubUrl': '', 'releasesUrl': '',
               'downloads': {name: '' for name in PLATFORMS}, 'release': {},
-              'subscribeUrl': '', 'waitlistUrl': '', 'androidBetaUrl': '', 'betaAccountUrl': '', 'waitlistPrivacyUrl': '', 'waitlistNotice': '',
+              'subscribeUrl': '', 'waitlistUrl': '', 'androidBetaUrl': '', 'androidPlayUrl': '', 'betaAccountUrl': '', 'waitlistPrivacyUrl': '', 'waitlistNotice': '',
               'privacy': {}, 'waitlist': {}, 'analytics': {'enabled': False, 'scriptPath': '/_vercel/insights/script.js'}, 'hostedPrice': '', 'hostedPeriod': '/ month', 'hostedPriceNote': '', 'hostedTrial': '',
               'hostedYearlyPrice': '', 'ga4': {'measurementId': ''}, 'priceTest': {'enabled': False, 'id': '', 'variants': {}},
               'license': {'core': 'AGPL-3.0-or-later', 'android': 'GPL-3.0-only'}}
@@ -167,6 +167,8 @@ def validate_settings(settings, mode):
             raise ValueError('Download link fields must be text')
         if url:
             public_url(url)
+    if config['androidPlayUrl'] not in ('', 'https://play.google.com/store/apps/details?id=com.orionmini.mobile'):
+        raise ValueError("The Google Play link must be Saiph's own store listing")
     if not isinstance(config['androidBetaUrl'], str) or (
             config['androidBetaUrl'] and not FIREBASE_INVITE.fullmatch(config['androidBetaUrl'])):
         raise ValueError('Android beta link must be a Firebase App Distribution invite link')
@@ -275,6 +277,53 @@ class Page(HTMLParser):
                 self.links.append(attrs[key])
 
 
+LEGAL_PAGES = {'website': ('privacy.html', 'Website privacy'),
+               'account': ('account-privacy.html', 'Account privacy'),
+               'terms': ('terms.html', 'Terms'), 'refunds': ('refunds.html', 'Refunds')}
+
+
+def consolidate_legal_pages(contents):
+    """One policy home; previous URLs remain small, deep-link-compatible aliases.
+
+    Existing source documents remain the single text source for each policy.
+    Contact stays separate so its private address never reaches an indexed page.
+    """
+    documents = {key: contents[name].decode('utf-8') for key, (name, _) in LEGAL_PAGES.items()}
+    panels = []
+    for key, document in documents.items():
+        body = re.search(r'<main id="main">\s*<section class="section"><div class="wrap reading">(.*?)</div></section>\s*</main>', document, re.S)
+        if not body:
+            raise ValueError('Policy document must have one reading section')
+        text = body[1].replace('<h2', '<h3').replace('</h2>', '</h3>')
+        text = text.replace('<h1', '<h2').replace('</h1>', '</h2>')
+        panels.append(f'<section id="{key}" data-policy-panel tabindex="0">{text}</section>')
+    navigation = '\n'.join(f'<a id="policy-tab-{key}" href="#{key}">{label}</a>'
+                           for key, (_, label) in LEGAL_PAGES.items())
+    main = ('<main id="main"><section class="section"><div class="wrap reading policy-home">'
+            '<h1>Privacy &amp; terms.</h1><p class="lede">How Saiph handles your data, subscriptions and refunds.</p>'
+            '<nav class="policy-tabs" data-policy-tabs aria-label="Privacy and terms">' + navigation + '</nav>'
+            + '\n'.join(panels) + '</div></section></main>')
+    contents['privacy.html'] = re.sub(r'<main id="main">.*?</main>', lambda _: main,
+                                     documents['website'], count=1, flags=re.S).encode('utf-8')
+    for key, (name, label) in LEGAL_PAGES.items():
+        if key == 'website':
+            continue
+        document = documents[key]
+        # Keep old fragment IDs addressable for bundle validation and bookmarks.
+        anchors = ''.join(f'<span id="{escape(identifier, quote=True)}"></span>'
+                          for identifier in sorted(Page(document).ids - {'main'}))
+        target = 'https://usesaiph.com/privacy.html#' + key
+        document = re.sub(r'(<link rel="canonical" href=")[^"]+', lambda m: m[1] + target, document)
+        document = re.sub(r'(<meta property="og:url" content=")[^"]+', lambda m: m[1] + target, document)
+        alias = (f'<main id="main" data-policy-redirect="{key}"><section class="section"><div class="wrap reading">'
+                 f'{anchors}<h1>{label}</h1><p>This document is now part of Privacy &amp; terms.</p>'
+                 f'<p><a href="privacy.html#{key}">Read {label.lower()}</a></p></div></section></main>')
+        document = re.sub(r'<main id="main">.*?</main>', lambda _: alias, document, count=1, flags=re.S)
+        if 'src="assets/legal.js"' not in document:
+            document = document.replace('</body>', '<script src="assets/legal.js"></script>\n</body>')
+        contents[name] = document.encode('utf-8')
+
+
 def prepare(source, output, settings, mode='preview', address=''):
     source, output = Path(source).resolve(), Path(output).absolute()
     config = validate_settings(settings, mode)
@@ -295,6 +344,7 @@ def prepare(source, output, settings, mode='preview', address=''):
                          for name, data in contents.items() if name.endswith('.html') and name != 'contact.html'):
         raise ValueError('Only contact.html may hold the trader address, exactly once')
     contents['contact.html'] = contact.encode('utf-8')
+    consolidate_legal_pages(contents)
     pages = {name: Page(data.decode('utf-8')) for name, data in contents.items() if name.endswith('.html')}
     for name, page in pages.items():
         for link in page.links:

@@ -10,7 +10,6 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.widget.LinearLayout
-import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 
@@ -108,39 +107,46 @@ class PhoneScreenActivity : ComponentActivity() {
     override fun onPause() { resumed = false; super.onPause() }
     override fun onStop() { lock.stopped(); super.onStop() }
 
+    /** Same layout as the camera page: one short status line, the steps, then clear actions in the dock. */
     private fun show(message: String? = null) {
         if (!::root.isInitialized) return
         page()
         if (explaining) { explanation(); return }
+        val sharing = ScreenShareService.active()
         // Live: a red banner while this phone's screen is showing on a computer.
-        if (ScreenShareService.active()) root.addView(liveBanner("Your screen is showing on your computer."))
-        val status: TextView = text(message ?: when {
-            ScreenShareService.active() -> "Stop here or from the notification. Locking the phone also stops sharing."
-            code != null -> "Show your phone screen on $label? Your computer sees everything on this screen until you stop. " +
-                "Protected screens, such as passwords and banking apps, stay black. Nothing is recorded and there is no sound. " +
-                "Locking the phone stops sharing."
-            else -> "On your computer, open Saiph → Phone → Apps and choose Show phone screen."
-        }, UiType.BODY, Palette.MUTED).apply { setPadding(dp(2), dp(4), 0, dp(20)) }
-        root.addView(status)
+        if (sharing) root.addView(liveBanner("Your screen is showing on your computer."))
+        root.addView(text(message ?: when {
+            sharing -> "Stop here or from the notification. Locking the phone also stops sharing."
+            code != null -> "$label wants to see this phone's screen."
+            else -> "Show this phone's screen on your computer."
+        }, UiType.BODY, Palette.MUTED).apply { setPadding(dp(2), dp(4), 0, dp(8)) })
         when {
-            ScreenShareService.active() -> root.addView(button("Stop sharing", tone = Tone.DANGER) { ScreenShareService.stop(this); show("Sharing stopped.") })
+            sharing -> frame.dockActions(button("Stop sharing", tone = Tone.DANGER) { ScreenShareService.stop(this); show("Sharing stopped.") })
             code != null -> {
-                root.addView(button("Start sharing", true) { confirmStart() })
-                root.addView(button("Not now") { code = null; show() })
+                root.addView(stepGuide(Step(StepPicture.VERIFY, "Confirm it's you on this phone."),
+                    Step(StepPicture.ALLOW, "Choose Start now in Android's prompt."),
+                    Step(StepPicture.STREAM, "$label sees this screen until you stop. Protected apps stay black. No sound.")))
+                frame.dockActions(button("Start sharing", true) { confirmStart() })
+                frame.dock.addView(buttonRow(setupLink("Not now") { code = null; show() }))
             }
-            else -> root.addView(button("Scan computer's code", tone = Tone.TONAL) {
-                if (!AppLock.locked(this)) scan.launch(OrionQrActivity.screenSession(this))
-            })
+            else -> {
+                root.addView(stepGuide(Step(StepPicture.COMPUTER_TAB, "On your computer, open Saiph → Phone → Apps and choose Show phone screen."),
+                    Step(StepPicture.NOTIFY, "Tap the request that appears on this phone."),
+                    Step(StepPicture.VERIFY, "Confirm it's you, then choose Start now."),
+                    Step(StepPicture.STREAM, "Your computer shows this screen until you stop.")))
+                frame.dockActions(button("Scan computer's code", true) {
+                    if (!AppLock.locked(this)) scan.launch(OrionQrActivity.screenSession(this))
+                })
+            }
         }
-        root.addView(section("Control from computer"))
-        val on = SaiphInputService.enabled(this)
-        root.addView(body(if (on) "On. During a session your computer can tap, swipe, type and press Back, Home and Recents."
-            else "Off. Sessions are view only. Turn this on to use your phone with the computer's mouse and keyboard."))
-        root.addView(button(if (on) "Turn off in Android settings" else "Turn on control from computer", tone = Tone.TONAL) {
-            if (on) openAccessibility() else { explaining = true; show() }
-        })
-        root.addView(switchRow("Let my computers offer sessions", "Approved computers on Saiph Cloud can send a request and list your apps. You still decide each time.",
-            offersAllowed(this)) { allowed -> getSharedPreferences(PREFS, 0).edit().putBoolean(OFFERS, allowed).apply() })
+        if (sharing) return
+        val control = SaiphInputService.enabled(this)
+        root.addView(section("Settings"))
+        root.addView(settingsList(listOf(
+            settingsRow(null, "Control from computer", if (control) "On: your computer's mouse and keyboard work on this phone"
+                else "Off: view only", external = control) { if (control) openAccessibility() else { explaining = true; show() } },
+            switchRow("Let my computers offer sessions", "Approved computers can send you a request. You still decide each time.",
+                offersAllowed(this)) { allowed -> getSharedPreferences(PREFS, 0).edit().putBoolean(OFFERS, allowed).apply() })))
     }
 
     /** The opt-in explanation Android's accessibility consent follows. */
@@ -151,8 +157,8 @@ class PhoneScreenActivity : ComponentActivity() {
             "store or send what is on your screen through this service; the screen picture uses Android's own screen sharing.").apply { setPadding(0, 0, 0, dp(8)) })
         root.addView(body("On the next screen, choose Saiph phone screen control and turn it on. You can turn it off there at any time.")
             .apply { setPadding(0, 0, 0, dp(20)) })
-        root.addView(button("Open Android settings", true) { explaining = false; openAccessibility() })
-        root.addView(button("Not now") { explaining = false; show() })
+        frame.dockActions(button("Open Android settings", true) { explaining = false; openAccessibility() })
+        frame.dock.addView(buttonRow(setupLink("Not now") { explaining = false; show() }))
     }
 
     private fun openAccessibility() = startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))

@@ -55,7 +55,7 @@ describe("Anonymous usage agreement", () => {
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     fireEvent.click(await screen.findByRole("button", { name: "Share anonymous usage" }));
     await waitFor(() => expect(call).toHaveBeenCalledWith("usage.consent", { granted: true }));
-    expect(await screen.findByText("Saiph is ready")).toBeVisible();
+    expect(await screen.findByText("Your preferences are saved")).toBeVisible();
   });
 
   it("skips the setup step in builds that cannot send", async () => {

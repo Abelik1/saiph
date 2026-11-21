@@ -9,6 +9,9 @@ def floors = [
     'org.bitbucket.b_c:jose4j': '0.9.6',
     'org.jdom:jdom2': '2.0.6.1',
     'org.apache.httpcomponents:httpclient': '4.5.14',
+    // CVE-2026-53914 (KAPT incremental cache deserialization). Also lifts the
+    // Kotlin DSL plugin dependency of the convention-plugin build.
+    'org.jetbrains.kotlin:kotlin-gradle-plugin': '2.4.20',
 ]
 // UTP's gRPC transport is host test tooling, not APK runtime. Keep its
 // mutually dependent Netty modules aligned within the existing 4.1 family.
@@ -34,14 +37,13 @@ gradle.beforeProject { project ->
     }
 }
 
-// CVE-2026-53914 is in KAPT's incremental deserialization cache. This build
-// uses KSP. Do not allow KAPT to be added until the compiler/toolchain upgrade
-// described in docs/DEPENDENCY_REVIEW.md has been validated.
+// CVE-2026-53914 is in KAPT's incremental deserialization cache. The floor above
+// patches it; this build uses KSP and keeps KAPT out as defence in depth.
 gradle.projectsEvaluated {
     gradle.rootProject.allprojects.each { project ->
         if (project.plugins.hasPlugin('org.jetbrains.kotlin.kapt') ||
             project.plugins.hasPlugin('kotlin-kapt')) {
-            throw new GradleException('KAPT is disabled pending the Kotlin security upgrade; use KSP.')
+            throw new GradleException('KAPT is disabled in this build; use KSP.')
         }
     }
 }

@@ -7,8 +7,9 @@ import sefirah.network.orion.MeshOrigin
 
 class BuildVariantTest {
     @Test fun independentDistributionNeverUsesOwnerHubDefault() {
-        assertEquals("com.orionmini.mobile", BuildConfig.APPLICATION_ID)
-        assertEquals("0.9.7", BuildConfig.VERSION_NAME)
+        // Google Play's Saiph and the website's Saiph Unlocked install side by side.
+        assertEquals(if (BuildConfig.PLAY_STORE) "com.orionmini.mobile" else "com.orionmini.mobile.unlocked", BuildConfig.APPLICATION_ID)
+        assertEquals("0.9.8", BuildConfig.VERSION_NAME)
         if (BuildConfig.INDEPENDENT) {
             // Push is an explicit opt-in that needs Firebase; it is never implied by it.
             assertTrue(!BuildConfig.HAS_FIREBASE_PUSH || BuildConfig.HAS_FIREBASE)

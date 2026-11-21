@@ -25,6 +25,7 @@ jobs:
     env:
       QT_QPA_PLATFORM: offscreen
       VITE_ORION_PROFILE: link
+      PYTHONDONTWRITEBYTECODE: '1'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -36,18 +37,53 @@ jobs:
         with:
           node-version: '24'
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: |
+            frontend/package-lock.json
+            desktop/package-lock.json
       - name: Linux native build libraries
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y xvfb libegl1 libgtk-3-0 libnss3 libxkbcommon-x11-0 libxcb-cursor0 libdbus-1-3 libx11-xcb1 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxtst6 libasound2 libxdamage1 libxrandr2 libxcomposite1 libgbm1
+        run: sudo apt-get update && sudo apt-get install -y xvfb x11-utils libegl1 libgtk-3-0 libnss3 libxkbcommon-x11-0 libxcb-cursor0 libdbus-1-3 libx11-xcb1 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxtst6 libasound2 libxdamage1 libxrandr2 libxcomposite1 libgbm1
       - name: Desktop dependencies with reviewed Qt notice version
         run: python -m pip install -e ".[dev,hosted]" "PySide6==${{ matrix.qt }}" -r hub/requirements-hosted.txt httpx
       - run: npm --prefix frontend ci
+      - run: npm --prefix desktop ci
+      - name: Fetch the Electron runtime when npm skipped it
+        run: node desktop/node_modules/electron/install.js
       - name: Public fixture and delegate boundary
         run: python scripts/public-release/check-public-data.py
       - name: Exported Python unit suite
         run: python scripts/public-release/verify-public.py
       - run: npm --prefix frontend run test:unit
+      - run: npm --prefix desktop test
+      - name: Build and drive the real Electron shell in isolation
+        shell: python
+        run: |
+          import os, subprocess, sys, time, json
+          from pathlib import Path
+          if sys.platform == 'linux' and not os.environ.get('DISPLAY'):
+              # The launcher and the display-server assertion need the same Xvfb session.
+              subprocess.run(['xvfb-run', '-a', sys.executable, __file__], check=True)
+              raise SystemExit(0)
+          subprocess.run(['npm' + ('.cmd' if os.name == 'nt' else ''), '--prefix', 'frontend', 'run', 'build'], check=True)
+          session = Path('build/ci-electron/session.json')
+          launch = [sys.executable, 'scripts/desktop-ui.py', '--shell', 'electron', '--fixture', 'phone', '--show', '--session', str(session.parent), '--timeout', '300']
+          app = subprocess.Popen(launch)
+          try:
+              for _ in range(120):
+                  if app.poll() is not None:
+                      raise RuntimeError('Electron stopped before readiness')
+                  if session.is_file() and json.loads(session.read_text()).get('status') == 'ready':
+                      break
+                  time.sleep(.5)
+              else:
+                  raise RuntimeError('Electron readiness timed out')
+              subprocess.run(['node', 'scripts/desktop-ui.cjs', '--session', str(session), 'run', '--script', 'tests/packaging/desktop_electron_visible.cjs'], check=True)
+          finally:
+              if app.poll() is None:
+                  subprocess.run(['node', 'scripts/desktop-ui.cjs', '--session', str(session), 'stop'], check=False)
+                  app.wait(timeout=30)
+          if app.returncode or json.loads(session.read_text()).get('status') != 'stopped':
+              raise RuntimeError('Electron did not complete an orderly test shutdown')
       - name: Build Link on its actual operating system
         if: github.event_name == 'workflow_dispatch'
         shell: python
@@ -102,16 +138,17 @@ jobs:
           package = distribution / ('package-0.1.0-beta.2-' + platform)
           shutil.copyfile(package / 'package-manifest.json', output / 'package-manifest.json')
           shutil.copyfile(package / 'licenses/inventory.json', output / 'dependency-inventory.json')
-          origins = Path('build/profile/native-build-origins.json')
+          origins = Path('build/electron/metadata/native-build-origins.json')
           if origins.is_file():
               shutil.copyfile(origins, output / origins.name)
-          defaults = Path('build/profile/hosted-defaults.json')
+          defaults = Path('build/electron/metadata/hosted-defaults.json')
           if defaults.is_file():
               shutil.copyfile(defaults, output / defaults.name)
           evidence = {'schema': 1, 'source_commit': commit, 'platform': platform,
                       'release_state': 'unsigned-development', 'run_id': os.environ['GITHUB_RUN_ID'],
-                      'runtime': sys.version, 'qt_version': '${{ matrix.qt }}',
-                      'limits': ['No signing, independent security review, Qt replacement acceptance or physical installation acceptance']}
+                      'runtime': sys.version, 'desktop_runtime': 'electron',
+                      'electron_version': json.loads(Path('desktop/package.json').read_text())['devDependencies']['electron'],
+                      'limits': ['No signing, independent security review, long-duration GPU acceptance or physical installation acceptance']}
           (output / 'build-evidence.json').write_text(json.dumps(evidence, indent=2) + '\n', encoding='utf-8')
           command = [sys.executable, 'scripts/public-release/release-checksums.py', str(output), '--source-commit', commit]
           subprocess.run(command, check=True)
@@ -175,3 +212,6 @@ jobs:
       - run: npm --prefix frontend ci
       - name: Audit frontend dependencies, including build tools
         run: npm --prefix frontend audit --audit-level=high
+      - run: npm --prefix desktop ci
+      - name: Audit desktop dependencies, including Electron packaging tools
+        run: npm --prefix desktop audit --audit-level=high

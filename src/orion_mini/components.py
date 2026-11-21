@@ -9,11 +9,11 @@ import subprocess
 import sys
 import threading
 import time
-import webbrowser
 from pathlib import Path
 from urllib.parse import urlsplit
 
 from .enrollment import login_server
+from . import child_process
 
 
 def tailscale_executable():
@@ -26,7 +26,7 @@ def tailscale_executable():
 
 def run(argv, timeout=15):
     options = {'creationflags': subprocess.CREATE_NO_WINDOW} if sys.platform == 'win32' else {}
-    return subprocess.run(argv, capture_output=True, text=True, timeout=timeout, **options)
+    return child_process.run(argv, capture_output=True, text=True, timeout=timeout, **options)
 
 
 def auth_url(value, controller):
@@ -77,7 +77,7 @@ class Components:
         if sys.platform == 'win32':
             winget = shutil.which('winget')
             if not winget:
-                webbrowser.open('https://tailscale.com/download/windows')
+                child_process.open_url('https://tailscale.com/download/windows')
                 return {'opened': True, 'message': 'Install the official component, then return to Saiph.'}
             command = [winget, 'install', '--id', 'Tailscale.Tailscale', '--exact', '--source', 'winget',
                        '--accept-source-agreements', '--accept-package-agreements', '--silent', '--disable-interactivity']
@@ -161,7 +161,7 @@ class Components:
         process = None
         try:
             options = {'creationflags': subprocess.CREATE_NO_WINDOW} if sys.platform == 'win32' else {}
-            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, **options)
+            process = child_process.popen(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, **options)
             timer = threading.Timer(130, process.kill); timer.daemon = True; timer.start()
             try:
                 buffer = ''; opened = False
@@ -178,7 +178,9 @@ class Components:
                     if url and not opened:
                         if not auth_url(url, controller):
                             raise ValueError('Sign-in returned an unexpected provider. Review the network in Advanced.')
-                        webbrowser.open(url); opened = True
+                        if not child_process.open_url(url):
+                            raise ValueError('Saiph could not open your browser for network sign-in.')
+                        opened = True
                 process.wait(timeout=5)
             finally:
                 timer.cancel()

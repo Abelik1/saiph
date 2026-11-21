@@ -171,7 +171,97 @@ subscription; **Manage billing** (Stripe customer portal) once a customer exists
 and the beta code form. After returning from checkout the page says Stripe is
 confirming the payment; it never treats the return as payment.
 
-## Free trial on sign-up
+## Current free trial — 14 days, card required (27 October 2026)
+
+New trial signup now uses Stripe Checkout with a card required and a fixed
+14-day trial, followed by the standard €9.99 monthly subscription unless
+cancelled. The original no-card trial implementation below is historical and
+remains only for existing grants and owner extensions. Existing trials are not
+shortened or automatically converted. See the implementation, activation gates
+and email/cancellation checks in [Card-required trial](CARD_REQUIRED_TRIAL.md).
+
+## Historical no-card trial on sign-up
+
+### Card-required Stripe trial (25 October 2026; replaced by [the 14-day trial](CARD_REQUIRED_TRIAL.md) of 27 October)
+
+New trials require a card in website Stripe Checkout. `/trial` offers the existing
+monthly/yearly prices and explains €0 now, automatic renewal after 30 days, and
+cancellation before the first charge. The offer uses `trial_period_days=30`,
+`payment_method_collection=always`, and `allowed_payment_method_types=[card]`.
+Missing-card end behavior is cancel. Checkout creation, return URLs and native
+sign-in grant no access; only the existing verified subscription-webhook path
+grants Cloud access. Stripe subscription status `trialing` and the first payment
+date appear on the account page. Play remains consumption-only with no purchase
+links. The native compatibility endpoint now returns `409 checkout_required`.
+
+Migration **0007_card_trials.sql** adds permanent verified-email/subject claims.
+Reservation runs under the same global lock as legacy trial claims; no card
+reservation creates a `trial:` grant or enters the legacy grant refresh queue.
+Same-account abandoned checkouts can retry; other accounts with the same email,
+legacy-trial users and prior subscribers are refused. Current Stripe subscription
+history is inspected under the customer lock so cancellation cannot restart a
+trial before its webhook arrives. Shared schema/mode boundaries remain intact.
+The cap counts legacy trials and card reservations, including abandoned ones;
+owner cap changes can reopen places. The existing HMAC secret is retained.
+
+Deploy migration 0007 before the revised account site. Ensure the configured
+Stripe customer portal permits cancellation while trialing, enable trial-ending
+reminders, and perform actual test-mode signup/cancel/no-first-charge acceptance.
+Existing no-card trials retain their original terms; this does not auto-charge
+them or replace their grants. `SAIPH_TRIAL_DAYS=0` disables the offer; otherwise
+the card-required introductory period is 30 days. Provider configuration, signup,
+emails and production deployment remain owner operations, not inferred from tests.
+
+The following automatic card-free design describes the earlier unreleased commit
+and is superseded for new trials.
+
+### Automatic Android trial on first sign-in (25 October 2026, source only; removed)
+
+Both Android flavors start the configured free trial automatically when
+`GET /v1/access` confirms no entitlement and no previous trial. This works before
+pairing a computer. Launch configuration must set `SAIPH_TRIAL_DAYS=30`; the
+existing default remains 14 and the existing trial secret must be preserved.
+
+`POST /api/app/trial` accepts only an empty native request with a bearer access
+token. It verifies RS256 against the fixed Auth0 issuer's cached JWKS, the Hosted
+API audience, subject, issuance/expiry and `openid email` scopes, then fetches
+the verified email from that issuer's `/userinfo` with the same token. The
+profile subject must match. There is no browser-session fallback, CORS, caller
+email/subject, purchase link, GA request or new Auth0 Action for email. Sandbox owner and
+`SAIPH_REQUIRE_MFA` checks still apply; missing access-token `amr: ["mfa"]`
+evidence fails closed and needs operator attention before live acceptance.
+The existing HMAC email key, permanent trial claims, cap and signed grant delivery
+remain authoritative. JSON outcomes are `started`, `active`, `subscribed`, `used`,
+`full` and `off`, with `endsAt` where applicable. HTTP 401/403/429/503 never grants
+access. Replays return the existing end and retry undelivered grants. Optional
+first-party `trial_started` counts use the store's actual creation outcome rather
+than a time heuristic (the website uses that outcome too).
+
+Request bodies are capped at 256 bytes, parameters and browser Origins are
+rejected, responses are private/no-store, and the exact POST route alone bypasses
+the website session gate. A bounded in-memory limiter permits 120 requests/minute
+and five per verified subject/minute **per server instance**; it is not a global
+quota. Deployment-wide edge limits remain an operations concern.
+
+Android requests `openid email` plus `offline_access` when refresh tokens are
+enabled. Existing sessions that lack those scopes need a fresh sign-in. The
+distributor supplies `-PorionAccountOrigin=https://account.example.test` (or
+`-AccountOrigin` to the Android build scripts). Independent builds omit it and
+leave automatic trials off. Tokens go to the configured account origin only when
+the current Cloud issuer, audience, API origin and Android client match the
+packaged public `hosted-defaults.json`. Release builds now include those defaults
+as beta already did; release scripts require them. No secrets are put in the APK.
+
+Android persists hashed per-account completion keys for successful outcomes;
+transient failures, rate limits and disabled trials can retry after one minute.
+It then reads Cloud access again: the account endpoint's reply never becomes an
+entitlement. Existing grants and previous trials skip activation, Play notices
+keep their existing wording without purchase links, and login survives trial
+service outages.
+
+Deployment and a fresh verified-email sign-in on the owner's authorized phone/PC
+are still required; synthetic checks do not establish live Auth0 scopes, delivery,
+signing, physical acceptance or independent security review.
 
 Owner request, 19 October 2026: "a free trial on sign up so that we can get more
 active users". Implemented in source on `claude/cloud-free-trial-0f6417`, with

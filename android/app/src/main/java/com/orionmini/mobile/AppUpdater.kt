@@ -184,6 +184,7 @@ class HubUpdateSource(private val context: Context) : UpdateSource {
 object UpdateSources {
     /** Debug override first (debug builds only), then the phone's own pairing: Hub, else Saiph account. */
     fun select(context: Context): UpdateSource? {
+        if (com.castle.sefirah.BuildConfig.PLAY_STORE) return null // Google Play installs updates.
         UpdateDebugOverride.source(context)?.let { return it }
         if (context.getSharedPreferences("orion", Context.MODE_PRIVATE).contains("device_id")) return HubUpdateSource(context)
         val hosted = context.getSharedPreferences("orion_hosted", 0)

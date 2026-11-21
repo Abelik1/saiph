@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Set A phone screen</title>
+<!-- Set A's phone, on its stand beside the laptop, as a function of time. Everything done
+     on the laptop shows up here: the reply in the notification, the declined call, the
+     mirrored home screen and the camera-in-use indicator. The laptop's mirror window
+     embeds this same page, so the two always match. Android surfaces are generic. -->
+<style>
+  html, body { margin: 0; width: 900px; height: 1970px; overflow: hidden; background: #000; font-family: Roboto, "Segoe UI", system-ui, sans-serif; color: #e8eaed; }
+  .layer { position: absolute; inset: 0; }
+  .wall { background: radial-gradient(700px 900px at 30% 20%, #12465a, transparent 70%), radial-gradient(700px 900px at 80% 90%, #2a1f66, transparent 70%), #05070c; }
+  .status { position: absolute; left: 0; right: 0; top: 0; height: 96px; display: flex; justify-content: space-between; align-items: center; padding: 0 54px; font-size: 36px; z-index: 5; }
+  .status .right { display: flex; gap: 18px; align-items: center; }
+  .cam { display: none; align-items: center; gap: 10px; padding: 6px 18px; border-radius: 999px; background: #22c55e; color: #04220f; font-weight: 700; font-size: 30px; }
+  .cast { display: none; width: 40px; height: 32px; border: 4px solid #e8eaed; border-radius: 6px; position: relative; }
+  .clock { position: absolute; top: 230px; left: 0; right: 0; text-align: center; font-size: 220px; font-weight: 300; letter-spacing: -.02em; }
+  .date { position: absolute; top: 500px; left: 0; right: 0; text-align: center; font-size: 44px; color: #cbd5e1; }
+  .notifs { position: absolute; left: 40px; right: 40px; top: 640px; display: grid; gap: 22px; }
+  .notif { padding: 38px 42px; border-radius: 44px; background: rgba(40, 44, 52, .94); font-size: 40px; line-height: 1.35; transform-origin: top; }
+  .notif small { display: block; font-size: 31px; color: #9aa0a6; margin-bottom: 10px; }
+  .notif .me { display: block; margin-top: 16px; padding-top: 16px; border-top: 2px solid #3c4048; color: #8ab4f8; }
+  .call { background: linear-gradient(#0d2b3a, #071019 60%); }
+  .call .who { position: absolute; top: 380px; left: 0; right: 0; text-align: center; }
+  .call .avatar { width: 220px; height: 220px; margin: 0 auto 40px; border-radius: 50%; background: #2a3a4e; display: grid; place-items: center; font-size: 110px; color: #9fb0c3; }
+  .call h1 { margin: 0; font-size: 72px; font-weight: 400; } .call p { margin: 14px 0 0; font-size: 44px; color: #9fb0c3; }
+  .buttons { position: absolute; bottom: 260px; left: 120px; right: 120px; display: flex; justify-content: space-between; }
+  .buttons span { width: 190px; height: 190px; border-radius: 50%; display: grid; place-items: center; font-size: 80px; color: #fff; }
+  .home { background: radial-gradient(800px 900px at 20% 15%, #0e5566, transparent 70%), radial-gradient(800px 1000px at 90% 85%, #3b2a8a, transparent 70%), #070a14; }
+  .grid { position: absolute; left: 60px; right: 60px; top: 980px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 70px 0; justify-items: center; }
+  .grid div { display: grid; justify-items: center; gap: 16px; font-size: 32px; color: #e8eaed; }
+  .grid i { width: 150px; height: 150px; border-radius: 50%; display: block; }
+  .widget { position: absolute; left: 60px; right: 60px; top: 260px; font-size: 140px; font-weight: 300; }
+  .widget small { display: block; font-size: 42px; color: #cbd5e1; margin-top: 10px; }
+  .app { background: #f4f6f8; color: #0f172a; }
+  .app .top { position: relative; z-index: 2; height: 300px; background: #0e7490; color: #fff; padding: 140px 56px 0; box-sizing: border-box; font-size: 56px; font-weight: 600; }
+  .scroll { position: absolute; left: 0; right: 0; top: 300px; }
+  .card { margin: 40px 44px 0; padding: 44px; border-radius: 36px; background: #fff; box-shadow: 0 4px 18px rgba(15,23,42,.08); font-size: 40px; line-height: 1.4; }
+  .card h2 { margin: 0 0 10px; font-size: 52px; }
+  .track { display: grid; gap: 34px; margin-top: 30px; }
+  .track span { display: flex; gap: 26px; align-items: center; color: #475569; }
+  .track b { width: 34px; height: 34px; border-radius: 50%; background: #cbd5e1; flex: none; }
+  .track .done b { background: #0e7490; } .track .done { color: #0f172a; }
+  .tap { position: absolute; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%; background: rgba(255,255,255,.35); z-index: 9; }
+</style>
+</head>
+<body>
+<div class="status" id="status"><span id="time">09:12</span><span class="right"><span class="cam" id="cam">● Camera</span><span class="cast" id="cast"></span>▾ ▴ ▮ 76%</span></div>
+
+<div id="lock" class="layer"><div class="layer wall"></div><div class="clock">09:12</div><div class="date">Tuesday 3 November</div>
+  <div class="notifs">
+    <div class="notif" id="n1"><small>Messages · now</small><b>Northbank</b><br>Your code is 482913. It expires in 10 minutes.</div>
+    <div class="notif" id="n2"><small>Messages · now</small><b>Ada Byrne</b><br>Are we still on for 7?<span class="me" id="me">You: Yes! See you at 7</span></div>
+  </div></div>
+
+<div id="call" class="layer call"><div class="who"><div class="avatar">?</div><h1>+353 1 555 0199</h1><p id="callState">Incoming call</p></div>
+  <div class="buttons" id="callButtons"><span style="background:#dc2626">✕</span><span style="background:#16a34a">✆</span></div></div>
+
+<div id="home" class="layer home"><div class="widget">09:14<small>Tue 3 Nov · 11°</small></div>
+  <div class="grid">
+    <div><i style="background:#1a73e8"></i>Phone</div><div><i style="background:#22a06b"></i>Messages</div><div><i style="background:#5f6368"></i>Camera</div><div><i style="background:#e8710a"></i>Photos</div>
+    <div><i style="background:#0e7490"></i>Parcels</div><div><i style="background:#7c3aed"></i>Music</div><div><i style="background:#0b3b5a"></i>Bank</div><div><i style="background:#d93025"></i>Maps</div>
+  </div></div>
+
+<div id="app" class="layer app"><div class="top">Parcels</div>
+  <div class="scroll" id="scroll">
+    <div class="card"><h2>Arriving today</h2>14:00 – 15:00 · Headphones<div class="track"><span class="done"><b></b>Ordered</span><span class="done"><b></b>Shipped</span><span class="done"><b></b>Out for delivery</span><span><b></b>Delivered</span></div></div>
+    <div class="card"><h2>Tomorrow</h2>Running shoes · 2 parcels</div>
+    <div class="card"><h2>Delivered</h2>Book · Friday</div>
+    <div class="card"><h2>Delivered</h2>Phone case · 24 Oct</div>
+  </div></div>
+
+<div class="tap" id="tap"></div>
+<script>
+  const $ = (id) => document.getElementById(id);
+  const clamp = (x) => Math.min(1, Math.max(0, x));
+  const ease = (x) => { x = clamp(x); return x * x * (3 - 2 * x); };
+  const show = (id, on) => { $(id).style.display = on ? '' : 'none'; };
+  // Shared timeline (seconds), matching a-laptop.html and set_a.py.
+  const T = { code: 0.4, text: 5.0, reply: 8.45, ring: 10.0, decline: 12.95, mirror: 15.4, unlock: 15.9, open: 16.6, scroll: 17.0, mirrorEnd: 19.4, camera: 19.8 };
+  window.T = T;
+  window.setTime = (t) => {
+    const calling = t >= T.ring && t < T.decline + 0.7;
+    const home = t >= T.unlock && t < T.open;
+    const app = t >= T.open;
+    show('call', calling);
+    show('home', home && !calling);
+    show('app', app);
+    show('lock', !calling && !home && !app);
+    document.body.style.filter = t < 0.3 ? 'brightness(0.06)' : '';
+    $('n1').style.display = t >= T.code && t < T.ring ? '' : 'none';
+    $('n1').style.opacity = ease((t - T.code) / 0.25);
+    $('n2').style.display = t >= T.text ? '' : 'none';
+    $('n2').style.transform = `scaleY(${ease((t - T.text) / 0.25)})`;
+    $('me').style.display = t >= T.reply ? '' : 'none';
+    $('me').style.opacity = ease((t - T.reply) / 0.3);
+    $('callState').textContent = t >= T.decline ? 'Call declined' : 'Incoming call';
+    $('callButtons').style.opacity = t >= T.decline ? 0.25 : 1;
+    $('scroll').style.transform = `translateY(${-380 * ease((t - T.scroll) / 0.8)}px)`;
+    $('cast').style.display = t >= T.mirror && t < T.mirrorEnd ? 'inline-block' : 'none';
+    $('cam').style.display = t >= T.camera ? 'inline-flex' : 'none';
+    $('time').textContent = t >= 14 ? '09:14' : '09:12';
+    // Taps arrive from the laptop's mirror window: unlock swipe and opening Parcels.
+    const tap = [[T.open - 0.15, 450, 1175]].find(([at]) => t >= at && t < at + 0.3);
+    show('tap', !!tap);
+    if (tap) { $('tap').style.left = tap[1] + 'px'; $('tap').style.top = tap[2] + 'px'; $('tap').style.opacity = 1 - (t - tap[0]) / 0.3; }
+  };
+  window.ready = Promise.resolve(true).then(() => { window.setTime(0); return true; });
+</script>
+</body>
+</html>

@@ -11,7 +11,7 @@ import { createBillingStore } from "../lib/billing/store.mjs";
 import { loadMigrations, runMigrations } from "../lib/billing/migrate.mjs";
 import { deriveEntitlement } from "../lib/billing/entitlement.mjs";
 import { createPublicKey, generateKeyPairSync, verify } from "node:crypto";
-import { accountAction, webhook, refresh } from "../lib/billing/http.ts";
+import { accountAction, trialAction, webhook, refresh } from "../lib/billing/http.ts";
 import { GRANT_CONTEXT, pushGrant } from "../lib/billing/grant-push.mjs";
 import { RENEWAL_GRACE_SECONDS, PAYMENT_GRACE_SECONDS } from "../lib/billing/entitlement.mjs";
 import { readBillingConfig, subjectReference } from "../lib/billing/policy.ts";
@@ -86,7 +86,7 @@ function provider() {
     const session = sessions.find((candidate) => candidate.customer === customerId && candidate.status === "open");
     const sub = { id: "sub_synthetic" + ++sequence, object: "subscription", customer: customerId, livemode: false,
       metadata: session.subscription_data.metadata, status, cancel_at_period_end: false, cancel_at: null, canceled_at: null, ended_at: null,
-      items: { has_more: false, data: [{ quantity: 1, current_period_end: PERIOD_END, price: { id: config.plans.monthly.priceId, livemode: false, product: config.productId } }] } };
+      items: { has_more: false, data: [{ quantity: 1, current_period_end: session.subscription_data.trial_period_days ? NOW+session.subscription_data.trial_period_days*86400 : PERIOD_END, price: { id: config.plans.monthly.priceId, livemode: false, product: config.productId } }] } };
     subscriptions.set(sub.id, sub);
     session.status = "complete"; session.subscription = sub.id;
     return { session, sub };
@@ -151,13 +151,39 @@ async function purchased(fixture) {
 }
 
 describe("billing lifecycle through HTTP handlers and isolated PostgreSQL", { skip: !databaseUrl ? "Run npm run test:billing-db for isolated Docker PostgreSQL checks" : false }, () => {
+  test("card trial access follows the signed webhook; cancellation and replay cannot restart it",async()=>{
+    const f=provider();
+    const trialDeps={...deps(f.stripe),env:{...env,SAIPH_TRIAL_SECRET:"t".repeat(40),SAIPH_TRIAL_DAYS:"30"},
+      getSession:async()=>({user:{sub:owner,trialKey:"e".repeat(64)}})};
+    const start=()=>trialAction(new Request(config.origin+"/api/billing/trial",{method:"POST",body:"trial=start",
+      headers:{origin:config.origin,"sec-fetch-site":"same-origin","content-type":"application/x-www-form-urlencoded"}}),trialDeps);
+    assert.equal((await start()).status,303);
+    assert.equal((await standing()).entitled,false);
+    assert.equal(await count("trials"),0,"checkout never starts a legacy no-card grant");
+    const mapping=await store().findCustomer(owner);
+    const {session,sub}=f.completeCheckout(mapping.customerId,"trialing");
+    assert.equal((await standing()).entitled,false,"returning from checkout still grants nothing");
+    const completed=stripeEvent("checkout.session.completed",session,NOW);
+    assert.equal((await deliver(f.stripe,completed)).status,200);
+    assert.equal((await standing()).entitled,true);
+    assert.ok(hubUntil(sub.id)>=NOW+14*86400);
+    assert.equal((await deliver(f.stripe,completed)).status,200);
+    assert.equal((await start()).status,409,"one subscription consumes eligibility");
+    sub.cancel_at_period_end=true;sub.cancel_at=NOW+14*86400;
+    assert.equal((await deliver(f.stripe,subscriptionEvent("customer.subscription.updated",sub,NOW+1))).status,200);
+    assert.equal(hubUntil(sub.id),NOW+14*86400,"scheduled cancellation never extends past the trial");
+    sub.status="canceled";sub.ended_at=NOW+14*86400;
+    assert.equal((await deliver(f.stripe,subscriptionEvent("customer.subscription.deleted",sub,NOW+2))).status,200);
+    assert.equal((await standing()).entitled,false);
+    assert.equal((await start()).status,409,"cancellation does not create another trial");
+  });
   before(async () => {
     assert.ok(config);
     pool = new pg.Pool({ connectionString: databaseUrl, max: 8 });
     await runMigrations(pool, await loadMigrations());
   });
   beforeEach(async () => {
-    await pool.query("TRUNCATE saiph_billing.trials, saiph_billing.grant_state, saiph_billing.disputes, saiph_billing.customer_creation_intents, saiph_billing.processed_events, saiph_billing.subscriptions, saiph_billing.customers");
+    await pool.query("TRUNCATE saiph_billing.card_trial_claims, saiph_billing.trials, saiph_billing.grant_state, saiph_billing.disputes, saiph_billing.customer_creation_intents, saiph_billing.processed_events, saiph_billing.subscriptions, saiph_billing.customers");
     hub.grants.clear(); hub.down = false;
   });
   after(async () => { await pool?.end(); });

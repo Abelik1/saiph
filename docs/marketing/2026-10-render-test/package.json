@@ -1,0 +1,6 @@
+{
+  "name": "saiph-render-test",
+  "private": true,
+  "description": "Renderer comparison for one Saiph ad: three.js against Blender.",
+  "dependencies": { "three": "0.180.0" }
+}

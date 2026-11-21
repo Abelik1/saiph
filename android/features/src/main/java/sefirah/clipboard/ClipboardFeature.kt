@@ -33,6 +33,9 @@ import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/** What sending the current clipboard did, for the clipboard bubble's answer. */
+enum class ClipboardSend { SENT, EMPTY, NOT_SENT }
+
 @Singleton
 class ClipboardFeature @Inject constructor(
     deviceManager: DeviceManager,
@@ -156,33 +159,32 @@ class ClipboardFeature @Inject constructor(
         }
     }
 
-    fun sendClipboard(message: ClipboardInfo) {
+    /** True when at least one connected computer took it. */
+    fun sendClipboard(message: ClipboardInfo): Boolean {
         if (enabledDevices.isEmpty()) {
-            return
+            return false
         }
         val targets = enabledDevices.toList()
         Log.d(TAG, "broadcasting clipboard | ${message.clipboardType}")
-        targets.forEach { deviceId ->
-            networkManager.sendMessage(deviceId, message)
-        }
+        return targets.map { deviceId -> networkManager.sendMessage(deviceId, message) }.any { it }
     }
 
 
+    /** Sends what is on the clipboard now. Android allows the read only while a Saiph window has focus. */
     @SuppressLint("Recycle")
-    suspend fun sendPrimaryClipboard() {
-        if (suppressOutbound) return
+    suspend fun sendPrimaryClipboard(): ClipboardSend {
+        if (suppressOutbound) return ClipboardSend.NOT_SENT
 
         val clip = clipboardManager.primaryClip
         if (clip == null || clip.itemCount == 0) {
-            return
+            return ClipboardSend.EMPTY
         }
 
         val item = clip.getItemAt(0)
 
         val text = item.text?.toString()
         if (!text.isNullOrEmpty()) {
-            sendClipboard(ClipboardInfo("text/plain", text))
-            return
+            return if (sendClipboard(ClipboardInfo("text/plain", text))) ClipboardSend.SENT else ClipboardSend.NOT_SENT
         }
 
         val uri = item.uri
@@ -196,23 +198,24 @@ class ClipboardFeature @Inject constructor(
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Clipboard image unavailable")
-                return
+                return ClipboardSend.NOT_SENT
             }
             if (pfd == null) {
                 Log.e(TAG, "Clipboard image unavailable")
-                return
+                return ClipboardSend.NOT_SENT
             }
-            sendClipboardImage(mime, pfd)
+            return if (sendClipboardImage(mime, pfd)) ClipboardSend.SENT else ClipboardSend.NOT_SENT
         }
+        return ClipboardSend.EMPTY
     }
 
     /**
      * Image FD from the shell worker or [sendPrimaryClipboard].
      * Known size ≤2MB → base64 [ClipboardInfo]. Larger → [FileTransferService.sendClipboard].
      */
-    private suspend fun sendClipboardImage(mimeType: String, pfd: ParcelFileDescriptor) {
+    private suspend fun sendClipboardImage(mimeType: String, pfd: ParcelFileDescriptor): Boolean {
         val mime = mimeType.takeIf { it in setOf("image/png", "image/jpeg", "image/webp") }
-        if (mime == null || enabledDevices.isEmpty()) { pfd.close(); return }
+        if (mime == null || enabledDevices.isEmpty()) { pfd.close(); return false }
         val file = java.io.File(context.cacheDir, "orion-clipboard-" + java.util.UUID.randomUUID() + "." + mime.substringAfter('/'))
         try {
             withContext(Dispatchers.IO) {
@@ -228,8 +231,10 @@ class ClipboardFeature @Inject constructor(
             }
             // Orion publishes a direct clipboard offer up to 25 MB, otherwise a file offer.
             // No legacy LAN certificates or per-device Sefirah pairing are involved.
-            if (!networkManager.sendClipboardFile(mime, file)) file.delete()
+            if (networkManager.sendClipboardFile(mime, file)) return true
+            file.delete()
         } catch (_: Exception) { file.delete(); Log.w(TAG, "Clipboard image transfer unavailable") }
+        return false
     }
 
     /**

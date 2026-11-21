@@ -80,6 +80,7 @@ def test_google_route_keeps_pkce_and_audience_without_affecting_custom_issuers(c
     with LoginAttempt(replace(config, issuer=issuer, google=google), browser_opener=lambda url: True) as attempt:
         params = parse_qs(urlsplit(attempt.begin()).query)
         assert params.get("connection") == connection
+        assert params.get("prompt") == (["select_account"] if connection else None)
         assert params["audience"] == [config.audience]
         assert params["code_challenge_method"] == ["S256"]
         assert params["state"] == [attempt._state]

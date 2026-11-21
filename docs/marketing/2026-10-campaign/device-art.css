@@ -1,0 +1,114 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* Device shells and screen chrome come from the landing page's site.css. */
+#device-art{position:absolute;left:180px;top:690px;width:720px;height:500px;--cyan:#67e8f9;--green:#34d399;--faint:#94a3b6;color:#e6edf5;z-index:2}
+#device-art .art-inner{position:absolute;width:720px;height:600px;transform-origin:0 0;font-size:10px}
+#device-art *,#device-art *::before,#device-art *::after{animation:none!important;transition:none!important;font-family:"Segoe UI",Arial,sans-serif}
+#device-art .dev-laptop{left:45px;width:500px;bottom:55px;transform-origin:50% 100%}
+#device-art .dev-phone{left:505px;width:185px;bottom:160px;z-index:4;transform-origin:50% 100%}
+#device-art .dev-label{font-size:15px;bottom:-29px;color:var(--muted);letter-spacing:1.5px}
+#device-art .dev .screen{font-family:"Segoe UI",Arial,sans-serif}
+#device-art .win{bottom:25px;top:15px}
+#device-art .win-bar{height:29px;font-size:15px;gap:7px}
+#device-art .win-bar .dots{gap:4px}
+#device-art .win-bar .dots i{width:6px;height:6px}
+#device-art .win-body{padding:15px;display:block}
+#device-art .taskbar{height:20px}
+#device-art .p-status{font-size:9px;top:8px;left:12px;right:12px}
+#device-art .p-app{padding:37px 9px 15px}
+#device-art .p-app h4{font-size:17px;margin:0 0 17px}
+#device-art .p-home-bar{height:3px;bottom:6px}
+#device-art .art-doc{background:#0d1319;border-radius:8px;padding:15px;height:100%;font-size:22px;line-height:1.4}
+#device-art .art-meta{font-size:13px;color:#9fb0c3;margin-bottom:14px}
+#device-art .art-note{font-size:18px;line-height:1.5;background:#162330;border:1px solid #304559;border-radius:10px;padding:12px 9px;min-height:95px}
+#device-art .art-note.selected{background:#133e4c;border-color:#67e8f9;color:#ecfeff}
+#device-art .art-state{font-size:13px;color:#67e8f9;margin-top:17px;line-height:1.4}
+#device-art .art-placeholder{color:#52667a;font-size:20px}
+#device-art .art-photo{background:linear-gradient(170deg,#5f8fa8 0 40%,#3c6a4c 41%);height:98px;border-radius:7px;margin-bottom:8px;border:1px solid #608c9d}
+#device-art .art-photo.large{height:77px;width:150px}
+#device-art .art-file{font-size:15px;color:#c7d3df}
+#device-art .art-notification{background:#1e2835;border:1px solid #304055;border-radius:12px;padding:13px;font-size:19px;line-height:1.4}
+#device-art .art-notification small{display:block;font-size:13px;color:#67e8f9;margin-bottom:6px}
+#device-art .art-notification.phone{padding:10px;font-size:16px}
+#device-art .art-network{display:flex;align-items:center;gap:10px;font-size:22px;padding:12px 0}
+#device-art .art-dot{width:10px;height:10px;border-radius:50%;background:#34d399;box-shadow:0 0 18px #34d39955}
+#device-art .art-packet{position:absolute;left:570px;top:160px;width:46px;height:42px;display:grid;place-items:center;border-radius:10px;background:#67e8f9;color:#04232a;font-size:21px;font-weight:750;box-shadow:0 0 30px #22d3ee55;z-index:6}
+
+#device-art .dev-desktop{left:420px;width:275px;bottom:270px;z-index:1;opacity:0}
+#device-art .dev-desktop .screen{min-height:130px}
+#device-art .art-peer{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;font-size:18px}
+#device-art .art-peer img{width:35px;height:35px}
+#device-art .art-peer span{font-size:12px;color:#94a3b6}
+#device-art .art-route{position:absolute;inset:0;width:720px;height:600px;z-index:3;pointer-events:none}
+#device-art .art-route path{fill:none;stroke:#67e8f95c;stroke-width:3;stroke-dasharray:8 11}
+#device-art .art-detail{position:absolute;left:35px;top:35px;width:345px;padding:19px 21px;background:#132330;border:1px solid #365267;border-radius:17px;box-shadow:0 16px 45px #0004;z-index:5}
+#device-art .art-detail small{display:block;color:#67e8f9;font-size:12px;letter-spacing:1.6px;margin-bottom:8px}
+#device-art .art-detail b{display:block;font-size:25px;line-height:1.3;font-weight:600}
+#device-art .art-typed{font-size:28px;min-height:45px}
+#device-art .art-phone-logo{width:80px;height:80px;margin:12px auto;display:block}
+#device-art .art-file-card{width:105px;height:120px;background:#e7edf4;border-radius:10px;padding:21px 10px;color:#216373;font-size:28px;font-weight:750;text-align:center;box-shadow:0 6px 25px #0004}
+#device-art .art-file-card span{font-size:12px;display:block;margin-top:20px;color:#243142;font-weight:500;overflow-wrap:anywhere}
+#device-art .art-file-card.wide{height:95px;width:160px;padding:10px}
+#device-art .art-file-card.wide span{margin-top:9px}
+#device-art .art-chat{border-radius:12px;padding:8px 11px;font-size:18px;line-height:1.3;margin-bottom:9px;max-width:95%}
+#device-art .art-chat.incoming{background:#1e2835}
+#device-art .art-chat.outgoing{background:#0e7490;margin-left:18px;color:#ecfeff}
+#device-art .art-avatar{display:grid;place-items:center;border-radius:50%;width:75px;height:75px;background:#67e8f9;color:#04232a;font-size:34px;margin:8px auto 14px}
+#device-art .art-caller{font-size:29px;font-weight:650;line-height:1.25;margin-bottom:15px}
+#device-art .p-app .art-caller{text-align:center;font-size:23px}
+#device-art .art-call-buttons{display:flex;gap:12px;margin:15px 0}
+#device-art .art-call-buttons span{padding:10px 20px;border-radius:20px;font-size:18px;background:#5c2633}
+#device-art .art-call-buttons span+span{background:#14634d}
+#device-art .art-camera{height:190px;border-radius:12px;background:radial-gradient(circle 27px at 50% 42%,#f2c9a0 0 95%,transparent 100%),radial-gradient(ellipse 65px 55px at 50% 100%,#2563eb 0 70%,transparent 72%),linear-gradient(170deg,#334155,#1e293b);border:1px solid #365267}
+#device-art .art-camera.wide{height:100px;width:100%}
+#device-art .art-control-row{display:flex;justify-content:space-between;align-items:center;font-size:19px;line-height:1.35;padding:15px 0;border-bottom:1px solid #2b3949;gap:10px}
+#device-art .art-control-row b{color:#67e8f9;font-size:17px}
+#device-art .art-overview-features{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px}
+#device-art .art-overview-features span{font-size:15px;background:#1e3447;border:1px solid #33506a;padding:8px 10px;border-radius:7px}
+#device-art .art-cursor{position:absolute;left:250px;top:370px;color:#67e8f9;font-size:36px;text-shadow:0 3px 10px #000;z-index:7;opacity:0}
+#device-art .art-keyboard{position:absolute;left:180px;bottom:6px;width:245px;height:42px;border:1px solid #365267;border-radius:7px;background:#17202b;display:grid;grid-template-columns:repeat(10,1fr);gap:4px;padding:6px;opacity:0}
+#device-art .art-keyboard i{background:#435569;border-radius:2px}
+#device-art[data-kind=deskflow] .art-detail,#device-art[data-kind=cloud] .art-detail{width:335px;top:30px}
+#device-art-note{position:absolute;top:1197px;left:180px;width:720px;text-align:center;color:var(--muted);font-size:16px;letter-spacing:.5px}
+#stage #bigword,#stage #count{display:none}
+#stage #brand{top:230px;font-size:39px;gap:15px}
+#stage #brand img{width:45px;height:45px}
+#stage .scene{top:330px}
+#stage .tag{font-size:18px;margin-bottom:18px;letter-spacing:2.3px}
+#stage .headline{font-size:66px;line-height:1.05;letter-spacing:-3px}
+#stage .sub{font-size:25px;line-height:1.35;margin-top:17px;max-width:700px}
+#stage #footer{top:1230px}
+#stage #cta{font-size:24px;margin-bottom:8px}
+#stage #url{font-size:36px}
+#stage #disclosure{font-size:20px;line-height:1.4;margin-top:13px}
+#stage #independent{font-size:17px;line-height:1.3;margin-top:8px}
+#stage.story #device-art{top:590px;height:600px}
+#stage.wide #brand{top:115px}
+#stage.wide .scene{left:140px;top:295px;width:640px}
+#stage.wide .headline{font-size:76px;letter-spacing:-3px}
+#stage.wide .sub{font-size:27px;max-width:620px}
+#stage.wide #device-art{left:850px;top:170px;width:930px;height:650px}
+#stage.wide #device-art-note{left:850px;top:840px;width:930px}
+#stage.wide #footer{left:140px;top:895px;width:1640px}
+#stage.wide #url{font-size:40px}
+#stage.wide #independent{font-size:16px}
+#stage.wide #disclosure{max-width:1000px;grid-column:1 / 3}
+#stage.poster #brand{top:65px}
+#stage.poster .scene{top:195px}
+#stage.poster .headline{font-size:74px}
+#stage.poster .sub{font-size:27px;margin-top:17px;max-width:840px}
+#stage.poster #device-art,#stage.poster.story #device-art{left:100px;top:550px;width:880px;height:530px}
+#stage.poster #device-art-note{left:100px;top:1095px;width:880px}
+#stage.poster #footer{top:1140px}
+#stage.square #brand{top:50px;font-size:36px}
+#stage.square #brand img{width:41px;height:41px}
+#stage.square .scene{top:150px}
+#stage.square .tag{font-size:16px;margin-bottom:15px}
+#stage.square .headline{font-size:56px;letter-spacing:-2px}
+#stage.square .sub{font-size:23px;margin-top:14px;max-width:830px}
+#stage.square #device-art,#stage.square.story #device-art{left:100px;top:470px;width:880px;height:365px}
+#stage.square #device-art-note{left:100px;top:847px;width:880px;font-size:14px}
+#stage.square #footer{top:887px}
+#stage.square #cta{font-size:22px}
+#stage.square #url{font-size:32px}
+#stage.square #disclosure{font-size:19px;margin-top:10px}
+#stage.square #independent{font-size:16px}

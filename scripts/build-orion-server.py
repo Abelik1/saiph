@@ -139,6 +139,37 @@ def build_public(root, output, release, source_commit=None, *, local_snapshot=Fa
         raise ValueError('Build output must stay outside the clean public source tree')
     public, receipt = snapshot_files(root)
     source = source_identity(root, receipt, source_commit, local_snapshot=local_snapshot)
+    return write_archive(output, release, hub_files(public, source), source=source)
+
+
+def build_git(root, output, release, source_commit):
+    """Package the Hub from an exact commit of the canonical public repository.
+
+    Bytes come from Git, not the working tree, and the checkout must be clean at
+    that commit, so the archive matches the source anyone can check out.
+    """
+    root = Path(root).resolve(strict=True)
+    if Path(output).resolve().is_relative_to(root):
+        raise ValueError('Build output must stay outside the clean public source tree')
+    if not source_commit or not re.fullmatch(r'[0-9a-f]{40}|[0-9a-f]{64}', source_commit):
+        raise ValueError('An exact full public source commit is required')
+    def git(*args):
+        return subprocess.run(['git', '-C', str(root), *args], check=True, capture_output=True).stdout
+    if git('rev-parse', 'HEAD').decode().strip() != source_commit or git('status', '--porcelain', '--untracked-files=all').strip():
+        raise ValueError('Public source commit must match HEAD in a clean checkout')
+    public = {}
+    for entry in git('ls-tree', '-r', '-z', source_commit).split(b'\0'):
+        if not entry: continue
+        meta, name = entry.decode().split('\t', 1)
+        mode, kind, blob = meta.split()
+        if mode in {'100644', '100755'} and kind == 'blob':  # Links and submodules are never packaged.
+            public[name] = git('cat-file', 'blob', blob)
+    source = {'kind': 'public-git-commit', 'source_commit': source_commit, 'official_release': False,
+              'scope': 'Source identity only; signing and release approval remain separate.'}
+    return write_archive(output, release, hub_files(public, source), source=source)
+
+
+def hub_files(public, source):
     required = {'hub/requirements.txt', 'hub/orion_hub/server_install.py', 'LICENSE', 'THIRD_PARTY_NOTICES.md', 'docs/SERVER_RELEASE.md'}
     if not required <= set(public) or b'GNU AFFERO GENERAL PUBLIC LICENSE' not in public['LICENSE']:
         raise ValueError('Public source is missing its Hub, project licence or release notices')
@@ -146,7 +177,7 @@ def build_public(root, output, release, source_commit=None, *, local_snapshot=Fa
     files.update({name: public[name] for name in ('hub/requirements.txt', 'LICENSE', 'THIRD_PARTY_NOTICES.md', 'docs/SERVER_RELEASE.md')})
     files['install.py'] = public['hub/orion_hub/server_install.py']
     files['SOURCE.json'] = (json.dumps(source, sort_keys=True, indent=2) + '\n').encode()
-    return write_archive(output, release, files, source=source)
+    return files
 
 
 def build(root, output, release):
@@ -165,6 +196,7 @@ if __name__ == "__main__":
     parser.add_argument("--output", type=Path, default=Path("dist/orion-server.tar.gz"))
     parser.add_argument('--source-root', type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument('--source-commit', help='Exact HEAD of the clean reviewed public Git checkout')
+    parser.add_argument('--git', action='store_true', help='Package --source-commit from the clean public Git checkout (public releases)')
     parser.add_argument('--local-snapshot', action='store_true', help='Record export receipt identity without claiming a public commit')
     parser.add_argument('--private-preview', action='store_true', help='Legacy private source preview; never an official public artifact')
     parser.add_argument('--verify', action='store_true', help='Verify --output archive without building')
@@ -172,8 +204,11 @@ if __name__ == "__main__":
     if args.verify:
         print(json.dumps(verify_archive(args.output), indent=2))
     else:
-        if args.private_preview and (args.source_commit or args.local_snapshot):
+        if args.private_preview and (args.source_commit or args.local_snapshot or args.git):
             parser.error('Private preview cannot claim public source metadata')
+        if args.git and args.local_snapshot:
+            parser.error('A Git release packages a commit, not a local snapshot')
         digest = (build(args.source_root, args.output, args.release) if args.private_preview else
+                  build_git(args.source_root, args.output, args.release, args.source_commit) if args.git else
                   build_public(args.source_root, args.output, args.release, args.source_commit, local_snapshot=args.local_snapshot))
         print(f"Server source package created; SHA256 {digest}")

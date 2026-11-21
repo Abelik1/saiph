@@ -19,10 +19,10 @@ import threading
 import time
 from typing import Callable
 from urllib.parse import parse_qs, urlsplit
-import webbrowser
 
 from authlib.integrations.requests_client import OAuth2Session
 import requests
+from . import child_process
 from .hosted_login_page import login_page
 
 
@@ -101,7 +101,7 @@ class LoginAttempt:
         self,
         config: HostedLoginConfig,
         *,
-        browser_opener: Callable[[str], bool] = webbrowser.open,
+        browser_opener: Callable[[str], bool] = child_process.open_url,
         oauth_factory=OAuth2Session,
         timeout_seconds: float = 300,
     ) -> None:
@@ -217,7 +217,9 @@ class LoginAttempt:
                 audience=self.config.audience,
                 nonce=self._nonce,
                 response_mode="query",
-                **({"connection": "google-oauth2"} if self.config.google
+                # Always ask which Google account: Auth0 and Google keep their browser sessions
+                # after Saiph signs out, so a wrong account could otherwise never be changed.
+                **({"connection": "google-oauth2", "prompt": "select_account"} if self.config.google
                    and urlsplit(self.config.issuer).hostname.endswith(".auth0.com") else {}),
             )
             if state != self._state:

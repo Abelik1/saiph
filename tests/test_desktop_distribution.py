@@ -39,6 +39,16 @@ def test_compiled_frontend_cannot_silently_omit_dependency_notices(tmp_path):
     assert not destination.exists()
 
 
+def test_a_missing_analysis_cannot_silently_omit_python_notices(tmp_path):
+    frontend = tmp_path / 'frontend'
+    frontend.mkdir()
+    (frontend / 'package-lock.json').write_text('{}')
+    destination = tmp_path / 'licences'
+    with pytest.raises(ValueError, match='PyInstaller analysis'):
+        packaging.license_inventory(destination, tmp_path / 'missing' / 'Analysis-00.toc', frontend)
+    assert not destination.exists()
+
+
 def test_secret_state_and_path_traversal_are_rejected(tmp_path):
     root = bundle(tmp_path)
     (root / 'google-services.json').write_text('{}')
@@ -374,6 +384,45 @@ def windows_sdk_signtool():
     kits = Path('C:/Program Files (x86)/Windows Kits/10/bin')
     found = sorted(kits.glob('10.*/x64/signtool.exe')) if kits.is_dir() else []
     return found[-1] if found else None
+
+
+@pytest.mark.skipif(sys.platform != 'win32', reason='Windows shell link metadata')
+def test_windows_shortcut_keeps_brand_and_identity_on_update(native_fixture_root):
+    root = native_fixture_root
+    compiler = Path('C:/Windows/Microsoft.NET/Framework64/v4.0.30319/csc.exe')
+    if not compiler.is_file():
+        pytest.skip('Windows Framework compiler absent')
+    probe = root / 'Probe.cs'
+    probe.write_text('''using System;
+using System.IO;
+public static class Probe {
+    [STAThread] public static void Main(string[] args) {
+        Shortcut.Create(args[0], args[1], args[3], "OrionMini.Desktop");
+        Shortcut.Create(args[0], args[2], args[3], "OrionMini.Desktop");
+        if (!Shortcut.Owned(args[0], new[] { args[2] }) || Shortcut.Owned(args[0], new[] { args[1] }))
+            throw new InvalidOperationException("The saved shortcut does not point to the updated release.");
+        dynamic explorer = Activator.CreateInstance(Type.GetTypeFromProgID("Shell.Application"));
+        dynamic item = explorer.NameSpace(Path.GetDirectoryName(args[0])).ParseName(Path.GetFileName(args[0]));
+        dynamic shell = Activator.CreateInstance(Type.GetTypeFromProgID("WScript.Shell"));
+        dynamic link = shell.CreateShortcut(args[0]);
+        if (link.Description != "Saiph" || link.IconLocation != args[3] + ",0" ||
+            item.ExtendedProperty("System.AppUserModel.ID") != "OrionMini.Desktop")
+            throw new InvalidOperationException("The saved shortcut is missing its name, icon or application ID.");
+    }
+}''')
+    executable = root / 'probe.exe'
+    references = ['/reference:System.Windows.Forms.dll', '/reference:System.Drawing.dll', '/reference:System.IO.Compression.dll',
+                  '/reference:System.IO.Compression.FileSystem.dll', '/reference:System.Web.Extensions.dll', '/reference:Microsoft.CSharp.dll']
+    subprocess.run([str(compiler), '/nologo', '/platform:x64', '/main:Probe', '/out:' + str(executable), *references,
+                    str(ROOT / 'scripts/packaging/WindowsSetup.cs'), str(probe)], check=True, capture_output=True)
+    old = root / 'Old release' / 'Saiph.exe'
+    new = root / 'New release' / 'Saiph.exe'
+    for release in (old, new):
+        release.parent.mkdir()
+        shutil.copyfile(executable, release)
+    icon = ROOT / 'assets/orion-mini-icon.ico'
+    shortcut = root / 'Saiph.lnk'
+    subprocess.run([str(executable), str(shortcut), str(old), str(new), str(icon)], check=True, capture_output=True, timeout=30)
 
 
 def throwaway_openssl():

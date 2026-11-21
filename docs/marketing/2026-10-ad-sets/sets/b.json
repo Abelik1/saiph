@@ -1,0 +1,187 @@
+{
+  "name": "Set B: Ctrl+V",
+  "group": "Clipboard & photos",
+  "angle": "One feature, shown so clearly it needs no explanation (sound-led, ASMR)",
+  "features": [
+    "Copy on the phone, paste on the PC",
+    "Copy on the PC, paste on the phone",
+    "Pictures in the clipboard"
+  ],
+  "duration": 12,
+  "captions": [
+    {
+      "from": 0.1,
+      "to": 2,
+      "text": "Copy on your phone."
+    },
+    {
+      "from": 2,
+      "to": 4,
+      "text": "Ctrl+V on your PC."
+    },
+    {
+      "from": 4,
+      "to": 7,
+      "text": "And back."
+    },
+    {
+      "from": 7,
+      "to": 9.6,
+      "text": "Photos too."
+    }
+  ],
+  "end": {
+    "from": 9.7,
+    "tag": "Copy here.<br>Paste there."
+  },
+  "stills": {
+    "portrait": {
+      "time": 3.4,
+      "caption": "Copy on your phone.<br>Ctrl+V on your PC.",
+      "capLines": 2,
+      "tally": false
+    },
+    "square": {
+      "time": 2.65,
+      "caption": "Copy on your phone.<br>Ctrl+V on your PC.",
+      "capLines": 2,
+      "tally": false
+    }
+  },
+  "copy": {
+    "primary": "Copy on your Android phone, Ctrl+V on your PC. Then the other way. Text and pictures, between Android, Windows and Linux.",
+    "headline": "Copy here. Paste there.",
+    "description": "14 days free, then €9.99/month"
+  },
+  "audio": {
+    "voice": "pFZP5JQG7iQjIQuC4Bku",
+    "lines": [
+      {
+        "at": 9.55,
+        "text": "Copy here. Paste there. Fourteen days free."
+      }
+    ],
+    "sfx": [
+      {
+        "at": [
+          1,
+          6,
+          7.35
+        ],
+        "prompt": "a single soft fingertip tap on a smartphone glass screen, close-up, quiet, clean",
+        "seconds": 0.5,
+        "gain": -4
+      },
+      {
+        "at": 9.55,
+        "prompt": "one soft warm felt piano chord ringing out naturally in a quiet room, calm and pleasant, acoustic, no synth, no whoosh",
+        "seconds": 2.4,
+        "gain": -9
+      },
+      {
+        "at": 1.65,
+        "prompt": "a tiny soft glassy tick, like a fingertip on a crystal glass, quiet, clean, modern interface",
+        "seconds": 0.8,
+        "gain": -12
+      },
+      {
+        "at": 5.05,
+        "prompt": "a tiny soft woody click with a short airy tail, quiet, modern interface",
+        "seconds": 0.8,
+        "gain": -12
+      },
+      {
+        "at": 7.55,
+        "prompt": "a tiny soft camera-like shimmer tick, quiet, modern interface",
+        "seconds": 0.8,
+        "gain": -12
+      },
+      {
+        "at": 3.05,
+        "prompt": "a warm low glowing synth pluck that blooms and slowly fades out with a long airy tail, cinematic, satisfying",
+        "seconds": 2.6,
+        "gain": -8
+      },
+      {
+        "at": 6.15,
+        "prompt": "a single soft warm kalimba note ringing out gently, natural wooden tone, calm and pleasant, slow natural fade, close, acoustic, no synth",
+        "seconds": 2.4,
+        "gain": -10
+      },
+      {
+        "at": 8.4,
+        "prompt": "a rich deep bell-like synth pluck with a soft bass swell that slowly fades out, satisfying, cinematic",
+        "seconds": 2.8,
+        "gain": -8
+      },
+      {
+        "at": [
+          2.1,
+          4.85,
+          7.95
+        ],
+        "prompt": "a single mechanical keyboard modifier key press, close-up, soft low thock",
+        "seconds": 0.5,
+        "gain": -5
+      },
+      {
+        "at": [
+          2.6,
+          4.97,
+          8.06
+        ],
+        "prompt": "a single mechanical keyboard letter key press, close-up, crisp light click",
+        "seconds": 0.5,
+        "gain": -4
+      }
+    ],
+    "music": {
+      "prompt": "Minimal ambient electronic for a calm modern tech product ad: warm analog synth pads, soft pulsing plucks, gentle sub bass, focused and satisfying, 100 bpm, clean mix, no vocals",
+      "gain": -16
+    }
+  },
+  "cuts": [
+    {
+      "id": "clipboard",
+      "feature": "Phone to PC clipboard",
+      "parts": [
+        [
+          0,
+          4
+        ],
+        [
+          9.7,
+          12
+        ]
+      ]
+    },
+    {
+      "id": "back",
+      "feature": "PC to phone clipboard",
+      "parts": [
+        [
+          4,
+          7
+        ],
+        [
+          9.7,
+          12
+        ]
+      ]
+    },
+    {
+      "id": "photos",
+      "feature": "Pictures in the clipboard",
+      "parts": [
+        [
+          7,
+          9.6
+        ],
+        [
+          9.7,
+          12
+        ]
+      ]
+    }
+  ]
+}

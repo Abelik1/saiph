@@ -32,6 +32,22 @@ No acceptance checkbox below is completed by this attempt.
 The source correction and automated checks are recorded separately in
 [release status](RELEASE_STATUS.md); they do not complete this physical run.
 
+## Linux fresh install, 2026-10-19
+
+Owner-reported on Ubuntu 26.04 GNOME with the account-site Linux build
+`0.1.0-beta.12` and a fresh profile: Sign in waited for the browser, but no tab
+opened. Diagnosed locally: the frozen app's `LD_LIBRARY_PATH` made `xdg-open`,
+`gio` and Chrome fail to start. The same environment also reached the Linux
+in-app update handoff (`sleep`, `sha256sum`, `mv`). The source now starts every
+program through `orion_mini.child_process`; only unit and synthetic-recorder
+checks have run.
+
+- [ ] Fresh Linux profile from a corrected build: Sign in opens a browser tab, and
+      returning from the browser completes sign-in.
+- [ ] A link, file and folder opened from Saiph on Linux open in the default app.
+- [ ] Linux in-app update from a corrected build to a newer one completes and
+      reopens Saiph.
+
 ## Before inviting friends (current beta.4 build)
 
 - [ ] Signed-in download of each beta.4 file from the account site; Windows

@@ -9,8 +9,8 @@ Android acceptance.
 
 The snapshot contains **56 open Maven alerts: 8 critical, 20 high, 26 medium and
 2 low**. The targeted version floors address **55 alerts** in the resolved graphs.
-**One medium Kotlin build-tool advisory remains**, with its affected KAPT path
-explicitly blocked. This does not claim that GitHub has closed the alerts; the
+The remaining medium Kotlin build-tool advisory was addressed on 2026-10-19 by
+moving to Kotlin Gradle Plugin 2.4.20 (see below). This does not claim that GitHub has closed the alerts; the
 main-branch dependency submission must run after merging and the alert list must
 then be checked again. New advisories can change this result.
 
@@ -40,23 +40,32 @@ adds the same `META-INF/LICENSE.md` resource in three modules; APK packaging
 merges that path to retain the license text while avoiding duplicate-resource
 errors.
 
-## Remaining Kotlin advisory
+## Kotlin advisory
 
-Alert #51, [CVE-2026-53914](https://github.com/advisories/GHSA-r937-wjx7-w2jp), covers
-Kotlin Gradle Plugin versions before 2.4.20-Beta1. The resolved main plugin remains
-2.3.0 and the Gradle Kotlin DSL convention-plugin build uses 2.4.0. Both are below
-the patched range and are **not recorded as fixed**.
-
-The [upstream fix](https://github.com/JetBrains/kotlin/commit/bf51df665b458fda7c3eaf436c4d88dc119d7ec6)
+[CVE-2026-53914](https://github.com/advisories/GHSA-r937-wjx7-w2jp) (alert #51 in the
+2026-10-11 snapshot, #1 on the public repository) covers Kotlin Gradle Plugin
+versions before 2.4.20-Beta1. The
+[upstream fix](https://github.com/JetBrains/kotlin/commit/bf51df665b458fda7c3eaf436c4d88dc119d7ec6)
 restricts Java deserialization in **KAPT incremental annotation-processing caches**.
+
+On 2026-10-19 the catalog `kotlin` and `jetbrainsKotlinJvm` versions moved from
+2.3.0 to **2.4.20**, the first stable patched release. The Compose compiler,
+parcelize and serialization plugins follow the same catalog version. KSP 2.3.6 is
+versioned independently of Kotlin and was kept. Hilt 2.59's bundled
+`kotlin-metadata-jvm` 2.2.20 cannot read Kotlin 2.4 class metadata (no Dagger
+release bundles a 2.4 reader yet), so the Hilt convention adds
+`kotlin-metadata-jvm` at the catalog Kotlin version to the KSP processor path, as
+Dagger's error message recommends. Gradle 9.7's `kotlin-dsl` plugin
+embeds Kotlin 2.4.0 in the convention-plugin build, so
+`android/gradle/security-dependencies.gradle` also sets a 2.4.20 floor for
+`org.jetbrains.kotlin:kotlin-gradle-plugin`. Gradle then prints its standard
+"Unsupported Kotlin plugin version" warning for that build; the convention plugins
+compile and apply normally. The verifier showed 2.4.20 in both builds.
+
 This repository uses KSP and applies no KAPT plugin. The shared settings script
-fails configuration if `org.jetbrains.kotlin.kapt` or its legacy `kotlin-kapt`
-alias is enabled in either build.
-Keep Gradle/Kotlin caches isolated and do not import caches from untrusted builds.
-The guard reduces exposure; it is not a patched Kotlin version or a vulnerability
-waiver. Validate a compatible AGP, KSP, Compose compiler and Kotlin DSL toolchain
-upgrade before removing the guard. Simply changing the catalog Kotlin version
-would still leave Gradle's embedded Kotlin DSL plugin dependency to address.
+still fails configuration if `org.jetbrains.kotlin.kapt` or its legacy
+`kotlin-kapt` alias is enabled in either build. Keep Gradle/Kotlin caches isolated
+and do not import caches from untrusted builds.
 
 ## Reproduce the graph check
 
@@ -71,8 +80,8 @@ builds, fails on unresolved modules or a selected version below a security floor
 and rejects same-base prereleases (including RC, Beta and SNAPSHOT) while
 recognizing Netty `.Final` as stable. Comparator regression cases run as a
 prerequisite. The verifier records sorted module/version/configuration entries in each build's
-`build/reports/dependency-security.json`. It reports Kotlin versions without
-claiming that the advisory is patched. The Android workflow runs this check before
+`build/reports/dependency-security.json`, including the Kotlin Gradle Plugin
+version in each build. The Android workflow runs this check before
 its debug/beta assemblies, debug JVM tests and debug/beta lint.
 
 No Firebase configuration, credentials, signing keys, phone, owner Hub, uploads or
@@ -94,6 +103,13 @@ Local checks passed with Firebase and push off, using JDK 22 and isolated caches
   license text from all three modules after fixing the initial packaging collision.
 - App/network/restic debug JVM suites: **126 passed, 2 skipped, 0 failures/errors**.
 - Debug and beta lint: **0 errors, 154 warnings** in each variant.
+
+The 2026-10-19 Kotlin 2.4.20 change was checked locally the same way (JDK 22,
+isolated Gradle home, Firebase and push off): the verifier found 597 Android and
+2 included-build entries with zero failures and Kotlin Gradle Plugin 2.4.20 in
+both builds; network/app/restic debug JVM suites ran **295 tests, 2 skipped,
+0 failures/errors**; debug lint reported **0 errors, 304 warnings**; the debug APK
+assembled. The beta variant was not rebuilt locally.
 
 CI results are recorded in the pull request. Release dependencies were resolved,
 but a minified release APK is not claimed as device-accepted. UTP/emulator
@@ -160,7 +176,7 @@ advisories; severity is the GitHub snapshot's severity.
 | #48 | `io.netty:netty-codec` | high | [CVE-2026-59901](https://github.com/advisories/GHSA-558v-64gr-wgg4) | 4.1.93.Final / 4.1.110.Final | 4.1.137.Final | UTP host test tooling |
 | #49 | `io.netty:netty-codec-http` | medium | [CVE-2026-59921](https://github.com/advisories/GHSA-gcjf-9mgh-3p7g) | 4.1.93.Final / 4.1.110.Final | 4.1.137.Final | UTP host test tooling |
 | #50 | `io.netty:netty-codec-http2` | high | [CVE-2026-56819](https://github.com/advisories/GHSA-93wv-jw9v-4972) | 4.1.93.Final / 4.1.110.Final | 4.1.137.Final | UTP host test tooling |
-| #51 | `org.jetbrains.kotlin:kotlin-gradle-plugin` | medium | [CVE-2026-53914](https://github.com/advisories/GHSA-r937-wjx7-w2jp) | 2.3.0 / 2.4.0 | retained; KAPT blocked | build plugin / included build |
+| #51 | `org.jetbrains.kotlin:kotlin-gradle-plugin` | medium | [CVE-2026-53914](https://github.com/advisories/GHSA-r937-wjx7-w2jp) | 2.3.0 / 2.4.0 | 2.4.20 (2026-10-19); KAPT still blocked | build plugin / included build |
 | #52 | `io.netty:netty-codec-http` | medium | [CVE-2026-59903](https://github.com/advisories/GHSA-8c42-7qj2-3j46) | 4.1.93.Final / 4.1.110.Final | 4.1.137.Final | UTP host test tooling |
 | #53 | `io.netty:netty-handler` | medium | [CVE-2026-75596](https://github.com/advisories/GHSA-fccg-mwvh-qqg4) | 4.1.93.Final / 4.1.110.Final | 4.1.137.Final | UTP host test tooling |
 | #54 | `io.netty:netty-handler` | critical | [CVE-2026-75595](https://github.com/advisories/GHSA-c4c3-7fpv-j4q5) | 4.1.93.Final / 4.1.110.Final | 4.1.137.Final | UTP host test tooling |

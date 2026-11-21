@@ -9,6 +9,7 @@ adapters are offered. Typing text into the focused app is a separate opt-in."""
 from __future__ import annotations
 
 import ctypes
+import ctypes.wintypes
 import os
 import shutil
 import subprocess
@@ -16,6 +17,7 @@ import sys
 import threading
 import time
 from uuid import uuid4
+from . import child_process
 
 MAX_TEXT = 500
 MAX_DELTA = 2000  # Largest pointer movement in one touchpad command, in pixels.
@@ -126,6 +128,20 @@ def _send_mouse(events):
         raise ValueError("This computer did not accept the input. Elevated windows cannot be controlled.")
 
 
+def _move_pointer(dx, dy):
+    """Move the pointer by exactly dx, dy pixels.
+
+    A relative mouse event is scaled by the owner's pointer speed (Settings > Mouse) and
+    acceleration, so on a slowish setting a 600 unit swipe moved the pointer a quarter as far
+    (measured on the owner's PC: 400 px swiped, 150 px moved). The phone already scales its own
+    movement, so it is placed directly; Windows keeps the pointer on a screen.
+    """
+    user32 = ctypes.windll.user32
+    point = ctypes.wintypes.POINT()
+    if not user32.GetCursorPos(ctypes.byref(point)) or not user32.SetCursorPos(point.x + dx, point.y + dy):
+        _send_mouse([(dx, dy, 0, 0x0001)])  # Locked desktop or secure screen: fall back to a relative event.
+
+
 def _send_windows(events):
     inputs = (INPUT * len(events))()
     for index, (vk, scan, flags) in enumerate(events):
@@ -138,7 +154,7 @@ def _send_windows(events):
 class SystemControls:
     """Platform side effects, kept apart so the policy can be tested without them."""
 
-    def __init__(self, runner=subprocess.run):
+    def __init__(self, runner=child_process.run):
         self.runner = runner
         self.wayland = sys.platform.startswith("linux") and os.environ.get("XDG_SESSION_TYPE") == "wayland"
 
@@ -198,7 +214,7 @@ class SystemControls:
         if sys.platform == "win32":
             buttons = {"click": [(0, 0, 0, 0x0002), (0, 0, 0, 0x0004)], "right_click": [(0, 0, 0, 0x0008), (0, 0, 0, 0x0010)]}
             if action == "move":
-                _send_mouse([(dx, dy, 0, 0x0001)])  # MOUSEEVENTF_MOVE, relative.
+                _move_pointer(dx, dy)
             elif action == "scroll":
                 _send_mouse([(0, 0, max(-1200, min(1200, -dy * 4)), 0x0800)])  # MOUSEEVENTF_WHEEL.
             else:
@@ -238,6 +254,8 @@ class Remote:
         self.lock = threading.Lock()
         self.recent = {}  # (device, control kind) -> recent command times, for rate limiting.
         self.last = None  # Most recent command, shown on the settings page.
+        from .remote_lan import RemoteLan
+        self.lan = RemoteLan(self)  # A direct channel on the local network (remote_lan.py).
 
     def options(self):
         return (self.workspace.settings.get("link") or {}).get("remote") or {}
@@ -261,7 +279,8 @@ class Remote:
                          "controls": [{key: control[key] for key in ("id", "label", "kind", "max") if key in control} for control in adapter["controls"]]})
         return {"apps": apps}
 
-    def event(self, frame):
+    def event(self, frame, reply=None):
+        """A Hub link frame or a Saiph Cloud event; `reply(target, kind, payload)` answers over the same route."""
         kind = frame["type"]
         if kind not in {"remote.catalog.request", "remote.command"}:
             return False
@@ -269,12 +288,12 @@ class Remote:
         if not self.allowed(source):
             # Not an approved controller: no catalog and no side effect, only a refusal.
             self._reply(source, "remote.result", {"app": "", "control": "", "ok": False,
-                                                  "message": "Allow this phone in Saiph's remote control settings on the computer."})
+                                                  "message": "Allow this phone in Saiph's remote control settings on the computer."}, reply)
             return True
         if kind == "remote.catalog.request":
             if frame["payload"] != {}:
                 raise ValueError("Invalid remote request.")
-            self._reply(source, "remote.catalog", self.catalog())
+            self._reply(source, "remote.catalog", self.catalog(), reply)
             return True
         payload = frame["payload"] if isinstance(frame["payload"], dict) else {}  # Older Hubs do not validate it.
         app, control = payload.get("app"), payload.get("control")
@@ -283,7 +302,9 @@ class Remote:
             result = {"app": app, "control": control, "ok": True, "message": ""}
         except ValueError as error:
             result = {"app": str(app)[:32], "control": str(control)[:32], "ok": False, "message": str(error)[:200]}
-        self._reply(source, "remote.result", result)
+        if result["ok"] and app == "touchpad" and control in ("move", "scroll"):
+            return True  # Movement streams many times a second; only a refusal is worth an answer.
+        self._reply(source, "remote.result", result, reply)
         return True
 
     def command(self, source, payload):
@@ -333,11 +354,14 @@ class Remote:
         with self.lock:
             key = (source, kind)  # Buttons, typed text and touchpad movement have separate budgets.
             times = [t for t in self.recent.get(key, []) if now - t < 1]
-            if len(times) >= {"text": 2, "pad": 60}.get(kind, 10):
+            if len(times) >= {"text": 2, "pad": 120}.get(kind, 10):
                 raise ValueError("Too many controls at once. Try again in a moment.")
             self.recent[key] = times + [now]
 
-    def _reply(self, target, kind, payload):
+    def _reply(self, target, kind, payload, reply=None):
+        if reply is not None:
+            reply(target, kind, payload)
+            return
         try:
             self.publish({"id": str(uuid4()), "type": kind, "ttl_seconds": 30, "targets": [target], "payload": payload})
         except ValueError:

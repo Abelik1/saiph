@@ -25,13 +25,14 @@
   },
   "waitlistUrl": "",
   "androidBetaUrl": "https://appdistribution.firebase.dev/i/127ea32988e8362f",
+  "androidPlayUrl": "",
   "betaAccountUrl": "https://account.dev.usesaiph.com/account",
   "subscribeUrl": "https://account.dev.usesaiph.com/account",
   "hostedPrice": "€9.99",
   "hostedPeriod": "/ month",
   "hostedPriceNote": "or €89.99 a year, saving about 25%",
   "hostedYearlyPrice": "€89.99",
-  "hostedTrial": "Free for 30 days, no card needed",
+  "hostedTrial": "14 days free, then €9.99/month.",
   "waitlistPrivacyUrl": "privacy.html#waitlist",
   "waitlistNotice": "I agree to receive the Saiph launch announcement and occasional launch updates by email. I can unsubscribe or ask for my email to be deleted at any time.",
   "waitlist": {
@@ -49,5 +50,18 @@
     "confirmationEmailDisabled": true,
     "trackingDisabled": false,
     "emailRequired": true
+  },
+  "releasesUrl": "https://github.com/Abelik1/saiph/releases/tag/v0.1.0-beta.13",
+  "downloads": {
+    "windows": "https://github.com/Abelik1/saiph/releases/download/v0.1.0-beta.13/Saiph-Link-0.1.0-beta.13-windows-x86_64.exe",
+    "linux": "https://github.com/Abelik1/saiph/releases/download/v0.1.0-beta.13/Saiph-Link-0.1.0-beta.13-linux-x86_64.tar.gz",
+    "android": "https://github.com/Abelik1/saiph/releases/download/v0.1.0-beta.13/Saiph-0.1.0-beta.13-android.apk",
+    "server": "https://github.com/Abelik1/saiph/releases/download/v0.1.0-beta.13/Saiph-Hub-0.1.0-beta.13.tar.gz"
+  },
+  "release": {
+    "tag": "v0.1.0-beta.13",
+    "sourceCommit": "33458ca206f516476948108144a305cf64ae2616",
+    "checksumsUrl": "https://github.com/Abelik1/saiph/releases/download/v0.1.0-beta.13/SHA256SUMS",
+    "sourceMetadataUrl": "https://github.com/Abelik1/saiph/releases/download/v0.1.0-beta.13/release-source.json"
   }
 }

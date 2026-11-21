@@ -32,7 +32,9 @@ export function BetaAccountView({access, billing, notice}: Props & {access: Acce
   const source = access?.kinds == null ? null : paid && access.kinds.length > 1 ? "Subscription and invitation"
     : paid ? "Subscription" : trial ? "Free trial" : "Beta invitation";
   const offerTrial = billing !== null && billing !== "unavailable" && billing.trial.state === "available";
-  const firebase = process.env.SAIPH_ANDROID_BETA_URL;
+  // Same invite-link shape the landing page accepts; Android installs through Firebase when set.
+  const firebaseUrl = process.env.SAIPH_ANDROID_BETA_URL ?? "";
+  const firebase = /^https:\/\/appdistribution\.firebase\.dev\/i\/[A-Za-z0-9]{8,64}$/.test(firebaseUrl) ? firebaseUrl : null;
   return <>
     <div className="page-head">
       <div>
@@ -45,6 +47,7 @@ export function BetaAccountView({access, billing, notice}: Props & {access: Acce
     {billing && <CheckoutNotice notice={notice} />}
     {access === null && <div className="notice warn" role="status"><Icon name="info" />
       <div><strong>Access status is temporarily unavailable.</strong><p>Try again shortly.</p></div></div>}
+    {!access?.entitled && offerTrial && <div className="after"><SubscriptionCard view={billing!} /></div>}
     {access?.entitled ? <>
       <div className="split">
         <section className="card featured string-edge" aria-labelledby="beta-access-title">
@@ -64,14 +67,21 @@ export function BetaAccountView({access, billing, notice}: Props & {access: Acce
         <h2 id="downloads-title">Download Saiph</h2>
         <p>Install the beta builds from here: they already include the connection settings. These are development builds.</p>
         <div className="downloads">
-          {installers.map(([value, label, detail, icon]) =>
-            <form key={value} method="post" action="/api/beta/download">
+          {installers.map(([value, label, detail, icon]) => value === "android" && firebase
+            ? <a key={value} className="button download" href={firebase} rel="noreferrer">
+                <Icon name={icon} />{label}<span>Beta &middot; automatic updates via Firebase</span></a>
+            : <form key={value} method="post" action="/api/beta/download">
               <input type="hidden" name="artifact" value={value} />
               <button className="download" type="submit"><Icon name={icon} />{label}<span>{detail}</span></button>
             </form>)}
         </div>
-        {firebase && /^https:\/\/appdistribution\.firebase\.dev\/i\/[A-Za-z0-9]{8,64}$/.test(firebase)
-          && <p className="fine after">Prefer automatic updates on Android? <a href={firebase} rel="noreferrer">Join the Android beta in Firebase</a>.</p>}
+        {firebase && <div className="fine after">
+          <p>Android installs through Firebase. Google asks for your email.</p>
+          <form method="post" action="/api/beta/download">
+            <input type="hidden" name="artifact" value="android" />
+            <button className="ghost small" type="submit">Standalone Android APK</button>
+          </form>
+        </div>}
         <div className="card-foot"><Icon name="info" /><span>Windows installers don&rsquo;t have a trusted publisher signature yet. Check the checksum before installing.</span></div>
         <details className="more">
           <summary>Source code, licences and checksums</summary>
@@ -101,7 +111,7 @@ export function BetaAccountView({access, billing, notice}: Props & {access: Acce
       </section>
       <NextSteps />
     </div>}
-    {billing && <div className="after"><SubscriptionCard view={billing} /></div>}
+    {billing && (access?.entitled || !offerTrial) && <div className="after"><SubscriptionCard view={billing} /></div>}
   </>;
 }
 

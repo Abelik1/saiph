@@ -10,6 +10,8 @@ import javax.inject.Inject
 class MainApplication : Application(), Configuration.Provider {
 
     override fun onCreate() {
+        // Google Play: trusted Wi-Fi names with foreground location only, never background location.
+        sefirah.common.util.LocationPolicy.backgroundLocation = !BuildConfig.PLAY_STORE
         super.onCreate()
         com.orionmini.mobile.OrionBackupWorker.schedule(this)
         // Camera and phone screen requests pop up inside Saiph while it is open.
@@ -22,6 +24,8 @@ class MainApplication : Application(), Configuration.Provider {
         sefirah.network.orion.OrionLink.failed = { com.orionmini.mobile.UsageAnalytics.failure(this, "hub_connection_failed") }
         sefirah.network.orion.HostedHttpTransport.failed = { code -> com.orionmini.mobile.UsageAnalytics.failure(this, code) }
         com.orionmini.mobile.UsageAnalytics.installCrashCounter(this)
+        // The clipboard bubble returns with the process, for example after a reboot starts sync again.
+        com.orionmini.mobile.ClipboardBubble.sync(this)
     }
 
     @Inject lateinit var workerFactory: HiltWorkerFactory

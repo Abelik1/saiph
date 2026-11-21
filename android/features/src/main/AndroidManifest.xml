@@ -18,6 +18,15 @@
             android:launchMode="singleTop"
             android:theme="@android:style/Theme.Material.NoActionBar" />
 
+        <!-- Takes focus for a moment so Android lets Saiph read the clipboard; its own task, never in Recents. -->
+        <activity
+            android:name="sefirah.clipboard.ClipboardChangeActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <receiver
             android:name="sefirah.playsound.PlaySoundReceiver"
             android:exported="false" />

@@ -13,6 +13,7 @@ from . import hub_client
 from .models import utc_now
 from .storage import write_json
 from .user_presence import confirm as confirm_user
+from . import child_process
 
 # Opt-in Saiph Cloud preview. Every method refuses work unless the hosted
 # setting is on; with it off, self-hosted behaviour is unchanged.
@@ -24,6 +25,7 @@ HOSTED_METHODS = frozenset({'hosted.configure', 'hosted.enable', 'hosted.sign_in
                             'hosted.join.account.inspect', 'hosted.join.account', 'hosted.approvals',
                             'hosted.request.deny', 'hosted.request.block'})
 _HOSTED_OFF = {'available': False, 'enabled': False, 'status': 'off', 'identity': False}
+_HOSTED_CREATE_LOCK = threading.RLock()
 
 
 @lru_cache(maxsize=1)
@@ -33,17 +35,23 @@ def hosted_available() -> bool:
     return all(find_spec(name) is not None for name in ('tink', 'authlib'))
 
 
-CORE_METHODS = frozenset({'cloud.info', 'cloud.setup', 'cloud.client.open', 'cloud.client.install', 'components.sign_in', 'state', 'hub.pair', 'hub.test', 'phone.sms.send', 'continuity.handoff', 'continuity.dnd', 'deskflow.restart', 'hotspot.connect', 'enrollment.import', 'continuity.dismiss', 'enrollment.cancel', 'components.install', 'hub.decide', 'enrollment.export', 'enrollment.qr', 'phone.call', 'call_audio.refresh', 'call_audio.setup', 'call_audio.remove_setup', 'call_audio.move_here', 'phone.ring', 'phone.media', 'phone.contacts.search', 'phone.sms.compose', 'phone.ringer', 'phone.dial', 'phone.calls.log', 'phone.sms.attachment', 'phone.sms.attachment.save', 'phone.photo.prefetch', 'phone.sms.open', 'enrollment.approve', 'phone.photo.save', 'phone.file.send', 'phone.notification', 'hub.refresh', 'phone.dnd', 'phone.refresh', 'phone.hotspot', 'phone.mobile_data', 'phone.wallpaper', 'usage.consent', 'usage.screen', 'insights.week', 'insights.enable', 'insights.clear'}) | HOSTED_METHODS
+CORE_METHODS = frozenset({'cloud.info', 'cloud.setup', 'cloud.client.open', 'cloud.client.install', 'components.sign_in', 'state', 'hub.pair', 'hub.test', 'phone.sms.send', 'continuity.handoff', 'continuity.dnd', 'deskflow.restart', 'hotspot.connect', 'enrollment.import', 'continuity.dismiss', 'enrollment.cancel', 'components.install', 'hub.decide', 'enrollment.export', 'enrollment.qr', 'phone.call', 'call_audio.refresh', 'call_audio.setup', 'call_audio.remove_setup', 'call_audio.move_here', 'phone.ring', 'phone.ring.stop', 'phone.media', 'phone.contacts.search', 'phone.sms.compose', 'phone.ringer', 'phone.dial', 'phone.calls.log', 'phone.sms.attachment', 'phone.sms.attachment.save', 'phone.photo.prefetch', 'phone.sms.open', 'enrollment.approve', 'phone.photo.save', 'phone.file.send', 'phone.notification', 'hub.refresh', 'phone.dnd', 'phone.refresh', 'phone.hotspot', 'phone.mobile_data', 'phone.wallpaper', 'usage.consent', 'usage.screen', 'insights.week', 'insights.enable', 'insights.clear'}) | HOSTED_METHODS
 
 class LinkOperations:
     def hosted_controller(self):
         """Created on first use only; importing it needs the hosted extras."""
         controller = getattr(self, '_hosted', None)
-        if controller is None:
-            if not hosted_available():
-                raise ValueError('This build does not include Saiph Cloud.')
-            from .hosted_runtime import HostedController
-            controller = self._hosted = HostedController(self)
+        if controller is not None:
+            return controller
+        # The first state request and the background tick both get here at startup. A second
+        # controller would replace the one that runs, leaving the window signed out.
+        with _HOSTED_CREATE_LOCK:
+            controller = getattr(self, '_hosted', None)
+            if controller is None:
+                if not hosted_available():
+                    raise ValueError('This build does not include Saiph Cloud.')
+                from .hosted_runtime import HostedController
+                controller = self._hosted = HostedController(self)
         return controller
 
     def hosted_blocks_self_hosted(self) -> bool:
@@ -326,12 +334,12 @@ class LinkOperations:
                     if os.name == 'nt':
                         system = Path(os.environ.get('SystemRoot', 'C:/Windows')) / 'System32'
                         options = {'capture_output': True, 'creationflags': subprocess.CREATE_NO_WINDOW, 'timeout': 10}
-                        identity = subprocess.run([str(system / 'whoami.exe'), '/user', '/fo', 'csv', '/nh'], **options)
+                        identity = child_process.run([str(system / 'whoami.exe'), '/user', '/fo', 'csv', '/nh'], **options)
                         sids = re.findall(rb'"(S-1-[0-9-]+)"', identity.stdout)
                         if identity.returncode or len(sids) != 1:
                             raise ValueError('Private invitation permissions could not be secured.')
                         principal = '*' + sids[0].decode('ascii') + ':(F)'
-                        if subprocess.run([str(system / 'icacls.exe'), str(target), '/inheritance:r', '/grant:r', principal], **options).returncode:
+                        if child_process.run([str(system / 'icacls.exe'), str(target), '/inheritance:r', '/grant:r', principal], **options).returncode:
                             raise ValueError('Private invitation permissions could not be secured.')
                     artifact = hub_client.signed(self.root, self.settings['hub'], '/v1/link/enrollment', 'POST', {})
                     parse_invitation(json.dumps(artifact).encode())

@@ -15,6 +15,10 @@ devices or disrupt an owner's running tests without coordinating first. Follow
 Record checks accurately; hosted encryption, signing, physical acceptance and
 independent security review must not be inferred from unit tests.
 
+For marketing-page work, use Page-CRO (`page-cro`) as the lead skill and follow
+the shared workflow in `docs/LANDING_CONVERSION.md` and `website/README.md`.
+Preserve the landing page's deliberate simplicity and primary conversion action.
+
 For desktop UI testing, use `scripts/desktop-ui.py` and `scripts/desktop-ui.cjs`
 as described in `docs/TESTING.md`. Drive tabs, buttons, form entry and screenshots
 directly instead of asking the user to perform routine UI interactions. Use a

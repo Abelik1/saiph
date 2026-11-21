@@ -109,7 +109,8 @@ fun SettingsScreen(
         contract = ActivityResultContracts.RequestMultiplePermissions(),
         onResult = { permissions ->
             val isForegroundGranted = permissions.entries.all { it.value }
-            if (isForegroundGranted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            // The Google Play build never asks for background location (foreground only).
+            if (isForegroundGranted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && !com.castle.sefirah.BuildConfig.PLAY_STORE) {
                 backgroundLocationRequester.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
             }
             viewModel.updatePermissionStates()

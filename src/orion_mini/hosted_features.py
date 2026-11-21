@@ -571,6 +571,59 @@ def _one_line(value) -> str:
     return "".join(ch for ch in text if ch.isprintable()).strip()[:MAX_LABEL].strip()
 
 
+# Find this computer and Phone remote over Saiph Cloud: the same commands a Hub phone sends
+# as link frames, flat like every Cloud event. The computer applies its own settings: ring
+# unless turned off, and remote control only for phones on its Phone remote list.
+COMPUTER_RING = "computer.ring"  # Phone -> computer: a sound and a Stop window.
+REMOTE_CATALOG_REQUEST = "remote.catalog.request"  # Phone -> computer: which controls are offered.
+REMOTE_COMMAND = "remote.command"  # Phone -> computer: one control (remote.py validates it).
+REMOTE_CATALOG = "remote.catalog"  # Computer -> the asking phone.
+REMOTE_RESULT = "remote.result"  # Computer -> the asking phone: done, or why not.
+CAMERA_REQUEST = "camera.request"  # Phone -> computer: "use me as your webcam"; the owner accepts here.
+CAMERA_OFF = "camera.off"  # Computer -> the asking phone: Allow phone camera is off here.
+REMOTE_LAN_REQUEST = "remote.lan.request"  # Phone -> computer: "let me send controls over the local network" (remote_lan.py).
+REMOTE_LAN = "remote.lan"  # Computer -> the asking phone: a one-use, pinned local invitation.
+REMOTE_REQUESTS = (COMPUTER_RING, REMOTE_CATALOG_REQUEST, REMOTE_COMMAND, CAMERA_REQUEST, REMOTE_LAN_REQUEST)
+
+
+# Wake over Saiph Cloud: no Hub stays awake on the network, so while this computer is on it
+# tells each phone its network adapters' addresses. On the same Wi-Fi the phone sends the
+# wake-on-LAN packet itself; the computer's adapter must allow waking.
+COMPUTER_WAKE = "computer.wake"  # Computer -> phone, with each subscription.
+MAX_WAKE_ADDRESSES = 4
+_MAC = re.compile(r"[0-9a-f]{2}(:[0-9a-f]{2}){5}")
+
+
+def wake_payload(addresses) -> dict:
+    """Up to four adapter addresses, lower case with colons; none for virtual or all-zero adapters."""
+    if type(addresses) is not list:
+        raise FeatureError()
+    clean = []
+    for value in addresses:
+        mac = value.lower().replace("-", ":") if type(value) is str else ""
+        if _MAC.fullmatch(mac) and mac != "00:00:00:00:00:00" and mac not in clean:
+            clean.append(mac)
+    if not clean:
+        raise FeatureError()
+    return {"type": COMPUTER_WAKE, "addresses": clean[:MAX_WAKE_ADDRESSES]}
+
+
+def read_remote(payload) -> dict:
+    """The body of a phone's ring, camera or remote request; only remote commands carry anything."""
+    if type(payload) is not dict or payload.get("type") not in REMOTE_REQUESTS:
+        raise FeatureError()
+    body = {key: value for key, value in payload.items() if key != "type"}
+    if payload["type"] != REMOTE_COMMAND and body:
+        raise FeatureError()
+    return body
+
+
+def remote_payload(kind_, body) -> dict:
+    if kind_ not in (REMOTE_CATALOG, REMOTE_RESULT, CAMERA_OFF, REMOTE_LAN) or type(body) is not dict or "type" in body:
+        raise FeatureError()
+    return {"type": kind_, **body}
+
+
 def kind(payload) -> str:
     if type(payload) is not dict or type(payload.get("type")) is not str:
         raise FeatureError()

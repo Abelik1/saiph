@@ -13,7 +13,10 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * Invisible activity that briefly takes focus so the app can read the clipboard on Android 10+
+ * Invisible activity that briefly takes focus so the app can read the clipboard on Android 10+.
+ * The clipboard bubble, the home screen's Clipboard action, the quick settings tile and the
+ * optional accessibility service all send through it. It runs in its own task, so Saiph's
+ * screens stay where they were.
  */
 @AndroidEntryPoint
 class ClipboardChangeActivity : FragmentActivity() {
@@ -44,7 +47,8 @@ class ClipboardChangeActivity : FragmentActivity() {
         if (!hasFocus) return
 
         lifecycleScope.launch {
-            clipboardFeature.sendPrimaryClipboard()
+            val result = clipboardFeature.sendPrimaryClipboard()
+            done?.invoke(result); done = null
             finish()
         }
     }
@@ -59,12 +63,17 @@ class ClipboardChangeActivity : FragmentActivity() {
         var isRunning: Boolean = false
             private set
 
-        fun launch(context: Context) {
+        /** Told what the send did; only the launch that asked hears it. */
+        @Volatile
+        private var done: ((ClipboardSend) -> Unit)? = null
+
+        fun launch(context: Context, result: ((ClipboardSend) -> Unit)? = null) {
             if (isRunning) return
+            done = result
             val intent = Intent(context, ClipboardChangeActivity::class.java).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
             }
-            context.startActivity(intent)
+            try { context.startActivity(intent) } catch (_: Exception) { done = null; result?.invoke(ClipboardSend.NOT_SENT) }
         }
     }
 }

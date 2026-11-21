@@ -1,0 +1,66 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Saiph motion composition</title>
+<link rel="stylesheet" href="assets/landing-devices.css">
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#0a0e13}body{font-family:"Segoe UI",Arial,sans-serif}#stage{position:relative;width:1080px;height:1920px;overflow:hidden;background:var(--bg);color:var(--ink);--bg:#0a0e13;--ink:#e7edf4;--accent:#67e8f9;--muted:#a7b6c8;--ghost:#172431}#stage.light{--bg:#e7edf4;--ink:#0a0e13;--accent:#216373;--muted:#435569;--ghost:#d2dce6}#stage.violet{--bg:#151021;--accent:#baa2ff;--ghost:#261b3b}#brand{position:absolute;left:180px;top:240px;display:flex;align-items:center;gap:18px;font-size:46px;font-weight:650;letter-spacing:-1.5px;z-index:10}#brand img{width:52px;height:52px}#count{position:absolute;left:182px;top:350px;color:var(--muted);font-size:22px;letter-spacing:5px}#bigword{position:absolute;left:145px;top:720px;font-weight:750;font-size:300px;letter-spacing:-22px;color:var(--ghost);white-space:nowrap;transform-origin:20% 50%;user-select:none}#scenes{position:absolute;inset:0}.scene{position:absolute;left:180px;top:440px;width:720px;opacity:0;transform-origin:0 50%}.tag{font-size:21px;font-weight:650;letter-spacing:3px;line-height:1.5;color:var(--accent);margin:0 0 42px}.headline{margin:0;font-size:88px;line-height:1.055;font-weight:720;letter-spacing:-4.5px}.line{display:block;white-space:nowrap}.accent{color:var(--accent)}.sub{margin:36px 0 0;font-size:29px;line-height:1.5;color:var(--muted);max-width:660px;font-weight:450}#footer{position:absolute;left:180px;top:1200px;width:720px;z-index:10}#cta{font-size:28px;font-weight:600;margin-bottom:12px}#url{font-size:40px;letter-spacing:-1px;font-weight:650}#disclosure{font-size:23px;line-height:1.5;color:var(--muted);margin-top:24px}#independent{font-size:20px;line-height:1.4;color:var(--muted);margin-top:12px;max-width:700px}.wide #brand{left:160px;top:125px}.wide #count{left:163px;top:220px}.wide .scene{left:160px;top:300px;width:1450px}.wide .tag{margin-bottom:26px}.wide .headline{font-size:100px;line-height:1.03;letter-spacing:-5px}.wide .sub{max-width:1220px;font-size:30px;margin-top:24px}.wide #bigword{left:600px;top:310px;font-size:340px}.wide #footer{left:160px;top:815px;width:1560px;display:grid;grid-template-columns:1fr 1fr;column-gap:70px}.wide #url{text-align:right;grid-column:2;grid-row:1 / 3;font-size:44px}.wide #disclosure{margin-top:0;grid-column:1}.wide #independent{grid-column:2;grid-row:3;text-align:right;max-width:900px;margin-top:0;font-size:18px}.poster #brand{left:100px;top:100px}.poster #count{left:103px;top:205px}.poster .scene{left:100px;top:300px;width:880px}.poster .headline{font-size:104px;letter-spacing:-5px}.poster .sub{font-size:30px;max-width:830px}.poster #footer{left:100px;top:1050px;width:880px}.poster #bigword{left:50px;top:620px}.square .scene{top:265px}.square .headline{font-size:94px}.square .tag{margin-bottom:25px}.square .sub{margin-top:25px}.square #footer{top:830px}.square #url{font-size:34px}.square #cta{font-size:24px;margin-bottom:6px}.square #disclosure{font-size:21px;margin-top:12px}.square #independent{font-size:17px;margin-top:6px}
+</style></head><body><main id="stage" aria-label="Animated Saiph advertisement"><div id="bigword" aria-hidden="true">saiph</div><div id="brand"><img src="assets/logo.svg" alt=""><span>saiph</span></div><div id="count"></div><div id="scenes"></div><div id="footer"><div id="cta">Explore the beta</div><div id="url">usesaiph.com</div><div id="disclosure">Beta · Android + Windows / Linux</div><div id="independent"></div></div></main>
+<link rel="stylesheet" href="device-art.css">
+<link rel="stylesheet" href="wave-art.css">
+<script src="device-art.js"></script>
+<script src="wave-art.js"></script>
+<script>
+let activeAd, scenes=[], mode='vertical';
+const $=id=>document.getElementById(id);
+const clamp=x=>Math.max(0,Math.min(1,x));
+const ease=x=>1-Math.pow(1-clamp(x),4);
+window.setup=(ad,format='vertical',posterScene=null)=>{
+ activeAd=ad;mode=format;const stage=$('stage');
+ stage.className=[ad.theme,ad.duration>=30?'story':'',format==='vertical'||format==='landscape'?'cinematic':'',format==='landscape'?'wide':'',format==='poster'||format==='square'?'poster':'',format==='square'?'square':''].join(' ');
+ const size=format==='landscape'?[1920,1080]:format==='poster'?[1080,1350]:format==='square'?[1080,1080]:[1080,1920];
+ stage.style.width=size[0]+'px';stage.style.height=size[1]+'px';
+ const frames=posterScene?[{...posterScene,at:0,tag:posterScene.tag||'YOUR DEVICES. CONNECTED.'}]:ad.scenes;
+ $('scenes').replaceChildren();
+ scenes=frames.map(s=>{const el=document.createElement('section');el.className='scene';
+ const tag=document.createElement('p');tag.className='tag';tag.textContent=s.tag;el.append(tag);
+ const h=document.createElement('h1');h.className='headline';
+ s.lines.forEach((line,i)=>{const span=document.createElement('span');span.className='line'+(i===s.accent?' accent':'');span.textContent=line;h.append(span)});el.append(h);
+ const sub=document.createElement('p');sub.className='sub';sub.textContent=s.sub;el.append(sub);$('scenes').append(el);
+ if(stage.classList.contains('cinematic')){let font=format==='landscape'?110:102;h.style.fontSize=font+'px';while(font>56&&Array.from(h.children).some(line=>line.scrollWidth>el.clientWidth)){font-=2;h.style.fontSize=font+'px'}}
+ return {el,s};});
+ $('independent').textContent=ad.id==='01-ecosystem-convenience'?'Saiph is independent. Not affiliated with Apple.':'';
+ $('disclosure').textContent=ad.id==='05-self-host'?'Beta · Your server + private network required':'Beta · Android + Windows / Linux';
+ window.renderAt(0,true);return size;
+};
+window.renderAt=(time,still=false)=>{
+ const t=Math.max(0,Math.min(time,activeAd.duration-.001));
+ let index=0;scenes.forEach(({s},i)=>{if(t>=s.at)index=i});
+ $('count').textContent=String(index+1).padStart(2,'0')+' / '+String(scenes.length).padStart(2,'0');
+ $('disclosure').textContent=scenes[index].s.qualifier||(activeAd.id==='05-self-host'?'Beta · Your server + private network required':'Beta · Android + Windows / Linux');
+ scenes.forEach(({el,s},i)=>{
+  const end=scenes[i+1]?.s.at??activeAd.duration+.5;
+  const entering=ease((t-s.at)/.3), leaving=ease((t-end)/.18);
+  const visible=(i===index||i===index-1)&&t>=s.at&&t<end+.18;
+  el.style.opacity=visible?String(still?1:entering*(1-leaving)):'0';
+  const direction=i%2===0?1:-1;
+  el.style.transform=still?'none':`translate(${direction*((1-entering)*130-leaving*120)}px, ${(1-entering)*24}px) scale(${.96+.04*entering+.025*leaving})`;
+  el.style.clipPath=still?'none':window.waveClip(entering*(1-leaving));
+  if(!still){const curtain=window.campaignCurtain(activeAd,s,i,t-s.at),handoff=curtain.textOut;el.style.opacity=visible?String(entering*(1-leaving)*(1-handoff)):'0';el.style.transform=`translate(${direction*(1-entering)*55}px,${(1-entering)*35+handoff*165}px) scale(${1-handoff*.62})`}
+  if(still&&document.getElementById('stage').classList.contains('cinematic'))el.style.opacity='0';
+  el.querySelectorAll('.line').forEach((line,k)=>{const p=still?1:ease((t-s.at-k*.045)/.28);line.style.opacity=p;line.style.transform=`translateY(${(1-p)*32}px)`;});
+ });
+ window.renderDevices(activeAd,t,index,still,scenes[index].s);
+ window.renderCampaignWaves(activeAd,t,index,still,scenes[index].s);
+};
+window.checkLayout=()=>{
+ const errors=[];const stage=$('stage').getBoundingClientRect();
+ for(const {el} of scenes){for(const line of el.querySelectorAll('.line')){if(line.scrollWidth>el.clientWidth+1)errors.push('Headline overflow: '+line.textContent)}}
+ const safe=mode==='vertical'?{x:180,y:220,r:900,b:1420}:{x:0,y:0,r:stage.width,b:stage.height};
+ for(const selector of ['#brand','#footer','#device-art-note']){const b=document.querySelector(selector).getBoundingClientRect();if(b.x<safe.x-1||b.y<safe.y-1||b.right>safe.r+1||b.bottom>safe.b+1)errors.push(selector+' outside safe area')}
+ const art=document.querySelector('#device-art').getBoundingClientRect();
+ if(art.x<0||art.y<0||art.right>stage.width+1||art.bottom>stage.height+1)errors.push('Device illustration outside canvas');
+ if(!document.getElementById('stage').classList.contains('cinematic'))for(const {el} of scenes){const sub=el.querySelector('.sub').getBoundingClientRect();if(sub.bottom>art.top-14&&sub.right>art.left-14&&sub.left<art.right)errors.push(`Copy ends at ${sub.bottom}, artwork starts at ${art.top}`)}
+ for(const el of document.querySelectorAll('#device-art .art-doc,#device-art .p-app')){if(el.scrollHeight>el.clientHeight+3)errors.push(`Illustrated screen content overflow: ${el.className} ${el.scrollHeight}/${el.clientHeight}`)}
+ return errors;
+};
+</script></body></html>

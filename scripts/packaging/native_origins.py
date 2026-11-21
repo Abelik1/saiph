@@ -45,7 +45,7 @@ def native_entries(value):
                 yield from native_entries(child)
 
 
-def audit_analysis(analysis, bundle, trusted_roots, project_inputs=None):
+def audit_analysis(analysis, bundle, trusted_roots, project_inputs=None, *, entrypoint='Saiph.exe'):
     """Reject ambient native inputs and changed/extra collected native files."""
     bundle = Path(bundle).resolve(strict=True)
     roots = [Path(root).resolve(strict=True) for root in trusted_roots if Path(root).is_dir()]
@@ -79,7 +79,7 @@ def audit_analysis(analysis, bundle, trusted_roots, project_inputs=None):
         if not target.is_file():
             continue
         relative = target.relative_to(bundle).as_posix()
-        if target.suffix.lower() in {'.exe', '.dll', '.pyd'} and relative != 'Saiph.exe':
+        if target.suffix.lower() in {'.exe', '.dll', '.pyd'} and relative != entrypoint:
             if relative not in records:
                 raise ValueError('Collected native file has no audited Analysis input: ' + relative)
     return {'schema': 1, 'format': 'saiph-native-build-origins',

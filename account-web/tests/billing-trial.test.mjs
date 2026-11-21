@@ -8,10 +8,10 @@ import assert from "node:assert/strict";
 import {generateKeyPairSync} from "node:crypto";
 import {trialAction} from "../lib/billing/http.ts";
 import {readBillingConfig,subjectReference} from "../lib/billing/policy.ts";
-import {checkout,withdrawalStatus,WITHDRAWAL_SECONDS} from "../lib/billing/service.ts";
+import {checkout,startTrial,withdrawalStatus,WITHDRAWAL_SECONDS} from "../lib/billing/service.ts";
 import {syncGrants} from "../lib/billing/grant-sync.mjs";
 import {CARRY_MIN_SECONDS,DEFAULT_TRIAL_DAYS,carriedTrialEnd,checkTrialConfig,daysLeft,normaliseEmail,readTrialConfig,
-  trialDecision,trialEmailKey,trialUntil} from "../lib/billing/trial.mjs";
+  trialDecision,trialEmailKey,trialUntil,readCardTrialConfig} from "../lib/billing/trial.mjs";
 
 const NOW=1_800_000_000;
 const grantKey=generateKeyPairSync("ed25519").privateKey.export({format:"der",type:"pkcs8"}).toString("base64url");
@@ -84,6 +84,12 @@ test("a running trial counts down in whole days and ends exactly at its end",()=
 function trialFixture({cap=null,subscribed=false,usedEmails=[]}={}) {
   const trials=new Map();const pushes=[];let started=0;let pushFails=false;
   const store={
+    async reserveCardTrial() {
+      if (subscribed) return {outcome:"subscribed",ref:null};
+      if (usedEmails.includes(emailKey)) return {outcome:"used",ref:null};
+      if (cap===0) return {outcome:"full",ref:null};
+      throw new Error("Only refusal paths use this legacy fixture");
+    },
     async startTrial({subject,emailKey:key,now,days,cap:limit,ref}) {
       assert.equal(limit,cap);
       if (trials.has(subject)) return {outcome:"exists",trial:trials.get(subject)};
@@ -104,33 +110,25 @@ function trialFixture({cap=null,subscribed=false,usedEmails=[]}={}) {
 const start=(body="trial=start",headers={})=>new Request(config.origin+"/api/billing/trial",{method:"POST",
   headers:{origin:config.origin,"sec-fetch-site":"same-origin","content-type":"application/x-www-form-urlencoded",...headers},body});
 
-test("starting a trial records it and pushes a signed trial grant to the end of the trial, without a card",async(t)=>{
+test("legacy grants retain their end date and retry safely without Stripe",async(t)=>{
   t.mock.timers.enable({apis:["Date"],now:NOW*1000});
   const f=trialFixture();
-  const response=await trialAction(start(),f.deps);
-  assert.equal(response.status,303);
-  assert.equal(response.headers.get("location"),config.origin+"/account?trial=started");
-  const trial=f.trials.get(owner);
-  assert.equal(trial.endsAt,NOW+14*86400);
-  assert.equal(f.pushes.length,1);
-  const [push]=f.pushes;
-  assert.match(push.grant,/^trial:[a-f0-9]{32}$/);
-  assert.equal(push.grant.includes(subjectReference(owner).slice(0,16)),false,"the reference does not reveal the subject");
-  assert.deepEqual({...push,grant:undefined,sequence:undefined},{issuer:"https://synthetic.us.auth0.com/",subject:owner,grant:undefined,until:NOW+14*86400,sequence:undefined,livemode:false});
-  // Pressing again neither starts a second trial nor pushes again.
-  assert.equal((await trialAction(start(),f.deps)).status,303);
+  const run=()=>startTrial(f.store,config,trialConfig,owner,emailKey,value=>f.deps.pushGrant(config,value));
+  f.setPushFails(true);
+  await assert.rejects(run(),/delivery pending/);
+  const originalEnd=f.trials.get(owner).endsAt;
+  assert.equal(originalEnd,NOW+14*86400);
+  f.setPushFails(false);
+  assert.equal((await run()).endsAt,originalEnd);
+  assert.equal((await run()).endsAt,originalEnd);
   assert.equal(f.trials.size,1);assert.equal(f.pushes.length,1);
 });
 
-test("a failed delivery answers 503 and pressing again delivers the same trial",async(t)=>{
-  t.mock.timers.enable({apis:["Date"],now:NOW*1000});
-  const f=trialFixture();f.setPushFails(true);
-  const failed=await trialAction(start(),f.deps);
-  assert.equal(failed.status,503);assert.match(await failed.text(),/again/);
-  assert.equal(f.trials.get(owner).dirty,true);
-  f.setPushFails(false);
-  assert.equal((await trialAction(start(),f.deps)).status,303);
-  assert.equal(f.pushes.length,1);assert.equal(f.pushes[0].until,f.trials.get(owner).endsAt);
+test("card offers stay 14 days with legacy 30-day settings and need live readiness",()=>{
+  assert.equal(readCardTrialConfig({...env,SAIPH_TRIAL_DAYS:"30"}).days,14);
+  assert.equal(readCardTrialConfig({...env,SAIPH_BILLING_MODE:"live"}),null);
+  assert.equal(readCardTrialConfig({...env,SAIPH_BILLING_MODE:"live",SAIPH_CARD_TRIAL_READY:"true"}).days,14);
+  assert.equal(readCardTrialConfig({...env,SAIPH_TRIAL_DAYS:"0"}),null);
 });
 
 test("used email, a full cap and existing subscribers are refused with a reason; a missing email key asks to sign in again",async()=>{

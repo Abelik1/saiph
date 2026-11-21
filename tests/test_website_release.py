@@ -172,8 +172,14 @@ def test_approved_controller_ships_without_enabling_collection(tmp_path):
     assert result['privacy']['status'] == 'approved'
     assert result['privacy']['contactEmail'] == 'support@usesaiph.com'
     assert result['waitlistUrl'] == ''
-    assert result['release'] == {}
-    assert not any(result['downloads'].values())
+    # Before the first public release nothing is offered; afterwards every
+    # download is an asset of exactly the published release tag.
+    if result['release']:
+        prefix = 'https://github.com/Abelik1/saiph/releases/download/' + result['release']['tag'] + '/'
+        assert all(url.startswith(prefix) for url in result['downloads'].values())
+        assert set(result['downloads']) >= {'windows', 'linux', 'android', 'server'}
+    else:
+        assert not any(result['downloads'].values())
     settings['privacy']['secret'] = 'must-not-ship'
     with pytest.raises(ValueError):
         site.prepare(ROOT / 'website', tmp_path / 'bad', settings)
@@ -230,7 +236,7 @@ def test_published_form_stays_disabled_without_controller_contact():
         site.validate_settings(settings, 'preview')
 
 
-def render_site_script(settings):
+def render_site_script(settings, user_agent=''):
     """Exercise the shipped script with DOM elements, without visiting a provider."""
     node = shutil.which('node')
     if not node:
@@ -248,25 +254,29 @@ function element() {
 const form = element(), details = element(), inactive = element(), contact = element(), subscribe = element();
 subscribe.dataset = {liveText: 'Subscribe', trialText: 'Start your free trial'};
 const beta = element(), betaBox = element(), status = element(), account = element(), trial = element();
+const download = element(), betaAccess = element();
+download.href = 'downloads.html';
 const elements = {
   '[data-link="android-beta"]': [beta], '[data-android-beta]': [betaBox],
   '[data-link="waitlist"]': [form], '[data-waitlist-details]': [details],
   '[data-waitlist-inactive]': [inactive], '[data-privacy-contact]': [contact],
   '[data-link="subscribe"]': [subscribe], '[data-hosted-status]': [status],
-  '[data-link="account"]': [account], '[data-trial]': [trial]
+  '[data-link="account"]': [account], '[data-trial]': [trial],
+  '.download-nav': [download], '[data-beta-access]': [betaAccess]
 };
 const document = { querySelectorAll: selector => elements[selector] || [],
   querySelector: () => null, createElement: element, createTextNode: text => ({textContent: text}) };
-vm.runInNewContext(fs.readFileSync(process.argv[1], 'utf8'), {window: {ORION_SITE: cfg}, document, Date});
+vm.runInNewContext(fs.readFileSync(process.argv[1], 'utf8'), {window: {ORION_SITE: cfg, navigator: {userAgent: process.argv[2] || ''}}, document, Date});
 console.log(JSON.stringify({form: form.href || '', disabled: form.attributes['aria-disabled'],
   hidden: details.hidden, inactiveHidden: inactive.hidden, contact: contact.href || '',
   subscribe: subscribe.href || '', subscribeText: subscribe.textContent, subscribeDisabled: subscribe.attributes['aria-disabled'] || '',
   hostedStatus: status.textContent, beta: beta.href || '', betaHidden: betaBox.hidden,
   account: account.href || '', accountDisabled: account.attributes['aria-disabled'] || '',
-  trial: trial.textContent, trialHidden: trial.hidden}));
+  trial: trial.textContent, trialHidden: trial.hidden,
+  download: download.href, downloadPlatform: download.dataset.download || '', betaAccessHidden: betaAccess.hidden}));
 """
-    result = subprocess.run([node, '-e', script, str(ROOT / 'website/assets/site.js')],
-                            input=json.dumps(settings), text=True, capture_output=True, check=True)
+    result = subprocess.run([node, '-e', script, str(ROOT / 'website/assets/site.js'), user_agent],
+                            input=json.dumps(settings), text=True, encoding='utf-8', capture_output=True, check=True)
     return json.loads(result.stdout)
 
 
@@ -373,7 +383,7 @@ def test_open_subscriptions_link_to_the_account_and_show_hosted_as_available():
     site.validate_settings(settings, 'preview')
     result = render_site_script(settings)
     assert result['subscribe'] == BETA_ACCOUNT and result['subscribeDisabled'] == ''
-    # Trials are on (30 days), so the generic subscribe button invites a trial.
+    # Trials are on (14 days), so the generic subscribe button invites a trial.
     assert result['subscribeText'] == 'Start your free trial' and result['hostedStatus'] == 'Available now'
     # Subscriptions take precedence over the email list and invitation-only access.
     settings = {**launch_settings(), **SUBSCRIBE, 'betaAccountUrl': BETA_ACCOUNT}
@@ -430,12 +440,12 @@ def test_launch_requires_trader_address(tmp_path):
 
 def test_free_trial_note_is_off_until_set_and_then_shown_with_a_trial_button():
     settings = json.loads((ROOT / 'website/landing-settings.json').read_text(encoding='utf-8'))
-    # Owner decision, 19 October 2026: 30-day trials, no card (SAIPH_TRIAL_DAYS=30).
-    assert settings['hostedTrial'] == 'Free for 30 days, no card needed'
+    # Owner decision, 19 October 2026: 14-day trials with a card required.
+    assert settings['hostedTrial'] == '14 days free, then €9.99/month.'
     off = render_site_script({**settings, 'hostedTrial': ''})
     assert off['trialHidden'] is True and off['subscribeText'] == 'Subscribe'
     on = render_site_script(settings)
-    assert on['trial'] == 'Free for 30 days, no card needed' and on['trialHidden'] is False
+    assert on['trial'] == '14 days free, then €9.99/month.' and on['trialHidden'] is False
     # A subscribe button without a trial path still opens the account page.
     assert on['subscribeText'] == 'Start your free trial' and on['subscribe'] == settings['subscribeUrl']
     # Without open subscriptions there is no trial to start.
@@ -452,7 +462,50 @@ def test_bad_trial_notes_fail(settings):
 
 def test_cloud_terms_and_privacy_describe_the_free_trial():
     terms = (ROOT / 'website/terms.html').read_text(encoding='utf-8')
-    assert 'id="trial"' in terms and 'One free trial per person' in terms and 'Nothing is charged automatically' in terms
+    assert 'id="trial"' in terms and 'One free trial per person' in terms and 'Cancel before the trial ends' in terms and 'Earlier no-card trials' in terms
     assert 'within 14 days of your first payment' in terms
     privacy = (ROOT / 'website/account-privacy.html').read_text(encoding='utf-8')
     assert 'keyed hash of your verified email address' in privacy and 'Free trial records' in privacy
+
+
+def published_release():
+    tag = 'https://github.com/Abelik1/saiph/releases/download/v0.1.0-beta.13/'
+    return {**SUBSCRIBE, 'betaAccountUrl': BETA_ACCOUNT, 'sourceVisibility': 'public',
+            'githubUrl': 'https://github.com/Abelik1/saiph',
+            'releasesUrl': 'https://github.com/Abelik1/saiph/releases/tag/v0.1.0-beta.13',
+            'release': {'tag': 'v0.1.0-beta.13', 'sourceCommit': 'b' * 40,
+                        'checksumsUrl': tag + 'SHA256SUMS', 'sourceMetadataUrl': tag + 'release-source.json'},
+            'downloads': {'windows': tag + 'Saiph-Link-0.1.0-beta.13-windows-x86_64.exe',
+                          'linux': tag + 'Saiph-Link-0.1.0-beta.13-linux-x86_64.tar.gz',
+                          'android': tag + 'Saiph-0.1.0-beta.13-android.apk', 'server': tag + 'Saiph-Hub-0.1.0-beta.13.tar.gz'}}
+
+
+WINDOWS = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+
+
+def test_header_download_fetches_the_windows_installer_only_on_windows_after_a_release():
+    settings = published_release()
+    result = render_site_script(settings, WINDOWS)
+    assert result['download'] == settings['downloads']['windows'] and result['downloadPlatform'] == 'windows'
+    # Free public downloads replace the account-only installers.
+    assert result['betaAccessHidden'] is True
+    linux = render_site_script(settings, 'Mozilla/5.0 (X11; Linux x86_64)')
+    assert linux['download'] == 'downloads.html' and linux['downloadPlatform'] == ''
+    before = render_site_script({**SUBSCRIBE, 'betaAccountUrl': BETA_ACCOUNT}, WINDOWS)
+    assert before['download'] == 'downloads.html' and before['betaAccessHidden'] is False
+
+
+def test_android_choice_is_google_play_or_the_unlocked_apk_with_a_guide():
+    downloads = (ROOT / 'website/downloads.html').read_text(encoding='utf-8')
+    assert 'data-link="android-play"' in downloads and 'data-download="android"' in downloads
+    assert 'href="install-android.html"' in downloads
+    guide = (ROOT / 'website/install-android.html').read_text(encoding='utf-8')
+    for step in ('Allow from this source', 'Install anyway', 'Auto Blocker', 'Allow restricted settings',
+                 'Notification access', 'Display over other apps', 'Saiph phone screen control',
+                 'adb shell appops set com.orionmini.mobile.unlocked RECEIVE_SENSITIVE_NOTIFICATIONS allow'):
+        assert step in guide
+    # Only Saiph's own store listing can be linked.
+    settings = launch_settings()
+    site.validate_settings({**settings, 'androidPlayUrl': 'https://play.google.com/store/apps/details?id=com.orionmini.mobile'}, 'preview')
+    with pytest.raises(ValueError, match='store listing'):
+        site.validate_settings({**settings, 'androidPlayUrl': 'https://play.google.com/store/apps/details?id=example.other'}, 'preview')

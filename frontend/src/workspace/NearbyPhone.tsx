@@ -15,7 +15,7 @@ const validCode = (code: unknown): code is string => typeof code === "string" &&
  * screens; approving still asks for Windows Hello. Leaving stops listening.
  */
 export function NearbyPhone({ client, onActive, onApproved }: {
-  client: Client; onActive?: (active: boolean) => void; onApproved?: (label: string) => void;
+  client: Client; onActive?: (active: boolean) => void; onApproved?: (label: string, deviceId: string) => void;
 }) {
   const [status, setStatus] = useState<NearbyStatus | null>(null);
   const [error, setError] = useState("");
@@ -55,7 +55,7 @@ export function NearbyPhone({ client, onActive, onApproved }: {
       : <div className="flex flex-wrap items-center gap-3">
         <Action variant="default" run={async () => {
           const result = await client.call<{ approved?: string; label?: string }>("hosted.link.approve", { code: peer.code, confirmed: true });
-          if (result?.approved) onApproved?.(typeof result.label === "string" ? result.label : peer.name);
+          if (result?.approved) onApproved?.(typeof result.label === "string" ? result.label : peer.name, result.approved);
         }}>Codes match, approve</Action>
         <small className="text-muted-foreground">Windows asks you to confirm it's you.</small>
       </div>}

@@ -35,7 +35,7 @@ describe("Connect a nearby phone without a QR code", () => {
       peer = { name: "Pixel", code: "713 284", state: "requested" };
       await act(async () => { vi.advanceTimersByTime(1500); });
       fireEvent.click(await screen.findByRole("button", { name: "Codes match, approve" }));
-      await waitFor(() => expect(onApproved).toHaveBeenCalledWith("Pixel"));
+      await waitFor(() => expect(onApproved).toHaveBeenCalledWith("Pixel", "dev_1"));
       expect(call).toHaveBeenCalledWith("hosted.link.approve", { code: "713 284", confirmed: true });
     } finally { vi.useRealTimers(); }
   });

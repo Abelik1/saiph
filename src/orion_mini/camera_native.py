@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+from . import child_process
 
 
 def component_root():
@@ -31,8 +32,8 @@ class NativeCameraSink:
         # This component's registration is explicitly per-user. System regsvr32
         # selects the x86 COM view; no administrator or third-party installer.
         system = Path(os.environ.get('SystemRoot', 'C:/Windows'))
-        result = subprocess.run([str(system / 'SysWOW64/regsvr32.exe'), '/s', str(root / 'SaiphCamera32.dll')],
-                                timeout=15, creationflags=subprocess.CREATE_NO_WINDOW)
+        result = child_process.run([str(system / 'SysWOW64/regsvr32.exe'), '/s', str(root / 'SaiphCamera32.dll')],
+                                   timeout=15, creationflags=subprocess.CREATE_NO_WINDOW)
         if result.returncode:
             raise ValueError('Saiph Camera setup could not finish. Reinstall this Saiph build and try again.')
         self.write_fn = ctypes.CDLL(str(root / 'SaiphCamera64.dll')).SaiphCameraWriteSized

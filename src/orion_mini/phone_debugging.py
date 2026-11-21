@@ -17,6 +17,7 @@ import re
 import subprocess
 
 from .companion_tools import tool_path
+from . import child_process
 
 SERIAL = re.compile(r'[A-Za-z0-9][A-Za-z0-9_.:\[\]-]{0,199}')
 _MODEL = re.compile(r'[^A-Za-z0-9 ._-]')
@@ -92,7 +93,7 @@ def pairing_code(value):
 
 
 class PhoneDebugging:
-    def __init__(self, adb, run=subprocess.run):
+    def __init__(self, adb, run=child_process.run):
         self.adb, self.run = adb, run
 
     def _adb(self, *args, timeout=10):

@@ -9,7 +9,64 @@ and records what was built from them. Implementation details for analytics are i
 Sources were read on 19 October 2026. Where only a secondary summary of a study
 was available, that is said next to it.
 
+## Required skill and workflow for marketing-page work
+
+Use **Page-CRO (`page-cro`) as the lead skill** for future reviews or changes to
+the Saiph marketing landing page, pricing presentation and conversion path.
+This applies to Claude, Codex and other contributors. Read this document before
+proposing changes; the compact page and its clear primary action are deliberate
+product decisions.
+
+The skill is enabled locally for both assistants. Read the active copy at
+`~/.claude/skills/page-cro/SKILL.md` (Claude) or
+`~/.codex/skills/page-cro/SKILL.md` (Codex), including its referenced resources
+when relevant. These are contributor-local tools, not files shipped with Saiph.
+If the skill is unavailable on another machine, report that and follow the
+conversion rules in this document; do not silently substitute a general app-UX
+review as a measure of marketing effectiveness.
+
+- Identify the page's conversion goal, audience and known traffic context first.
+  Use existing product context and evidence; label unknowns and assumptions.
+- Preserve one clear primary action: **Start your free trial** while trials are
+  available, with **Buy now** secondary. Retain the owner's product demonstration,
+  transparent pricing and required trust/legal information.
+- Use the same compact header (Features, Self-host, Account) across pages. The
+  footer has Downloads, Self-host, Privacy & terms, Contact and Cookie settings.
+  Privacy & terms is one tabbed document home; old legal URLs remain compatible.
+  Keep launch updates and GitHub in relevant download/self-host content instead
+  of adding them back to global navigation.
+- Keep setup, device pairing and troubleshooting instructions in the account
+  guide and apps. Adding another section, destination or competing action to the
+  landing page needs a specific conversion rationale.
+- Use **Copywriting** for focused message/CTA work and **Impeccable** for visual
+  hierarchy, readability, responsiveness and accessibility. Page-CRO leads the
+  marketing decision; an aesthetic or app-usability score is not a conversion
+  result.
+- Separate observed defects from hypotheses. Explain how each proposed change
+  helps the next action, and assess experiments using completed trials and paying
+  customers per landing visit as described below. Do not claim that fewer
+  elements always increase sales or infer a lift from a screenshot or test pass.
+
 ## 1. What the research says
+
+### Current offer — owner decision, 27 October 2026
+
+New signups use a **14-day trial with a card required**, followed by **€9.99/month
+unless cancelled before the trial ends**. This supersedes the no-card / 30-day
+decision and historical implementation notes below. Preserve the single primary
+trial button. Owner layout clarification: show the demonstration first, then the
+trial button, with only “14 days free, then €9.99/month.” beneath it. Explain the
+card requirement, automatic billing and cancellation on `/trial` before sign-in
+and again in Stripe Checkout. Do not describe this offer as “no card needed,”
+“nothing charged automatically,” or a trial that merely pauses.
+
+The journey is landing → `/trial` → Google → Stripe Checkout → signed webhook →
+Cloud access. Stripe collects the card and shows the billing date and recurring
+price. Earlier no-card trials retain their dates and terms. Live activation
+requires the release prerequisites in `docs/CARD_REQUIRED_TRIAL.md`; a local
+preview or passing tests does not verify reminder delivery or live cancellation.
+Measure completed trials and subsequent paying customers per landing visit.
+Requiring a card is the owner's offer decision, not a proven conversion lift.
 
 ### Minimal pages, one call to action
 
@@ -144,24 +201,37 @@ was available, that is said next to it.
 
 ## 2. Design rules for usesaiph.com
 
+2026-10-27 clarification: preserve the compact conversion page during product
+onboarding reviews. Installation, device approval and troubleshooting instructions
+belong in the account setup guide and apps. Do not add a competing setup action
+beside the trial CTA or a full setup section to the landing page without a
+specific conversion hypothesis. Keep the owner's product demonstration. Use
+“no server to run” for the setup reassurance; the apps still require installation
+and explicit device approval. Evaluate marketing changes against completed
+trials and paying customers per landing visit, not a general app-usability score.
+
 1. **One product on the landing page: Saiph Cloud.** Self-hosting and downloads
    get one quiet text link. Downloads live on `self-host.html` and
    `downloads.html` only.
 2. **Say what it is in three lines or fewer**, above the price: what it connects,
-   that it's end-to-end encrypted, that there is nothing to set up.
+   that it's end-to-end encrypted, that there is no server to run.
 3. **Prices on the first screen, as the total.** Reuse the Cloud page's two-plan
    box. "€9.99 a month" and "€89.99 a year", no VAT added (the trader is not VAT
    registered, `terms.html`), no "from" prices.
 4. **One primary button.** While free trials run it is **Start your free
-   trial** (30 days, no card), with the price box and a quieter **Buy now** right
+   trial** (14 days, card required), with the price box and a quieter **Buy now** right
    under it; with trials off, **Buy now** is the primary button. The two plan
    cards pick the plan (a radio group); Buy now carries that plan. Monthly is preselected: the smallest
    first payment for a beta product, and no default nudging towards the larger
    one. Yearly keeps its "Save about 25%" label.
 5. **Reassurance next to the button, not in a dialog:** sign in with Google, pay
    with Stripe, cancel any time, 14 days to withdraw for a full refund.
-6. **Navigation is the logo, Self-host and Account.** The demo animation and the
-   comparison table move to the Cloud page (`hosted.html`), one link away.
+6. **Navigation is the logo, Features, Self-host, Download and Account.** The demo
+   animation and the comparison table move to the Cloud page (`hosted.html`), one
+   link away. Download (owner decision, 28 October 2026) is a quiet text link, never
+   a second filled button: downloads are free, and the apps ask for a Saiph Cloud
+   sign-in or Self-hosted on first launch. On Windows, once a release is published,
+   it fetches the installer directly; elsewhere it opens `downloads.html`.
 7. **No pre-sign-in dialog for buying or the trial.** The account site's own sign-in screen
    shows the order (plan and total price) and one "Continue with Google" button,
    with one line on why. The website dialog stays only for the download buttons,
@@ -190,7 +260,9 @@ was available, that is said next to it.
     the stricter alternative is a second, separate choice. Plan the sample size
     first, don't stop early, and check the split.
 
-### Decision: "Start your free trial" first, "Buy now" beside it
+### Historical decision (19 October): "Start your free trial" first, "Buy now" beside it
+
+The 27 October card-required offer above supersedes this offer and journey.
 
 Updated 19 October 2026, after the owner switched on a **30-day free trial with
 no card** (`SAIPH_TRIAL_DAYS=30`). The first version of this page made Buy now the

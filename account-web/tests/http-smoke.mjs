@@ -115,6 +115,30 @@ try {
  const trialOff=await request("/trial");assert.equal(trialOff.status,200);
  const trialHtml=await trialOff.text();assert.match(trialHtml,/Free trials are not available right now/);assert.match(trialHtml,/href="\/buy\/monthly"/);
  checks.push({case:"trial page with trials off offers the plans",status:200});
+ // Account deletion (Google Play): public, drawn without navigation, and every link
+ // on it stays on the deletion path; a spoofed layout header changes nothing elsewhere.
+ const hrefs=(html)=>[...html.matchAll(/<a [^>]*href="([^"]+)"/g)].map(match=>match[1]);
+ const deletionOut=await request("/account/delete");assert.equal(deletionOut.status,200);
+ const deletionOutHtml=await deletionOut.text();
+ assert.match(deletionOutHtml,/What gets deleted/);assert.match(deletionOutHtml,/Sign in to continue/);
+ assert.deepEqual(hrefs(deletionOutHtml).sort(),["#main","/account/delete/sign-in"]);
+ assert.equal(/Main navigation|\/buy\/|€|usesaiph\.com\/hosted/.test(deletionOutHtml),false);
+ checks.push({case:"deletion page signed out explains and links only to its sign-in",status:200});
+ for(const [label,cookie,expected] of [["owner, storage unavailable",ownerCookie,/We could not check your account just now/],["not permitted",otherCookie,/This sign-in cannot use the request form/]]) {
+  const r=await request("/account/delete",cookie);assert.equal(r.status,200,label);const html=await r.text();
+  assert.match(html,expected,label);assert.deepEqual(hrefs(html),["#main"],label);checks.push({case:"deletion page "+label,status:200});
+ }
+ for(const [path,cookie,status,location] of [["/account/delete/sign-in?returnTo=https://evil.test",undefined,400],["/account/delete/sign-in",ownerCookie,307,"https://account.saiph.test/account/delete"]]) {
+  const r=await request(path,cookie);assert.equal(r.status,status,path);if(location)assert.equal(r.headers.get("location"),location,path);
+  checks.push({case:path+(cookie?" signed in":""),status:r.status});
+ }
+ for(const [label,cookie,status,headers] of [["absent",undefined,307,{}],["non-owner",otherCookie,403,{origin:"https://account.saiph.test"}],["owner wrong origin",ownerCookie,403,{origin:"https://evil.test"}],
+  ["owner, storage unavailable",ownerCookie,503,{origin:"https://account.saiph.test","content-type":"application/x-www-form-urlencoded"}]]) {
+  const r=await request("/api/account/delete",cookie,"POST",headers,"confirm=delete");assert.equal(r.status,status,label);assert.match(r.headers.get("cache-control"),/no-store/);
+  checks.push({case:"deletion request "+label,status:r.status});
+ }
+ const spoofed=await request("/account",ownerCookie,"GET",{"x-saiph-chrome":"plain"});assert.equal(spoofed.status,200);assert.match(await spoofed.text(),/Main navigation/);
+ checks.push({case:"layout header cannot be spoofed",status:200});
  console.log(JSON.stringify({checks,scope:"Actual Next.js production HTTP + official SDK encrypted synthetic sessions; no real provider login"},null,2));
 } finally {
  child.kill();await Promise.race([once(child,"exit"),delay(3000)]);

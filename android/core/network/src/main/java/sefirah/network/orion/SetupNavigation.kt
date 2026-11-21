@@ -12,7 +12,7 @@ object SetupNavigation {
         else -> "home"
     }
     fun back(current: String): String? = when (current) {
-        "setup", "settings" -> "home"
+        "setup", "settings", "inbox" -> "home"
         "advanced" -> "settings"
         else -> null
     }

@@ -278,6 +278,7 @@ def hosted(tmp_path, monkeypatch):
     controller.configure(CONFIG)
     controller.set_enabled(True)
     monkeypatch.setattr(controller, "_token", lambda: "synthetic-access")
+    monkeypatch.setattr(controller, "wake_addresses", lambda: [])  # This test machine's adapters stay out of it.
     root = trust_root_code(controller.setup_root()["code"], trusted_out_of_band=True)
     device = "dev_" + uuid4().hex
     signing, encryption = ec.generate_private_key(ec.SECP256R1()), generate_recipient()
@@ -1191,3 +1192,138 @@ def test_mms_and_group_features_end_with_the_texts_capability(hosted):
     h.send({"type": "phone.capabilities", "capabilities": ["files"]})
     capabilities = h.controller.phones()[0]["capabilities"]
     assert "sms-mms" not in capabilities and "sms-group" not in capabilities and "notification-actions" in capabilities
+
+
+class RemoteControls:
+    wayland = False
+
+    def __init__(self):
+        self.calls = []
+
+    def available(self, adapter):
+        return True
+
+    def foreground(self):
+        return ""
+
+    def lock(self):
+        self.calls.append("lock")
+
+
+def test_ring_and_phone_remote_work_over_cloud_with_the_same_allow_list(hosted):
+    from orion_mini.remote import Remote
+    h = hosted
+    h.send({"type": "phone.capabilities", "capabilities": ["files"]})  # Now a known phone.
+    h.received()
+    rings, controls = [], RemoteControls()
+    h.profile.ring_requested = rings.append
+    # Cloud answers through its mailbox, never the Hub link.
+    h.profile.remote = Remote(h.profile, lambda event: pytest.fail("Cloud remote replied over the Hub link"), controls)
+    h.send({"type": "computer.ring"})
+    assert rings == ["Synthetic phone"]
+    # Not on this computer's Phone remote list: a refusal, and nothing locks.
+    h.send({"type": "remote.command", "app": "system", "control": "lock"})
+    [refusal] = h.received()
+    assert refusal["type"] == "remote.result" and refusal["ok"] is False and "Allow this phone" in refusal["message"]
+    h.profile.settings["link"] = {"remote": {"enabled": True, "devices": [h.device], "adapters": {"system": True}}}
+    h.send({"type": "remote.catalog.request"})
+    [catalog] = h.received()
+    assert catalog["type"] == "remote.catalog" and "system" in [app["id"] for app in catalog["apps"]]
+    h.send({"type": "remote.command", "app": "system", "control": "lock"})
+    assert controls.calls == ["lock"]
+    assert h.received() == [{"type": "remote.result", "app": "system", "control": "lock", "ok": True, "message": ""}]
+    # Ring can be turned off; a request with extra fields is ignored.
+    h.profile.settings["link"]["ring_computer"] = False
+    h.send({"type": "computer.ring"})
+    h.profile.settings["link"]["ring_computer"] = True
+    h.send({"type": "computer.ring", "loud": True})
+    assert rings == ["Synthetic phone"]
+
+
+def test_a_phone_on_the_same_network_gets_a_direct_remote_invitation_and_the_mailbox_speeds_up(hosted):
+    from orion_mini.remote import Remote
+    from orion_mini.remote_lan import RemoteLan
+    h = hosted
+    h.send({"type": "phone.capabilities", "capabilities": ["files"]})
+    h.received()
+    remote = Remote(h.profile, lambda event: None, RemoteControls())
+    remote.lan = RemoteLan(remote, addresses=lambda: ["192.168.1.7"])
+    h.profile.remote = remote
+    try:
+        # Not on the Phone remote list: no invitation, only the later refusal of a command.
+        h.send({"type": "remote.lan.request"})
+        assert h.received() == []
+        h.profile.settings["link"] = {"remote": {"enabled": True, "devices": [h.device], "adapters": {"touchpad": True}}}
+        assert not h.controller._remote_hot()
+        h.send({"type": "remote.lan.request"})
+        [offer] = h.received()
+        assert offer["type"] == "remote.lan" and set(offer) == {"type", "session", "addresses", "port", "certificate", "secret", "expires"}
+        assert h.controller._remote_hot() and h.controller._remote_ready()
+        h.send({"type": "remote.lan.request", "extra": 1})  # Extra fields are ignored.
+        assert h.received() == []
+    finally:
+        remote.lan.close()
+
+
+def test_only_phones_may_ring_or_control_over_cloud(hosted):
+    from orion_mini.remote import Remote
+    h = hosted
+    rings, controls = [], RemoteControls()
+    h.profile.ring_requested = rings.append
+    h.profile.remote = Remote(h.profile, lambda event: None, controls)
+    h.profile.settings["link"] = {"remote": {"enabled": True, "devices": [h.device], "adapters": {"system": True}}}
+    # The laptop has never said it is a phone, and the phone has not either yet.
+    h.send({"type": "computer.ring"}, source=h.laptop)
+    h.send({"type": "remote.command", "app": "system", "control": "lock"})
+    assert rings == [] and controls.calls == []
+
+
+def test_a_cloud_phone_asks_to_be_the_webcam_and_this_computer_decides(hosted):
+    h = hosted
+    asks = []
+    h.profile.camera_requested = lambda device, name: asks.append((device, name))
+    h.send({"type": "camera.request"}, source=h.laptop)  # Not known as a phone: ignored.
+    h.send({"type": "phone.capabilities", "capabilities": ["files"]})
+    h.received()
+    h.send({"type": "camera.request"})
+    assert asks == [(h.device, "Synthetic phone")]
+    assert h.received() == []  # The answer is the camera offer itself, sent only after Accept.
+    # Phone camera switched off here: nothing is asked, and the phone is told at once.
+    h.profile.settings["link"] = {"camera": {"enabled": False}}
+    h.send({"type": "camera.request"})
+    assert asks == [(h.device, "Synthetic phone")]
+    assert [item["type"] for item in h.received()] == ["camera.off"]
+    # A request with extra fields is ignored either way.
+    h.send({"type": "camera.request", "resolution": "1080p"})
+    h.profile.settings["link"] = {}
+    h.send({"type": "camera.request", "resolution": "1080p"})
+    assert asks == [(h.device, "Synthetic phone")] and h.received() == []
+
+
+def test_wake_addresses_need_no_qt_and_skip_virtual_adapters(hosted, monkeypatch):
+    import socket
+    from types import SimpleNamespace as Entry
+    import psutil
+    def adapter(ip, mac):
+        return [Entry(family=socket.AF_INET, address=ip), Entry(family=psutil.AF_LINK, address=mac)]
+    adapters = {"Ethernet": adapter("192.168.1.5", "AA-BB-CC-DD-EE-01"), "vEthernet (WSL)": adapter("172.20.0.1", "AA-BB-CC-DD-EE-02"),
+                "Wi-Fi": adapter("8.8.8.8", "AA-BB-CC-DD-EE-03"), "Down": adapter("192.168.1.6", "AA-BB-CC-DD-EE-04")}
+    monkeypatch.setattr(psutil, "net_if_addrs", lambda: adapters)
+    monkeypatch.setattr(psutil, "net_if_stats", lambda: {name: Entry(isup=name != "Down") for name in adapters})
+    assert type(hosted.controller).wake_addresses(hosted.controller) == ["AA-BB-CC-DD-EE-01"]  # Private, up and not virtual.
+
+
+def test_a_cloud_phone_learns_how_to_wake_this_computer(hosted, monkeypatch):
+    h = hosted
+    monkeypatch.setattr(h.controller, "wake_addresses", lambda: ["AA-BB-CC-DD-EE-01", "00:00:00:00:00:00", "aa:bb:cc:dd:ee:01", "not a mac"])
+    h.send({"type": "phone.capabilities", "capabilities": ["files"]})
+    assert h.received() == [{"type": "phone.subscribe", "label": "Synthetic desk"},
+                            {"type": "computer.wake", "addresses": ["aa:bb:cc:dd:ee:01"]}]
+
+
+def test_wake_payload_keeps_only_real_adapter_addresses():
+    from orion_mini.hosted_features import FeatureError, wake_payload
+    assert wake_payload(["01:02:03:04:05:0" + str(n) for n in range(6)])["addresses"] == ["01:02:03:04:05:0" + str(n) for n in range(4)]
+    for bad in ([], ["00:00:00:00:00:00"], [None], "aa:bb:cc:dd:ee:ff"):
+        with pytest.raises(FeatureError):
+            wake_payload(bad)

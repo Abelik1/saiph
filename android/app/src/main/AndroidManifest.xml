@@ -93,7 +93,7 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="usesaiph.com" android:path="/android/oauth2redirect" />
+                <data android:scheme="https" android:host="usesaiph.com" android:path="${authRedirectPath}" />
             </intent-filter>
         </activity>
         <service android:name="com.orionmini.mobile.HostedSyncService" android:exported="false" android:foregroundServiceType="dataSync" />

@@ -10,5 +10,17 @@
         "D1:9D:59:43:BD:0E:E8:27:E2:C5:4F:30:6F:9C:10:EF:F3:7A:BC:FC:E9:B8:3B:F6:77:38:7C:52:3C:50:2B:54"
       ]
     }
+  },
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.orionmini.mobile.unlocked",
+      "sha256_cert_fingerprints": [
+        "A5:6A:ED:EF:9D:20:DC:07:EF:AE:BC:5D:7F:EB:22:20:BB:06:6F:00:EA:ED:A7:0A:BA:BD:90:CB:FC:1D:E5:AD"
+      ]
+    }
   }
 ]

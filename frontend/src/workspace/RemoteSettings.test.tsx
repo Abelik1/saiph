@@ -23,6 +23,24 @@ describe("Phone remote settings", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save remote preferences" }));
     await waitFor(() => expect(call).toHaveBeenCalledWith("settings.save", { link: { remote: { enabled: true, devices: ["phone"], adapters: { media: true, system: true, keyboard: false } } } }));
   });
+  it("lists Saiph Cloud phones too, but never this computer or other computers", () => {
+    const cloud = { ...state, phone: undefined, hosted: { roster: { members: [
+      { id: "cloud-phone", label: "Pixel 8", root: false, kind: "phone", fingerprint: "" },
+      { id: "laptop", label: "Laptop", root: true, kind: "computer", fingerprint: "" },
+      { id: "self", label: "This computer", root: false, self: true, kind: "computer", fingerprint: "" }] } } } as unknown as State;
+    render(<RemoteSettings remote={remote} state={cloud} client={{ call: vi.fn() } as unknown as Client} />);
+    expect(screen.getByLabelText("Pixel 8")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Laptop")).toBeNull();
+    expect(screen.queryByLabelText("This computer")).toBeNull();
+  });
+  it("lists a phone once when the Phone page and the Cloud roster both have it", () => {
+    const both = { ...state, hosted: { roster: { members: [
+      { id: "phone", label: "Galaxy A55", root: false, kind: "phone", fingerprint: "" },
+      { id: "cloud-phone", label: "Pixel 8", root: false, kind: "phone", fingerprint: "" }] } } } as unknown as State;
+    render(<RemoteSettings remote={remote} state={both} client={{ call: vi.fn() } as unknown as Client} />);
+    expect(screen.getAllByLabelText("Galaxy A55")).toHaveLength(1);
+    expect(screen.getAllByLabelText("Pixel 8")).toHaveLength(1);
+  });
   it("explains Wayland limits", () => {
     render(<RemoteSettings remote={{ ...remote, wayland: true }} state={state} client={{ call: vi.fn() } as unknown as Client} />);
     expect(screen.getByText(/Wayland does not let apps send keys/)).toBeVisible();

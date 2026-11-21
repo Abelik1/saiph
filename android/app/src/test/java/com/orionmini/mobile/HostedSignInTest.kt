@@ -6,7 +6,7 @@ import org.junit.Test
 
 class HostedSignInTest {
     @Test fun googleRoutingPreservesTheSaiphAudience() {
-        assertEquals(mapOf("audience" to "https://synthetic.invalid/api", "connection" to "google-oauth2"),
+        assertEquals(mapOf("audience" to "https://synthetic.invalid/api", "connection" to "google-oauth2", "prompt" to "select_account"),
             HostedSignIn.parameters("https://synthetic.eu.auth0.com/", "https://synthetic.invalid/api"))
     }
     @Test fun existingAccountsCanKeepTheirOriginalSignInMethod() {

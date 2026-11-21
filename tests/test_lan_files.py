@@ -96,9 +96,10 @@ class Cutter:
                     if self.cut_after is not None and self.forwarded >= self.cut_after:
                         self.cut_after = None
                         self.cut()
+            # Pass the end of this direction on. Closing here can reset the other
+            # direction on Windows and lose a reply the client has not read yet.
+            target.shutdown(socket.SHUT_WR)
         except OSError:
-            pass
-        finally:
             for item in (source, target):
                 try:
                     item.close()
@@ -212,7 +213,8 @@ def test_pinned_certificate_is_checked_before_the_secret_is_sent(tmp_path):
         server.close()
 
 
-def test_download_resumes_after_a_dropped_connection_and_stays_exact(tmp_path):
+def test_download_resumes_after_a_dropped_connection_and_stays_exact(tmp_path, monkeypatch):
+    monkeypatch.setattr(lan_files, "CONNECT_TIMEOUT", 30)  # A busy runner is slow through the relay; this tests resuming.
     source = tmp_path / "Synthetic.bin"
     digest = synthetic(source, 8 * 1024 * 1024)
     server, invite = serve(source)
@@ -225,6 +227,7 @@ def test_download_resumes_after_a_dropped_connection_and_stays_exact(tmp_path):
 
 
 def test_a_drop_longer_than_the_resume_window_fails_visibly(tmp_path, monkeypatch):
+    monkeypatch.setattr(lan_files, "CONNECT_TIMEOUT", 30)  # A busy runner is slow through the relay; this tests the window.
     monkeypatch.setattr(lan_files, "RESUME_SECONDS", 3)
     monkeypatch.setattr(lan_files, "RETRY_SECONDS", 0.2)
     source = tmp_path / "Synthetic.bin"

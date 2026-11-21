@@ -29,11 +29,9 @@
       Saiph
     </a>
     <nav class="nav-links" aria-label="Main">
-      <a class="hide-sm" href="hosted.html#features">Demo</a>
-      <a class="download-nav" href="downloads.html">Download</a>
+      <a class="hide-sm" href="hosted.html">Features</a>
       <a class="hide-sm" href="self-host.html">Self-host</a>
-      <a class="hide-sm" href="hosted.html">Cloud</a>
-      <a class="hide-sm" data-link="github" href="#">GitHub</a>
+      <a class="download-nav" href="downloads.html">Download</a>
       <a class="account-nav" data-link="account" href="#" aria-label="Account: sign in or open your dashboard">Account</a>
     </nav>
   </div>
@@ -44,16 +42,21 @@
 <h1>Download <em>Saiph.</em></h1>
 <p class="lede" data-release-status>Installers are coming soon.</p>
 <div class="callout info" data-beta-access hidden><strong>Your Saiph account:</strong> with a Saiph Cloud subscription or an invitation code, installers, matching source archives, licences and checksums are in your account downloads. Windows installers don't yet have a trusted publisher signature, so check the supplied checksum before installing. <a class="btn" data-link="beta-account">Open your account</a></div>
-<div class="grid c2" style="margin-top:28px"><a class="card dl" data-download="windows"><h2>Windows</h2><span class="go">Download installer</span></a><a class="card dl" data-download="linux"><h2>Linux</h2><span class="go">Download desktop archive</span></a><a class="card dl" data-link="android-beta" rel="noreferrer"><h2>Android</h2><span class="muted">Beta &middot; automatic updates</span><span class="go">Install via Firebase &rarr;</span></a><a class="card dl" data-download="server"><h2>Self-hosted Hub</h2><span class="go">Download server archive</span></a></div>
-<p class="download-note muted" data-android-beta hidden>Android installs through Firebase. Google asks for your email.</p>
-<p><a class="btn" data-download="android">Standalone Android APK</a></p>
+<h2>Computer</h2>
+<div class="grid c2"><a class="card dl" data-download="windows"><h3>Windows</h3><span class="go">Download installer</span></a><a class="card dl" data-download="linux"><h3>Linux</h3><span class="go">Download desktop archive</span></a></div>
+<h2>Android</h2>
+<div class="grid c2"><a class="card dl" data-link="android-play" rel="noreferrer"><h3>Google Play</h3><span class="muted">The easy way. Installs and updates like any other app.</span><span class="go">Get it on Google Play</span></a><a class="card dl" data-download="android"><h3>Android, fully unlocked</h3><span class="muted">Every feature, including sending each copy to your computer automatically.</span><span class="go">Download the APK</span></a></div>
+<p class="download-note muted">The unlocked version takes a few extra steps because Android treats apps from outside Google Play with more caution. <a href="install-android.html">Read the installation guide</a>.</p>
+<p class="download-note muted" data-android-beta hidden>Testing the Android beta? <a data-link="android-beta" rel="noreferrer">Install it through Firebase</a>. Google asks for your email.</p>
+<h2>Your own server</h2>
+<div class="grid c2"><a class="card dl" data-download="server"><h3>Self-hosted Hub</h3><span class="go">Download server archive</span></a></div>
 <div data-release-details hidden><h2>Check your download</h2><p>Version: <strong data-release-tag></strong>. Exact source: <code data-release-commit></code>.</p><div class="btn-row"><a class="btn" data-link="checksums">SHA256SUMS</a><a class="btn" data-link="source-metadata">Source and file metadata</a><a class="btn" data-link="release-source">Exact source revision</a><a class="btn" data-link="releases">Release notes</a></div>
 <p>Compare your file with its line in SHA256SUMS:</p><pre><code># Windows PowerShell
 Get-FileHash -Algorithm SHA256 ./downloaded-file
 
 # Linux
 sha256sum ./downloaded-file</code></pre><p class="muted">A checksum proves the file wasn't changed, not who published it. Don't skip signature warnings.</p></div>
-<h2>Before upgrading</h2><p>Back up your Saiph data and read the release notes.</p><p><a href="waitlist.html">Launch updates</a> · <a href="self-host.html">Self-hosting guide</a> · <a href="privacy.html">Website privacy</a></p>
+<h2>Before upgrading</h2><p>Back up your Saiph data and read the release notes.</p><p><a href="waitlist.html">Launch updates</a> · <a href="self-host.html">Self-hosting guide</a> · <a href="privacy.html#website">Website privacy</a></p>
 </div></section>
 </main>
 
@@ -63,17 +66,10 @@ sha256sum ./downloaded-file</code></pre><p class="muted">A checksum proves the f
       <strong style="color:var(--text)">Saiph</strong> · © <span data-year>2026</span> Crios
     </div>
     <nav aria-label="Footer">
-      <a href="hosted.html#features">Demo</a>
-      <a href="downloads.html">Download</a>
+      <a href="downloads.html">Downloads</a>
       <a href="self-host.html">Self-host</a>
-      <a href="hosted.html">Cloud</a>
-      <a href="privacy.html">Privacy</a>
-      <a href="account-privacy.html">Account privacy</a>
-      <a href="terms.html">Terms</a>
-      <a href="refunds.html">Refunds</a>
+      <a href="privacy.html">Privacy &amp; terms</a>
       <a href="contact.html">Contact</a>
-      <a href="waitlist.html">Launch updates</a>
-      <a data-link="github" href="#">GitHub</a>
       <button type="button" class="link-button" data-consent-open hidden>Cookie settings</button>
     </nav>
   </div>

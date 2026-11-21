@@ -23,7 +23,8 @@ def set_start_with_windows(enabled: bool) -> None:
 
 
 def startup_command() -> str:
-    executable = Path(sys.executable)
+    from .paths import desktop_executable
+    executable = desktop_executable() if getattr(sys, 'frozen', False) else Path(sys.executable).resolve()
     if getattr(sys, "frozen", False):
         # Older updaters relaunch through the OrionMini.exe compatibility copy; the
         # installer's shortcuts and startup entry name Saiph.exe beside it.

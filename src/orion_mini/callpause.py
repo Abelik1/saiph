@@ -12,12 +12,13 @@ import os
 import shutil
 import subprocess
 import sys
+from . import child_process
 
 NO_WINDOW = {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}
 
 
 class Playerctl:
-    def __init__(self, runner=subprocess.run):
+    def __init__(self, runner=child_process.run):
         self.runner = runner
 
     def available(self):

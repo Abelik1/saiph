@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import sys
 import time
+from . import child_process
 
 MAC = re.compile(r"(?:[0-9A-F]{2}:){5}[0-9A-F]{2}")
 DEFAULT_SECONDS = 30
@@ -30,7 +31,7 @@ def validate_options(options):
 
 
 class BluetoothLock:
-    def __init__(self, settings, *, runner=subprocess.run, clock=time.monotonic):
+    def __init__(self, settings, *, runner=child_process.run, clock=time.monotonic):
         self.settings, self.runner, self.clock = settings, runner, clock
         self.seen = False        # The phone has been connected since start or the last lock.
         self.gone_since = None

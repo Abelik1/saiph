@@ -196,7 +196,7 @@ class SaiphWidgetRefresh : BroadcastReceiver() {
             SaiphControls.RING -> {
                 val computer = intent.getStringExtra(SaiphControls.EXTRA_COMPUTER)
                 val link = EntryPointAccessors.fromApplication(context, SaiphWidgetEntryPoint::class.java).link()
-                val sent = computer != null && OrionComputers.ring(link, computer)
+                val sent = computer != null && OrionComputers.ring(context, link, computer)
                 Toast.makeText(context, if (sent) "Ringing your computer…" else "Saiph is reconnecting. Nothing was sent.", Toast.LENGTH_SHORT).show()
             }
         }
