@@ -60,6 +60,7 @@ def main():
     parser.add_argument('--workpath', default='build')
     parser.add_argument('--profile', choices=['link', 'workspace'], default='link',
                         help='Link is the default; personal Workspace is an explicit separate build.')
+    parser.add_argument('--shell', choices=['electron', 'qt'], help='Link defaults to Electron; Qt remains for private Workspace compatibility.')
     parser.add_argument('--workspace-source', type=Path,
                         help='Checkout of the private Workspace add-on (orion_workspace); required for --profile workspace.')
     parser.add_argument('--version', default='0.1.0-unified.2')
@@ -67,6 +68,16 @@ def main():
     parser.add_argument('--hosted-config', type=Path, help='Explicit public deployment defaults; never contains secrets or enables Hosted')
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
+    if args.profile == 'link' and args.shell != 'qt':
+        if args.workspace_source:
+            parser.error('--workspace-source is only used with --profile workspace.')
+        command = [sys.executable, str(root / 'scripts/build-electron.py'), '--distpath', args.distpath,
+                   '--workpath', args.workpath, '--version', args.version, '--build-number', str(args.build_number)]
+        if args.hosted_config:
+            command += ['--hosted-config', str(args.hosted_config)]
+        return subprocess.run(command, cwd=root, check=True).returncode
+    if args.profile == 'workspace' and args.shell == 'electron':
+        parser.error('The external private Workspace add-on still uses its separate Qt build contract.')
     hosted_configuration = None
     if args.hosted_config:
         sys.path.insert(0, str(root / 'src'))
@@ -160,7 +171,7 @@ def main():
     # Linux slim hosts may lack /usr/share/zoneinfo. PyInstaller's zoneinfo
     # hook enables tzdata only on Windows, so include our declared fallback on
     # both platforms; its upstream hook collects package/resource directories.
-    command += ['--hidden-import', 'tzdata', '--hidden-import','desktop_notifier.resources',str(root / 'run_orion_mini.py')]
+    command += ['--hidden-import', 'tzdata', '--hidden-import','desktop_notifier.resources',str(root / 'run_qt_desktop.py')]
     if os.name == 'nt':
         from native_origins import windows_native_environment
         environment, trusted_native_roots = windows_native_environment(environment)

@@ -29,6 +29,20 @@ def test_only_the_project_executable_may_change(pair):
     assert bundles.check(*pair) == {'files': 2, 'signed': ['Saiph.exe']}
 
 
+def test_electron_requires_service_signature_without_allowing_dependency_changes(pair):
+    import json
+    unsigned, signed = pair
+    for root in pair:
+        (root / 'resources/service').mkdir(parents=True)
+        (root / 'resources/service/SaiphService.exe').write_bytes(b'MZ synthetic service')
+        (root / '_internal/desktop-runtime.json').write_text(json.dumps({'runtime': 'electron', 'service': 'resources/service/SaiphService.exe'}))
+    with pytest.raises(ValueError, match='SaiphService.exe was not signed'):
+        bundles.check(*pair)
+    with (signed / 'resources/service/SaiphService.exe').open('ab') as stream:
+        stream.write(b'synthetic certificate')
+    assert bundles.check(*pair)['signed'] == ['Saiph.exe', 'resources/service/SaiphService.exe']
+
+
 def test_unsigned_executable_is_rejected(pair):
     unsigned, signed = pair
     shutil.copyfile(unsigned / 'Saiph.exe', signed / 'Saiph.exe')

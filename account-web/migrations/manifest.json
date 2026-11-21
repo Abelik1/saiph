@@ -28,5 +28,15 @@
     "version": 6,
     "file": "0006_funnel_counts.sql",
     "sha256": "8cd1f424bc238878388176cf682231193941df3ed7b196e83e60d3361fd12d41"
+  },
+  {
+    "version": 7,
+    "file": "0007_card_trial_claims.sql",
+    "sha256": "ad2898554dff57924184a7f580edd1ec095fef8df936ff736bdd538a5203bd52"
+  },
+  {
+    "version": 8,
+    "file": "0008_deletion_requests.sql",
+    "sha256": "9b343b91b180ec000d47e15eb9492c4e330deb781c1e80603181ff7a0e935155"
   }
 ]

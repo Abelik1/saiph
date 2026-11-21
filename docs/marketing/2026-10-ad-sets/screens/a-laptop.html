@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Set A laptop screen</title>
+<!-- The laptop's screen for Set A, as a function of time. Saiph's own windows are real
+     captures from the design preview (build/ad-sets/ui); the browser, the mirror window,
+     the video call, the cursor and notification cards are generic stand-ins. The mirror
+     window embeds a-phone.html on the same clock, so it matches the phone on the desk.
+     The call's camera picture is a hand-drawn stick figure waving at the camera. -->
+<style>
+  :root { --cyan: #22d3ee; --violet: #a78bfa; --ink: #e7edf4; --muted: #94a3b8; }
+  html, body { margin: 0; width: 1920px; height: 1200px; overflow: hidden; background: #050a14; font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; color: var(--ink); }
+  .layer { position: absolute; inset: 0; }
+  img.app { position: absolute; inset: 0 0 56px 0; width: 1920px; height: 1144px; object-fit: cover; object-position: top; }
+  .taskbar { position: absolute; left: 0; right: 0; bottom: 0; height: 56px; background: rgba(10, 16, 28, .92); border-top: 1px solid #1c2738; display: flex; align-items: center; justify-content: center; gap: 18px; }
+  .taskbar i { width: 30px; height: 30px; border-radius: 8px; background: #1d2a40; display: block; }
+  .taskbar i.saiph { background: linear-gradient(135deg, var(--cyan), var(--violet)); }
+  .clock { position: absolute; right: 26px; top: 10px; font-size: 18px; line-height: 1.2; text-align: right; color: #cbd5e1; }
+  .win { position: absolute; border-radius: 16px; overflow: hidden; background: #f6f7f9; color: #0f172a; box-shadow: 0 30px 80px rgba(0,0,0,.55); border: 1px solid #c8ced8; }
+  .bar { height: 54px; background: #e7eaf0; display: flex; align-items: center; gap: 14px; padding: 0 20px; font-size: 19px; color: #334155; border-bottom: 1px solid #d3d8e0; }
+  .dots { display: flex; gap: 9px; } .dots b { width: 14px; height: 14px; border-radius: 50%; background: #c3c9d3; display: block; }
+  .url { flex: 1; height: 34px; border-radius: 17px; background: #fff; display: flex; align-items: center; padding: 0 16px; font-size: 18px; color: #475569; }
+  .login { display: grid; justify-items: center; gap: 22px; padding-top: 70px; }
+  .brand { font-size: 30px; font-weight: 700; letter-spacing: -.02em; color: #0b3b5a; }
+  .login h1 { margin: 6px 0 0; font-size: 46px; letter-spacing: -.02em; }
+  .login p { margin: 0; font-size: 24px; color: #475569; }
+  .digits { display: flex; gap: 16px; margin-top: 10px; }
+  .digits span { width: 74px; height: 92px; border-radius: 14px; border: 2px solid #cbd5e1; background: #fff; display: grid; place-items: center; font-size: 46px; font-weight: 600; }
+  .digits span.on { border-color: #0ea5e9; box-shadow: 0 0 0 4px #bae6fd; }
+  .btn { margin-top: 12px; width: 520px; height: 70px; border-radius: 14px; background: #0b3b5a; color: #fff; font-size: 26px; font-weight: 600; display: grid; place-items: center; }
+  .ok { font-size: 30px; font-weight: 600; color: #047857; }
+  .toast { position: absolute; right: 30px; width: 640px; border-radius: 18px; background: rgba(15, 23, 38, .97); border: 1px solid #2a3b58; box-shadow: 0 24px 60px rgba(0,0,0,.6), 0 0 0 1px rgba(34,211,238,.15); padding: 22px 26px; color: var(--ink); }
+  .toast .head { display: flex; align-items: center; gap: 12px; font-size: 20px; color: var(--muted); }
+  .toast .head svg { width: 30px; height: 30px; }
+  .toast h3 { margin: 12px 0 4px; font-size: 28px; }
+  .toast p { margin: 0; font-size: 24px; color: #cbd5e1; line-height: 1.4; }
+  .toast .code { font-weight: 700; color: #fff; letter-spacing: .04em; }
+  /* The sent reply: the conversation slides up and the new bubble appears under it. */
+  .sent { position: absolute; left: 960px; top: 455px; width: 885px; height: 513px; overflow: hidden; background: #091123; }
+  .sent .clip { position: absolute; left: 0; top: 0; width: 885px; overflow: hidden; }
+  .sent img { position: absolute; left: -960px; width: 1920px; height: 1200px; }
+  .bubble { position: absolute; right: 10px; bottom: 14px; padding: 18px 22px 12px; border-radius: 22px; background: #0c273a; font-size: 27px; color: #e7edf4; text-align: right; }
+  .bubble small { display: block; margin-top: 10px; font-size: 21px; color: #9fb0c3; }
+  .mirror { position: absolute; left: 140px; top: 228px; width: 360px; border-radius: 14px; overflow: hidden; background: #1b2232; box-shadow: 0 30px 80px rgba(0,0,0,.7), 0 0 0 1px #33415a; }
+  .mirror .title { height: 42px; display: flex; align-items: center; justify-content: space-between; padding: 0 14px; font-size: 18px; color: #cbd5e1; }
+  .mirror .frame { width: 360px; height: 788px; overflow: hidden; position: relative; }
+  .mirror iframe { width: 900px; height: 1970px; border: 0; transform: scale(.4); transform-origin: 0 0; pointer-events: none; }
+  .meet { left: 150px; top: 120px; width: 1620px; height: 880px; background: #111827; border-color: #273449; color: #e5e7eb; }
+  .meet .bar { background: #0b1220; color: #cbd5e1; border-bottom-color: #1f2a3c; }
+  .tiles { display: grid; grid-template-columns: 1fr 380px; gap: 16px; padding: 18px; height: 690px; }
+  .feed { position: relative; border-radius: 14px; overflow: hidden; background: radial-gradient(500px 360px at 70% 30%, #7a5a3a, transparent 70%), radial-gradient(600px 400px at 20% 80%, #1e3a4a, transparent 70%), #2a2420; }
+  .feed .person { position: absolute; left: 50%; bottom: 0; width: 600px; transform: translateX(-50%); }
+  .feed .person * { fill: none; stroke: #f5efe6; stroke-width: 13; stroke-linecap: round; stroke-linejoin: round; }
+  .bokeh { position: absolute; border-radius: 50%; background: rgba(255, 214, 160, .28); filter: blur(6px); }
+  .label { position: absolute; left: 16px; bottom: 14px; padding: 8px 14px; border-radius: 10px; background: rgba(0,0,0,.55); font-size: 22px; }
+  .side { display: grid; gap: 16px; }
+  .side div { border-radius: 14px; background: #1f2937; display: grid; place-items: center; font-size: 64px; color: #9ca3af; position: relative; }
+  .controls { display: flex; justify-content: center; gap: 22px; }
+  .controls span { width: 74px; height: 74px; border-radius: 50%; background: #1f2937; display: grid; place-items: center; font-size: 30px; }
+  .cursor { position: absolute; width: 34px; height: 46px; pointer-events: none; filter: drop-shadow(0 3px 4px rgba(0,0,0,.6)); z-index: 20; }
+  .press { position: absolute; width: 60px; height: 60px; margin: -30px 0 0 -30px; border-radius: 50%; border: 3px solid rgba(34,211,238,.9); z-index: 19; }
+</style>
+</head>
+<body>
+<img class="app" id="app" src="/build/ad-sets/ui/app-messages.png" alt="">
+<div class="sent" id="sent"><div class="clip" id="sentClip"><img src="/build/ad-sets/ui/app-messages.png" alt="" id="sentImg"></div><div class="bubble" id="bubble">Yes! See you at 7<small>09:13</small></div></div>
+<div class="taskbar"><i class="saiph"></i><i></i><i></i><i></i><i></i><div class="clock" id="clock">09:12<br>Tue 03/11</div></div>
+
+<div class="win" id="browser" style="left:330px;top:90px;width:1260px;height:880px">
+  <div class="bar"><div class="dots"><b></b><b></b><b></b></div><div class="url">🔒&nbsp; northbank.example / sign-in</div></div>
+  <div class="login">
+    <div class="brand">northbank</div>
+    <h1 id="loginTitle">Check your phone</h1>
+    <p id="loginText">Enter the 6-digit code we sent you</p>
+    <div class="digits" id="digits"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+    <div class="btn" id="verify">Verify</div>
+  </div>
+</div>
+
+<div class="mirror" id="mirror"><div class="title"><span>Pixel 8</span><span>— ▢ ✕</span></div><div class="frame"><iframe id="phoneFrame" src="a-phone.html" title="Mirrored phone"></iframe></div></div>
+
+<div class="win meet" id="meet">
+  <div class="bar"><div class="dots"><b></b><b></b><b></b></div><span style="flex:1">Weekly sync · Video call</span><span>● 00:42</span></div>
+  <div class="tiles">
+    <div class="feed" id="feed"><span class="bokeh" style="left:8%;top:12%;width:90px;height:90px"></span><span class="bokeh" style="left:72%;top:8%;width:120px;height:120px"></span><span class="bokeh" style="left:84%;top:40%;width:70px;height:70px"></span>
+      <svg class="person" viewBox="0 0 600 560"><g id="figure">
+        <circle cx="300" cy="170" r="78"/><path d="M272 158v6M328 158v6" stroke-width="15"/><path d="M262 198q38 32 76 0" stroke-width="10"/>
+        <path d="M300 248v330"/><path d="M300 300l-110 90l-40 110"/><path d="M300 300l130 -60"/>
+        <g id="forearm"><path d="M430 240l40 -115"/><circle cx="476" cy="104" r="20" stroke-width="11"/></g>
+      </g></svg>
+      <span class="label">You · Pixel 8 camera</span></div>
+    <div class="side"><div>NW<span class="label">Niamh</span></div><div>CD<span class="label">Conor</span></div></div>
+  </div>
+  <div class="controls"><span>🎙</span><span>📷</span><span>🖥</span><span style="background:#dc2626">✕</span></div>
+</div>
+
+<div class="toast" id="toast"><div class="head"><svg viewBox="0 0 40 40"><defs><linearGradient id="s" x1="8" y1="29" x2="32" y2="11" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#22d3ee"/><stop offset="1" stop-color="#a78bfa"/></linearGradient></defs><circle cx="20" cy="20" r="18" fill="#0b1220" stroke="#22d3ee" stroke-opacity=".4"/><path d="M10 27Q16 25 20 20Q24 15 30 13" fill="none" stroke="url(#s)" stroke-width="2.2" stroke-linecap="round"/><circle cx="10" cy="27" r="2.6" fill="#67e8f9"/><circle cx="20" cy="20" r="2.8" fill="#e7edf4"/><circle cx="30" cy="13" r="2.6" fill="#a78bfa"/></svg><span id="toastApp"></span></div>
+  <h3 id="toastTitle"></h3><p id="toastText"></p></div>
+
+<div class="press" id="press"></div>
+<svg class="cursor" id="cursor" viewBox="0 0 34 46"><path d="M3 2 L3 38 L12 30 L18 44 L24 41 L18 28 L30 28 Z" fill="#fff" stroke="#0b1220" stroke-width="2.4" stroke-linejoin="round"/></svg>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const clamp = (x) => Math.min(1, Math.max(0, x));
+  const ease = (x) => { x = clamp(x); return x * x * (3 - 2 * x); };
+  const span = (t, a, b) => t >= a && t < b;
+  const ui = (name) => `/build/ad-sets/ui/${name}.png`;
+  const pad = (n) => String(n).padStart(2, '0');
+  const show = (el, on, opacity = 1) => { el.style.display = on ? '' : 'none'; if (on) el.style.opacity = opacity; };
+  const lerp = (a, b, u) => a + (b - a) * u;
+  // Shared beats, matching a-phone.html and set_a.py.
+  const T = { code: 0.4, text: 5.0, reply: 8.45, ring: 10.0, decline: 12.95, mirror: 15.4, unlock: 15.9, open: 16.6, scroll: 17.0, mirrorEnd: 19.4, camera: 19.8, meet: 20.4 };
+  // Cursor path: [time, x, y]; it glides between points.
+  const path = [[0, 1500, 760], [5.9, 1500, 760], [6.2, 1300, 1018], [7.95, 1300, 1018], [8.25, 1765, 1020], [11.6, 1765, 1020], [12.4, 1816, 132],
+    [14.6, 1816, 132], [15.1, 1160, 190], [15.45, 320, 920], [15.55, 320, 920], [15.9, 320, 640], [16.3, 203, 804], [16.75, 320, 860],
+    [19.4, 320, 860], [19.75, 1342, 190], [20.2, 1342, 190], [20.8, 1700, 1080]];
+  const clicks = [6.25, 8.3, 12.9, 15.2, 16.45, 19.8];
+  function cursorAt(t) {
+    for (let i = 0; i < path.length - 1; i++) {
+      const [ta, xa, ya] = path[i], [tb, xb, yb] = path[i + 1];
+      if (t <= tb) { const u = ease((t - ta) / (tb - ta)); return [lerp(xa, xb, u), lerp(ya, yb, u)]; }
+    }
+    return path[path.length - 1].slice(1);
+  }
+  const TOASTS = [
+    [T.code + 1.1, 4.5, 90, 'Saiph · Pixel 8 · Messages', 'Northbank', 'Your code is <span class="code">482913</span>. It expires in 10 minutes.'],
+    [T.text + 0.1, 6.9, 250, 'Saiph · Pixel 8 · Messages', 'Ada Byrne', 'Are we still on for 7?'],
+    [T.camera + 0.1, 21.4, 90, 'Saiph · Pixel 8', 'Webcam on', "Your phone's camera is now a webcam on this PC."],
+  ];
+  window.setTime = (t) => {
+    // Saiph underneath: messages, typing the reply, the sent reply, the call banner.
+    let app = 'app-messages';
+    if (t >= 6.3 && t < 8.35) app = `app-reply-${pad(Math.min(17, Math.floor((t - 6.3) / 1.6 * 17)))}`;
+    if (t >= 8.35) app = 'app-reply-00';
+    if (t >= T.ring + 0.15 && t < T.decline) app = t >= 12.4 ? 'app-call-hover' : 'app-call';
+    if ($('app').dataset.name !== app) { $('app').src = ui(app); $('app').dataset.name = app; }
+    const sent = t >= 8.35 && !(t >= T.ring + 0.15 && t < T.decline);
+    show($('sent'), sent);
+    const k = ease((t - 8.35) / 0.3);
+    $('sentImg').style.top = `${-455 - 125 * k}px`; $('sentClip').style.height = `${513 - 125 * k}px`;
+    $('bubble').style.opacity = k; $('bubble').style.transform = `translateY(${(1 - k) * 30}px)`;
+
+    // Sign-in code: the site asks, the phone's text shows up here, it's typed in.
+    show($('browser'), span(t, 0.9, 4.7), Math.min(ease((t - 0.9) / 0.3), 1 - ease((t - 4.45) / 0.25)));
+    const code = '482913', typed = Math.max(0, Math.min(6, Math.floor((t - 2.3) / 0.13) + 1));
+    [...$('digits').children].forEach((d, i) => { d.textContent = t >= 2.3 && i < typed ? code[i] : ''; d.className = (i === Math.min(typed, 5) && t < 3.2) ? 'on' : ''; });
+    const done = t >= 3.45;
+    $('loginTitle').textContent = done ? 'Signed in' : 'Check your phone';
+    $('loginText').innerHTML = done ? '<span class="ok">✓ Welcome back</span>' : 'Enter the 6-digit code we sent you';
+    $('verify').style.background = span(t, 3.2, 3.45) ? '#0e7490' : '#0b3b5a';
+
+    const toast = TOASTS.find(([a, b]) => span(t, a, b));
+    show($('toast'), !!toast);
+    if (toast) {
+      const [a, b, bottom, appName, title, html] = toast;
+      const kk = Math.min(ease((t - a) / 0.35), 1 - ease((t - (b - 0.3)) / 0.3));
+      $('toast').style.bottom = bottom + 'px'; $('toast').style.transform = `translateX(${(1 - kk) * 700}px)`;
+      $('toastApp').textContent = appName; $('toastTitle').textContent = title; $('toastText').innerHTML = html;
+    }
+
+    // Mirror screen: the phone's own screen in a window, driven from here.
+    const m = span(t, T.mirror - 0.1, T.mirrorEnd);
+    show($('mirror'), m, Math.min(ease((t - (T.mirror - 0.1)) / 0.25), 1 - ease((t - (T.mirrorEnd - 0.25)) / 0.25)));
+    if (m) { $('mirror').style.transform = `scale(${0.92 + 0.08 * ease((t - T.mirror + 0.1) / 0.3)})`; const w = $('phoneFrame').contentWindow; if (w && w.setTime) w.setTime(t); }
+
+    // Webcam: the video call shows the phone's camera.
+    show($('meet'), t >= T.meet, ease((t - T.meet) / 0.35));
+    // The stick figure on the phone's camera waves hello and bobs a little.
+    const since = Math.max(0, t - T.meet);
+    $('forearm').setAttribute('transform', `rotate(${(12 + 18 * Math.sin(2 * Math.PI * 1.6 * since)).toFixed(2)} 430 240)`);
+    $('figure').setAttribute('transform', `translate(0 ${(5 * Math.sin(2 * Math.PI * 0.8 * since)).toFixed(2)})`);
+    $('meet').style.transform = `scale(${0.96 + 0.04 * ease((t - T.meet) / 0.35)})`;
+    $('clock').innerHTML = (t >= 14 ? '09:14' : '09:12') + '<br>Tue 03/11';
+
+    const [x, y] = cursorAt(t);
+    $('cursor').style.left = x + 'px'; $('cursor').style.top = y + 'px';
+    const click = clicks.find((c) => t >= c && t < c + 0.35);
+    show($('press'), click !== undefined);
+    if (click !== undefined) { const kk = (t - click) / 0.35; $('press').style.left = (x + 4) + 'px'; $('press').style.top = (y + 4) + 'px'; $('press').style.transform = `scale(${0.4 + kk})`; $('press').style.opacity = 1 - kk; }
+  };
+  window.ready = new Promise((resolve) => {
+    const names = ['app-messages', 'app-call', 'app-call-hover', ...Array.from({ length: 18 }, (_, i) => `app-reply-${pad(i)}`)];
+    const images = names.map((n) => new Promise((r) => { const im = new Image(); im.onload = im.onerror = r; im.src = ui(n); }));
+    const frame = new Promise((r) => { const f = $('phoneFrame'); const go = () => (f.contentWindow.ready || Promise.resolve()).then(r); if (f.contentWindow && f.contentWindow.ready) go(); else f.addEventListener('load', go); });
+    Promise.all([...images, frame]).then(() => { window.setTime(0); resolve(true); });
+  });
+</script>
+</body>
+</html>

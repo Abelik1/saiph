@@ -174,6 +174,14 @@ def collect(bundle, destination):
         try: versions[name] = importlib.metadata.version(name)
         except importlib.metadata.PackageNotFoundError: pass
     native_origin_records(binaries)
+    electron_receipt = bundle / '_internal/electron-runtime-provenance.json'
+    if electron_receipt.is_file():
+        receipt = json.loads(electron_receipt.read_text(encoding='utf-8'))
+        matches = {item['path']: item['sha256'] for item in receipt.get('native_files', [])}
+        for item in binaries:
+            item['electron_runtime_match'] = matches.get(item['path']) == item['sha256']
+            if item['path'] in ('resources/service/SaiphService.exe', 'resources/service/SaiphService'):
+                item['project_generated'] = True
     camera_root = bundle / '_internal/camera'
     camera_receipt = None
     if camera_root.exists():
@@ -188,13 +196,16 @@ def collect(bundle, destination):
             if not source.is_file() or digest(source) != camera_receipt['files'][leaf]:
                 raise ValueError('Bundled camera component differs from its build receipt')
         for item in binaries:
-            if item['path'] in {'_internal/camera/SaiphCamera64.dll', '_internal/camera/SaiphCamera32.dll'}:
+            if item['path'] in {prefix + leaf for prefix in ('_internal/camera/', 'resources/service/_internal/camera/')
+                               for leaf in ('SaiphCamera64.dll', 'SaiphCamera32.dll')}:
+                if item['sha256'] != camera_receipt['files'][Path(item['path']).name]:
+                    raise ValueError('Service camera component differs from its build receipt')
                 item['project_generated'] = True
         target = destination / 'saiph-camera'
         target.mkdir(exist_ok=True)
         shutil.copyfile(camera_root / 'LICENSE.UnityCapture.txt', target / 'LICENSE.UnityCapture.txt')
         shutil.copyfile(camera_root / 'camera-build.json', target / 'camera-build.json')
-    qt = versions.get('PySide6_Essentials')
+    qt = versions.get('PySide6_Essentials') if any(Path(item['path']).name.lower().startswith(('qt6', 'libqt6')) for item in binaries) else None
     if qt and not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', qt):
         raise ValueError('Qt source provenance requires an exact stable package version')
     copied = []
@@ -222,7 +233,7 @@ def collect(bundle, destination):
         'native_files': binaries,
         'bundled_camera_build': camera_receipt,
         'unmatched_native_files': [item['path'] for item in binaries if not (
-            item['wheel_record_matches'] or item['build_interpreter_matches'] or item['project_generated'])],
+            item['wheel_record_matches'] or item['build_interpreter_matches'] or item['project_generated'] or item.get('electron_runtime_match'))],
         'origin_scope': 'Exact installed wheel RECORD and build-interpreter byte matches; these do not independently verify wheel downloads, build options, platform grants or replacement acceptance. The project launcher is generated output, not an upstream wheel.',
         'notice_files': copied,
         'python_runtime': collect_python_runtime_notice(destination),
@@ -231,10 +242,10 @@ def collect(bundle, destination):
         'source_status': 'Retained evidence records official verified source archives when present; URLs alone are not proof of retention, wheel build options or replacement verification.',
         'remaining_review': [
             'Review native files without exact wheel RECORD matches and retain wheel build options/patch provenance; environment versions alone do not establish a match.',
-            'Transfer matching retained Qt/PySide/Chromium source archives and notices with the private release; confirm wheel-specific build options/patches.',
             'Complete Python, OpenSSL/cryptography, libffi, platform runtime and optional Workspace native dependency notices.',
-            'Verify interface-compatible Qt replacement on each supported native platform before external distribution.',
-        ],
+        ] + (['Transfer matching retained Qt/PySide/Chromium source archives and notices with the private release; confirm wheel-specific build options/patches.',
+              'Verify interface-compatible Qt replacement on each supported native platform before external distribution.'] if qt else [])
+          + (['Retain exact Electron/Chromium third-party notices and review codec/platform distribution grants.'] if electron_receipt.is_file() else []),
     }
     (destination / 'native-provenance.json').write_text(json.dumps(inventory, indent=2), encoding='utf-8')
     shutil.copyfile(HERE / 'REPLACEABLE_LIBRARIES.md', destination / 'REPLACEABLE_LIBRARIES.md')

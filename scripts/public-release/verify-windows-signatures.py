@@ -73,18 +73,19 @@ def verify_file(path: Path, publisher: str, certificate_sha256: str, version: st
 
 
 def verify(installer: Path, executable: Path, publisher: str, certificate_sha256: str,
-           version: str, signtool: str, output: Path):
+           version: str, signtool: str, output: Path, *, service: Path | None = None):
     if not publisher.strip() or not re.fullmatch(r"[0-9a-f]{64}", certificate_sha256):
         raise ValueError("Expected approved publisher subject and lowercase SHA-256 certificate fingerprint")
     if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.-]+)?", version):
         raise ValueError("Expected explicit semantic version")
-    if installer.resolve() == executable.resolve():
+    paths = (installer, executable, *((service,) if service else ()))
+    if len({path.resolve() for path in paths}) != len(paths):
         raise ValueError("Installer and project executable must be distinct")
     if output.exists() or output.is_symlink():
         raise ValueError("Use a fresh signature receipt output")
     records = [verify_file(path, publisher, certificate_sha256, version, signtool)
-               for path in (installer, executable)]
-    for path, record in zip((installer, executable), records):
+               for path in paths]
+    for path, record in zip(paths, records):
         if path.is_symlink() or digest(path) != record['sha256']:
             raise ValueError('Artifact changed before signature receipt creation')
     receipt = {"schema": 1, "verification": "Windows Authenticode and SignTool /pa /all /v /tw",
@@ -98,6 +99,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--installer", required=True, type=Path)
     parser.add_argument("--executable", required=True, type=Path)
+    parser.add_argument("--service", type=Path, help="Electron's project-authored frozen service; verify with the same approved signing identity.")
     parser.add_argument("--publisher", required=True)
     parser.add_argument("--certificate-sha256", required=True)
     parser.add_argument("--version", required=True)
@@ -105,4 +107,4 @@ if __name__ == "__main__":
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     verify(args.installer, args.executable, args.publisher, args.certificate_sha256,
-           args.version, args.signtool, args.output)
+           args.version, args.signtool, args.output, service=args.service)

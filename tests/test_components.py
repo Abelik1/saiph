@@ -68,7 +68,7 @@ def test_stopped_profile_resumes_bare_up_preserving_all_preferences(monkeypatch,
                      'CorpDNS': False, 'RouteAll': True, 'ExitNodeID': 'preserved-node'}
         return SimpleNamespace(returncode=0, stdout=json.dumps(value))
     monkeypatch.setattr(components, 'run', run)
-    monkeypatch.setattr(components.webbrowser, 'open', lambda _: pytest.fail('Resume needs no new login'))
+    monkeypatch.setattr(components.child_process, 'open_url', lambda _: pytest.fail('Resume needs no new login'))
     assert components.Components().sign_in(controller)['mesh_running']
     up = next(command for command in calls if command[-1] == 'up')
     assert up[-2:] == ['synthetic-tailscale', 'up']

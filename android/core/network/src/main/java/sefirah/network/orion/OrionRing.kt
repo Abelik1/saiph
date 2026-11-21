@@ -17,10 +17,11 @@ import android.os.Looper
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import sefirah.common.util.canUseFullScreenAlerts
 
 /**
  * "Find phone" from a paired computer: alarm sound for up to 30 seconds. While it rings,
- * a full-screen Stop screen opens (over the lock screen too) and an ongoing notification
+ * a full-screen Stop screen opens when allowed, and an ongoing notification
  * keeps Stop one tap away; swiping that notification away brings it back. Stop on the
  * screen, the notification, a volume key or a power press stops it everywhere.
  */
@@ -92,7 +93,7 @@ object OrionRing {
             manager.notify(NOTIFICATION, NotificationCompat.Builder(app, CHANNEL).setSmallIcon(android.R.drawable.ic_lock_silent_mode_off)
                 .setContentTitle("Ringing to find your phone").setContentText(ringing.from?.let { "Asked by $it. Tap Stop." } ?: "Tap Stop.")
                 .setOngoing(true).setOnlyAlertOnce(true).setAutoCancel(false)
-                .setContentIntent(open).setFullScreenIntent(open, true)
+                .setContentIntent(open).apply { if (canUseFullScreenAlerts(app)) setFullScreenIntent(open, true) }
                 .setDeleteIntent(broadcast(ACTION_DISMISSED, NOTIFICATION + 1)).addAction(0, "Stop", stop)
                 .setTimeoutAfter(SECONDS * 1000 + 1000)
                 .setPriority(NotificationCompat.PRIORITY_MAX).setCategory(NotificationCompat.CATEGORY_ALARM).build())

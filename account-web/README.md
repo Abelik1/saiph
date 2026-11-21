@@ -1,5 +1,11 @@
 # Saiph account website
 
+New trial signup is prepared as a 14-day, card-required Stripe subscription trial
+followed by €9.99/month unless cancelled. See
+[implementation and activation checks](../docs/CARD_REQUIRED_TRIAL.md), including
+migration 0007, verified trial-ending reminders and the live readiness gate.
+The no-card behavior described in older documents applies to legacy grants only.
+
 Owner-only development application. Product code belongs here; private environment values, Vercel/DNS identifiers and deployment receipts belong in saiph-cloud or protected storage.
 
 An explicitly enabled beta access mode (`friends-beta`) adds code-based Hosted access to the same
@@ -59,3 +65,22 @@ and passing source checks do not establish legal or Stripe approval.
 The responsive home, account overview and privacy pages share navigation and keyboard skip access. The account page shows only fixed test-subscription labels and validated period dates from stored billing observations. It reads storage only after owner verification and displays a pending state when billing/storage is unavailable. Subscription management appears only after a stored customer exists. Checkout return queries display feedback; they never set subscription state or Hosted access. Loading and error states keep account/provider details private.
 
 Run `npm test`, `npm run build`, `npm run typecheck` and `npm run test:integration` after interface or dependency changes. The HTTP checks use synthetic encrypted Auth0 sessions and include checkout return/cancellation feedback with unavailable billing. Real provider sign-in and sandbox delivery still need separate acceptance.
+
+## Account deletion requests
+
+`/account/delete` is the public page Google Play's User Data policy asks for; the
+Android app's **Delete account** setting opens it in both builds. It explains what
+is deleted (the Auth0 login; the Saiph Cloud account with its device records and
+encrypted content; billing records except those tax law requires us to keep), that
+a subscription must be cancelled first, and the 30-day timeline. It is drawn without
+the site navigation and links only to its own sign-in (`/account/delete/sign-in`,
+which returns to the page), so nothing on it leads to plans or prices.
+
+Signed in, **Request deletion** posts `confirm=delete` to `/api/account/delete`
+(same-origin, bounded body, a per-instance limit of 120 requests and five per subject
+a minute). It stores one idempotent row per account in `deletion_requests`
+(migration 0008: subject, issuer, request time, state). A renewing subscription is
+reported on the page but does not block the request. The owner sees pending
+requests on `/account/admin`, deletes the account and data by hand, and marks each
+one done. Nothing is deleted automatically. Until migration 0008 is applied, the
+page points people to email and the admin page asks for the migration.

@@ -1,0 +1,11 @@
+{
+  "devices": [{
+    "id": "electron-test-phone", "name": "Test phone", "online": true,
+    "capabilities": ["battery", "photos", "files", "sms", "notifications", "apps"],
+    "battery": {"battery_level": 82, "is_charging": false, "updated_at": 1}
+  }],
+  "records": {
+    "phone_photo": [{"id": "electron-test-photo", "photo_id": "1", "device_id": "electron-test-phone", "name": "Synthetic landscape.svg", "timestamp": 1792368000000, "preview": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Crect width='400' height='300' fill='%23204d67'/%3E%3Ccircle cx='300' cy='80' r='35' fill='%23f1c899'/%3E%3Cpath d='M0 300L150 100L300 300Z' fill='%236a7f95'/%3E%3C/svg%3E"}],
+    "phone_sms": [{"id": "electron-test-message", "message_id": 1, "device_id": "electron-test-phone", "thread": 1, "body": "Synthetic message for Electron rendering checks.", "timestamp": 1792368000000, "direction": "incoming", "address": "+15550100123", "name": "Test contact"}]
+  }
+}

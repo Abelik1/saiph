@@ -139,6 +139,7 @@
   }
 
   let banner = null;
+  let returnFocus = null;
   function decide(value) {
     choice = value;
     writeChoice(value);
@@ -152,7 +153,8 @@
     const hadFocus = banner && banner.contains(document.activeElement);
     if (banner) banner.hidden = true;
     const opener = document.querySelector("[data-consent-open]");
-    if (hadFocus && opener) opener.focus();
+    const focusTarget = returnFocus || document.querySelector('.landing .trial-cta:not([hidden]) a, .landing .buy-now') || opener;
+    if (hadFocus && focusTarget) focusTarget.focus({ preventScroll: true });
     document.querySelectorAll("[data-consent-status]").forEach((el) => { el.textContent = statusText(); });
   }
   function statusText() {
@@ -183,7 +185,11 @@
         row.appendChild(button);
       });
       banner.append(text, row);
-      document.body.appendChild(banner);
+      // On the compact landing page, narrow screens reserve space between the
+      // offer and demonstration instead of covering either with an overlay.
+      const demo = document.querySelector(".landing .showcase");
+      if (demo) demo.insertAdjacentElement("beforebegin", banner);
+      else document.body.appendChild(banner);
     }
     banner.hidden = false;
   }
@@ -199,7 +205,12 @@
     // A browser privacy signal (GPC or Do Not Track) is treated as Decline.
     document.querySelectorAll("[data-consent-open]").forEach((button) => {
       button.hidden = browserOptOut;
-      button.addEventListener("click", showBanner);
+      button.addEventListener("click", () => {
+        returnFocus = button;
+        showBanner();
+        banner.scrollIntoView({ block: "nearest" });
+        banner.querySelector("button").focus({ preventScroll: true });
+      });
     });
     document.querySelectorAll("[data-consent-status]").forEach((el) => { el.textContent = statusText(); });
     if (choice === null) showBanner();

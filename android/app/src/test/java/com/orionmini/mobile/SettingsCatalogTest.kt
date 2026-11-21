@@ -81,7 +81,7 @@ class SettingsCatalogTest {
     }
 
     @Test fun summariesNameWhatTheCategoryHolds() {
-        assertEquals("Sync · Background activity", SettingsCatalog.summary(SettingsCatalog.CLOUD, Category.CONNECTION))
+        assertEquals("Sync · Sync over mobile data · Background activity", SettingsCatalog.summary(SettingsCatalog.CLOUD, Category.CONNECTION))
         assertEquals("Status and quick controls", SettingsCatalog.summary(SettingsCatalog.CLOUD, Category.STATUS))
     }
 
@@ -91,7 +91,25 @@ class SettingsCatalogTest {
             "notification_access", "saiph_alerts", "status_sharing", "app_lock", "security_activity", "usage", "policies")
         assertTrue(SettingsCatalog.CLOUD.map { it.id }.containsAll(required))
         val selfHosted = setOf("saiph_account", "hub_details", "saiph_on", "tailscale", "permissions", "dnd_sync", "sleep_plan",
-            "clipboard", "backups", "status_sharing", "app_lock", "usage", "updates")
+            "clipboard", "clipboard_bubble", "clipboard_auto", "backups", "status_sharing", "app_lock", "usage", "updates")
         assertEquals(selfHosted, SettingsCatalog.SELF_HOSTED.map { it.id }.toSet())
+    }
+
+    @Test fun theClipboardBubbleIsFoundByWhatPeopleCallIt() {
+        for (catalog in listOf(SettingsCatalog.CLOUD, SettingsCatalog.SELF_HOSTED)) {
+            assertEquals("clipboard_bubble", ids("floating", catalog).first())
+            assertEquals("clipboard_auto", ids("accessibility", catalog).first())
+        }
+        // Moved off the home screen; still one search away.
+        assertEquals("mobile_data", ids("mobile data").first())
+    }
+
+    @Test fun thePlayBuildHasNoAutomaticClipboardSending() {
+        for (catalog in listOf(SettingsCatalog.CLOUD, SettingsCatalog.SELF_HOSTED)) {
+            assertFalse("clipboard_auto" in SettingsCatalog.forBuild(catalog, playStore = true).map { it.id })
+            assertFalse("subscription" in SettingsCatalog.forBuild(catalog, playStore = true).map { it.id })
+            assertEquals(catalog, SettingsCatalog.forBuild(catalog, playStore = false))
+            assertTrue("clipboard_bubble" in SettingsCatalog.forBuild(catalog, playStore = true).map { it.id })
+        }
     }
 }

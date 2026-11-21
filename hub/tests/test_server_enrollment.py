@@ -68,7 +68,7 @@ def test_install_lock_rejects_contender_and_closes_descriptors_without_unlinking
         return 10 + len(descriptors)
     monkeypatch.setattr(server_install.os, 'open', open_lock)
     monkeypatch.setattr(server_install.os, 'close', close)
-    monkeypatch.setattr(server_install.os, 'fstat', lambda fd: SimpleNamespace(st_mode=stat.S_IFREG | 0o600, st_uid=42))
+    monkeypatch.setattr(server_install.os, 'fstat', lambda fd: SimpleNamespace(st_mode=stat.S_IFREG | 0o600, st_uid=42, st_size=0))
     monkeypatch.setattr(server_install.os, 'geteuid', lambda: 42, raising=False)
     monkeypatch.setattr(server_install.os, 'O_NOFOLLOW', 0x20000, raising=False)
     monkeypatch.setattr(server_install.os, 'O_CLOEXEC', 0x80000, raising=False)

@@ -11,6 +11,22 @@ from platformdirs import user_data_path
 APP_DATA = user_data_path("OrionMini", appauthor=False)
 
 
+def desktop_executable() -> Path:
+    """The owning desktop, supplied only by the native service launcher."""
+    value = os.environ.get('SAIPH_DESKTOP_EXECUTABLE') if os.environ.get('SAIPH_ELECTRON_SERVICE') == '1' else None
+    if value:
+        candidate = Path(value)
+        if not candidate.is_absolute() or not candidate.is_file():
+            raise ValueError('The desktop executable is unavailable.')
+        return candidate.resolve()
+    return Path(sys.executable).resolve()
+
+
+def desktop_pid() -> int:
+    value = os.environ.get('SAIPH_DESKTOP_PID') if os.environ.get('SAIPH_ELECTRON_SERVICE') == '1' else None
+    return int(value) if value and value.isdecimal() and int(value) > 0 else os.getpid()
+
+
 def app_data_dir() -> Path:
     path = Path(os.environ.get("ORION_MINI_DATA_DIR", str(APP_DATA)))
     path.mkdir(mode=0o700, parents=True, exist_ok=True)

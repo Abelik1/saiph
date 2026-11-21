@@ -10,14 +10,32 @@ as described in [CONTRIBUTING.md](../CONTRIBUTING.md), run:
 ```text
 python scripts/public-release/verify-public.py
 npm --prefix frontend run test:unit
+npm --prefix desktop test
 python scripts/build-native.py --profile link --version 0.1.0-beta.1
 ```
 
 Push and pull-request CI run unit suites on Windows and Linux. Explicit
 workflow dispatch additionally builds and wraps the native bundle with its
-package auditor; a green push check alone does not establish packaging success. Linux needs Qt/WebEngine runtime libraries and an
+package auditor; a green push check alone does not establish packaging success. Linux needs Electron runtime libraries (and Qt libraries for legacy compatibility tests) and an
 appropriate display environment; consult `.github/workflows/public-ci.yml`.
 Do not label a Windows-built executable as a Linux build.
+
+## Programs the desktop app starts
+
+A frozen Linux build runs with `LD_LIBRARY_PATH` set to its bundled libraries.
+Any system program that inherits it (`xdg-open`, browsers, coreutils, `nmcli`,
+`pactl`, `gsettings`) can fail to start, often without an error the app sees.
+Start every other program through `orion_mini.child_process` (`run`, `popen`,
+`open_url`), which restores the user's own environment.
+`tests/test_child_process.py` fails when package code calls `subprocess`, `os`
+exec/spawn, `webbrowser`, `QProcess` or `QDesktopServices` directly, and records
+what a synthetic `xdg-open` inherits under a frozen-style environment.
+
+Unit tests do not run the frozen bundle. For a packaged Linux build, also run a
+smoke check before release: put a recorder script named `xdg-open` first on
+`PATH`, start the bundle with an isolated `ORION_MINI_DATA_DIR`, choose Sign in,
+and confirm the recorder ran with no `LD_LIBRARY_PATH` pointing into `_internal`.
+This step is not yet automated in CI.
 
 Hosted Hub tests use a separate Python 3.12 environment:
 
@@ -37,6 +55,14 @@ isolated fixture or successful unit suite does not establish those results.
 
 ## Desktop UI control
 
+The Electron conversion uses the same launcher/controller with `--shell electron`.
+See [desktop/README.md](../desktop/README.md) for setup, fresh synthetic sessions,
+native smoke flows and current limitations. Electron is the default; use `--shell qt`
+for legacy comparison. Real services require explicit `--live`; an authorized
+existing profile additionally requires `--existing-profile PATH`. Synthetic
+fixtures cannot be combined with live services. Short UI smoke tests do not
+establish complete OS/GPU rendering or live-device acceptance.
+
 Integrated camera checks and their separate Windows/Android acceptance scope are
 documented in [PHONE_CAMERA.md](PHONE_CAMERA.md#verification-and-limits). Run
 `python -m pytest tests/test_camera_session.py tests/test_phone_camera.py tests/test_native_origins.py tests/test_desktop_distribution.py tests/test_windows_camera_registration.py -q`
@@ -50,14 +76,14 @@ WOW6432Node redirection is not exercised there. Android's camera instrumentation
 requires a fresh synthetic local invitation provisioned by the emulator harness;
 without one it deliberately skips, which must not be reported as camera acceptance.
 
-Agents can drive the real Qt desktop directly: switch tabs, click buttons, type
+Agents can drive the real Electron desktop directly: switch tabs, click buttons, type
 into forms, use keyboard shortcuts and capture screenshots. Use these tools for
 routine desktop testing instead of asking the user to click or enter details.
-This uses the production dashboard, native QWebChannel and actual LinkWorkspace;
+This uses the production dashboard, native Electron/Python bridge and actual LinkWorkspace;
 it is separate from the browser-only synthetic previews.
 
 Build the frontend and install the desktop dependencies in an isolated Python
-3.12 environment first. No Playwright browser download is needed: Qt supplies
+3.12 environment first. No Playwright browser download is needed: Electron supplies
 the Chromium instance. Launch a disposable test instance (the session directory
 must be new):
 

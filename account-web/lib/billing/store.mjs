@@ -19,6 +19,8 @@ const DISPUTE_ID = /^(dp|du)_[A-Za-z0-9]{1,250}$/;
 const TRIAL_COLUMNS = "auth_subject, trial_ref, started_at, ends_at, dirty, pushed_until";
 const TRIAL_COLUMNS_EXTENDED = "auth_subject, trial_ref, started_at, COALESCE(extended_until, ends_at) AS ends_at, dirty, pushed_until";
 const FUNNEL_STEPS = new Set(["signin_view", "signin_done", "checkout_started", "purchase", "trial_started"]);
+// A subscription that still charges unless cancelled: for account deletion (migration 0008).
+const RENEWING = "s.status IN ('trialing','active','past_due','unpaid','paused') AND NOT s.cancel_at_period_end AND s.cancel_at IS NULL";
 
 /** @typedef {{subject: string, customerId: string}} CustomerMapping */
 /** @typedef {{eventId: string, type: string, created: number, customerId: string, livemode: boolean}} BillingEvent */
@@ -53,6 +55,13 @@ function subjectValue(subject) {
     throw new BillingStoreError("INVALID_SUBJECT");
   }
   return subject;
+}
+/** The Auth0 issuer that signed the account in, e.g. "https://tenant.eu.auth0.com/". @param {unknown} issuer */
+function issuerValue(issuer) {
+  if (typeof issuer !== "string" || issuer.length > 255 || !/^https:\/\/[a-z0-9.-]+\/$/.test(issuer)) {
+    throw new BillingStoreError("INVALID_ISSUER");
+  }
+  return issuer;
 }
 /** @param {unknown} value @param {boolean} [nullable] */
 function timestamp(value, nullable = false) {
@@ -514,6 +523,31 @@ export function createBillingStore(pool, { stripeAccountId, livemode = false }) 
       return tx((client) => trialFacts(client, subject, emailKey));
     },
 
+    /** Reserve an offer, not access. Commit before contacting Stripe so retries
+     * cannot lose the email claim after a provider success/database rollback.
+     * @param {{subject:string,emailKey:string,now:number,cap:number|null,ref:string}} request
+     * @returns {Promise<{outcome:"reserved"|"subscribed"|"used"|"full",ref:string|null}>} */
+    async reserveCardTrial({subject,emailKey,now,cap,ref}) {
+      subjectValue(subject);
+      if (!validEmailKey(emailKey) || !/^[a-f0-9]{32}$/.test(ref)
+        || cap !== null && (!Number.isSafeInteger(cap) || cap < 0)) throw new BillingStoreError("INVALID_TRIAL");
+      timestamp(now);
+      return tx(async client => {
+        await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+          [JSON.stringify(["saiph-billing-trial", stripeAccountId])]);
+        const facts = await trialFacts(client, subject, emailKey);
+        if (facts.stored || facts.emailUsed) return {outcome:"used",ref:null};
+        if (facts.subscribed) return {outcome:"subscribed",ref:null};
+        const own = await client.query("SELECT email_key,trial_ref FROM saiph_billing.card_trial_claims WHERE stripe_account_id=$1 AND auth_subject=$2",[stripeAccountId,subject]);
+        if (own.rows[0]) return own.rows[0].email_key === emailKey
+          ? {outcome:"reserved",ref:String(own.rows[0].trial_ref)} : {outcome:"used",ref:null};
+        if (cap !== null && facts.started >= cap) return {outcome:"full",ref:null};
+        await client.query("INSERT INTO saiph_billing.card_trial_claims (stripe_account_id,auth_subject,email_key,trial_ref,reserved_at) VALUES ($1,$2,$3,$4,$5)",
+          [stripeAccountId,subject,emailKey,ref,now]);
+        return {outcome:"reserved",ref};
+      });
+    },
+
     /**
      * Start this subject's free trial if the rules allow it. One global lock
      * serializes trial starts, so the optional cap and the one-per-email rule
@@ -628,7 +662,111 @@ export function createBillingStore(pool, { stripeAccountId, livemode = false }) 
         return { sequence, until };
       });
     },
+
+    /**
+     * Record that this account asked to be deleted (migration 0008). Idempotent:
+     * a pending request keeps its first time; a request after an earlier one was
+     * completed opens it again. A renewing subscription is reported, not refused.
+     * @param {{subject: string, issuer: string, now: number}} request
+     * @returns {Promise<{outcome: "recorded" | "pending", requestedAt: number, subscriptionRenews: boolean}>}
+     */
+    async requestDeletion({ subject, issuer, now }) {
+      subjectValue(subject);
+      issuerValue(issuer);
+      timestamp(now);
+      return tx(async (client) => {
+        await deletionTable(client);
+        await lockSubject(client, subject);
+        const renews = await subscriptionRenews(client, subject);
+        const { rows } = await client.query(
+          "SELECT state, requested_at FROM saiph_billing.deletion_requests WHERE stripe_account_id=$1 AND auth_subject=$2 FOR UPDATE",
+          [stripeAccountId, subject],
+        );
+        if (rows[0]?.state === "pending") return { outcome: "pending", requestedAt: Number(rows[0].requested_at), subscriptionRenews: renews };
+        await client.query(
+          `INSERT INTO saiph_billing.deletion_requests (stripe_account_id,auth_subject,auth_issuer,requested_at,state,completed_at)
+           VALUES ($1,$2,$3,$4,'pending',NULL)
+           ON CONFLICT (stripe_account_id,auth_subject) DO UPDATE
+             SET auth_issuer=EXCLUDED.auth_issuer, requested_at=EXCLUDED.requested_at, state='pending', completed_at=NULL`,
+          [stripeAccountId, subject, issuer, now],
+        );
+        return { outcome: "recorded", requestedAt: now, subscriptionRenews: renews };
+      });
+    },
+
+    /** This account's deletion request (or null) and whether a subscription still renews.
+     * @param {string} subject
+     * @returns {Promise<{request: {state: "pending" | "done", requestedAt: number, completedAt: number | null} | null, subscriptionRenews: boolean}>} */
+    async deletionStatus(subject) {
+      subjectValue(subject);
+      return tx(async (client) => {
+        await deletionTable(client);
+        const { rows } = await client.query(
+          "SELECT state, requested_at, completed_at FROM saiph_billing.deletion_requests WHERE stripe_account_id=$1 AND auth_subject=$2",
+          [stripeAccountId, subject],
+        );
+        return {
+          request: rows[0] ? { state: rows[0].state === "done" ? "done" : "pending", requestedAt: Number(rows[0].requested_at),
+            completedAt: rows[0].completed_at === null ? null : Number(rows[0].completed_at) } : null,
+          subscriptionRenews: await subscriptionRenews(client, subject),
+        };
+      });
+    },
+
+    /** Pending deletion requests for the owner admin page, oldest first.
+     * @returns {Promise<{subject: string, issuer: string, requestedAt: number, subscriptionRenews: boolean}[]>} */
+    async pendingDeletions() {
+      return tx(async (client) => {
+        await deletionTable(client);
+        const { rows } = await client.query(
+          `SELECT d.auth_subject, d.auth_issuer, d.requested_at,
+             EXISTS (SELECT 1 FROM saiph_billing.subscriptions s JOIN saiph_billing.customers c USING (stripe_account_id,stripe_customer_id)
+               WHERE c.stripe_account_id=d.stripe_account_id AND c.auth_subject=d.auth_subject AND ${RENEWING}) AS renews
+           FROM saiph_billing.deletion_requests d
+           WHERE d.stripe_account_id=$1 AND d.state='pending'
+           ORDER BY d.requested_at, d.auth_subject LIMIT 200`,
+          [stripeAccountId],
+        );
+        return rows.map((row) => ({ subject: String(row.auth_subject), issuer: String(row.auth_issuer),
+          requestedAt: Number(row.requested_at), subscriptionRenews: Boolean(row.renews) }));
+      });
+    },
+
+    /** The owner marks a pending request done after removing the account and its data.
+     * @param {{subject: string, now: number}} request
+     * @returns {Promise<{outcome: "done" | "not_found"}>} */
+    async completeDeletion({ subject, now }) {
+      subjectValue(subject);
+      timestamp(now);
+      return tx(async (client) => {
+        await deletionTable(client);
+        const { rowCount } = await client.query(
+          `UPDATE saiph_billing.deletion_requests SET state='done', completed_at=GREATEST($3::bigint, requested_at)
+           WHERE stripe_account_id=$1 AND auth_subject=$2 AND state='pending'`,
+          [stripeAccountId, subject, now],
+        );
+        return { outcome: rowCount ? "done" : "not_found" };
+      });
+    },
   };
+
+  /** Without migration 0008 deletion requests cannot be stored; say so instead of a SQL error.
+   * @param {import("./transaction.mjs").SqlClient} client */
+  async function deletionTable(client) {
+    const { rows } = await client.query("SELECT to_regclass('saiph_billing.deletion_requests') AS present");
+    if (!rows[0]?.present) throw new BillingStoreError("MIGRATION_PENDING");
+  }
+
+  /** Whether a stored subscription will still renew (not ended, no cancellation scheduled).
+   * @param {import("./transaction.mjs").SqlClient} client @param {string} subject */
+  async function subscriptionRenews(client, subject) {
+    const { rows } = await client.query(
+      `SELECT 1 FROM saiph_billing.subscriptions s JOIN saiph_billing.customers c USING (stripe_account_id,stripe_customer_id)
+       WHERE c.stripe_account_id=$1 AND c.auth_subject=$2 AND ${RENEWING} LIMIT 1`,
+      [stripeAccountId, subject],
+    );
+    return rows.length > 0;
+  }
 
   /** @param {import("./transaction.mjs").SqlClient} client @param {string} subject @param {string | null} emailKey */
   async function trialFacts(client, subject, emailKey) {
@@ -646,9 +784,16 @@ export function createBillingStore(pool, { stripeAccountId, livemode = false }) 
        WHERE c.stripe_account_id=$1 AND c.auth_subject=$2 AND s.status NOT IN ('incomplete','incomplete_expired') LIMIT 1`,
       [stripeAccountId, subject],
     );
+    // Older deployments can still maintain legacy grants before migration 0007.
+    const cardTable = await client.query("SELECT to_regclass('saiph_billing.card_trial_claims') AS present");
+    const card = cardTable.rows[0]?.present ? await client.query(
+      `SELECT count(*) FILTER (WHERE auth_subject<>$2) AS reserved,
+        bool_or(email_key=$3 AND auth_subject<>$2) AS email_used
+       FROM saiph_billing.card_trial_claims WHERE stripe_account_id=$1`,[stripeAccountId,subject,emailKey]) : {rows:[]};
     const count = await client.query("SELECT count(*) AS started FROM saiph_billing.trials WHERE stripe_account_id=$1", [stripeAccountId]);
-    return { stored: own.rows[0] ? trialRow(own.rows[0]) : null, emailUsed: email.rows.length > 0,
-      subscribed: subscribed.rows.length > 0, started: Number(count.rows[0].started) };
+    return { stored: own.rows[0] ? trialRow(own.rows[0]) : null, emailUsed: email.rows.length > 0 || Boolean(card.rows[0]?.email_used),
+      subscribed: subscribed.rows.length > 0, started: Number(count.rows[0].started) + Number(card.rows[0]?.reserved ?? 0),
+      cardReady: Boolean(cardTable.rows[0]?.present), cardEmailUsed: Boolean(card.rows[0]?.email_used) };
   }
 }
 

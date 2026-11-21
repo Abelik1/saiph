@@ -23,6 +23,8 @@ tokens/
 frontend/node_modules/
 frontend/test-results/
 frontend/playwright-report/
+desktop/dist/
+desktop/node_modules/
 test-artifacts/
 
 # Orion Hub / Android local runtime and credentials
@@ -44,6 +46,7 @@ node_modules/
 **/local.properties
 **/google-services.json
 android/app/src/beta/assets/hosted-defaults.json
+android/app/src/release/assets/hosted-defaults.json
 *.pfx
 *.p12
 *.pem

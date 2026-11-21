@@ -280,38 +280,33 @@
       await c.wait(1200);
     },
 
-    async cloud(c) {
-      const f = (name, cls = "") => `<div class="file ${cls}"><i></i>${name}</div>`;
-      const folder = (extra = "") => plainWin("Saiph Cloud", `<div class="fm">${f("Lab report.pdf")}${f("Budget.docx", "docx")}${f("Tickets.pdf")}${extra}</div>`);
-      c.set("laptop", computer("w1", folder()));
-      c.set("desktop", computer("w2", folder()));
-      c.set("phone", phoneLock());
-      c.say("Optional Cloud: save into your Saiph folder on the laptop…");
-      await c.wait(1100);
-      const nf = h(`<div class="file docx new"><i></i>Thesis v4.docx<em class="badge sync"></em></div>`);
-      c.q("laptop", ".fm").appendChild(nf);
-      await c.wait(900);
-      await c.beam("laptop", "desktop", 2);
-      nf.querySelector(".badge").className = "badge done";
-      c.q("desktop", ".fm").appendChild(h(`<div class="file docx new"><i></i>Thesis v4.docx<em class="badge done"></em></div>`));
-      c.say("…and it's on your desktop, synced through storage you control.");
-      await c.wait(2800);
-    },
+
   };
 
   const order = tabs.map((t) => t.dataset.scene);
+  root.id = root.id || "feature-demo-panel";
+  root.setAttribute("role", "tabpanel");
+  root.tabIndex = 0;
+  tabs.forEach((tab, index) => {
+    tab.id = tab.id || "feature-demo-tab-" + index;
+    tab.setAttribute("aria-controls", root.id);
+    tab.tabIndex = index === 0 ? 0 : -1;
+  });
 
   async function play(index, auto) {
     current = (index + order.length) % order.length;
     const id = ++runId;
     clearStage();
-    tabs.forEach((t, i) => t.setAttribute("aria-selected", String(i === current)));
+    tabs.forEach((t, i) => { t.setAttribute("aria-selected", String(i === current)); t.tabIndex = i === current ? 0 : -1; });
+    root.setAttribute("aria-labelledby", tabs[current].id);
     const label = tabs[current].dataset.label;
     if (label) inner.setAttribute("aria-label", label);
     try {
       await scenes[order[current]](ctx(id));
       if (reduced) return;
       await ctx(id).wait(700);
+      // Do not move the selected tab away while someone is using the demo.
+      if (tabs.includes(document.activeElement) || root.contains(document.activeElement)) return;
       play(current + 1, true);
     } catch (e) {
       if (!(e instanceof Abort)) throw e;
@@ -321,6 +316,15 @@
   tabs.forEach((t, i) => t.addEventListener("click", () => {
     play(i);
     if (t.closest(".feature-cards")) root.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "center" });
+  }));
+  tabs.forEach((tab, index) => tab.addEventListener("keydown", (event) => {
+    const next = event.key === "ArrowRight" ? (index + 1) % tabs.length
+      : event.key === "ArrowLeft" ? (index + tabs.length - 1) % tabs.length
+      : event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : null;
+    if (next === null) return;
+    event.preventDefault();
+    tabs[next].focus();
+    play(next);
   }));
   document.querySelectorAll("[data-goto-scene]").forEach((b) => b.addEventListener("click", () => {
     const i = order.indexOf(b.dataset.gotoScene);

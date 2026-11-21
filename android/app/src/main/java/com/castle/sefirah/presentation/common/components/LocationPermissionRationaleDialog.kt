@@ -15,7 +15,8 @@ fun LocationPermissionRationaleDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.location_permission_dialog_title)) },
-        text = { Text(stringResource(R.string.location_permission_dialog_message)) },
+        // The Google Play build never asks for background location.
+        text = { Text(stringResource(if (com.castle.sefirah.BuildConfig.PLAY_STORE) R.string.location_permission_dialog_message_foreground else R.string.location_permission_dialog_message)) },
         confirmButton = {
             TextButton(onClick = onConfirm) {
                 Text(stringResource(R.string.grant))

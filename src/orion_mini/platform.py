@@ -9,6 +9,9 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from urllib.parse import urlsplit
+
+from . import child_process
 
 
 def qt_platform_for_background_clipboard(environ=None):
@@ -35,19 +38,32 @@ def qt_platform_for_background_clipboard(environ=None):
 
 
 def beep(urgent=False):
+    native = globals().get('_desktop_beep')
+    if native is not None:
+        return native(urgent)
     if sys.platform == "win32":
         import winsound
         winsound.MessageBeep(winsound.MB_ICONEXCLAMATION if urgent else winsound.MB_ICONASTERISK)
     else:
-        from PySide6.QtWidgets import QApplication
-        QApplication.beep()
+        try:
+            child_process.run(['canberra-gtk-play', '-i', 'dialog-warning' if urgent else 'dialog-information'],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+        except FileNotFoundError:
+            sys.stderr.write('\a')
 
 
 def open_target(value):
-    from PySide6.QtCore import QUrl
-    from PySide6.QtGui import QDesktopServices
-    url = QUrl.fromLocalFile(str(Path(value).resolve())) if isinstance(value, Path) else QUrl(str(value))
-    if not QDesktopServices.openUrl(url):
+    """Open a local path or URL in the user's default application."""
+    native = globals().get('_desktop_open')
+    if native is not None:
+        return native(value)
+    if isinstance(value, Path):
+        target = str(value.resolve())
+    else:
+        target = str(value)
+        if not urlsplit(target).scheme or any(char.isspace() for char in target):
+            raise ValueError("This computer could not open the item.")
+    if not child_process.open_url(target):
         raise ValueError("This computer could not open the item.")
 
 
@@ -175,7 +191,7 @@ def idle_seconds():
     # xprintidle returns elapsed milliseconds only; unavailable on native Wayland.
     if os.environ.get("XDG_SESSION_TYPE") != "wayland" and shutil.which("xprintidle"):
         try:
-            result = subprocess.run(["xprintidle"], capture_output=True, timeout=2, check=False)
+            result = child_process.run(["xprintidle"], capture_output=True, timeout=2, check=False)
             if result.returncode:
                 return None
             return max(0.0, float(result.stdout.strip()) / 1000)
@@ -214,7 +230,7 @@ def system_dnd(focus):
         return _windows_dnd()
     if sys.platform.startswith("linux") and "GNOME" in os.environ.get("XDG_CURRENT_DESKTOP", "").upper() and shutil.which("gsettings"):
         try:
-            result = subprocess.run(["gsettings", "get", "org.gnome.desktop.notifications", "show-banners"], capture_output=True, timeout=3)
+            result = child_process.run(["gsettings", "get", "org.gnome.desktop.notifications", "show-banners"], capture_output=True, timeout=3)
         except (OSError, subprocess.TimeoutExpired):
             return None
         if result.returncode or result.stdout.strip() not in {b"true", b"false"}:
@@ -253,7 +269,7 @@ class FocusAdapter:
         if sys.platform.startswith("linux") and "GNOME" in os.environ.get("XDG_CURRENT_DESKTOP", "").upper() and shutil.which("gsettings"):
             key = ["gsettings", "get", "org.gnome.desktop.notifications", "show-banners"]
             if quiet and not self.restore_pending:
-                result = subprocess.run(key, capture_output=True, timeout=3)
+                result = child_process.run(key, capture_output=True, timeout=3)
                 if result.returncode:
                     raise ValueError("Notification focus is unavailable on this desktop.")
                 self.previous = result.stdout.strip() == b"true"
@@ -264,7 +280,7 @@ class FocusAdapter:
                 self.restore_pending = True
             restore = False if quiet else self.previous
             if restore is not None:
-                result = subprocess.run(["gsettings", "set", "org.gnome.desktop.notifications", "show-banners", str(restore).lower()], capture_output=True, timeout=3)
+                result = child_process.run(["gsettings", "set", "org.gnome.desktop.notifications", "show-banners", str(restore).lower()], capture_output=True, timeout=3)
                 if result.returncode:
                     raise ValueError("Notification focus is unavailable on this desktop.")
             self.restore_pending = quiet

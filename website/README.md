@@ -1,7 +1,33 @@
 # Saiph website
 
+For marketing-page reviews and changes, use **Page-CRO (`page-cro`) as the lead
+skill** and read [the shared conversion brief and required workflow](../docs/LANDING_CONVERSION.md#required-skill-and-workflow-for-marketing-page-work)
+first. This guidance applies to Claude and Codex. Keep the deliberate compact
+page and clear primary action; use Impeccable for supporting visual/accessibility
+checks and Copywriting for focused messaging. Device setup guidance belongs in
+the account site and apps.
+
+All public pages share a compact header (Features, Self-host, Download, Account) and footer
+(Downloads, Self-host, Privacy & terms, Contact, Cookie settings). Keep launch
+updates and source links in relevant download/self-host content instead of
+repeating them in global navigation.
+
+The checked build assembles `privacy.html` as the policy home with Website
+privacy, Account privacy, Terms and Refunds tabs. Edit policy text in its existing
+source document; `consolidate_legal_pages` composes those documents at build time
+to avoid divergent copies. The old account-privacy, terms and refunds URLs ship
+as noindexed aliases with fragment-preserving navigation and a plain-link
+fallback. `assets/legal.js` enhances the canonical page with keyboard/history
+support; all four documents are readable without JavaScript and printable.
+Contact remains separate so the protected trader address stays only in its
+noindexed page. Always preview generated output, not raw source pages.
+
 Static product source. The product and operations repositories are private;
 source publication, downloads and Hosted availability are separate launch gates.
+The prepared new offer is 14 days free with a card required, then €9.99/month
+unless cancelled. Release the website/account changes together after the
+[trial activation checks](../docs/CARD_REQUIRED_TRIAL.md); earlier no-card trials
+keep their original terms.
 Vercel visit analytics (pageviews, allow-listed campaign tags and four button
 counts) is enabled in `landing-settings.json`; local previews remain untracked.
 `robots.txt`, `sitemap.xml`, canonical and link-preview tags and the share image
@@ -44,8 +70,9 @@ the email list. Keep claims aligned with
 [the security model](../docs/SECURITY_MODEL.md): Hosted is a beta service without
 an independent security review yet. Texts and call controls are included in the
 released beta builds and require phone opt-in and Android permissions; physical
-acceptance remains pending. Notification replies and automatic image clipboard
-sync are still Hosted implementation gaps, not separate subscription tiers.
+acceptance remains pending. Saiph Cloud and a self-hosted Hub share the same
+features; the only difference is starting the webcam from the phone, which needs
+Saiph Cloud's sealed delivery (self-hosted phones scan the computer's code).
 
 The trader's postal address is required on the contact page but is not kept in
 Git. The hosting project sets `SAIPH_TRADER_ADDRESS` (one plain line, for example

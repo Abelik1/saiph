@@ -49,17 +49,15 @@ class OrionRemoteActivity : ComponentActivity() {
         computer = null; screen("Remote", ::finish)
         status.text = "Finding computers that allow phone remote control…"
         lifecycleScope.launch {
-            val own = getSharedPreferences("orion", 0).getString("device_id", null)
-            val found = withContext(Dispatchers.IO) { runCatching {
-                val devices = JSONObject(Api.request(this@OrionRemoteActivity, "/v1/link/phone")).getJSONArray("devices")
-                (0 until devices.length()).map(devices::getJSONObject).filter { device ->
-                    val caps = device.optJSONArray("capabilities")
-                    device.optBoolean("online") && device.getString("id") != own && caps != null && (0 until caps.length()).any { caps.optString(it) == "remote" }
-                }.map { it.getString("id") to it.getString("name") }
-            }.getOrNull() }
+            val found = withContext(Dispatchers.IO) { runCatching { OrionComputers.targets(this@OrionRemoteActivity, "remote") }.getOrNull() }
             when {
-                found == null -> status.text = "Saiph is reconnecting. Try again shortly."
-                found.isEmpty() -> status.text = "No computer is offering remote control. On your computer open Saiph Settings → Devices → Phone remote, turn it on and allow this phone."
+                found == null -> { status.text = ""; root.addView(emptyState(com.castle.sefirah.R.drawable.saiph_ic_remote,
+                    "Saiph is reconnecting", "Your computers will appear here once this phone is back online.",
+                    button("Try again", true) { computers() })) }
+                found.isEmpty() -> { status.text = ""; root.addView(emptyState(com.castle.sefirah.R.drawable.saiph_ic_remote,
+                    "No computer is offering remote control",
+                    "On your computer, open Saiph → Settings → Devices → Phone remote. Turn it on and allow this phone.",
+                    button("Try again", true) { computers() })) }
                 found.size == 1 -> { choices = 1; catalog(found.single()); return@launch }
                 else -> { choices = found.size; status.text = "Choose a computer"
                     root.addView(settingsList(found.map { device -> settingsRow(sefirah.common.R.drawable.ic_desktop_windows, device.second, null) { catalog(device) } })) }
@@ -69,7 +67,7 @@ class OrionRemoteActivity : ComponentActivity() {
     private fun catalog(device: Pair<String, String>) {
         computer = device; screen(device.second, back = { if (choices > 1) computers() else finish() })
         status.text = "Asking ${device.second} for its apps…"
-        if (link.status.value != "Online" || !link.publish("remote.catalog.request", JsonObject(emptyMap()), device.first))
+        if (!OrionComputers.send(this, link, device.first, "remote.catalog.request", JsonObject(emptyMap())))
             status.text = "Saiph is reconnecting. Try again shortly."
         val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(list)
@@ -77,7 +75,9 @@ class OrionRemoteActivity : ComponentActivity() {
             OrionRemote.catalogs.collect { catalogs ->
                 val apps = catalogs[device.first] ?: return@collect
                 list.removeAllViews()
-                status.text = if (apps.isEmpty()) "No apps are offered. Choose apps in Saiph on your computer." else "Choose an app"
+                status.text = if (apps.isEmpty()) "" else "Choose an app"
+                if (apps.isEmpty()) list.addView(emptyState(com.castle.sefirah.R.drawable.saiph_ic_remote, "No apps are offered yet",
+                    "On ${device.second}, open Saiph → Settings → Devices → Phone remote and choose the apps this phone may control."))
                 apps.forEach { remote ->
                     list.addView(button(remote.name + if (remote.available) "" else " · unavailable") { controls(remote) }.apply { isEnabled = remote.available })
                 }
@@ -86,7 +86,7 @@ class OrionRemoteActivity : ComponentActivity() {
     }
     private fun send(remote: RemoteApp, control: RemoteControl, value: String? = null) {
         val device = computer ?: return
-        status.text = if (link.status.value == "Online" && link.publish("remote.command", OrionRemote.command(remote.id, control.id, value), device.first))
+        status.text = if (OrionComputers.send(this, link, device.first, "remote.command", OrionRemote.command(remote.id, control.id, value)))
             "Sending ${control.label}…" else "Saiph is reconnecting. This control has not been sent."
     }
     private fun controls(remote: RemoteApp) {
@@ -134,9 +134,8 @@ class OrionRemoteActivity : ComponentActivity() {
         fun flush(remote: RemoteApp) {
             val device = computer?.first ?: return
             val (moveX, moveY, click) = synchronized(this) { Triple(dx.toInt(), dy.toInt(), tapped).also { dx -= it.first; dy -= it.second; tapped = false } }
-            if (link.status.value != "Online") return
-            if (moveX != 0 || moveY != 0) link.publish("remote.command", OrionRemote.pad(remote.id, control.id, if (control.id == "scroll") 0 else moveX * 3 / 2, moveY * 3 / 2), device)
-            if (click) remote.controls.firstOrNull { it.id == "click" }?.let { link.publish("remote.command", OrionRemote.command(remote.id, it.id), device) }
+            if (moveX != 0 || moveY != 0) OrionComputers.send(this@OrionRemoteActivity, link, device, "remote.command", OrionRemote.pad(remote.id, control.id, if (control.id == "scroll") 0 else moveX * 3 / 2, moveY * 3 / 2))
+            if (click) remote.controls.firstOrNull { it.id == "click" }?.let { OrionComputers.send(this@OrionRemoteActivity, link, device, "remote.command", OrionRemote.command(remote.id, it.id)) }
         }
     }
     override fun onDestroy() { watch?.cancel(); super.onDestroy() }

@@ -38,6 +38,7 @@ from pathlib import Path
 
 from .bt_lock import MAC
 from .call_audio_probe import CallAudioProbe, text_version, verdict, wireplumber_settings
+from . import child_process
 
 GATEWAY_UUID = "0000111f-0000-1000-8000-00805f9b34fb"   # The phone offers phone calls (Handsfree Audio Gateway).
 TELEPHONY = "org.pipewire.Telephony"
@@ -197,7 +198,7 @@ class Telephony:
 class CallAudio:
     """Detection, setup and the per-call audio route. Linux only; inert elsewhere."""
 
-    def __init__(self, settings, *, runner=subprocess.run, which=shutil.which, platform=None, home=None, root="/",
+    def __init__(self, settings, *, runner=child_process.run, which=shutil.which, platform=None, home=None, root="/",
                  clock=time.monotonic, sleep=time.sleep, threaded=True):
         self.settings, self.runner, self.which = settings, runner, which
         self.platform = platform or sys.platform

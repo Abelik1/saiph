@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { Metadata } from "next";
 import Link from "next/link";
+import { headers } from "next/headers";
 import { readBetaConfig } from "../lib/beta-policy.mjs";
 import { readBillingConfig } from "../lib/billing/policy";
 import { Mark } from "./ui";
@@ -17,12 +18,41 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default function Layout({
+export default async function Layout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   const beta = readBetaConfig(process.env) !== null;
   // Live payments: no "Development" badge on the page people pay from.
   const live = readBillingConfig(process.env)?.livemode === true;
+  // The account deletion page, which the Android app opens, gets no navigation:
+  // nothing on it may lead to plans or prices. proxy.ts always sets this header.
+  const plain = (await headers()).get("x-saiph-chrome") === "plain";
+  if (plain) return (
+    <html lang="en">
+      <body>
+        <a className="skip-link" href="#main">
+          Skip to content
+        </a>
+        <header className="site-header">
+          <div>
+            <span className="brand">
+              <Mark id="brand" />
+              Saiph <span className="brand-section">Account</span>
+            </span>
+            {!live && <span className="pill warn" title="Development site"><span>Development</span></span>}
+          </div>
+        </header>
+        <main id="main" tabIndex={-1}>
+          {children}
+        </main>
+        <footer className="site-footer">
+          <div>
+            <span>Saiph · Your devices. Your control.</span>
+          </div>
+        </footer>
+      </body>
+    </html>
+  );
   return (
     <html lang="en">
       <body>

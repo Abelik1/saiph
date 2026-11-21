@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Check, Cloud, Server } from "lucide-react";
 import type { Client, State } from "./types";
 import { Action, Card, Form } from "./ui";
@@ -15,7 +15,7 @@ type Mode = "hosted" | "hub";
 type Step = "welcome" | "connect" | "phone" | "features" | "tools" | "privacy" | "done";
 const toolNames: Record<string, string> = { adb: "Android platform tools (adb)", scrcpy: "scrcpy", deskflow: "Deskflow" };
 const steps: Step[] = ["welcome", "connect", "phone", "features", "tools", "privacy", "done"];
-const titles: Record<Step, string> = { welcome: "Welcome", connect: "Connect this computer", phone: "Add your phone", features: "Choose features", tools: "Optional tools", privacy: "Usage statistics", done: "All set" };
+const titles: Record<Step, string> = { welcome: "Welcome", connect: "Connect this computer", phone: "Add your phone", features: "Choose features", tools: "Optional tools", privacy: "Usage statistics", done: "Setup saved" };
 
 type Feature = { key: string; label: string; detail: string; default: boolean; hosted?: boolean };
 // Plain-language choices with the same defaults the settings use.
@@ -55,6 +55,8 @@ export function SetupWizard({ state, client, close }: { state: State; client: Cl
   const [mode, setMode] = useState<Mode | null>(state.setup?.mode || (state.hosted?.available === false ? null : "hosted"));
   // A computer that is already connected starts at the optional choices; connection lives in the Phone tab.
   const [step, setStep] = useState<Step>(() => alreadyConnected(state, mode) ? "features" : "welcome");
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => { heading.current?.focus(); }, [step]);
   const link = state.settings?.link as Record<string, unknown> | undefined;
   const [choices, setChoices] = useState<Record<string, boolean>>(() => Object.fromEntries(features.map((f) =>
     [f.key, f.key === "remote" ? (link?.remote as { enabled?: boolean } | undefined)?.enabled === true
@@ -69,7 +71,8 @@ export function SetupWizard({ state, client, close }: { state: State; client: Cl
   const joining = hosted?.role === "member" && hosted.status === "awaiting_approval";
   const connected = mode === "hub" ? Boolean(state.settings?.hub?.paired) : Boolean(hosted?.identity && signedIn && !joining);
   const phone = phoneOf(state);
-  const hostedPhones = hosted?.roster?.members.filter((m) => !m.root && !m.self) || [];
+  const hostedPhones = hosted?.roster?.members.filter((m) => !m.root && !m.self && (m.kind === "phone"
+    || (!m.kind && state.phone?.devices.some((device) => device.id === m.id)))) || [];
   const phoneReady = mode === "hub" ? Boolean(phone) : hostedPhones.length > 0;
   const shown = features.filter((f) => mode !== "hosted" || f.hosted);
   const finish = async () => { await client.call("settings.save", { setup: { completed: true } }); close(); };
@@ -98,7 +101,7 @@ export function SetupWizard({ state, client, close }: { state: State; client: Cl
   const helpers = Object.entries(state.setup?.linux || {});
   const missing = helpers.filter(([, h]) => !h.found);
   return <div className="setup-wizard" role="dialog" aria-label="Saiph setup">
-    <header className="setup-header">{step !== "welcome" && <SaiphMark size={40} />}<h1 key={step}>{titles[step]}</h1>
+    <header className="setup-header">{step !== "welcome" && <SaiphMark size={40} />}<h1 ref={heading} tabIndex={-1} key={step}>{titles[step]}</h1>
       {step !== "done" && <button type="button" className="text-button" onClick={() => void finish()}>Set up later</button>}</header>
     {step !== "welcome" && step !== "done" && <Progress step={step} usage={Boolean(state.usage?.available)} />}
     <div className="setup-step" key={step}>
@@ -106,20 +109,20 @@ export function SetupWizard({ state, client, close }: { state: State; client: Cl
     {step === "welcome" && <div className="setup-hero"><SaiphMark size={96} /><p>Your phone and your computers, in tune.</p></div>}
     {step === "welcome" && <Card title="How do you want to connect your devices?" subtitle="You can change this later in Settings.">
       <div className="setup-choices">
-        <button type="button" className={"setup-choice" + (mode === "hosted" ? " selected" : "")} disabled={hosted?.available === false} onClick={() => setMode("hosted")}>
+        <button type="button" aria-pressed={mode === "hosted"} className={"setup-choice" + (mode === "hosted" ? " selected" : "")} disabled={hosted?.available === false} onClick={() => setMode("hosted")}>
           <Cloud size={28} /><b>Saiph Cloud</b><span>Sign in with your Saiph account. No server or network setup is needed.</span>
           {hosted?.available === false && <small>This build does not include Saiph accounts.</small>}</button>
-        <button type="button" className={"setup-choice" + (mode === "hub" ? " selected" : "")} onClick={() => setMode("hub")}>
+        <button type="button" aria-pressed={mode === "hub"} className={"setup-choice" + (mode === "hub" ? " selected" : "")} onClick={() => setMode("hub")}>
           <Server size={28} /><b>I self-host my own Hub</b><span>Only if you run a Saiph Hub on your own private network. You'll need an invitation from it.</span></button>
       </div>
-      {mode === "hosted" && hosted?.available && !hosted.configured && <p role="status">This build cannot connect to Saiph accounts. Download the current beta from your account page.</p>}
+      {mode === "hosted" && hosted?.available && !hosted.configured && <p role="status">This build cannot connect to Saiph accounts. Download Saiph from usesaiph.com.</p>}
       <div className="actions"><Action disabled={!mode || (mode === "hosted" && (!hosted?.configured || hosted.account?.status === "signing_in"))} run={chooseMode}>{mode === "hosted" && !signedIn ? "Continue with Google" : "Continue"}</Action></div>
     </Card>}
 
     {step === "connect" && <Card title={mode === "hosted" ? (signedIn ? "You're signed in" : "Sign in with your Saiph account") : "Pair with your Hub"}>
       {mode === "hosted" && hosted && <>
         {hosted.self_hosted_paired ? <p>This computer is already paired with your own Hub. A device uses one or the other.</p>
-          : !hosted.configured ? <p>This build cannot connect to Saiph accounts. Download the current beta from your account page.</p>
+          : !hosted.configured ? <p>This build cannot connect to Saiph accounts. Download Saiph from usesaiph.com.</p>
           : <>
             {!signedIn && <HostedSignIn hosted={hosted} client={client} />}
             {signedIn && !hosted.identity && <><p>This computer becomes the device that approves your others. Keep it online now and then so approvals stay current.</p>
@@ -193,10 +196,11 @@ export function SetupWizard({ state, client, close }: { state: State; client: Cl
       <div className="actions"><button type="button" className="text-button" onClick={next("tools")}>Back</button></div>
     </Card>}
 
-    {step === "done" && <Card title="Saiph is ready" subtitle="Your devices now work together.">
+    {step === "done" && <Card title="Your preferences are saved" subtitle={phoneReady ? "Try your first share from the Phone page." : "Next: connect your Android phone from the Phone page."}>
       <ul>
-        <li>{mode === "hosted" ? "Connected with your Saiph account." : "Paired with your own Hub."}</li>
-        <li>{phoneReady ? "Your phone is connected." : "Add your phone any time from the Phone page."}</li>
+        <li>{connected ? mode === "hosted" ? "This computer is set up with your Saiph account." : "This computer is paired with your own Hub." : "This computer still needs a connection."}</li>
+        <li>{phoneReady ? "Your phone is approved. Keep Saiph open on both devices to connect." : "No phone has been added yet. Add one any time from the Phone page."}</li>
+        {phoneReady && <li>Send a small test file from your phone. It should appear in Phone → Files on this computer.</li>}
         <li>Find every setting again in Settings, and run this guide again from Settings → General.</li>
       </ul>
       <div className="actions"><Action run={finish}>Open Saiph</Action></div>

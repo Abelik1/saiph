@@ -15,6 +15,7 @@
     "test": "node --test tests/*.test.mjs",
     "test:integration": "node tests/http-smoke.mjs",
     "test:beta-integration": "node tests/beta-http-smoke.mjs",
+    "test:trial-integration": "node tests/trial-http-smoke.mjs",
     "db:plan": "node scripts/migrate.mjs --plan",
     "db:migrate": "node scripts/migrate.mjs --apply-reviewed",
     "test:billing-db": "node scripts/test-billing-db.mjs",
@@ -26,7 +27,7 @@
   "dependencies": {
     "@auth0/nextjs-auth0": "4.31.1",
     "@neondatabase/serverless": "1.2.0",
-    "next": "16.4.0",
+    "next": "16.4.5",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "server-only": "0.0.1",

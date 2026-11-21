@@ -39,8 +39,6 @@ class OrionActivity : ComponentActivity() {
     private lateinit var root: LinearLayout
     /** The bar above every screen: back (on inner screens), the title, then status and actions on the right. */
     private lateinit var header: LinearLayout
-    /** Everyday actions on the home screen, fixed where the thumb rests so a long inbox never buries them. */
-    private lateinit var dock: LinearLayout
     private lateinit var scroll: ScrollView
     private var showAllRecent = false
     private var shownScreen = ""
@@ -87,15 +85,10 @@ class OrionActivity : ComponentActivity() {
             orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
             setPadding(dp(10), dp(8), dp(10), dp(8)); minimumHeight = dp(64)
         }
-        dock = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL; visibility = View.GONE
-            background = outline(0xF20A1224.toInt(), Palette.LINE, 0); setPadding(dp(8), dp(6), dp(8), dp(6))
-        }
         val column = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             addView(header)
             addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-            addView(dock)
         }
         // The strings sit behind every screen; the column scrolls over them.
         val shell = FrameLayout(this).apply {
@@ -151,7 +144,7 @@ class OrionActivity : ComponentActivity() {
     private fun lockedScreen() {
         if (showingLock) return
         showingLock = true; poll?.cancel()
-        root.removeAllViews(); header.removeAllViews(); dock.visibility = View.GONE
+        root.removeAllViews(); header.removeAllViews()
         root.addView(heading("Saiph is locked")); root.addView(text("Confirm it's you to open Saiph.", UiType.BODY, Palette.MUTED))
         root.addView(buttonRow(button("Unlock", true) { lock.declined = false; lock.open({}, ::resumeUnlocked) }))
     }
@@ -177,7 +170,7 @@ class OrionActivity : ComponentActivity() {
     }
     override fun onPause() { poll?.cancel(); super.onPause() }
     private fun title(value: String) {
-        root.removeAllViews(); header.removeAllViews(); dock.visibility = View.GONE
+        root.removeAllViews(); header.removeAllViews()
         // A new screen opens at its top; a refresh of the same screen keeps its place. A fling still
         // running from the last screen is stopped first, or it would carry on into the new one.
         if (screen != shownScreen) { shownScreen = screen; scroll.fling(0); scroll.scrollTo(0, 0); scroll.post { scroll.scrollTo(0, 0) } }
@@ -402,11 +395,6 @@ class OrionActivity : ComponentActivity() {
             Toast.makeText(this, "This settings page isn't available. Open Android Settings to configure it.", Toast.LENGTH_LONG).show()
         }
     }
-    /** Android lets only system apps switch the hotspot on; open its settings page instead. */
-    private fun hotspotSettings() {
-        val tethering = Intent(Intent.ACTION_MAIN).setClassName("com.android.settings", "com.android.settings.TetherSettings")
-        try { startActivity(tethering) } catch (_: Exception) { openSettings(Intent(Settings.ACTION_WIRELESS_SETTINGS)) }
-    }
     private fun appPermissionSettings() = openSettings(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
@@ -428,6 +416,7 @@ class OrionActivity : ComponentActivity() {
     }
     private fun render(items: JSONArray?, state: String) {
         title("Saiph")
+        ClipboardBubble.sync(this)
         val paused = OrionPause.paused(this)
         // Status sits beside the title, so it is the first thing read.
         header.addView(when {
@@ -435,25 +424,34 @@ class OrionActivity : ComponentActivity() {
             state == "Online" -> badge("Online", Palette.GOOD, Palette.GOOD_SURFACE)
             else -> badge("Reconnecting", Palette.MUTED, Palette.MUTED_FILL)
         }, 1, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginEnd = dp(4) })
-        showDock()
         if (paused) {
             root.addView(card(strong = true).apply {
                 addView(text("Saiph is paused. Nothing syncs until you resume it.", UiType.BODY))
                 addView(buttonRow(button("Resume", true) { OrionPause.set(this@OrionActivity, false); network.startService(); homeLoop() }))
             })
         } else if (state != "Online") root.addView(text(state, UiType.META, Palette.MUTED).apply { setPadding(dp(4), 0, 0, dp(4)) })
-        // The features people start, at the top; Photo, Sketch, Remote and Hotspot stay in the dock.
-        root.addView(quickActions(
-            QuickAction(sefirah.common.R.drawable.ic_videocam, "Use as webcam") { startActivity(Intent(this, PhoneCameraActivity::class.java)) },
-            QuickAction(sefirah.common.R.drawable.ic_desktop_windows, "Share screen") { startActivity(Intent(this, PhoneScreenActivity::class.java)) },
-            QuickAction(sefirah.common.R.drawable.ic_upload, "Send a file") { sendFile.launch(arrayOf("*/*")) }))
+        // Requests wait in the inbox; the home screen only says that something is there.
+        inbox = items
+        val new = inboxItems().filter { it.getString("status") == "new" }
+        if (new.isNotEmpty()) root.addView(needsYou(if (new.size == 1) new[0].getString("title") else "${new.size} requests need you") { inboxScreen() })
+        // The home screen is a remote: big tiles, smaller actions, then devices. Settings sit behind the gear.
+        root.addView(remoteTiles(
+            RemoteTile(sefirah.common.R.drawable.ic_videocam, "Use as webcam") { startActivity(Intent(this, PhoneCameraActivity::class.java)) },
+            RemoteTile(sefirah.common.R.drawable.ic_desktop_windows, "Share screen") { startActivity(Intent(this, PhoneScreenActivity::class.java)) },
+            RemoteTile(sefirah.common.R.drawable.ic_upload, "Send a file") { sendFile.launch(arrayOf("*/*")) },
+            RemoteTile(sefirah.common.R.drawable.ic_folder, "Received files") { receivedFiles() }))
+        root.addView(homeActions { ClipboardBubble.sendNow(this) })
         devicesSection()
-        val all = items?.let { a -> (0 until a.length()).map(a::getJSONObject) }.orEmpty()
+    }
+    /** The last inbox the home screen fetched; null until the Hub answers. */
+    private var inbox: JSONArray? = null
+    private fun inboxItems() = inbox?.let { a -> (0 until a.length()).map(a::getJSONObject) }.orEmpty()
+    /** Requests that need a decision, then recent decisions. Opened from the home screen's amber line. */
+    private fun inboxScreen() {
+        screen = "inbox"; poll?.cancel(); title("Requests")
+        val all = inboxItems()
         val new = all.filter { it.getString("status") == "new" }
-        root.addView(section(if (new.isEmpty()) "Needs you" else "Needs you · ${new.size}"))
-        if (new.isEmpty()) root.addView(card().apply {
-            addView(text(if (items == null) "Your inbox will return automatically." else "All clear", UiType.BODY, Palette.MUTED))
-        })
+        if (new.isEmpty()) root.addView(card().apply { addView(text(if (inbox == null) "Your requests will return automatically." else "All clear", UiType.BODY, Palette.MUTED)) })
         new.forEach { root.addView(itemCard(it)) }
         // Decided items are history: three are enough at a glance, the rest on request.
         val decided = all.filter { it.getString("status") != "new" }.take(10)
@@ -461,55 +459,39 @@ class OrionActivity : ComponentActivity() {
             root.addView(section("Recent decisions"))
             (if (showAllRecent) decided else decided.take(3)).forEach { root.addView(itemCard(it)) }
             if (decided.size > 3) root.addView(buttonRow(button(if (showAllRecent) "Show fewer" else "Show ${decided.size - 3} more", tone = Tone.TONAL) {
-                showAllRecent = !showAllRecent; lastRender = ""; render(items, state)
+                showAllRecent = !showAllRecent; inboxScreen()
             }))
         }
     }
-    /** Photo, sketch, remote and hotspot: fixed at the bottom of the home screen. */
-    private fun showDock() {
-        dock.removeAllViews(); dock.visibility = View.VISIBLE
-        fun add(icon: Int, label: String, run: () -> Unit) =
-            dock.addView(dockAction(icon, label, run), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        add(R.drawable.saiph_ic_photo, "Photo") { startActivity(Intent(this, OrionCaptureActivity::class.java)) }
-        add(R.drawable.saiph_ic_sketch, "Sketch") { startActivity(Intent(this, OrionSketchActivity::class.java)) }
-        add(R.drawable.saiph_ic_remote, "Remote") { startActivity(Intent(this, OrionRemoteActivity::class.java)) }
-        add(R.drawable.saiph_ic_hotspot, "Hotspot") { hotspotSettings() }
-    }
+    /** Files from a Hub computer land in Downloads/Orion; the system's Downloads app shows them. */
+    private fun receivedFiles() = openSettings(Intent(android.app.DownloadManager.ACTION_VIEW_DOWNLOADS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     /** Every other paired device, with what it can do from here: ring, lock and wake. */
     private fun devicesSection() {
         val wake = runCatching { JSONArray(getSharedPreferences("orion_continuity",0).getString("wake_targets","[]")) }.getOrNull()
             ?.let { list -> (0 until list.length()).map(list::getString) }.orEmpty()
         if (devices.isEmpty() && wake.isEmpty()) return
-        root.addView(section("Your devices"))
-        // One card, one row per device: its name, battery and status, then what it can do.
-        val list = card()
-        root.addView(list)
-        devices.forEachIndexed { index, device -> list.apply {
-            if (index > 0) addView(divider())
-            val row = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL }
-            val battery = device.battery?.takeIf { device.online }?.let { " · $it%" + if (device.charging) " · charging" else "" } ?: ""
-            row.addView(text(device.name + battery, UiType.BODY), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-            row.addView(if (device.online) badge("Online", Palette.GOOD, Palette.GOOD_SURFACE) else badge("Offline", Palette.MUTED, Palette.MUTED_FILL))
-            addView(row)
+        val list = devicesCard(root)
+        fun say(value: String) = Toast.makeText(this, value, Toast.LENGTH_SHORT).show()
+        devices.forEach { device ->
             val actions = mutableListOf<Button>()
-            if (device.online && device.computer && "ring" in device.capabilities) actions += button("Ring", tone = Tone.TONAL) {
-                Toast.makeText(this@OrionActivity, if (OrionComputers.ring(link, device.id)) "Ringing ${device.name}…" else "Saiph is reconnecting. Nothing was sent.", Toast.LENGTH_SHORT).show()
+            if (device.online && device.computer && "ring" in device.capabilities) actions += deviceAction(sefirah.common.R.drawable.ic_notifications, "Ring") {
+                say(if (OrionComputers.ring(this, link, device.id)) "Ringing ${device.name}…" else "Saiph is reconnecting. Nothing was sent.")
             }
             // Opt-in on each computer: Phone remote with "This computer" turned on.
-            if (device.online && "remote" in device.capabilities) actions += button("Lock", tone = Tone.TONAL) {
-                Toast.makeText(this@OrionActivity, if (OrionComputers.lock(link, device.id)) "Locking ${device.name}…" else "Saiph is reconnecting. Nothing was sent.", Toast.LENGTH_SHORT).show()
+            if (device.online && "remote" in device.capabilities) actions += deviceAction(sefirah.common.R.drawable.ic_lock, "Lock") {
+                say(if (OrionComputers.lock(this, link, device.id)) "Locking ${device.name}…" else "Saiph is reconnecting. Nothing was sent.")
             }
-            if (actions.isNotEmpty()) addView(buttonRow(*actions.toTypedArray()))
-        } }
-        if (wake.isNotEmpty()) list.apply {
-            if (devices.isNotEmpty()) addView(divider())
-            addView(text("Wake a computer", UiType.BODY))
-            wake.forEach { target -> addView(buttonRow(button("Wake " + target.replace('-', ' '), tone = Tone.TONAL) {
-                if(link.status.value=="Online" && link.publish("wake",buildJsonObject { put("target",target) })) Toast.makeText(this@OrionActivity,"Wake request queued.",Toast.LENGTH_SHORT).show()
-                else Toast.makeText(this@OrionActivity,"Saiph is reconnecting. The request has not been sent.",Toast.LENGTH_SHORT).show()
-            })) }
+            val battery = device.battery?.takeIf { device.online }?.let { " · $it%" + if (device.charging) " · charging" else "" } ?: ""
+            list.addDeviceRow(deviceRow(if (device.computer) sefirah.common.R.drawable.ic_desktop_windows else R.drawable.ic_devices,
+                device.name, (if (device.online) "Online" else "Offline") + battery, *actions.toTypedArray()))
         }
-        if (devices.isEmpty() && wake.isEmpty()) root.removeView(list)
+        wake.forEach { target ->
+            list.addDeviceRow(deviceRow(sefirah.common.R.drawable.ic_desktop_windows, target.replace('-', ' '), "Asleep or off",
+                deviceAction(sefirah.common.R.drawable.ic_power_settings_new, "Wake") {
+                    say(if (link.status.value == "Online" && link.publish("wake", buildJsonObject { put("target", target) })) "Wake request queued."
+                        else "Saiph is reconnecting. The request has not been sent.")
+                }))
+        }
     }
     private fun itemCard(item: JSONObject): View {
         val kind = item.getString("kind"); val state = item.getString("status"); val open = state == "new"
@@ -581,7 +563,7 @@ class OrionActivity : ComponentActivity() {
     private fun settings(category: SettingsCatalog.Category? = null, target: String = "") {
         if (screen == "setup" && !prefs.getBoolean("setup_done", false))
             prefs.edit().putBoolean("setup_deferred", true).apply()
-        val entries = SettingsCatalog.SELF_HOSTED.filter { it.id != "usage" || UsageAnalytics.available(this) }
+        val entries = SettingsCatalog.forBuild(SettingsCatalog.SELF_HOSTED, BuildConfig.PLAY_STORE).filter { it.id != "usage" || UsageAnalytics.available(this) }
         // A different page opens at its top; redrawing the same page keeps its place.
         val samePage = screen == "settings" && settingsCategory == category
         screen = "settings"; settingsCategory = category; poll?.cancel()
@@ -620,8 +602,11 @@ class OrionActivity : ComponentActivity() {
                 page.switchItem("sleep_plan", "Quiet this phone during the sleep plan you share across your devices.", prefs.getBoolean("focus_enabled", true)) { _, checked ->
                     prefs.edit().putBoolean("focus_enabled", checked).apply(); refresh() }
             }
-            SettingsCatalog.Category.CLIPBOARD -> page.switchItem("clipboard", "Copy on one device and paste on another.", prefs.getBoolean("clipboard_enabled", true)) { _, checked ->
-                prefs.edit().putBoolean("clipboard_enabled", checked).apply(); network.refreshCapabilities() }
+            SettingsCatalog.Category.CLIPBOARD -> {
+                page.switchItem("clipboard", "Copy on one device and paste on another.", prefs.getBoolean("clipboard_enabled", true)) { _, checked ->
+                    prefs.edit().putBoolean("clipboard_enabled", checked).apply(); network.refreshCapabilities(); ClipboardBubble.sync(this@OrionActivity) }
+                page.clipboardControls(this, ::openSettings) { settings(SettingsCatalog.Category.CLIPBOARD) }
+            }
             SettingsCatalog.Category.PHOTOS -> page.item("backups") { backupSettings.controls(this) }
             SettingsCatalog.Category.STATUS -> page.switchItem("status_sharing", "Battery, Wi-Fi, Bluetooth, signal and sound mode on your computers, and their quick actions: find this phone, sound mode and Do Not Disturb.",
                 sefirah.network.orion.PhoneQuickControls.shared(this)) { _, on -> sefirah.network.orion.PhoneQuickControls.setShared(this@OrionActivity, on) }
@@ -629,7 +614,7 @@ class OrionActivity : ComponentActivity() {
                 page.item("app_lock") { addView(lock.toggle()) }
                 if (UsageAnalytics.available(this)) page.item("usage") { UsageAnalytics.settingsControls(this@OrionActivity).forEach(::addView) }
             }
-            SettingsCatalog.Category.ABOUT -> page.item("updates", "Saiph ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE}). Updates come from your Hub.") {
+            SettingsCatalog.Category.ABOUT -> page.item("updates", "Saiph ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE}). ${if (BuildConfig.PLAY_STORE) "Updates come from Google Play." else "Updates come from your Hub."}") {
                 updateSettings().forEach(::addView)
             }
             else -> {}

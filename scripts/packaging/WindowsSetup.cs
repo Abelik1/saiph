@@ -424,6 +424,7 @@ public static class Setup {
     }
     static string MenuShortcut { get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "Saiph", "Saiph.lnk"); } }
     static string LegacyMenuShortcut { get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "Orion", "Orion.lnk"); } }
+    static string FlatMenuShortcut { get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "Saiph.lnk"); } }
     // Explorer's Send to menu: Windows appends the selected files after this fixed argument.
     static string SendToShortcut { get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.SendTo), "Saiph (phone).lnk"); } }
     const string SendFilesArgument = "--send-files";
@@ -476,8 +477,10 @@ public static class Setup {
         Shortcut.Create(MenuShortcut, exe, icon, "OrionMini.Desktop");
         if (noSendTo) { if (OwnShortcut(SendToShortcut, targets, SendFilesArgument)) File.Delete(SendToShortcut); }
         else { Directory.CreateDirectory(Path.GetDirectoryName(SendToShortcut)); Shortcut.Create(SendToShortcut, exe, icon, "OrionMini.Desktop", SendFilesArgument); }
-        // Only remove the old label when its target proves installer ownership.
-        if (OwnShortcut(LegacyMenuShortcut, targets)) File.Delete(LegacyMenuShortcut);
+        // Keep one Start entry for our AppUserModelID. A developer or user link
+        // to another location stays in place even when it shares the ID.
+        if (OwnShortcut(LegacyMenuShortcut, targets)) Shortcut.Delete(LegacyMenuShortcut);
+        if (OwnShortcut(FlatMenuShortcut, targets)) Shortcut.Delete(FlatMenuShortcut);
         using (var key = Registry.CurrentUser.CreateSubKey(RunKey)) {
             // Existing opt-out is retained on upgrade. The app's own setting remains authoritative.
             if (!noStartup && (first || key.GetValue("OrionMini") != null)) key.SetValue("OrionMini", "\"" + exe + "\"");
@@ -562,8 +565,9 @@ public static class Setup {
             else retained.Add(version);
         }
         if (!isolated) {
-            if (OwnShortcut(MenuShortcut, targets)) File.Delete(MenuShortcut);
-            if (OwnShortcut(LegacyMenuShortcut, targets)) File.Delete(LegacyMenuShortcut);
+            if (OwnShortcut(MenuShortcut, targets)) Shortcut.Delete(MenuShortcut);
+            if (OwnShortcut(LegacyMenuShortcut, targets)) Shortcut.Delete(LegacyMenuShortcut);
+            if (OwnShortcut(FlatMenuShortcut, targets)) Shortcut.Delete(FlatMenuShortcut);
             if (OwnShortcut(SendToShortcut, targets, SendFilesArgument)) File.Delete(SendToShortcut);
             using (var key = Registry.CurrentUser.OpenSubKey(RunKey, true)) { object value = key == null ? null : key.GetValue("OrionMini", null, RegistryValueOptions.DoNotExpandEnvironmentNames); if (IntegrationPolicy.OwnRun(value, targets)) key.DeleteValue("OrionMini"); }
             if (IntegrationPolicy.OwnUninstall(TryReadTree(UninstallKey), destination)) Registry.CurrentUser.DeleteSubKeyTree(UninstallKey, false);
@@ -928,6 +932,9 @@ sealed class Slice : Stream {
 }
 
 static class Shortcut {
+    const int ShellCreate = 0x2, ShellDelete = 0x4, ShellUpdateItem = 0x2000, ShellPathUnicode = 0x5;
+    [DllImport("shell32.dll", ExactSpelling = true, CharSet = CharSet.Unicode)]
+    static extern void SHChangeNotify(int change, int flags, string path, IntPtr secondItem);
     [ComImport, Guid("00021401-0000-0000-C000-000000000046")] class ShellLink {}
     [ComImport, InterfaceType(ComInterfaceType.InterfaceIsIUnknown), Guid("000214F9-0000-0000-C000-000000000046")]
     interface Link {
@@ -955,14 +962,21 @@ static class Shortcut {
         } finally { Marshal.FinalReleaseComObject(item); }
     }
     public static void Create(string path, string executable, string icon, string identity, string arguments = "") {
+        bool existed = File.Exists(path);
         object item = new ShellLink();
         try {
             var link = (Link)item; link.SetPath(executable); link.SetWorkingDirectory(Path.GetDirectoryName(executable)); link.SetIconLocation(icon, 0);
+            link.SetDescription(Path.GetFileNameWithoutExtension(path));
             if (arguments.Length > 0) link.SetArguments(arguments);
             var store = (Store)item; var key = new Key { format = new Guid("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3"), id = 5 };
             var value = new Value { type = 31, text = Marshal.StringToCoTaskMemUni(identity) };
             try { store.SetValue(ref key, ref value); store.Commit(); } finally { Marshal.FreeCoTaskMem(value.text); }
             ((System.Runtime.InteropServices.ComTypes.IPersistFile)item).Save(path, true);
         } finally { Marshal.FinalReleaseComObject(item); }
+        SHChangeNotify(existed ? ShellUpdateItem : ShellCreate, ShellPathUnicode, path, IntPtr.Zero);
+    }
+    public static void Delete(string path) {
+        File.Delete(path);
+        SHChangeNotify(ShellDelete, ShellPathUnicode, path, IntPtr.Zero);
     }
 }

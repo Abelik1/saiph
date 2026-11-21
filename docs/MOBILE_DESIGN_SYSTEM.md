@@ -27,21 +27,15 @@ these rules to new mobile screens and when updating older screens.
 - Group related content on one card beneath a sentence-case section heading.
   Keep descriptions, state and actions with the feature they describe.
 - Keep frequent actions easy to reach. A fixed action dock stays above system
-  navigation and must not cover content. The self-hosted home screen uses this
-  for Photo, Sketch, Remote and Hotspot.
-- Both home screens start with a quick-actions strip (`quickActions` in
-  `Ui.kt`): equal icon tiles with a short label for the features people start,
-  currently **Use as webcam**, **Share screen** and **Send a file**. Keep it to
-  three or four tiles; a feature in the strip does not get a second card with
-  the same button further down.
-- Feature on/off on the home screen is a switch row (title and one-line summary
+  navigation and must not cover content; setup screens use it for their main
+  action. The home screen is described under **Home** below.
+- Feature on/off in Settings is a switch row (title and one-line summary
   on the left, the switch on the right), never a pair of Allow / Turn off or
   Stop sharing buttons. Turning a switch on still runs owner verification and
   Android's permission request; it stays off until they succeed. A missing
   Android access after it is on is one short warning and one compact action.
-- Keep home copy to a title and one short summary per feature. Details (what
-  each part does, who can use it) go behind a **Learn more** disclosure or in
-  Settings.
+- Keep copy to a title and one short summary per feature. Details (what each
+  part does, who can use it) go behind a **Learn more** disclosure.
 - A request that needs the owner immediately, such as **Find phone**, opens its
   own full-screen page with one very large action, over the lock screen when
   needed, and keeps an ongoing notification with the same action. Swiping the
@@ -53,6 +47,38 @@ these rules to new mobile screens and when updating older screens.
   computers, so the desktop's action returns to its idle label.
 - Preserve scroll position when refreshing the same screen. Start a different
   screen at its top. Long lists and larger text must remain scrollable.
+
+
+### Home
+
+The home screen is a remote, the same on Saiph Cloud and Hub phones
+(`RemoteHome.kt`). It holds actions, never settings:
+
+1. An amber **needs you** line (`needsYou`), only while something waits for
+   the owner, such as a computer's request. It opens the full list.
+2. Four big tiles (`remoteTiles`), two to a row: **Use as webcam**, **Share
+   screen**, **Send a file**, and **Open cloud** (Cloud: the received files
+   page, with a count of new files) or **Received files** (Hub: Downloads).
+3. One row of smaller actions (`homeActions`): **Clipboard** (send it now),
+   **Photo**, **Sketch**, **Remote** and **Hotspot**.
+4. **Your devices** (`devicesCard`, `deviceRow`, `deviceAction`): each computer
+   with its status and its actions on the right: **Ring** and **Lock** while it
+   is online, **Wake** while it sleeps.
+
+Everything switched on or off, such as photos, texts and calls, status sharing,
+notifications and mobile data, lives behind the gear in Settings. A feature
+never gets a second button elsewhere on the home screen.
+
+### Clipboard bubble
+
+Android lets an app read the clipboard only while one of its windows has focus,
+so sending from the phone is an explicit tap: the home screen's **Clipboard**
+action, or the clipboard bubble (`ClipboardBubble.kt`). The bubble is a small
+cyan button over other apps; tapping it sends what was copied, dragging moves
+it to either edge, and pressing and holding hides it. It needs Android's
+"Display over other apps" access and is turned on in Settings → Clipboard,
+which also offers **Send automatically** through the optional accessibility
+service. The first successful send from the home screen offers the bubble once.
 
 ## Hierarchy
 

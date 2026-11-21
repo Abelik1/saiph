@@ -23,7 +23,7 @@ def test_start_update_launches_visible_script_for_this_process(monkeypatch, tmp_
 
 @pytest.mark.skipif(sys.platform == 'win32', reason='Linux source updater guidance')
 def test_linux_source_update_requires_explicit_checkout_rebuild(tmp_path):
-    with pytest.raises(ValueError, match='bootstrap-orion-linux.sh'):
+    with pytest.raises(ValueError, match='build-native.py'):
         updater.start_update(tmp_path)
 
 

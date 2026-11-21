@@ -18,6 +18,7 @@ from .peer import PeerServer, Blobs, mesh_address, NoRedirect
 from .cloud import ensure_layout
 from .models import utc_now
 from .paths import received_dir
+from . import child_process
 
 MAX_FILE=2*1024**3
 MAX_CAPTURE=32*1024**2  # A phone photo placed on the clipboard, not an arbitrary file.
@@ -635,7 +636,7 @@ class PhoneFeatures:
         self.stop_requested.set()
         if self.file_server:self.file_server.stop();self.file_server=None
 
-def mirror_phone(adb,serial,runner=subprocess.Popen):
+def mirror_phone(adb,serial,runner=child_process.popen):
     """Only a deliberate preview click calls this function. No arbitrary commands."""
     if not serial or any(c.isspace() or c in ';|&' for c in serial):raise ValueError('Choose an authorized phone in Settings → Advanced.')
     from .companion_tools import tool_path

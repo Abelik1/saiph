@@ -313,42 +313,8 @@ fun Context.switchRow(label: String, detail: String? = null, checked: Boolean, c
         detail?.let { addView(body(it).apply { setPadding(0, dp(4), 0, dp(8)) }) }
     }
 
-/**
- * One everyday action: an icon over a short label. Used in the home screen's dock,
- * where the thumb rests, so they never sit below a long list.
- */
-fun Context.dockAction(icon: Int, label: String, run: () -> Unit) = LinearLayout(this).apply {
-    orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
-    contentDescription = label; isClickable = true; isFocusable = true
-    background = pressable(outline(0, 0, 16))
-    setPadding(dp(4), dp(10), dp(4), dp(8))
-    addView(android.widget.ImageView(context).apply {
-        setImageResource(icon); imageTintList = ColorStateList.valueOf(Palette.ON_TONAL)
-        background = outline(Palette.TONAL, Palette.TONAL_LINE, 14); setPadding(dp(10), dp(10), dp(10), dp(10))
-    }, LinearLayout.LayoutParams(dp(46), dp(46)))
-    addView(text(label, 12f, Palette.TEXT).apply {
-        gravity = Gravity.CENTER; maxLines = 1; ellipsize = TextUtils.TruncateAt.END; setPadding(0, dp(6), 0, 0)
-        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-    })
-    setOnClickListener { run() }
-}
-
-/** One tile of the home screen's quick-actions strip. */
+/** One of the home screen's smaller actions (`miniActions`): an icon, a short label and what it does. */
 data class QuickAction(val icon: Int, val label: String, val run: () -> Unit)
-
-/**
- * The home screen's quick-actions strip: the features people start most, as equal icon
- * tiles on one card at the top, so they never sit below a long page. Three or four tiles.
- */
-fun Context.quickActions(vararg actions: QuickAction): LinearLayout = card().apply {
-    orientation = LinearLayout.HORIZONTAL; setPadding(dp(6), dp(6), dp(6), dp(6))
-    actions.forEach { action ->
-        addView(dockAction(action.icon, action.label, action.run).apply {
-            // Two lines at most, so "Use as webcam" never truncates at larger text sizes.
-            (getChildAt(1) as TextView).apply { maxLines = 2; textSize = UiType.META }
-        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-    }
-}
 
 /**
  * The strings behind every screen, as on the desktop: contour lines running from

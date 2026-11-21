@@ -3,7 +3,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { Client, HostedConfig, HostedState } from "./types";
 import { Action, Form } from "./ui";
 import { PreferenceCard as Card } from "./PreferenceCard";
-import { validQr } from "./PairingQr";
+import { QrImage, validQr } from "./PairingQr";
 import { HostedJoin } from "./HostedJoin";
 import { HostedSignIn } from "./HostedSignIn";
 import { useSettingsNavigation } from "./settingsNavigation";
@@ -59,8 +59,8 @@ export function HostedRootCode({hosted, client, autoShow = false, compact = fals
     return () => { alive = false; };
   }, [autoShow, hosted.identity, client]);
   return <div className="grid min-w-0 gap-3 text-sm leading-relaxed [&_p]:m-0">
-    {root && <div className={compact ? "grid items-start gap-4 sm:grid-cols-[264px_minmax(0,1fr)]" : undefined}>
-      <svg className={(compact ? "" : "my-3 ") + "h-auto w-full max-w-[264px] rounded-field"} role="img" aria-label="Cloud computer approval QR code" viewBox={`0 0 ${root.modules.length} ${root.modules.length}`} width="264" height="264" shapeRendering="crispEdges"><rect width="100%" height="100%" fill="white" /><path fill="black" d={root.modules.map((row, y) => [...row].map((cell, x) => cell === "1" ? `M${x} ${y}h1v1h-1z` : "").join("")).join("")} /></svg>
+    {root && <div className={compact ? "grid items-start gap-4 sm:grid-cols-[360px_minmax(0,1fr)]" : undefined}>
+      <div className={compact ? "" : "my-3"}><QrImage modules={root.modules} label="Cloud computer approval QR code" /></div>
       <div className="min-w-0">
       <p className="text-muted-foreground">This computer's security code</p>
       <code className="my-2 block break-words rounded-field border border-border bg-field p-3 text-sm">{root.fingerprint}</code>
@@ -79,7 +79,7 @@ export function HostedRootCode({hosted, client, autoShow = false, compact = fals
 /** Approve a device's signed request after the owner compares its full fingerprint.
  * Devices that signed in offer their request through the service, so it appears here by
  * itself; the code is verified on this computer and pasting stays as a fallback. */
-export function HostedApproveDevice({hosted, client, onApproved}: {hosted: HostedState; client: Client; onApproved?: (label: string) => void}) {
+export function HostedApproveDevice({hosted, client, onApproved}: {hosted: HostedState; client: Client; onApproved?: (label: string, deviceId: string) => void}) {
   const id = useId();
   const revision = useRef(0);
   const [code, setCode] = useState("");
@@ -104,7 +104,7 @@ export function HostedApproveDevice({hosted, client, onApproved}: {hosted: Hoste
         <Button variant="tonal" onClick={() => review(item)}>Review and approve</Button>
       </div>)}
     </div> : <p className="muted" aria-live="polite">Waiting for your device… After it signs in and checks this computer's code, it appears here.</p>)}
-    {request && <Form className="[&_fieldset]:grid [&_fieldset]:gap-4" submit={async () => {const current = revision.current; await client.call("hosted.approve", {code, label, confirmed}); if (revision.current === current) { const approved = label; reset(); onApproved?.(approved); }}}>
+    {request && <Form className="[&_fieldset]:grid [&_fieldset]:gap-4" submit={async () => {const current = revision.current; const deviceId = request.device_id; await client.call("hosted.approve", {code, label, confirmed}); if (revision.current === current) { const approved = label; reset(); onApproved?.(approved, deviceId); }}}>
       <p>Compare every group of this security code with the one on the device you are adding:</p>
       <code className="block break-words rounded-field border border-border bg-field p-3 text-sm">{request.fingerprint}</code>
       <Field label="Device name" htmlFor={id + "-name"} className="[&_label]:text-sm"><Input id={id + "-name"} value={label} maxLength={40} required placeholder="For example: My phone" onChange={event => setLabel(event.target.value)} /></Field>
@@ -168,7 +168,7 @@ export function HostedSettings({hosted, client}: {hosted?: HostedState; client: 
       {hosted.identity && <Disclosure summary="Connection details">{isMember
         ? <p className="muted">This computer joined your account as another computer. Your main computer approves and removes devices and renews approvals; keep it online at least every 12 hours.</p>
         : <p className="muted">This computer approves your other devices. Keep it online to renew approvals every 8 hours. Devices stop syncing after 12 hours without renewal. Lost root keys cannot be recovered or transferred yet.</p>}</Disclosure>}
-      {!hosted.configured && <><p>This build cannot connect to Saiph accounts. Download the current beta from your account page.</p>
+      {!hosted.configured && <><p>This build cannot connect to Saiph accounts. Download Saiph from usesaiph.com.</p>
       <Disclosure summary="Custom service (advanced)"><Form submit={() => client.call("hosted.configure", {...config})}>
         {([['service_url', 'Cloud service address'], ['issuer', 'Sign-in issuer'], ['audience', 'API audience'], ['client_id', 'Desktop client ID']] as const).map(([key, title]) => <label key={key}>{title}<input value={config[key]} required disabled={enabled} onChange={event => setConfig({...config, [key]: event.target.value})} /></label>)}
         <label><input type="checkbox" checked={config.refresh_tokens} disabled={enabled} onChange={event => setConfig({...config, refresh_tokens: event.target.checked})} /> Keep me signed in using a protected rotating refresh token (requires deployment support)</label>

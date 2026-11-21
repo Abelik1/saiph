@@ -69,6 +69,8 @@ def test_inventory_hashes_real_native_bytes_and_keeps_exact_version_notices(tmp_
 
 
 def test_rejects_ambiguous_qt_version(tmp_path, monkeypatch):
+    (tmp_path / 'bundle').mkdir()
+    (tmp_path / 'bundle/Qt6Core.dll').write_bytes(b'synthetic Qt native runtime')
     monkeypatch.setattr(notices.importlib.metadata, 'version', lambda name: '6.8.3+local')
     with pytest.raises(ValueError, match='exact stable'):
         notices.collect(tmp_path / 'bundle', tmp_path / 'output')
@@ -183,6 +185,9 @@ def test_packaged_inventory_fills_reviewed_gap_and_preserves_unknown_gap(tmp_pat
     analysis = tmp_path / 'analysis.toc'
     analysis.write_text(str(represented))
     output = tmp_path / 'licenses'
+    frontend = tmp_path / 'frontend'
+    frontend.mkdir()
+    (frontend / 'package-lock.json').write_text('{"lockfileVersion":3,"packages":{}}')
     packaging.license_inventory(output, analysis, tmp_path / 'frontend')
     inventory = json.loads((output / 'inventory.json').read_text())
     assert inventory['packages_without_shipped_notice'] == ['winrt-Windows.UI.Notifications']

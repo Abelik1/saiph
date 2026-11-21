@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Set C phone screen</title>
+<!-- Set C's phones. ?far=1 is the phone left across the room: a lock screen holding
+     the sign-in code. Otherwise the phone on the desk copies an address (Copy at 7.3 s), and at
+     13.4 s the sign-in code arrives on it as a text. -->
+<style>
+  html, body { margin: 0; width: 900px; height: 1970px; overflow: hidden; background: #000; font-family: Roboto, "Segoe UI", system-ui, sans-serif; color: #e8eaed; }
+  .lock { position: absolute; inset: 0; background: radial-gradient(700px 900px at 30% 20%, #12465a, transparent 70%), radial-gradient(700px 900px at 80% 90%, #2a1f66, transparent 70%), #05070c; }
+  .clock { position: absolute; top: 260px; left: 0; right: 0; text-align: center; font-size: 230px; font-weight: 300; letter-spacing: -.02em; }
+  .date { position: absolute; top: 540px; left: 0; right: 0; text-align: center; font-size: 46px; color: #cbd5e1; }
+  .notif { position: absolute; left: 44px; right: 44px; top: 760px; padding: 40px 44px; border-radius: 44px; background: rgba(40, 44, 52, .92); font-size: 40px; line-height: 1.35; }
+  .notif small { display: block; font-size: 32px; color: #9aa0a6; margin-bottom: 10px; }
+  .appbar { position: absolute; left: 0; right: 0; top: 100px; height: 120px; display: flex; align-items: center; gap: 30px; padding: 0 44px; font-size: 44px; }
+  .note { position: absolute; left: 60px; right: 60px; top: 280px; font-size: 52px; line-height: 1.45; }
+  .note h2 { font-size: 64px; margin: 0 0 30px; font-weight: 500; }
+  .sel { background: rgba(138, 180, 248, .45); border-radius: 4px; }
+  .toolbar { position: absolute; left: 120px; top: 520px; display: flex; background: #303134; border-radius: 22px; font-size: 40px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,.6); }
+  .toolbar span { padding: 26px 34px; } .toolbar span.hit { background: #4a4c50; }
+  .chip { position: absolute; left: 50px; bottom: 170px; padding: 26px 34px; border-radius: 26px; background: #2b2d31; font-size: 36px; }
+  .status { position: absolute; left: 0; right: 0; top: 0; height: 90px; display: flex; justify-content: space-between; align-items: center; padding: 0 54px; font-size: 34px; }
+</style>
+</head>
+<body>
+<div id="far"><div class="lock"></div><div class="clock">10:24</div><div class="date">Tuesday 3 November</div>
+  <div class="notif"><small>Messages · now</small><b>Northbank</b><br>Your code is 482913. It expires in 10 minutes.</div></div>
+<div id="desk"><div class="status"><span>10:24</span><span>▾ ▴ ▮ 81%</span></div><div class="appbar">‹ <span style="flex:1">Notes</span>⋮</div>
+  <div class="note"><h2>Saturday</h2>Dinner at the place near the canal. <span id="sel">14 Harbour Road, Dublin 4</span>. Table for four at 7.</div>
+  <div class="toolbar" id="tb"><span>Cut</span><span id="copy">Copy</span><span>Paste</span><span>Share</span></div>
+  <div class="chip" id="chip">Copied</div>
+  <div class="notif" id="code" style="top:120px;background:#2b2f37"><small>Messages · now</small><b>Northbank</b><br>Your code is 482913. It expires in 10 minutes.</div></div>
+<script>
+  const $ = (id) => document.getElementById(id);
+  const far = new URLSearchParams(location.search).get('far') === '1';
+  $('far').style.display = far ? '' : 'none';
+  $('desk').style.display = far ? 'none' : '';
+  window.setTime = (t) => {
+    if (far) return;
+    $('sel').className = t >= 6.6 ? 'sel' : '';
+    $('tb').style.display = t >= 6.9 && t < 7.55 ? 'flex' : 'none';
+    $('copy').className = t >= 7.3 && t < 7.55 ? 'hit' : '';
+    $('chip').style.display = t >= 7.55 && t < 9.4 ? '' : 'none';
+    $('code').style.display = t >= 13.4 ? '' : 'none';
+    $('code').style.transform = `translateY(${(1 - Math.min(1, Math.max(0, (t - 13.4) / 0.25))) * -300}px)`;
+  };
+  window.ready = Promise.resolve(true).then(() => { window.setTime(0); return true; });
+</script>
+</body>
+</html>

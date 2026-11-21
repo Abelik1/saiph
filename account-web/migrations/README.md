@@ -27,6 +27,16 @@ No schema statement contains deployment secrets or an owner identity.
   purchase) by plan and price-test variant. No person, session, customer or
   Stripe identifier. Additive; until it is applied the account site skips
   counting and `billing:report` shows `funnel: null`.
+- `0007_card_trial_claims.sql` (docs/CARD_REQUIRED_TRIAL.md): `card_trial_claims`,
+  permanent card-trial reservations (subject, keyed email hash, random reference,
+  reservation time) guarded by the `protect_card_trial_claim` trigger. Additive;
+  until it is applied, newer code keeps legacy trials working.
+- `0008_deletion_requests.sql` (docs/DATA_RETENTION.md): `deletion_requests`, one
+  row per account that asked at `/account/delete` to be deleted (Auth0 subject
+  and issuer, request time, `pending`/`done` state and completion time), with the
+  partial index `deletion_requests_pending`. Repeating a pending request keeps the
+  first time. Additive; until it is applied, the deletion page points people to
+  email and the admin page asks for the migration.
 - `manifest.json`: SHA-256 of the exact canonical LF SQL bytes.
 - `reviewed-migration.sql`: generated **complete transaction** for the Neon SQL editor.
   It includes schema/ledger creation, an advisory transaction lock, migration
@@ -53,10 +63,11 @@ SELECT
   (SELECT count(*) FROM saiph_billing.processed_events) AS processed_event_count;
 ```
 
-The receipt must show versions 1 to 6 with the manifest checksums
-(`manifest.json`), ten tables (`customer_creation_intents`, `customers`,
-`disputes`, `funnel_daily`, `grant_state`, `processed_events`, `schema_migrations`,
-`settings`, `subscriptions`, `trials`), the indexes `disputes_customer`, `processed_events_customer`,
+The receipt must show versions 1 to 8 with the manifest checksums
+(`manifest.json`), twelve tables (`card_trial_claims`, `customer_creation_intents`,
+`customers`, `deletion_requests`, `disputes`, `funnel_daily`, `grant_state`,
+`processed_events`, `schema_migrations`, `settings`, `subscriptions`, `trials`), the
+indexes `deletion_requests_pending`, `disputes_customer`, `processed_events_customer`,
 `processed_events_subscription` and `subscriptions_customer` (plus primary/unique
 keys), and on a fresh database zero business rows. Rerunning the complete
 export is safe. Changed/unknown applied history fails the transaction. If the

@@ -1,10 +1,19 @@
 # Saiph Link architecture
 
-The public desktop edition uses the existing Orion compatibility identifiers.
-`frontend/src/App.tsx` renders Link navigation and pages, communicating through
-the finite Qt WebChannel API in `desktop_bridge.py`. `app.py` owns the native
-window, tray and process lifecycle. `link_service.py` dispatches Link operations;
-personal Workspace services and pages are excluded from this public edition.
+Saiph Link uses Electron with the existing React dashboard and a Qt-free Python
+service. `desktop/src/main.cts` owns native lifecycle and windows; its sandboxed
+preload adapts the existing frontend `Client` interface. `electron_service.py`
+owns the private control protocol, and `electron_runtime.py` starts the actual
+Link services. `desktop_actions.py` preserves the shared operation validators;
+`link_service.py` and the device/service modules retain their business logic.
+See [desktop/README.md](../desktop/README.md) for launch/build commands and the
+[implementation record](DESKTOP_ELECTRON_MIGRATION.md) for compatibility details.
+
+The public edition preserves Orion identifiers, data paths, pairing and native
+owner verification. Its native lock excludes both Qt and Electron owners of the
+same profile. Control uses inherited child pipes; JPEG/clipboard bytes use bounded
+authenticated local binary channels. Browser storage is separate from application
+identity and database storage. Production launches expose no DevTools endpoint.
 
 `phone.py`, clipboard, continuity, camera, microphone and peer components handle
 their respective device features. Cloud clients and Deskflow integration reuse
@@ -22,10 +31,11 @@ They must not be treated as an accepted replacement for active app transport.
 See [SECURITY_MODEL.md](SECURITY_MODEL.md) for the actual boundary and outstanding
 integration work.
 
-Native packaging uses a PyInstaller one-folder bundle. Frontend files and
-distribution profile/version metadata travel with the bundle. Shared Qt libraries
-remain replaceable. The installer keeps application releases separate from user
-data, preserving internal data locations and identifiers across the public rename.
+Native Link packaging combines Electron and a frozen Python service, preserving
+the existing installer/manifest and executable compatibility contracts. Package
+audits reject Qt and private Workspace modules and retain Electron, Python,
+frontend and native component notices/provenance. Previous Qt code remains for
+explicit comparison/rollback and the separately owned private Workspace build.
 See [desktop distribution](ORION_DESKTOP_DISTRIBUTION.md).
 
 The MIT SDK retains the local reporting contract. Personal plugin management and

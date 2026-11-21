@@ -25,7 +25,7 @@ window.ORION_SITE = {
   waitlistNotice: "", // Visible beside each waitlist link before collecting emails.
   hostedPrice: "",  // e.g. "€6" — empty shows "Pricing at launch"
   hostedPeriod: "/ month",
-  hostedTrial: "", // e.g. "Free for 14 days, no card needed"; only while the account site offers trials
+  hostedTrial: "", // e.g. "14 days free, then €9.99/month."
   hostedYearlyPrice: "", // e.g. "€89.99"
   ga4: { measurementId: "" }, // Owner's GA4 web stream ID ("G-..."); empty keeps Google Analytics and the cookie banner off.
   // Off by default. Variants map to Stripe prices held in the account site's SAIPH_PRICE_TEST.

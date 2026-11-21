@@ -31,11 +31,17 @@ function verifyInstalledSession(session) {
 function readSession(file) {
   const session = JSON.parse(fs.readFileSync(file, "utf8"));
   const endpoint = new URL(session.endpoint);
+  const dashboardAllowed = session.shell === "electron"
+    ? session.dashboard === "saiph-app://desktop/index.html" && ["isolated", "live"].includes(session.mode)
+      && (session.mode === "live" || session.existing_profile === false) && !session.installed
+      && new URL(session.source_dashboard).protocol === "file:"
+      && (session.existing_profile && session.mode === "live" || path.resolve(session.profile) === path.join(path.dirname(path.resolve(file)), "profile"))
+    : (session.shell === undefined || session.shell === "qt") && new URL(session.dashboard).protocol === "file:";
   if (session.schema !== 1 || session.status !== "ready" || !Number.isInteger(session.pid)
     || !/^[a-f0-9]{48}$/.test(session.nonce) || !["isolated", "live"].includes(session.mode)
     || endpoint.protocol !== "http:" || endpoint.hostname !== "127.0.0.1" || !endpoint.port
     || endpoint.username || endpoint.password || endpoint.pathname !== "/" || endpoint.search || endpoint.hash
-    || new URL(session.dashboard).protocol !== "file:") {
+    || !dashboardAllowed) {
     throw new Error("Not a ready local Saiph UI test session. Launch scripts/desktop-ui.py first.");
   }
   return session;

@@ -32,7 +32,7 @@ class OrionCaptureActivity : ComponentActivity() {
         if (!taken || file == null || device == null || !file.isFile || file.length() == 0L) { file?.delete(); finish(); return@registerForActivityResult }
         status.text = "Sending your photo…"
         lifecycleScope.launch {
-            val ok = files.capture(file, device)
+            val ok = OrionComputers.clipboardImage(this@OrionCaptureActivity, files, file, device, "Photo", "image/jpeg")
             Toast.makeText(this@OrionCaptureActivity, if (ok) "Photo sent. Paste it on your computer." else "The photo could not be sent. Check Saiph on both devices.", Toast.LENGTH_LONG).show()
             finish()
         }
@@ -44,19 +44,13 @@ class OrionCaptureActivity : ComponentActivity() {
         target = state?.getString("target"); photo = state?.getString("photo")?.let(::File)
         if (state != null) return // The camera result is delivered to the restored activity.
         lifecycleScope.launch {
-            val own = getSharedPreferences("orion", 0).getString("device_id", null)
-            val computers = withContext(Dispatchers.IO) { runCatching {
-                val devices = JSONObject(Api.request(this@OrionCaptureActivity, "/v1/link/phone")).getJSONArray("devices")
-                (0 until devices.length()).map(devices::getJSONObject).filter { device ->
-                    val caps = device.optJSONArray("capabilities")
-                    device.optBoolean("online") && device.getString("id") != own && caps != null && (0 until caps.length()).any { caps.optString(it) == "files" }
-                }
-            }.getOrNull() }
+            val computers = withContext(Dispatchers.IO) { runCatching { OrionComputers.targets(this@OrionCaptureActivity, "files") }.getOrNull() }
             when {
-                computers.isNullOrEmpty() -> { status.text = "Your paired computers are offline. No photo was taken." }
-                computers.size == 1 -> start(computers[0].getString("id"))
+                computers.isNullOrEmpty() -> { status.text = "Your computers are offline. No photo was taken." }
+                // Saiph Cloud shares a photo with every approved computer, so there is nothing to choose.
+                computers.size == 1 || OrionComputers.cloud(this@OrionCaptureActivity) -> start(computers[0].first)
                 else -> AlertDialog.Builder(this@OrionCaptureActivity).setTitle("Photo for which computer?")
-                    .setItems(computers.map { it.getString("name") }.toTypedArray()) { _, index -> start(computers[index].getString("id")) }
+                    .setItems(computers.map { it.second }.toTypedArray()) { _, index -> start(computers[index].first) }
                     .setNegativeButton("Cancel") { _, _ -> finish() }.setOnCancelListener { finish() }.show()
             }
         }

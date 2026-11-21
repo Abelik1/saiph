@@ -19,6 +19,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from . import child_process
 
 HANDSFREE_UUID = "0000111e-0000-1000-8000-00805f9b34fb"     # Our adapter offers the HF role.
 TELEPHONY_SERVICE = "org.pipewire.Telephony"
@@ -106,7 +107,7 @@ def wireplumber_settings(wireplumber, *, home, root="/", config_home=None):
 class CallAudioProbe:
     """Collects read-only facts and turns them into a short, user-facing verdict."""
 
-    def __init__(self, *, runner=subprocess.run, which=shutil.which, platform=None, home=None, root="/"):
+    def __init__(self, *, runner=child_process.run, which=shutil.which, platform=None, home=None, root="/"):
         self.runner, self.which = runner, which
         self.platform = platform or sys.platform
         self.home = home or Path.home()

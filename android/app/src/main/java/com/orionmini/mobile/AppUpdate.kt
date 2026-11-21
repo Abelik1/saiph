@@ -61,7 +61,8 @@ class UpdateRefused(val reason: Reason) : Exception(reason.message) {
 
 /** Strict readers for each official source's release description. Anything unexpected is refused. */
 object UpdateManifest {
-    const val PACKAGE = "com.orionmini.mobile"
+    /** This app's own ID: Saiph Unlocked only accepts Saiph Unlocked updates. */
+    val PACKAGE: String = com.castle.sefirah.BuildConfig.APPLICATION_ID
     private const val MAX_BYTES = 16 * 1024
     private const val MAX_NOTES = 4000
     private val HASH = Regex("[a-f0-9]{64}")

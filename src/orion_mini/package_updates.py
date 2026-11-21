@@ -32,6 +32,7 @@ import zipfile
 
 from . import hub_client
 from .storage import read_json, write_json
+from . import child_process
 
 PLATFORMS = {'windows-x86_64': '.exe', 'linux-x86_64': '.tar.gz'}
 PROFILES = {'link', 'workspace'}
@@ -141,8 +142,8 @@ def _private_directory(root):
     folder.mkdir(mode=0o700, parents=True, exist_ok=True)
     if os.name == 'nt':
         user = getpass.getuser()
-        secured = subprocess.run(['icacls', str(folder), '/inheritance:r', '/grant:r', user + ':(OI)(CI)(F)'],
-                                 capture_output=True, timeout=10, creationflags=subprocess.CREATE_NO_WINDOW)
+        secured = child_process.run(['icacls', str(folder), '/inheritance:r', '/grant:r', user + ':(OI)(CI)(F)'],
+                                    capture_output=True, timeout=10, creationflags=subprocess.CREATE_NO_WINDOW)
         if secured.returncode:
             raise ValueError('Private update staging permissions are unavailable')
     else:
@@ -635,12 +636,14 @@ exec "$next"
 def _running_executable(folder, *names):
     """This process's installed executable: its name, or the pre-rename compatibility copy
     that older updaters relaunch. Portable and source copies match neither."""
-    running = Path(sys.executable).resolve()
+    from .paths import desktop_executable
+    running = desktop_executable()
     return next((folder / name for name in names if running == (folder / name).resolve()), None)
 
 
 def install(root, staged):
     """Explicit action only. Caller must quit after this returns; no processes are killed."""
+    from .paths import desktop_pid
     installed = current()
     if (installed is None or not isinstance(staged, dict) or set(staged) != {'staged', 'path', 'release'}
             or staged['staged'] is not True or not isinstance(staged['path'], str)):
@@ -658,7 +661,7 @@ def install(root, staged):
             or read_json(path.parent / 'staged.json') != release):
         raise ValueError('Choose a verified update staged by this application')
     _verify(path, release)
-    environment = {key: value for key, value in os.environ.items() if not key.startswith('_PYI') and key != '_MEIPASS2'}
+    environment = child_process.system_environment()
     if release['platform'] == 'windows-x86_64':
         base = Path(os.environ['LOCALAPPDATA']) / 'Programs' / 'OrionMini'
         expected = _running_executable(base / 'releases' / installed['version'] / 'app', 'Saiph.exe', 'OrionMini.exe')
@@ -668,7 +671,7 @@ def install(root, staged):
         with helper.open('x', encoding='utf-8-sig') as output:
             output.write(WINDOWS_HANDOFF)
         command = ['powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', str(helper),
-                   '-AppPid', str(os.getpid()), '-Package', str(path), '-Digest', release['sha256'],
+                   '-AppPid', str(desktop_pid()), '-Package', str(path), '-Digest', release['sha256'],
                    '-NextExe', str(base / 'releases' / release['version'] / 'app' / 'Saiph.exe'),
                    '-OldExe', str(expected), '-StatusFile', str(updates / 'update-status.json')]
         options = {'creationflags': subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP}
@@ -682,13 +685,13 @@ def install(root, staged):
         with helper.open('x', encoding='utf-8') as output:
             output.write(LINUX_HANDOFF)
         helper.chmod(0o700)
-        command = ['/bin/sh', str(helper), str(os.getpid()), str(path), release['sha256'], str(installer),
+        command = ['/bin/sh', str(helper), str(desktop_pid()), str(path), release['sha256'], str(installer),
                    str(base / 'releases' / release['version'] / 'app/saiph'), str(expected), str(updates / 'update-status.json')]
         options = {'start_new_session': True}
     write_json(updates / 'update-status.json', {'state': 'waiting', 'code': ''})
     try:
-        subprocess.Popen(command, cwd=str(path.parent), env=environment, close_fds=True,
-                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **options)
+        child_process.popen(command, cwd=str(path.parent), env=environment, close_fds=True,
+                            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **options)
     except OSError:
         write_json(updates / 'update-status.json', {'state': 'failed', 'code': 'handoff_failed'})
         raise ValueError('The update installer could not start. Saiph is still running.') from None

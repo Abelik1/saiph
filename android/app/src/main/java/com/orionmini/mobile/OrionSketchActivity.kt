@@ -54,23 +54,24 @@ class OrionSketchActivity : ComponentActivity() {
         if (canvas.empty()) { Toast.makeText(this, "Draw something first.", Toast.LENGTH_SHORT).show(); return }
         val image = canvas.render()
         lifecycleScope.launch {
-            val computers = withContext(Dispatchers.IO) { runCatching { OrionComputers.devices(this@OrionSketchActivity) }.getOrDefault(emptyList()) }
-                .filter { it.online && it.computer && "files" in it.capabilities }
+            val computers = withContext(Dispatchers.IO) { runCatching { OrionComputers.targets(this@OrionSketchActivity, "files") }.getOrDefault(emptyList()) }
             when {
-                computers.isEmpty() -> Toast.makeText(this@OrionSketchActivity, "Your paired computers are offline. Nothing was sent.", Toast.LENGTH_LONG).show()
-                computers.size == 1 -> deliver(image, computers.single())
+                computers.isEmpty() -> Toast.makeText(this@OrionSketchActivity, "Your computers are offline. Nothing was sent.", Toast.LENGTH_LONG).show()
+                // Saiph Cloud shares a sketch with every approved computer, so there is nothing to choose.
+                computers.size == 1 || OrionComputers.cloud(this@OrionSketchActivity) -> deliver(image, computers.first())
                 else -> AlertDialog.Builder(this@OrionSketchActivity).setTitle("Send to which computer?")
-                    .setItems(computers.map { it.name }.toTypedArray()) { _, index -> deliver(image, computers[index]) }
+                    .setItems(computers.map { it.second }.toTypedArray()) { _, index -> deliver(image, computers[index]) }
                     .setNegativeButton("Cancel", null).show()
             }
         }
     }
-    private fun deliver(image: Bitmap, computer: LinkDevice) = lifecycleScope.launch {
+    private fun deliver(image: Bitmap, computer: Pair<String, String>) = lifecycleScope.launch {
         val file = File(cacheDir, "orion-sketch-" + UUID.randomUUID() + ".png")
         val ok = withContext(Dispatchers.IO) { runCatching { file.outputStream().use { image.compress(Bitmap.CompressFormat.PNG, 100, it) } }.isSuccess } &&
-            files.capture(file, computer.id, "Sketch", "image/png")
+            OrionComputers.clipboardImage(this@OrionSketchActivity, files, file, computer.first, "Sketch", "image/png")
         if (!ok) file.delete()
-        Toast.makeText(this@OrionSketchActivity, if (ok) "Sent. Paste it on ${computer.name}." else "The sketch could not be sent.", Toast.LENGTH_LONG).show()
+        val where = if (OrionComputers.cloud(this@OrionSketchActivity)) "your computer" else computer.second
+        Toast.makeText(this@OrionSketchActivity, if (ok) "Sent. Paste it on $where." else "The sketch could not be sent.", Toast.LENGTH_LONG).show()
         if (ok) finish()
     }
 }

@@ -2,20 +2,62 @@
 
 CI builds are unsigned development artifacts. A public release needs a reviewed
 source commit, successful Windows and Linux native builds, synthetic pairing and
-upgrade checks, complete third-party notices/source obligations, and the platform
-signatures below. Do not label a build signed until verification succeeds.
+upgrade checks and complete third-party notices/source obligations. Until Windows
+signing is accepted, the Windows installer ships unsigned and says so; do not label
+a build signed until verification succeeds.
+
+## Publishing a release
+
+Every download is free on the project's GitHub releases; the website's Download
+buttons point at the latest one. Saiph Cloud is chosen and paid for inside the
+apps and on the account site, never by gating the installers.
+
+1. On GitHub, run **Actions → Public release** on `main` with the new version and
+   build number. Leave **sign** off until SignPath is configured. The repository
+   variable `SAIPH_HOSTED_CONFIG` must hold the five public Saiph Cloud settings so
+   the apps offer Saiph Cloud. It builds and tests Windows, Linux and the
+   self-hosted Hub from that commit and opens a draft release with the exact source,
+   build evidence and `SHA256SUMS`.
+2. Build the Android APK from the same commit with
+   `scripts/android/build-release.ps1`.
+3. Check, then publish:
+
+   ```text
+   python scripts/public-release/finish-release.py --tag vVERSION --android-apk PATH\TO\Saiph-VERSION.apk
+   python scripts/public-release/finish-release.py --tag vVERSION --android-apk PATH\TO\Saiph-VERSION.apk --publish --work build/finish-vVERSION-publish
+   ```
+
+   The first command is a dry run. The second uploads the APK and the complete
+   checksums, publishes the release and updates `website/landing-settings.json`.
+4. Commit that settings change and deploy the website.
 
 Run the [native evidence check](RELEASE_REVIEW.md) on each final package, with
 retained matching source and package-bound review results. Missing notices,
 changed bytes and incomplete source/replacement review must block distribution.
+
+## Electron Link packages
+
+Install both locked npm projects (`frontend/`, `desktop/`) before building.
+Link defaults to Electron plus `resources/service/SaiphService.exe`; explicit
+`--shell qt` remains for legacy comparisons and the external Workspace build.
+Use a clean build environment with `[hosted]` and PyInstaller. The service must
+contain no PySide/Qt modules; package audits enforce this. See
+[desktop build commands](../desktop/README.md).
+
+The existing SignPath application configuration must cover both `Saiph.exe` and
+`resources/service/SaiphService.exe`, with the same approved publisher identity,
+before an Electron release can be signed. The bundle checker requires signatures
+on both project executables and rejects changes to other files. The final Windows
+signature verifier accepts `--service` and the workflow supplies it. No signing
+configuration, certificate, service or deployed release was changed by this migration.
 
 ## Windows
 
 Signing is not configured. The maintainer must obtain an approved signing service
 or certificate, retain control over release approval, and keep signing credentials
 out of source, build archives and untrusted pull-request jobs. SignPath Foundation
-is the chosen provider; acceptance is not assured. The `Signed Windows release`
-workflow implements the order below and refuses to run until SignPath is
+is the chosen provider; acceptance is not assured. The `Public release` workflow
+with **sign** on implements the order below and refuses to run until SignPath is
 configured; see the [code signing policy](CODE_SIGNING.md#release-workflow).
 
 Use an isolated release workflow with protected-environment manual approval on

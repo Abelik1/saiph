@@ -104,3 +104,29 @@ def test_archive_rejects_unmanifested_file_and_duplicate_members(tmp_path):
             for member_name, data in members + [(name, b'unreviewed')]:
                 item = tarfile.TarInfo(member_name); item.size = len(data); archive.addfile(item, io.BytesIO(data))
         with pytest.raises(ValueError): builder.verify_archive(bad)
+
+
+def test_git_release_packages_committed_bytes_of_a_clean_checkout(tmp_path):
+    root = snapshot(tmp_path)
+    (root / 'PUBLIC_EXPORT.json').unlink()  # The canonical public repository has no export receipt.
+    (root / 'account-web').mkdir(); (root / 'account-web/page.tsx').write_text('// Not part of the Hub')
+    def git(*args):
+        return subprocess.run(['git', '-C', str(root), *args], check=True, capture_output=True, text=True).stdout.strip()
+    git('init'); git('add', '.')
+    git('-c', 'user.name=Synthetic release fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-m', 'Synthetic public commit')
+    commit = git('rev-parse', 'HEAD')
+    with pytest.raises(ValueError, match='match HEAD'):
+        builder.build_git(root, tmp_path / 'wrong.tar.gz', '0.1.0-beta.1', 'a' * 40)
+    (root / 'hub/orion_hub/server.py').write_text('# Uncommitted change')
+    with pytest.raises(ValueError, match='clean checkout'):
+        builder.build_git(root, tmp_path / 'dirty.tar.gz', '0.1.0-beta.1', commit)
+    git('checkout', '--', '.')
+    output = tmp_path / 'server.tar.gz'
+    builder.build_git(root, output, '0.1.0-beta.1', commit)
+    manifest = builder.verify_archive(output)
+    assert manifest['source'] == {'kind': 'public-git-commit', 'source_commit': commit, 'official_release': False,
+                                  'scope': 'Source identity only; signing and release approval remain separate.'}
+    assert 'hub/orion_hub/server.py' in manifest['files'] and 'install.py' in manifest['files']
+    assert not any(name.startswith('account-web') for name in manifest['files'])
+    with pytest.raises(ValueError, match='outside'):
+        builder.build_git(root, root / 'out.tar.gz', '0.1.0-beta.1', commit)

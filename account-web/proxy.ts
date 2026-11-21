@@ -15,13 +15,17 @@ export async function proxy(request: NextRequest) {
   const analytics = /^\/(buy\/(monthly|yearly)|trial)$/.test(path) && readGaConfig(process.env) !== null;
   const csp = contentSecurityPolicy(nonce, process.env.NODE_ENV === "development", {analytics});
   const responseHeaders = {"Cache-Control": "private, no-store", "Referrer-Policy": responseReferrerPolicy(path), "Content-Security-Policy": csp};
+  // The account deletion page is public (the Android app opens it) and is drawn
+  // without the site navigation, so nothing on it leads to plans or prices.
+  const deletionPage = path === "/account/delete" || path === "/account/delete/sign-in";
   function secure(response: NextResponse) {
     for (const [name, value] of Object.entries(responseHeaders)) response.headers.set(name, value);
     if (response.headers.get("x-middleware-next") === "1") {
       // Next reads the request policy to nonce its framework and hydration scripts.
       // Preserve request-cookie overrides emitted by the Auth0 SDK.
       const overrides = new Set((response.headers.get("x-middleware-override-headers") || "").split(",").filter(Boolean));
-      for (const [name, value] of [["content-security-policy", csp], ["x-nonce", nonce]]) {
+      // Always set here, so a caller cannot choose the layout (app/layout.tsx).
+      for (const [name, value] of [["content-security-policy", csp], ["x-nonce", nonce], ["x-saiph-chrome", deletionPage ? "plain" : "full"]]) {
         overrides.add(name);
         response.headers.set("x-middleware-request-" + name, value);
       }
@@ -56,7 +60,7 @@ export async function proxy(request: NextRequest) {
   }
   const auth0 = getAuth0();
   if (!auth0) {
-    if (path === "/" || path === "/privacy" || path === "/setup") return secure(NextResponse.next());
+    if (path === "/" || path === "/privacy" || path === "/setup" || deletionPage) return secure(NextResponse.next());
     return new NextResponse("Account setup is pending. Please try again after configuration.", {status: 503, headers: responseHeaders});
   }
   // Prevent login-query overrides of audience, scopes, connections or return URL.
@@ -70,7 +74,9 @@ export async function proxy(request: NextRequest) {
     if (path === "/auth/callback" && response.status >= 400) {
       expireDeniedSessionCookies(response);
     }
-    if (path === "/account" || path.startsWith("/account/") || path.startsWith("/api/")) {
+    // The deletion page explains itself to anyone and checks the session itself;
+    // its form posts to /api/account/delete, which is gated here as usual.
+    if (!deletionPage && (path === "/account" || path.startsWith("/account/") || path.startsWith("/api/"))) {
       const session = await auth0.getSession(request);
       if (!session) return secure(NextResponse.redirect(new URL("/auth/login", process.env.APP_BASE_URL)));
       if (!canUseAccount(session.user.sub, process.env.SAIPH_OWNER_SUBJECT, process.env, session.user.mfa)) {

@@ -27,7 +27,8 @@ describe("Pairing QR", () => {
     const onClose = vi.fn();
     render(<PairingQr qr={qr} shownAt={shownAt} onClose={onClose} onExpire={vi.fn()} />);
     const image = screen.getByRole("img", { name: "Pairing QR code" });
-    expect(image).toHaveAttribute("viewBox", "0 0 29 29");
+    expect(image).toHaveAttribute("viewBox", "-4 -4 37 37"); // A four-module quiet zone.
+    expect(image).toHaveAttribute("width", "360");
     expect(image.querySelector("rect")).toHaveAttribute("fill", "#fff");
     expect(image.querySelector("path")).toHaveAttribute("fill", "#000");
     expect(screen.getByText(/private invitation/)).toBeVisible();

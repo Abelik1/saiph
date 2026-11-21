@@ -39,3 +39,30 @@ internal object CameraRequests {
 
     fun dismiss(context: Context) { runCatching { context.getSystemService(NotificationManager::class.java)?.cancel(NOTIFICATION) } }
 }
+
+/**
+ * "Use this phone as your webcam", asked from the phone's camera page through Saiph Cloud.
+ * The computer shows Accept; accepting sends an ordinary camera offer, and the next one from
+ * that computer answers the request here instead of raising a separate prompt.
+ */
+internal object CameraAsk {
+    const val TYPE = "camera.request"
+    /** The asked computer's answer when Allow phone camera is off there. */
+    const val OFF = "camera.off"
+    const val WAIT_SECONDS = 60L
+    private var asked: Pair<String, Long>? = null
+    /** The camera page while it waits; gets the answering offer's ID on the main thread. */
+    @Volatile var listener: ((String) -> Unit)? = null
+    /** The camera page while it waits; told on the main thread that the computer's camera setting is off. */
+    @Volatile var offListener: (() -> Unit)? = null
+
+    @Synchronized fun ask(source: String, now: Long = System.currentTimeMillis() / 1000) { asked = source to now + WAIT_SECONDS }
+    @Synchronized fun cancel() { asked = null }
+    /** True once, when [source] answers this phone's open request before it lapses. */
+    @Synchronized fun answers(source: String, now: Long = System.currentTimeMillis() / 1000): Boolean {
+        val (computer, until) = asked ?: return false
+        if (computer != source || until <= now) return false
+        asked = null
+        return true
+    }
+}

@@ -7,13 +7,19 @@ import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle }
 /** QR modules from the desktop. The grid is itself a private invitation credential. */
 export type PairingQrCode = { modules: string[]; expires_at: string; expires_in: number };
 
-/** Camera and pairing credentials need the same fixed black-on-white QR. */
-export function QrImage({ modules, label, width = 264 }: { modules: string[]; label: string; width?: number }) {
-  const size = modules.length;
+/** White margin around the code, in modules: the QR standard's quiet zone, which phone cameras need to find it. */
+export const QUIET_ZONE = 4;
+
+/**
+ * Camera and pairing credentials need the same fixed black-on-white QR. It is drawn large, with its
+ * full quiet zone, because a phone reads it off a screen from a distance (360 px is about 9 cm).
+ */
+export function QrImage({ modules, label, width = 360 }: { modules: string[]; label: string; width?: number }) {
+  const size = modules.length, outer = size + 2 * QUIET_ZONE;
   const path = modules.map((row, y) => [...row].map((cell, x) => cell === "1" ? `M${x} ${y}h1v1h-1z` : "").join("")).join("");
-  return <svg className="block h-auto max-w-full rounded-[10px] bg-white p-3" role="img" aria-label={label}
-    viewBox={`0 0 ${size} ${size}`} width={width} height={width} shapeRendering="crispEdges">
-    <rect width={size} height={size} fill="#fff" /><path d={path} fill="#000" />
+  return <svg className="block h-auto max-w-full rounded-[10px]" role="img" aria-label={label}
+    viewBox={`${-QUIET_ZONE} ${-QUIET_ZONE} ${outer} ${outer}`} width={width} height={width} shapeRendering="crispEdges">
+    <rect x={-QUIET_ZONE} y={-QUIET_ZONE} width={outer} height={outer} fill="#fff" /><path d={path} fill="#000" />
   </svg>;
 }
 

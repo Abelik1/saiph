@@ -17,7 +17,11 @@ export function RemoteSettings({ remote, state, client }: { remote?: RemoteStatu
   const [devices, setDevices] = useState<string[]>(remote?.devices || []);
   const [adapters, setAdapters] = useState<Record<string, boolean>>(() => Object.fromEntries(Object.entries(remote?.adapters || {}).map(([id, value]) => [id, value.enabled])));
   if (!remote) return null;
-  const phones = (state.phone?.devices || []).filter(device => device.id !== state.settings?.hub?.device_id);
+  // Hub phones and Saiph Cloud phones alike; each is allowed by its own device ID.
+  const cloudPhones = (state.hosted?.roster?.members || []).filter(member => member.kind === "phone" && !member.self).map(member => ({ id: member.id, name: member.label }));
+  const listed = (state.phone?.devices || []).filter(device => device.id !== state.settings?.hub?.device_id);
+  // The Phone page's list already includes Cloud phones, so add only those it lacks.
+  const phones = [...listed, ...cloudPhones.filter(phone => !listed.some(device => device.id === phone.id))];
   const toggle = (id: string, on: boolean) => setDevices(current => on ? [...current.filter(value => value !== id), id] : current.filter(value => value !== id));
   return <Card title="Phone remote" subtitle="Choose which phones can control this computer.">
     <Form submit={() => client.call("settings.save", { link: { remote: { enabled, devices, adapters } } })}>

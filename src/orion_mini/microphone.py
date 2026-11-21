@@ -16,6 +16,7 @@ import uuid
 
 from .adb_worker import AdbWorker
 from .companion_tools import tool_path
+from . import child_process
 
 CABLE_INPUT = 'CABLE Input (VB-Audio Virtual Cable)'
 CABLE_OUTPUT = 'CABLE Output (VB-Audio Virtual Cable)'
@@ -72,7 +73,7 @@ def windows_cable(scrcpy):
 
 class PulseInput:
     """Own only two ephemeral modules; never touch existing modules or defaults."""
-    def __init__(self, executable, run=subprocess.run, popen=subprocess.Popen):
+    def __init__(self, executable, run=child_process.run, popen=child_process.popen):
         self.executable, self.run, self.popen = executable, run, popen
         suffix = uuid.uuid4().hex
         self.description = 'Saiph Phone Capture ' + suffix
@@ -185,7 +186,7 @@ class PulseInput:
 
 
 class Microphone:
-    def __init__(self, workspace, *, system=None, popen=subprocess.Popen, run=subprocess.run,
+    def __init__(self, workspace, *, system=None, popen=child_process.popen, run=child_process.run,
                  worker_factory=AdbWorker, cable_probe=windows_cable, pulse_factory=PulseInput):
         self.workspace, self.system = workspace, system or sys.platform
         self.popen, self.run, self.worker_factory = popen, run, worker_factory

@@ -23,6 +23,8 @@ and independent review remain open.
 """
 from __future__ import annotations
 
+import re
+import socket
 import hashlib
 import json
 import mimetypes
@@ -54,6 +56,7 @@ from .hosted_features import (
     APPS_ICONS, APPS_ICONS_REQUEST, apps_icons_request_payload, read_apps_icons,
     NOTIFICATION_ACTION, NOTIFICATION_ACTIONS, NOTIFICATION_OPEN, NOTIFICATION_REPLY, PHONE_FEATURES, SMS_ATTACHMENT_ORIGINAL,
     SMS_ATTACHMENT_REQUEST, notification_command, read_notification_actions, read_phone_features,
+    CAMERA_OFF, CAMERA_REQUEST, COMPUTER_RING, REMOTE_LAN, REMOTE_LAN_REQUEST, REMOTE_REQUESTS, read_remote, remote_payload, wake_payload,
 )
 from .paths import received_dir
 from .phone_settings import data_allowed, flag as phone_flag
@@ -82,6 +85,8 @@ ANSWER_WINDOW_SECONDS = 60  # Contact results, call history and refusals answer 
 SUBSCRIBE_SECONDS = 90  # Renew this computer's subscription with each phone heartbeat (phones keep it 10 min).
 NOTICE_SECONDS = 60  # "Answered on <computer>" and similar notes stay this long.
 FAST_POLL_SECONDS = 4  # Ringing calls need prompt delivery once texts and calls are on.
+REMOTE_POLL_SECONDS = 0.25  # While a phone is steering this computer by Saiph Cloud (no direct network channel).
+REMOTE_ACTIVE_SECONDS = 20  # ... until it has been quiet this long.
 # A notification already this old when it arrives was on the phone before this
 # computer heard of it (a phone resends what is showing when it reconnects or a
 # computer joins). It is listed in Saiph but not announced, like Hub "silent" rows.
@@ -189,6 +194,7 @@ class HostedController:
         self.error = ""
         self.decision = None
         self.next_step_at = 0.0
+        self._remote_until = 0.0
         self.clipboard_cache = RecentClipboard()
         self.clipboard_sink = lambda mime, data: None
         self.clipboard_dispatch = None
@@ -1289,6 +1295,9 @@ class HostedController:
                 elif event in (SESSION_OFFER, SESSION_CLOSE, SESSION_REFUSE, FILE_REQUEST):
                     self._lan_event(envelope["header"]["source"], event, payload)
                     outcome = "succeeded"
+                elif event in REMOTE_REQUESTS and self.is_phone(envelope["header"]["source"]):
+                    self._remote(envelope["header"]["source"], event, payload)
+                    outcome = "succeeded"
                 # Anything else, including phone actions sent to a computer, has no effect here.
             except (FeatureError, ValueError, OSError):
                 outcome = "failed"
@@ -1299,6 +1308,62 @@ class HostedController:
             self._offers.pop(event_id, None)
             activity = True
         return activity
+
+    def wake_addresses(self) -> list:
+        """Hardware addresses of this computer's real network adapters that are up on a private network."""
+        try:
+            import psutil
+            from .camera_session import local_address
+            states = psutil.net_if_stats()
+            adapters = psutil.net_if_addrs()
+        except Exception:
+            return []
+        values = []
+        for name, entries in adapters.items():
+            if (name not in states or not states[name].isup
+                    or re.search(r"loopback|virtual|vethernet|vmware|vbox|docker|wsl|tailscale|^lo$|^veth|^br-|^tun|^tap", name, re.I)):
+                continue
+            if any(local_address(entry.address) for entry in entries if entry.family == socket.AF_INET):
+                values += [entry.address for entry in entries if entry.family == psutil.AF_LINK and entry.address]
+        return values
+
+    # ------------------------------------------------ ring and phone remote
+    def _remote(self, source, event, payload):
+        """Ring, or a Phone remote request, from an approved phone: as from a Hub phone, answered by mailbox."""
+        body = read_remote(payload)
+        if event == COMPUTER_RING:
+            ring = getattr(self.workspace, "ring_requested", None)
+            if ring and (self.workspace.settings.get("link") or {}).get("ring_computer", True) is not False:
+                ring(self._labels().get(source) or "your phone")
+            return
+        if event == CAMERA_REQUEST:
+            # The phone asks to be the webcam; nothing starts until the owner accepts on this computer.
+            ask = getattr(self.workspace, "camera_requested", None)
+            if ((self.workspace.settings.get("link") or {}).get("camera") or {}).get("enabled", True) is False:
+                # Off means off: nothing appears here, and the phone hears why at once.
+                self.mailbox.stage(source, remote_payload(CAMERA_OFF, {}), ttl_seconds=30)
+                self._wake.set()
+            elif ask:
+                ask(source, self._labels().get(source) or "your phone")
+            return
+        remote = getattr(self.workspace, "remote", None)
+        if remote is None:
+            return
+        if remote.allowed(source):  # A phone that may not steer this computer cannot make it poll fast.
+            self._remote_until = time.monotonic() + REMOTE_ACTIVE_SECONDS
+        if event == REMOTE_LAN_REQUEST:
+            # A direct channel on this network; without one the phone keeps using the mailbox.
+            lan = getattr(remote, "lan", None)
+            invite = lan.offer(source) if lan is not None else None
+            if invite is not None:
+                self.mailbox.stage(source, remote_payload(REMOTE_LAN, invite), ttl_seconds=30)
+                self._wake.set()
+            return
+
+        def reply(target, kind_, value):
+            self.mailbox.stage(target, remote_payload(kind_, value), ttl_seconds=30)
+            self._wake.set()
+        remote.event({"type": event, "payload": body, "source": source}, reply)
 
     # --------------------------------------------------- files on this network
     def lan_addresses(self) -> list:
@@ -1737,6 +1802,11 @@ class HostedController:
             if now - self._subscribed.get(source, 0) >= SUBSCRIBE_SECONDS:
                 # Any approved computer, root or not, asks for texts and calls by name.
                 self.mailbox.stage(source, subscribe_payload(self.label()), ttl_seconds=300)
+                # How to wake this computer later; end-to-end encrypted to the owner's own phone.
+                try:
+                    self.mailbox.stage(source, wake_payload(self.wake_addresses()), ttl_seconds=300)
+                except FeatureError:
+                    pass  # No physical adapter to wake.
                 self._subscribed[source] = now
                 self._wake.set()
             if "photos" not in body["capabilities"]:
@@ -2195,9 +2265,21 @@ class HostedController:
         if activity:
             self.changed()
 
+    def _remote_hot(self) -> bool:
+        """A phone sent remote controls through the mailbox a moment ago."""
+        return time.monotonic() < self._remote_until
+
+    def _remote_ready(self) -> bool:
+        """Phone remote is on for at least one phone: its first request should not wait for a 15 s pass."""
+        remote = getattr(self.workspace, "remote", None)
+        try:
+            return bool(remote is not None and remote.enabled() and (remote.options().get("devices") or []))
+        except Exception:
+            return False
+
     def _fast_poll(self) -> bool:
-        """Poll often while a phone shares calls or texts, or a direct file offer waits for an answer."""
-        if self.transfers.lan_waiting():
+        """Poll often while a phone shares calls or texts, a direct file offer waits for an answer or Phone remote is on."""
+        if self.transfers.lan_waiting() or self._remote_ready():
             return True
         return any({"calls", "sms"} & set(row.get("capabilities") or []) for row in self.workspace.store.all("hosted_phone"))
 
@@ -2269,13 +2351,14 @@ class HostedController:
                         self.status, self.error = "retrying", "Saiph Cloud is temporarily unavailable. Saiph will retry."
                     self.next_poll_at = time.monotonic() + FAST_POLL_SECONDS
                 elif time.monotonic() >= self.next_poll_at:
-                    self.next_poll_at = time.monotonic() + FAST_POLL_SECONDS
+                    hot = self._remote_hot()
+                    self.next_poll_at = time.monotonic() + (REMOTE_POLL_SECONDS if hot else FAST_POLL_SECONDS)
                     try:
-                        if self._fast_poll():
+                        if hot or self._fast_poll():
                             self.poll()
                     except Exception:
                         pass  # The next full step reports the connection state.
-            self._wake.wait(1.0)
+            self._wake.wait(REMOTE_POLL_SECONDS if self._remote_hot() else 1.0)
 
     def stop(self):
         self._stop.set()

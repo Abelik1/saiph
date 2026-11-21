@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Free trial of Saiph Cloud on sign-up (docs/PAID_HOSTED.md). Every new account
-// may start one trial, without a card. The trial is a time-limited Hosted grant
-// pushed like a paid grant (grant "trial:<ref>"); it never touches Stripe.
+// New offers use a card-required 14-day Stripe trial. Legacy no-card grants and
+// their original end dates remain supported (docs/PAID_HOSTED.md).
 import { createHmac, randomBytes } from "node:crypto";
 
 /** Default length (owner request, 19 October 2026: "a free trial on sign up"). */
 export const DEFAULT_TRIAL_DAYS = 14;
+/** New card-backed offers are fixed at 14 days; legacy grants keep their dates. */
+export const CARD_TRIAL_DAYS = 14;
 /** One push covers the whole trial: stays inside the 35-day grant roll window. */
 export const MAX_TRIAL_DAYS = 30;
 /** Stripe Checkout needs a trial end at least 48 hours ahead; a shorter remainder
@@ -39,6 +40,16 @@ export function checkTrialConfig(env) {
 /** @param {Record<string, string | undefined>} env */
 export function readTrialConfig(env) {
   return checkTrialConfig(env).config;
+}
+
+/** Live activation follows verified reminder/cancellation settings, not a build.
+ * The old 30-day environment value cannot lengthen the new card-backed offer.
+ * @param {Record<string, string | undefined>} env
+ * @returns {TrialConfig | null} */
+export function readCardTrialConfig(env) {
+  const config = readTrialConfig(env);
+  if (!config || env.SAIPH_BILLING_MODE === "live" && env.SAIPH_CARD_TRIAL_READY !== "true") return null;
+  return {...config, days: CARD_TRIAL_DAYS};
 }
 
 /**

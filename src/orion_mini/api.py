@@ -184,6 +184,14 @@ class ApiServer:
                         body = json.loads(self.rfile.read(length))
                     except ValueError:
                         return self.reply(400, {"error": "invalid_json", "message": "The body is not valid JSON."})
+                if path == "/v1/window/show" and method == "POST":
+                    show = getattr(workspace, 'request_show_window', None)
+                    if show is None:
+                        return self.reply(503, {'error': 'unavailable', 'message': 'This desktop cannot be shown from this process.'})
+                    if body not in (None, {}):
+                        return self.reply(400, {'error': 'invalid', 'message': 'Open Saiph takes no options.'})
+                    self.reply(202, {'showing': True})
+                    return show()
                 if path == "/v1/app/restart" and method == "POST":
                     # Live authenticated callers only: an inbox replay at startup
                     # must never be able to restart the app again.

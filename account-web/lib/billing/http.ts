@@ -2,8 +2,8 @@
 import {timingSafeEqual} from "node:crypto";
 import type Stripe from "stripe";
 import {billingHeaders,maySubscribe,readBillingConfig,reportBillingConfig,subjectReference,type BillingConfig,type PlanKey} from "./policy.ts";
-import {BillingConflict,TrialUnavailable,WithdrawalUnavailable,checkout,grantPolicy,portal,processWebhook,eventDescriptor,startTrial,withdraw,type BillingStore} from "./service.ts";
-import {checkTrialConfig,validEmailKey} from "./trial.mjs";
+import {BillingConflict,TrialUnavailable,WithdrawalUnavailable,checkout,grantPolicy,portal,processWebhook,eventDescriptor,withdraw,type BillingStore} from "./service.ts";
+import {readCardTrialConfig,newTrialRef,validEmailKey} from "./trial.mjs";
 import {syncGrants} from "./grant-sync.mjs";
 import type {GrantValue} from "./grant-push.mjs";
 import {secondFactorRequired} from "../beta-policy.mjs";
@@ -104,12 +104,12 @@ export async function withdrawAction(request:Request,deps:Dependencies):Promise<
     return reply(503,"Withdrawal is temporarily unavailable. Please try again shortly or contact support@usesaiph.com.");
   }
 }
-/** Free trial: exactly `trial=start` from the account's own form, no card. */
+/** Card-backed trial: exactly `trial=start`; access only follows Stripe's webhook. */
 export async function trialAction(request:Request,deps:Dependencies):Promise<Response> {
   if (request.method!=="POST") return reply(405,"Method not allowed.");
   const config=readBillingConfig(deps.env);if(!config) return reportBillingConfig(deps.env), reply(503,"Free trials are not available yet.");
-  const {config:trial,problems}=checkTrialConfig(deps.env);
-  if (!trial) {if (problems.length) console.error("Free trials are off; these settings were rejected: "+problems.join(", "));return reply(503,"Free trials are not available right now.");}
+  const trial=readCardTrialConfig(deps.env);
+  if (!trial) return reply(503,"Free trials are not available right now.");
   if (request.headers.get("origin")!==config.origin || request.headers.get("sec-fetch-site") && request.headers.get("sec-fetch-site")!=="same-origin"
     || new URL(request.url).search) return reply(403,"Request rejected.");
   try {
@@ -125,23 +125,24 @@ export async function trialAction(request:Request,deps:Dependencies):Promise<Res
     // The email key comes only from the verified sign-in (lib/auth.ts), never the browser.
     const emailKey=session.user.trialKey;
     if (!validEmailKey(emailKey)) return reply(401,"Sign out and sign in again to start your free trial.");
-    const before=Math.floor(Date.now()/1000);
-    const started=await deps.withStore(config,store=>startTrial(store,config,trial,subject,emailKey as string,value=>deps.pushGrant(config,value)));
-    // Count a trial once, when it really starts (pressing again returns the same trial).
-    if (started.startedAt>=before-5) {
-      await count(deps,config,"trial_started","trial",null,"a");
-      const ga=readGaConfig(deps.env);
-      const consent=ga?readConsent(request.headers.get("cookie")):{granted:false,clientId:null};
-      await sendEvent(ga,consent.granted?consent.clientId:null,"trial_start",{plan:"trial"},deps.analyticsFetch);
-    }
-    return new Response(null,{status:303,headers:{...billingHeaders,Location:config.origin+"/account?trial=started"}});
+    const reservation=await deps.withStore(config,store=>store.reserveCardTrial({subject,emailKey:emailKey as string,
+      now:Math.floor(Date.now()/1000),cap:trial.cap,ref:newTrialRef()}));
+    if (!reservation.ref) throw new TrialUnavailable(reservation.outcome as "subscribed"|"used"|"full");
+    const ga=readGaConfig(deps.env);
+    const consent=ga?readConsent(request.headers.get("cookie")):{granted:false,clientId:null};
+    const clientId=consent.granted?consent.clientId:null;
+    const url=await deps.withStore(config,store=>checkout(deps.createStripe(config),store,config,subject,"monthly",
+      {cardTrial:{days:trial.days,ref:reservation.ref!},analyticsClientId:clientId}));
+    await count(deps,config,"checkout_started","trial",null,"a");
+    await sendEvent(ga,clientId,"begin_checkout",{plan:"trial",currency:"EUR"},deps.analyticsFetch);
+    return new Response(null,{status:303,headers:{...billingHeaders,Location:url}});
   } catch (error) {
     if (error instanceof TrialUnavailable) return reply(409,{
       subscribed:"This account already has a subscription, so it does not need a free trial.",
       used:"A free trial has already been used with this email address. Subscribe on your account page to continue.",
       full:"All free trial places have been taken. You can still subscribe on your account page.",
     }[error.state]);
-    return reply(503,"Your trial could not be activated just now. Press Start free trial again in a minute; you will not get a second trial or lose days.");
+    return reply(503,"Trial checkout is temporarily unavailable. Please try again shortly. Access starts only after you finish Stripe Checkout.");
   }
 }
 export async function webhook(request:Request,deps:Dependencies):Promise<Response> {
@@ -166,6 +167,14 @@ export async function webhook(request:Request,deps:Dependencies):Promise<Respons
   // A completed Checkout is counted once, when its event is first applied
   // (before grant delivery, so a Stripe retry never counts it twice).
   const purchased=async(applied:{outcome?:string})=>{
+    if (event.type==="checkout.session.completed" && (applied.outcome==="applied" || applied.outcome==="stale")) {
+      const session=event.data.object as Stripe.Checkout.Session;
+      if (session.mode==="subscription" && session.status==="complete" && session.metadata?.saiph_trial==="card-v1") {
+        await count(deps,config,"trial_started","trial",null,"a");
+        await sendEvent(readGaConfig(deps.env),session.metadata.saiph_ga ?? null,"trial_start",{plan:"trial"},deps.analyticsFetch);
+        return;
+      }
+    }
     const purchase=purchaseFrom(event,config,applied);if (!purchase) return;
     await count(deps,config,"purchase",purchase.plan,purchase.test,purchase.variant);
     await sendEvent(readGaConfig(deps.env),purchase.clientId,"purchase",{plan:purchase.plan,currency:"EUR",value:purchase.value,
@@ -181,6 +190,7 @@ export function purchaseFrom(event:Stripe.Event,config:BillingConfig,applied:{ou
   const session=event.data.object as Stripe.Checkout.Session;
   if (session.mode!=="subscription" || session.status!=="complete") return null;
   const meta=session.metadata ?? {};
+  if (meta.saiph_trial==="card-v1") return null; // A free trial is not a paid purchase.
   const plan=meta.saiph_plan==="monthly" || meta.saiph_plan==="yearly" ? meta.saiph_plan : null;
   if (!plan) return null;
   const {test,variant}=resolveOffer(config.priceTest,meta.saiph_price_test && meta.saiph_price_test===config.priceTest?.id ? meta.saiph_variant : undefined);

@@ -30,7 +30,7 @@ describe("Hosted preview settings", () => {
     fireEvent.click(screen.getByRole("button", {name: "Open firewall settings"}));
     await waitFor(() => expect(call).toHaveBeenCalledWith("hosted.firewall.open"));
   });
-  it("points a new person to the free trial before signing in", () => { setup(off); expect(screen.getByText(/Start your free trial \(no card needed\)/)).toBeVisible(); });
+  it("explains the card-required 14-day trial before signing in", () => { setup(off); expect(screen.getByText(/14-day free trial with a card, then €9.99\/month unless you cancel/)).toBeVisible(); });
   it("shows free trial days left with a subscribe button that opens the plans page", async () => {
     const call = setup({...active, access: {state: "trial", days_left: 3, trial_until: 1900000000, message: "Free trial: 3 days left. Subscribe on the Saiph website to keep Saiph Cloud after it ends; nothing is charged automatically."}});
     const notice = screen.getByLabelText("Saiph Cloud access");

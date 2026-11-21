@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { WaveLoader, WaveProgress } from "./waves";
 
 const connectionSteps = ["Account", "Computer", "Scan", "Approve"];
-type ConnectedPhone = { name: string; hosted?: boolean; online: boolean };
+type ConnectedPhone = { id: string; name: string; hosted?: boolean; online: boolean };
 type Offered = { device_id: string };
 
 function ConnectionStep({ step, children }: { step: number; children: ReactNode }) {
@@ -31,7 +31,7 @@ function PhonePairingSteps({ hosted, client, phones = [], onApproved, onDone }: 
   const headingId = useId();
   useWizardOpen();
   const [step, setStep] = useState<"scan" | "approve" | "approved">("scan");
-  const [approvedLabel, setApprovedLabel] = useState("");
+  const [approvedId, setApprovedId] = useState("");
   // Requests already on the list when the owner goes back to scanning: they wait for an explicit Continue.
   const ignored = useRef<string[]>([]);
   // A phone comparing codes over the local network: its Cloud request must not pull the wizard to the fingerprint list.
@@ -61,7 +61,7 @@ function PhonePairingSteps({ hosted, client, phones = [], onApproved, onDone }: 
     ignored.current = Array.isArray(value?.requests) ? value.requests.map(item => item.device_id) : [];
     setStep("scan");
   };
-  const connected = phones.find(phone => phone.hosted && phone.online && phone.name === approvedLabel);
+  const connected = phones.find(phone => phone.hosted && phone.online && phone.id === approvedId);
   return <ConnectionStep step={step === "scan" ? 2 : 3}>
     <section className="grid min-w-0 gap-4" aria-labelledby={headingId}>
       <h3 id={headingId} ref={heading} tabIndex={-1} className="m-0 text-lg font-semibold outline-none">
@@ -70,7 +70,7 @@ function PhonePairingSteps({ hosted, client, phones = [], onApproved, onDone }: 
       {step === "scan" ? <>
         <p className="m-0 text-sm leading-relaxed text-muted-foreground">Open Saiph on your phone and sign in with the same account. Then tap Find my computer, or scan the code below. This screen moves on by itself.</p>
         <NearbyPhone client={client} onActive={nearbyActive}
-          onApproved={label => { nearbyActive(false); setApprovedLabel(label); setStep("approved"); onApproved?.(label); }} />
+          onApproved={(label, id) => { nearbyActive(false); setApprovedId(id); setStep("approved"); onApproved?.(label); }} />
         {!nearby && <HostedRootCode hosted={hosted} client={client} autoShow compact />}
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
           <p role="status" className="m-0 text-sm text-muted-foreground">Waiting for your phone…</p>
@@ -78,19 +78,23 @@ function PhonePairingSteps({ hosted, client, phones = [], onApproved, onDone }: 
         </div>
       </> : step === "approve" ? <>
         <p className="m-0 text-sm leading-relaxed text-muted-foreground">Choose your phone below, then compare its security code with the phone's screen.</p>
-        <HostedApproveDevice hosted={hosted} client={client} onApproved={label => { setApprovedLabel(label); setStep("approved"); onApproved?.(label); }} />
+        <HostedApproveDevice hosted={hosted} client={client} onApproved={(label, id) => { setApprovedId(id); setStep("approved"); onApproved?.(label); }} />
         <Disclosure summary="Why compare security codes?">
           <p className="m-0">A security code is the fingerprint of a device's encryption keys. Signing in finds your account; comparing every group on both screens checks which device you are trusting.</p>
         </Disclosure>
         <div className="border-t border-border pt-4"><Button variant="secondary" onClick={() => void backToScan()}>Back to scanning</Button></div>
       </> : connected ? <>
         <p role="status" className="m-0 flex items-center gap-2 text-status-on"><Check className="size-4" />{connected.name} is connected</p>
-        <p className="m-0 text-muted-foreground">Your phone and this computer are now in tune. Notifications, files and photos you share appear in the Phone tab.</p>
+        <p className="m-0 text-muted-foreground">Send a small test file from Saiph on your phone. It should appear here in Phone → Files.</p>
+        <p className="m-0 text-sm text-muted-foreground">Choose photos, notifications, texts and calls on your phone when you want to share them. You can skip permissions and change them later in Settings.</p>
         {onDone && <div className="flex justify-end"><Button variant="default" onClick={onDone}>Done</Button></div>}
       </> : <>
         <p role="status" className="m-0 flex items-center gap-2 text-status-on"><Check className="size-4" />Approval complete</p>
         <WaveLoader label="Waiting for your phone to connect…" size={80} />
         <p className="m-0 text-sm text-muted-foreground">Your phone is finishing the connection. Keep Saiph open on it; this screen updates when it connects.</p>
+        <Disclosure summary="Phone still not connecting?">
+          <p className="m-0">Check that both devices have internet access, Saiph is open on your phone and syncing is turned on. Use the same account on both. Your approval is saved; you can leave this screen and return to Phone without starting again.</p>
+        </Disclosure>
         {onDone && <div className="flex justify-end"><Button variant="secondary" onClick={onDone}>Done</Button></div>}
       </>}
     </section>
@@ -104,7 +108,10 @@ export function HostedPhoneSetup({ hosted, client, phones, onApproved, onDone }:
   const signedIn = hosted.enabled && hosted.account?.status === "signed_in";
   if (!hosted.available) return <p>This build does not include Saiph accounts.</p>;
   if (hosted.self_hosted_paired) return <p>This computer uses your own Hub. Keep using its pairing invitation.</p>;
-  if (!hosted.configured) return <p>This build cannot connect to Saiph accounts. Download the current beta from your account page.</p>;
+  if (!hosted.configured) return <div className="grid gap-3">
+    <p>This build cannot connect to Saiph accounts. Download the current desktop app from usesaiph.com. Your pairing and keys stay when you upgrade.</p>
+    <div><Action variant="tonal" run={() => client.call("setup.open", { link: "downloads" })}>Get the desktop app</Action></div>
+  </div>;
   if (!signedIn) return <ConnectionStep step={0}><div className="grid gap-4">
     <h3 className="m-0 text-lg font-semibold">Sign in to connect your phone</h3>
     <HostedSignIn hosted={hosted} client={client} />

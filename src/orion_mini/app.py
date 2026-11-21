@@ -10,7 +10,7 @@ from concurrent.futures import Future, TimeoutError as FutureTimeout
 from random import randrange
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from PySide6.QtCore import QEvent, QProcess, QTimer, QUrl, Qt, QLockFile, Signal
+from PySide6.QtCore import QEvent, QTimer, QUrl, Qt, QLockFile, Signal
 from PySide6.QtGui import QAction, QColor, QCursor, QIcon, QPalette
 from PySide6.QtWidgets import QApplication, QDialog, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMenu, QPushButton, QSystemTrayIcon, QVBoxLayout
 from .api import ApiServer, replay_inbox
@@ -23,6 +23,7 @@ from .frame_feed import SCHEME as FRAME_SCHEME, frame_handler
 from .paths import app_data_dir
 from .platform import beep, qt_platform_for_background_clipboard, set_startup
 from .updater import start_update
+from . import child_process
 APP_MODEL_ID = 'OrionMini.Desktop'
 # The dashboard's darkest ground (--background). Qt paints it wherever the page
 # has not drawn yet, so resizing or first show never flashes white.
@@ -74,6 +75,7 @@ class MainWindow(QMainWindow):
     send_files_requested = Signal(object)
     open_phone_app_requested = Signal(str)
     ring_requested = Signal(str)
+    camera_requested = Signal(str, str)
     open_phone_requested = Signal()
 
     def __init__(self, data_dir=None, bootstrap=True):
@@ -189,6 +191,8 @@ class MainWindow(QMainWindow):
         self.open_phone_app_requested.connect(self.open_phone_app)
         self.ring_requested.connect(self.ring_computer)
         self.workspace.ring_requested = self.ring_requested.emit
+        self.camera_requested.connect(self.answer_camera_request)
+        self.workspace.camera_requested = self.camera_requested.emit
         # A clicked Saiph Cloud notification toast, from the notifier's thread.
         self.open_phone_requested.connect(self.open_phone_page)
         self.workspace.request_open_phone = self.open_phone_requested.emit
@@ -364,7 +368,7 @@ class MainWindow(QMainWindow):
     def stop_process(process):
         pid = int(process.processId())
         if pid > 0 and os.name == 'nt':
-            subprocess.run(['taskkill', '/PID', str(pid), '/T', '/F'], capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW, timeout=10)
+            child_process.run(['taskkill', '/PID', str(pid), '/T', '/F'], capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW, timeout=10)
         process.kill()
 
     def update_and_rebuild(self):
@@ -402,6 +406,36 @@ class MainWindow(QMainWindow):
         box.finished.connect(finished)
         self.showNormal(); self.raise_(); self.activateWindow()
         box.open(); ring(); timer.start()
+
+    def answer_camera_request(self, device, phone_name):
+        """A phone asked to be the webcam: Accept starts a camera session and sends it to that phone."""
+        from PySide6.QtWidgets import QMessageBox
+        if getattr(self, 'camera_box', None):
+            return
+        box = self.camera_box = QMessageBox(QMessageBox.Icon.Question, 'Saiph',
+                                            f"{phone_name} wants to be this computer's webcam.", QMessageBox.StandardButton.NoButton, self)
+        box.setInformativeText('Audio stays off. Closing the camera page on the phone stops it.')
+        accept = box.addButton('Accept', QMessageBox.ButtonRole.AcceptRole)
+        box.addButton('Decline', QMessageBox.ButtonRole.RejectRole)
+        # An unanswered request lapses with the phone's own wait.
+        QTimer.singleShot(60000, lambda: box.done(0) if self.camera_box is box else None)
+
+        def start():
+            camera = self.workspace.camera
+            try:
+                code = camera.start_local(preview=not camera.status().get('integrated_available', False))
+                camera.offer_to_phone(code['session'], device)
+            except Exception as error:
+                self.phone_alert.emit('Saiph', f'The webcam could not start: {error}')
+
+        def finished(_result):
+            chosen = box.clickedButton() is accept
+            self.camera_box = None
+            if chosen:
+                threading.Thread(target=start, name='orion-camera-request', daemon=True).start()
+        box.finished.connect(finished)
+        self.showNormal(); self.raise_(); self.activateWindow()
+        box.open()
 
     def open_phone_app(self, package, attempts=0):
         """A pinned phone app: mirror it over the local network (docs/PHONE_SCREEN.md).
@@ -557,11 +591,11 @@ class MainWindow(QMainWindow):
     def restart_app(self):
         """Relaunch this same build once this instance has released its profile lock."""
         command = [sys.executable, *sys.argv[1:]] if getattr(sys, 'frozen', False) else [sys.executable, '-m', 'orion_mini', *sys.argv[1:]]
-        env = {key: value for key, value in os.environ.items() if not key.startswith('_PYI') and key != '_MEIPASS2'}
+        env = child_process.system_environment()
         env['ORION_RELAUNCH_WAIT'] = '1'
         flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == 'win32' else 0
-        subprocess.Popen(command, env=env, cwd=os.getcwd(), creationflags=flags, close_fds=True,
-                         start_new_session=sys.platform != 'win32')
+        child_process.popen(command, env=env, cwd=os.getcwd(), creationflags=flags, close_fds=True,
+                            start_new_session=sys.platform != 'win32')
         QTimer.singleShot(200, self.quit_app)
 
     def quit_app(self):

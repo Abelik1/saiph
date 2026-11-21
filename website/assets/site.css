@@ -83,6 +83,22 @@ p { margin: 0 0 1em; }
 .nav-links .hide-sm { display: none; }
 @media (min-width: 760px) { .nav-links .hide-sm { display: inline-block; } }
 
+/* One policy destination with a compact, keyboard-operable document picker. */
+.policy-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 24px 0 32px; }
+.policy-tabs a {
+  display: inline-flex; align-items: center; min-height: 44px; padding: 8px 14px;
+  border: 1px solid var(--border); border-radius: 8px; color: var(--muted); text-decoration: none;
+}
+.policy-tabs a:hover, .policy-tabs a[aria-selected="true"] { color: var(--text); background: var(--surface-2); border-color: var(--cyan); }
+[data-policy-panel][hidden] { display: none; }
+[data-policy-panel] { scroll-margin-top: 80px; }
+[data-policy-panel] [id] { scroll-margin-top: 80px; }
+[data-policy-panel] h3 { font-size: 1.15rem; margin-top: 28px; }
+@media print {
+  [data-policy-panel][hidden] { display: block !important; }
+  .policy-tabs { display: none; }
+}
+
 /* Buttons */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
@@ -338,6 +354,7 @@ footer a:hover { color: var(--text); }
 .showcase { padding: 8px 0 40px; }
 .feature-tabs { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; margin-bottom: 18px; }
 .feature-tabs button {
+  min-height: 44px;
   font: inherit; font-size: 0.9rem; font-weight: 600; color: var(--muted); background: transparent;
   border: 1px solid var(--border); border-radius: 999px; padding: 7px 14px; cursor: pointer; transition: all .15s;
 }
@@ -690,6 +707,11 @@ footer a:hover { color: var(--text); }
 .consent p { margin: 0; flex: 1 1 280px; }
 .consent-buttons { display: flex; gap: 10px; flex: 1 1 auto; justify-content: flex-end; }
 .consent-buttons .btn { flex: 1 1 0; min-width: 110px; justify-content: center; padding: 9px 16px; }
+@media (max-width: 999px) {
+  .landing .consent {
+    position: static; transform: none; margin: 12px auto 24px; box-shadow: none;
+  }
+}
 /* On wide screens the banner sits in a corner, clear of the centred Buy button. */
 @media (min-width: 1000px) {
   .consent { left: auto; right: 16px; bottom: 16px; transform: none; width: 380px; }

@@ -70,11 +70,13 @@ param(
     [string[]]$Testers = @(),
     [string]$ReleaseNotesFile = '',
     # Public service/OAuth identifiers, temporarily embedded in the beta APK.
-    [string]$HostedConfiguration = ''
+    [string]$HostedConfiguration = '',
+    # Canonical public account origin; empty leaves automatic trials off in independent/test builds.
+    [string]$AccountOrigin = ''
 )
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.IO.Compression.FileSystem
-$package = 'com.orionmini.mobile'
+$package = 'com.orionmini.mobile.unlocked'  # Saiph Unlocked; Google Play's Saiph is com.orionmini.mobile
 
 function ConvertTo-ArgumentString([string[]]$Arguments) {
     ($Arguments | ForEach-Object {
@@ -223,11 +225,13 @@ try {
 
     # ------------------------------------------------------------------- build
     $variant = (Get-Culture).TextInfo.ToTitleCase($BuildType)
-    $tasks = @(":app:assemble$variant")
+    # Tester builds are the direct-download flavor; Google Play builds go through Play's own tracks.
+    $tasks = @(":app:assembleDirect$variant")
     if (-not $SkipChecks) {
-        $tasks += @(":app:testDebugUnitTest", ":core:network:testDebugUnitTest", ":restic-android:testDebugUnitTest", ":app:lint$variant")
+        $tasks += @(":app:testDirectDebugUnitTest", ":core:network:testDebugUnitTest", ":restic-android:testDebugUnitTest", ":app:lintDirect$variant")
     }
     $gradleArguments = $tasks + @("-PorionVersionCode=$VersionCode", '-PorionFirebase=true', '-PorionIndependent=true', '-PorionPush=false', '--no-configuration-cache', '--console=plain')
+    if ($AccountOrigin) { $gradleArguments += "-PorionAccountOrigin=$AccountOrigin" }
     $gradleEnvironment = @{}
     if ($KeystorePath) {
         if (-not $KeyAlias -or -not $env:SAIPH_ANDROID_KEYSTORE_PASSWORD -or -not $env:SAIPH_ANDROID_KEY_PASSWORD) {
@@ -248,7 +252,7 @@ try {
     if ($gradle.ExitCode) { throw "Gradle failed; see $(Join-Path $output 'build.log')." }
 
     # ------------------------------------------------------------------ verify
-    $apkDirectory = Join-Path $android "app/build/outputs/apk/$BuildType"
+    $apkDirectory = Join-Path $android "app/build/outputs/apk/direct/$BuildType"
     $metadata = Get-Content -LiteralPath (Join-Path $apkDirectory 'output-metadata.json') -Raw | ConvertFrom-Json
     if ($metadata.applicationId -ne $package -or @($metadata.elements).Count -ne 1) { throw 'Unexpected APK metadata.' }
     $element = $metadata.elements[0]
