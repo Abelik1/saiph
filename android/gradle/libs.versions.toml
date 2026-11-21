@@ -2,9 +2,9 @@
 # Gradle and Kotlin
 agp = "9.3.1"
 annotation = "1.10.0"
-kotlin = "2.3.0"
+kotlin = "2.4.20"
 ksp = "2.3.6"
-jetbrainsKotlinJvm = "2.3.0"
+jetbrainsKotlinJvm = "2.4.20"
 androidDesugarJdkLibs = "2.1.5"
 smsmms = "kdeconnect-1-21-0"
 
@@ -125,6 +125,8 @@ hilt-compiler = { module = "com.google.dagger:hilt-compiler", version.ref = "hil
 hilt-android = { module = "com.google.dagger:hilt-android", version.ref = "hilt" }
 hilt-navigation-compose = { module = "androidx.hilt:hilt-navigation-compose", version.ref = "hiltAndroidx" }
 hilt-androidx-compiler = { module = "androidx.hilt:hilt-compiler", version.ref = "hiltAndroidx" }
+# Lets Hilt read Kotlin 2.4 class metadata until Dagger bundles a newer reader.
+kotlin-metadata-jvm = { module = "org.jetbrains.kotlin:kotlin-metadata-jvm", version.ref = "kotlin" }
 
 # Networking - SSH
 apache-mina-core = { module = "org.apache.mina:mina-core", version.ref = "minaCore" }

@@ -37,8 +37,16 @@ def inventory(root: Path) -> dict[str, Path]:
     return files
 
 
-def check(unsigned: Path, signed: Path, executables=PROJECT_EXECUTABLES) -> dict:
+def check(unsigned: Path, signed: Path, executables=None) -> dict:
     before, after = inventory(unsigned), inventory(signed)
+    if executables is None:
+        executables = PROJECT_EXECUTABLES
+        marker = unsigned / '_internal/desktop-runtime.json'
+        if marker.is_file():
+            runtime = json.loads(marker.read_text(encoding='utf-8'))
+            if runtime.get('runtime') != 'electron' or runtime.get('service') != 'resources/service/SaiphService.exe':
+                raise ValueError('Invalid Electron signing descriptor')
+            executables += ('resources/service/SaiphService.exe',)
     missing, added = sorted(before.keys() - after.keys()), sorted(after.keys() - before.keys())
     if missing or added:
         raise ValueError(f'Signed bundle file set differs; missing {missing[:5]}, added {added[:5]}')

@@ -185,7 +185,7 @@ export function PhoneScreen({ screen, deviceId, client }: { screen?: PhoneScreen
       {code?.delivered && <p className="m-0 text-sm" role="status">On your phone, tap the Saiph notification, verify it's you and choose Start now.</p>}
       {code && !showQr && <Button size="sm" variant="ghost" onClick={() => setShowQr(true)}>No notification? Show a code to scan</Button>}
       {code && showQr && (remaining > 0 ? <>
-        <QrImage modules={code.modules} label="Phone screen QR code" width={220} />
+        <QrImage modules={code.modules} label="Phone screen QR code" />
         <p className="m-0 text-sm">On your phone: Saiph → Show phone screen → Scan computer's code.</p>
         <small className="text-muted-foreground" role="timer">Works once · expires in {remaining}s. Keep this code private.</small>
       </> : <p role="status" className="m-0 text-sm">Code expired. Cancel and start again.</p>)}

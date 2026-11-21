@@ -41,7 +41,16 @@ def safe_path(value):
 def audit_installed_modules(bundle, platform, profile):
     from PyInstaller.archive.readers import CArchiveReader
     entry = bundle / executable(platform)
+    marker = bundle / '_internal/desktop-runtime.json'
+    if marker.is_file():
+        runtime = json.loads(marker.read_text(encoding='utf-8'))
+        expected = 'resources/service/' + ('SaiphService.exe' if platform.startswith('windows') else 'SaiphService')
+        if runtime.get('runtime') != 'electron' or runtime.get('service') != expected:
+            raise ValueError('Invalid Electron service entrypoint')
+        entry = bundle / expected
     archive = CArchiveReader(str(entry)).open_embedded_archive('PYZ.pyz')
+    if marker.is_file() and any(name == prefix or name.startswith(prefix + '.') for name in archive.toc for prefix in ('PySide6', 'shiboken6')):
+        raise ValueError('Electron service still contains Qt modules')
     audit_profile_contents(bundle, profile, archive.toc)
 
 
@@ -77,11 +86,27 @@ def audit_bundle(bundle, platform):
     if (not isinstance(profile, dict) or set(profile) != {'schema', 'profile'} or type(profile['schema']) is not int
             or profile['schema'] != 1 or profile['profile'] not in {'link', 'workspace'}):
         raise ValueError('Invalid native distribution profile')
+    marker = bundle / '_internal/desktop-runtime.json'
+    if marker.exists():
+        runtime = json.loads(marker.read_text(encoding='utf-8'))
+        service = 'resources/service/' + ('SaiphService.exe' if platform.startswith('windows') else 'SaiphService')
+        if (runtime.get('schema') != 1 or runtime.get('runtime') != 'electron' or runtime.get('service') != service
+                or profile['profile'] != 'link' or runtime.get('frontend') != 'resources/app/frontend'):
+            raise ValueError('Invalid Electron runtime descriptor')
+        for relative in (service, 'resources/app/package.json', 'resources/app/dist/main.cjs', 'resources/app/dist/preload.cjs',
+                         'resources/app/frontend/index.html', 'resources/app/frontend/screen.html'):
+            if not (bundle / relative).is_file():
+                raise ValueError('Electron application is incomplete: ' + relative)
+        for leaf in ('distribution-profile.json', 'distribution-release.json'):
+            if (bundle / '_internal' / leaf).read_bytes() != (bundle / 'resources/service/_internal' / leaf).read_bytes():
+                raise ValueError('Electron and service release metadata disagree')
     for path in bundle.rglob('*'):
         if path.is_symlink(): raise ValueError("Distribution bundle contains a symbolic link; use a fully materialized bundle")
         if not path.is_file(): continue
         relative = safe_path(path.relative_to(bundle).as_posix())
         name = path.name.lower()
+        if marker.exists() and (name.startswith(('qt6', 'libqt6', 'pyside6', 'shiboken6')) or '/PySide6/' in relative):
+            raise ValueError('Electron package still contains a Qt runtime')
         if name in {'.env', 'google-services.json', 'client-bootstrap.json', 'settings.json', 'connections.json', 'api.json', 'device_key.pem', 'hub-device-key.pem'} or name.endswith(('.jks', '.keystore', '.sqlite', '.sqlite3', '.db', '.pfx', '.p12', '.orion-enrollment')):
             raise ValueError("Distribution contains private state or credential files")
         if path.stat().st_size <= 1024 * 1024:
@@ -98,12 +123,14 @@ def license_inventory(destination, analysis, frontend):
     lock = frontend / 'package-lock.json'
     if not lock.is_file():
         raise ValueError('Frontend licence inventory requires the source package-lock.json and installed dependencies')
+    if not analysis.is_file():
+        raise ValueError(f'Python licence inventory requires the PyInstaller analysis, not found at {analysis}')
     import importlib.util
     spec = importlib.util.spec_from_file_location('distribution_native_notices', HERE / 'native_notices.py')
     native_notices = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(native_notices)
     destination.mkdir(parents=True)
-    text = analysis.read_text(encoding='utf-8') if analysis.is_file() else ''
+    text = analysis.read_text(encoding='utf-8')
     included = []
     for distribution in importlib.metadata.distributions():
         files = distribution.files or []
@@ -175,6 +202,20 @@ def prepare(bundle, staging, version, platform, analysis, frontend):
     shutil.copy2(staging / 'app' / executable(platform), staging / 'app' / legacy_executable(platform))
     license_inventory(staging / 'licenses', analysis, frontend)
     native_notices.collect(bundle, staging / 'licenses')
+    if (bundle / '_internal/desktop-runtime.json').is_file():
+        runtime = json.loads((bundle / '_internal/desktop-runtime.json').read_text(encoding='utf-8'))
+        notices = staging / 'licenses/electron'
+        notices.mkdir()
+        for source in bundle.glob('*'):
+            if source.is_file() and source.name.lower().startswith(('license', 'notice')):
+                shutil.copyfile(source, notices / source.name)
+        inventory_path = staging / 'licenses/inventory.json'
+        inventory = json.loads(inventory_path.read_text(encoding='utf-8'))
+        inventory['desktop'] = [{'name': 'electron', 'version': runtime['electron_version'], 'license': 'MIT',
+            'notices': [p.relative_to(staging / 'licenses').as_posix() for p in notices.iterdir() if p.is_file()],
+            'source': 'https://github.com/electron/electron/releases/tag/v' + runtime['electron_version']}]
+        inventory['unresolved'] = ['Review Electron/Chromium/Node/FFmpeg transitive notices and Python native library obligations before external release.']
+        inventory_path.write_text(json.dumps(inventory, indent=2), encoding='utf-8')
     project_license = HERE.parents[1] / 'LICENSE'
     if project_license.is_file():
         shutil.copyfile(project_license, staging / 'licenses/Saiph-LICENSE.txt')
@@ -219,7 +260,9 @@ def build_windows(staging, output, compiler):
         raise ValueError('Installer temporary outputs already exist; choose a fresh output directory')
     manifest = add_network_relay(staging, compiler)
     write_assembly_metadata(metadata_path, manifest['version'], manifest['build'], manifest['profile'])
+    icon = HERE.parents[1] / 'assets/orion-mini-icon.ico'
     subprocess.run([str(compiler), '/nologo', '/target:winexe', '/optimize+', '/platform:x64', '/out:' + str(stub),
+                    '/win32icon:' + str(icon),
                     '/reference:System.Windows.Forms.dll', '/reference:System.Drawing.dll',
                     '/reference:System.IO.Compression.dll', '/reference:System.IO.Compression.FileSystem.dll',
                     '/reference:System.Web.Extensions.dll', str(HERE / 'WindowsSetup.cs'), str(metadata_path)], check=True)
@@ -321,7 +364,8 @@ def main():
     if args.linux_setup and not args.platform.startswith('linux'):
         parser.error('--linux-setup is only available for Linux packages')
     args.bundle = args.bundle or Path('dist') / bundle_name(args.platform)
-    args.analysis = args.analysis or Path('build') / bundle_name(args.platform) / 'Analysis-00.toc'
+    args.analysis = args.analysis or (Path('build/electron/python-build/SaiphService/Analysis-00.toc')
+        if (args.bundle / '_internal/desktop-runtime.json').is_file() else Path('build') / bundle_name(args.platform) / 'Analysis-00.toc')
     profile = audit_bundle(args.bundle, args.platform)
     audit_installed_modules(args.bundle, args.platform, profile)
     args.output.mkdir(parents=True, exist_ok=True)

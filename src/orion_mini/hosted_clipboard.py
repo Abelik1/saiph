@@ -21,18 +21,17 @@ def valid_image(mime, data, *, decode=False):
     """Check dimensions before decoding. MIME and the actual codec must agree."""
     if mime not in IMAGE_FORMATS or type(data) is not bytes or not 0 < len(data) <= MAX_IMAGE_BYTES:
         return False
-    from PySide6.QtCore import QBuffer, QByteArray, QIODevice
-    from PySide6.QtGui import QImageReader
-    buffer = QBuffer()
-    buffer.setData(QByteArray(data))
-    buffer.open(QIODevice.ReadOnly)
-    reader = QImageReader(buffer)
-    reader.setAutoTransform(True)
-    size = reader.size()
-    if (not reader.canRead() or bytes(reader.format()).decode("ascii", errors="replace") != IMAGE_FORMATS[mime]
-            or not size.isValid() or size.width() * size.height() > MAX_IMAGE_PIXELS):
+    from io import BytesIO
+    from PIL import Image
+    try:
+        with Image.open(BytesIO(data)) as image:
+            if image.format.lower() != IMAGE_FORMATS[mime] or min(image.size) < 1 or image.width * image.height > MAX_IMAGE_PIXELS:
+                return False
+            if decode:
+                image.load()
+        return True
+    except (OSError, ValueError, Image.DecompressionBombError):
         return False
-    return not decode or not reader.read().isNull()
 
 
 def private_directory(path):

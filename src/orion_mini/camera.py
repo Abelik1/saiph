@@ -15,6 +15,7 @@ import time
 from .adb_worker import AdbWorker
 from .companion_tools import tool_path
 from .phone_debugging import SERIAL, PhoneDebugging, adb_path
+from . import child_process
 
 WINDOW_TITLE = 'Orion Phone Camera'
 OBS_NAME = 'Orion Phone'
@@ -102,7 +103,7 @@ def obs_configuration(config):
     except (OSError, ValueError, TypeError, AttributeError, KeyError, RecursionError):return None
 
 
-def scrcpy_version(executable, run=subprocess.run):
+def scrcpy_version(executable, run=child_process.run):
     """(major, minor) from `scrcpy --version`, or None when it cannot be read."""
     try:
         result = run([executable, '--version'], capture_output=True, text=True, timeout=5,
@@ -114,7 +115,7 @@ def scrcpy_version(executable, run=subprocess.run):
 
 
 class Camera:
-    def __init__(self, workspace, *, system=None, popen=subprocess.Popen, run=subprocess.run, worker_factory=AdbWorker,
+    def __init__(self, workspace, *, system=None, popen=child_process.popen, run=child_process.run, worker_factory=AdbWorker,
                  verify_sink=loopback_sink, debugging_factory=PhoneDebugging):
         self.workspace = workspace
         self.system = system or sys.platform

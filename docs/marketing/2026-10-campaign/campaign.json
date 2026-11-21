@@ -1,0 +1,534 @@
+{
+  "brand": "Saiph",
+  "date": "2026-10-19",
+  "destination": "https://usesaiph.com",
+  "cta": "Explore the beta",
+  "disclosure": "Beta · Android + Windows / Linux",
+  "ads": [
+    {
+      "id": "01-ecosystem-convenience",
+      "name": "Plot A: That ecosystem feeling",
+      "duration": 32,
+      "theme": "cyan",
+      "audience": "Android users who like the Apple ecosystem idea but want to keep their PC",
+      "source": "README.md: current What it does table, Cloud beta texts/call controls and platform support; docs/POSITIONING.md: ecosystem idea",
+      "hypothesis": "This convenience-led story earns a higher completion rate than Plot B under matching audience and placement conditions.",
+      "headline": "Apple-style convenience on your PC",
+      "primary": "Want that Apple-style convenience on the devices you own? Meet Saiph for Android, Windows and Linux. Explore the beta.",
+      "short": "That ecosystem feeling. Your Android and PC. Meet Saiph. Beta.",
+      "alternates": [
+        "That ecosystem feeling. Your devices.",
+        "Your Android and PC, working together."
+      ],
+      "poster": {
+        "lines": [
+          "That ecosystem",
+          "feeling.",
+          "Your devices."
+        ],
+        "accent": 1,
+        "sub": "Android, Windows and Linux. Meet Saiph.",
+        "kind": "overview"
+      },
+      "scenes": [
+        {
+          "at": 0,
+          "tag": "PLOT A / THE CONNECTION",
+          "lines": [
+            "Apple-style",
+            "convenience?"
+          ],
+          "accent": 0,
+          "sub": "With your Android and PC.",
+          "kind": "intro"
+        },
+        {
+          "at": 4,
+          "tag": "01 / TEXT CLIPBOARD",
+          "lines": [
+            "Copy here.",
+            "Paste there."
+          ],
+          "accent": 1,
+          "sub": "That link follows you.",
+          "kind": "clipboard"
+        },
+        {
+          "at": 8,
+          "tag": "02 / NOTIFICATIONS",
+          "lines": [
+            "Your phone alerts.",
+            "On your computer."
+          ],
+          "accent": 1,
+          "sub": "Stay on the screen you are using.",
+          "kind": "notifications"
+        },
+        {
+          "at": 12,
+          "tag": "03 / PHOTOS",
+          "lines": [
+            "From your camera",
+            "to your computer."
+          ],
+          "accent": 1,
+          "sub": "Send the photo you need.",
+          "kind": "photos"
+        },
+        {
+          "at": 16,
+          "tag": "04 / FILES",
+          "lines": [
+            "Send it back.",
+            "Keep going."
+          ],
+          "accent": 1,
+          "sub": "Files move in either direction.",
+          "kind": "files",
+          "reverse": true
+        },
+        {
+          "at": 20,
+          "tag": "05 / TEXTS",
+          "lines": [
+            "Your number.",
+            "A real keyboard."
+          ],
+          "accent": 1,
+          "sub": "Read and reply from your computer.",
+          "kind": "messages",
+          "qualifier": "Texts: beta · Phone opt-in + Android permissions"
+        },
+        {
+          "at": 24,
+          "tag": "06 / CALL CONTROLS",
+          "lines": [
+            "A call comes in.",
+            "You choose."
+          ],
+          "accent": 1,
+          "sub": "See, answer or decline from your desk.",
+          "kind": "calls",
+          "qualifier": "Call controls: beta · Call audio stays on your phone"
+        },
+        {
+          "at": 28,
+          "tag": "SAIPH / ANDROID + WINDOWS + LINUX",
+          "lines": [
+            "Your devices.",
+            "Connected."
+          ],
+          "accent": 1,
+          "sub": "Explore the beta at usesaiph.com",
+          "kind": "overview"
+        }
+      ]
+    },
+    {
+      "id": "02-day-in-sync",
+      "name": "Plot B: A day across your devices",
+      "duration": 32,
+      "theme": "violet",
+      "audience": "People moving links and text between Android and their computer",
+      "source": "README.md: current feature table and mode limits; docs/ORION_DESKFLOW.md; docs/ORION_SELF_HOSTED_SERVER.md",
+      "hypothesis": "This day-in-the-life story earns a higher outbound click-through rate than Plot A under matching audience and placement conditions.",
+      "headline": "Your day across your devices",
+      "primary": "Your Android and your computers, working through the day together. Explore Saiph beta, with Cloud and self-hosted options.",
+      "short": "One day. Your devices, connected. Explore Saiph beta.",
+      "alternates": [
+        "Your day, across your devices.",
+        "A companion for your Android and PC."
+      ],
+      "poster": {
+        "lines": [
+          "One day.",
+          "Your devices.",
+          "Connected."
+        ],
+        "accent": 2,
+        "sub": "A phone companion for Android, Windows and Linux.",
+        "kind": "overview"
+      },
+      "scenes": [
+        {
+          "at": 0,
+          "tag": "PLOT B / A DAY IN SYNC",
+          "lines": [
+            "One day.",
+            "Your devices."
+          ],
+          "accent": 1,
+          "sub": "Android meets your Windows or Linux desk.",
+          "kind": "intro"
+        },
+        {
+          "at": 4,
+          "tag": "09:00 / YOUR FIRST REMINDER",
+          "lines": [
+            "Your reminder.",
+            "Right here."
+          ],
+          "accent": 1,
+          "sub": "Your phone alerts on the computer.",
+          "kind": "notifications"
+        },
+        {
+          "at": 8,
+          "tag": "10:00 / THE VIDEO CALL",
+          "lines": [
+            "Your phone.",
+            "Your webcam."
+          ],
+          "accent": 1,
+          "sub": "Use the camera you already have.",
+          "kind": "webcam",
+          "qualifier": "Webcam: local USB / Wi-Fi · Desktop camera setup required"
+        },
+        {
+          "at": 12,
+          "tag": "12:30 / PHONE CONTROLS",
+          "lines": [
+            "Stay at",
+            "your desk."
+          ],
+          "accent": 1,
+          "sub": "Ringer, media and Do Not Disturb.",
+          "kind": "controls",
+          "qualifier": "Phone controls: beta · Phone permissions required"
+        },
+        {
+          "at": 16,
+          "tag": "14:00 / YOUR NEXT COMPUTER",
+          "lines": [
+            "Your folder.",
+            "Across computers."
+          ],
+          "accent": 1,
+          "sub": "Synced on storage you choose.",
+          "kind": "cloud",
+          "qualifier": "Folder sync requires a self-hosted Hub"
+        },
+        {
+          "at": 20,
+          "tag": "16:00 / TWO COMPUTERS",
+          "lines": [
+            "One keyboard.",
+            "Both screens."
+          ],
+          "accent": 1,
+          "sub": "Keyboard and mouse sharing.",
+          "kind": "deskflow",
+          "qualifier": "Self-hosted · Separately installed Deskflow required"
+        },
+        {
+          "at": 24,
+          "tag": "18:00 / YOUR OWN SETUP",
+          "lines": [
+            "Your server.",
+            "Your own Hub."
+          ],
+          "accent": 1,
+          "sub": "Self-host on Linux or a Raspberry Pi.",
+          "kind": "hub",
+          "qualifier": "Free self-hosting · Your server + private network required"
+        },
+        {
+          "at": 28,
+          "tag": "SAIPH / YOUR DEVICES. CONNECTED.",
+          "lines": [
+            "Keep your",
+            "day moving."
+          ],
+          "accent": 1,
+          "sub": "Explore the beta at usesaiph.com",
+          "kind": "overview"
+        }
+      ]
+    },
+    {
+      "id": "03-emailing-yourself",
+      "name": "The email to yourself",
+      "duration": 15,
+      "theme": "violet",
+      "audience": "People emailing photos and files to themselves",
+      "source": "README.md: opening paragraph and Photos & files row",
+      "hypothesis": "The email-to-yourself hook earns a higher outbound click-through rate than 02-day-in-sync among the same Android/PC audience.",
+      "headline": "Your files can take a shorter route",
+      "primary": "Still emailing files to yourself? Send photos and files between Android and your Windows or Linux PC with Saiph. Beta.",
+      "short": "Send photos and files between Android and your PC with Saiph. Beta.",
+      "alternates": [
+        "That photo belongs on your PC.",
+        "A shorter route for your files."
+      ],
+      "poster": {
+        "lines": [
+          "Still emailing",
+          "files to",
+          "yourself?"
+        ],
+        "accent": 2,
+        "sub": "Send photos and files across your devices with Saiph.",
+        "kind": "photos"
+      },
+      "scenes": [
+        {
+          "at": 0,
+          "tag": "TO: ME",
+          "lines": [
+            "Still emailing",
+            "files to",
+            "yourself?"
+          ],
+          "accent": 2,
+          "sub": "There is another way across your devices.",
+          "kind": "photos"
+        },
+        {
+          "at": 5,
+          "tag": "WITH SAIPH",
+          "lines": [
+            "Send from",
+            "your phone",
+            "to your PC."
+          ],
+          "accent": 2,
+          "sub": "Photos and files across Android, Windows and Linux.",
+          "kind": "files"
+        },
+        {
+          "at": 10,
+          "tag": "YOUR DEVICES. CONNECTED.",
+          "lines": [
+            "Keep the",
+            "file moving."
+          ],
+          "accent": 1,
+          "sub": "Explore the Saiph beta at usesaiph.com",
+          "kind": "overview"
+        }
+      ]
+    },
+    {
+      "id": "04-linux-too",
+      "name": "Linux deserves this too",
+      "duration": 12,
+      "theme": "cyan",
+      "audience": "Android users with Linux or mixed Windows/Linux desktops",
+      "source": "README.md: platform support and How Saiph compares; website/index.html: comparison",
+      "hypothesis": "Naming Linux in the opening frame earns a higher qualified click rate than 01-ecosystem-convenience in Linux-focused placements.",
+      "headline": "Linux deserves this too",
+      "primary": "Your Android and Linux computer can work together. Saiph brings text clipboard, notifications and file sharing. Beta.",
+      "short": "Your Android. Your Linux PC. Connected with Saiph. Beta.",
+      "alternates": [
+        "Your phone belongs with Linux too.",
+        "Android meets your Linux desktop."
+      ],
+      "poster": {
+        "lines": [
+          "Linux",
+          "deserves",
+          "this too."
+        ],
+        "accent": 0,
+        "sub": "Your Android and your computer, connected with Saiph.",
+        "kind": "clipboard"
+      },
+      "scenes": [
+        {
+          "at": 0,
+          "tag": "FOR YOUR LINUX DESKTOP",
+          "lines": [
+            "Linux",
+            "deserves",
+            "this too."
+          ],
+          "accent": 0,
+          "sub": "Your phone belongs in your workflow.",
+          "kind": "clipboard"
+        },
+        {
+          "at": 4,
+          "tag": "MEET SAIPH",
+          "lines": [
+            "Clipboard.",
+            "Notifications.",
+            "Files."
+          ],
+          "accent": 2,
+          "sub": "Across Android, Linux and Windows.",
+          "kind": "notifications"
+        },
+        {
+          "at": 8,
+          "tag": "YOUR CHOICE OF COMPUTER",
+          "lines": [
+            "Your Android.",
+            "Your Linux.",
+            "Connected."
+          ],
+          "accent": 2,
+          "sub": "Explore the beta at usesaiph.com",
+          "kind": "overview"
+        }
+      ]
+    },
+    {
+      "id": "05-self-host",
+      "name": "Your own Hub",
+      "duration": 12,
+      "theme": "light",
+      "audience": "Home-server and self-hosting enthusiasts",
+      "source": "README.md: self-hosted plan and Get started; docs/ORION_SELF_HOSTED_SERVER.md",
+      "hypothesis": "A self-hosting hook earns more self-hosting-intent replies per impression than 04-linux-too in home-server communities. No replies are fabricated.",
+      "headline": "Self-host your device connection",
+      "primary": "Run Saiph Hub on your own Linux server or Raspberry Pi. Free self-hosting for Android and Windows/Linux computers. Beta.",
+      "short": "Your Linux server. Your Saiph Hub. Free self-hosting. Beta.",
+      "alternates": [
+        "Your home server has another job.",
+        "Your devices. Your own Hub."
+      ],
+      "poster": {
+        "lines": [
+          "Your server.",
+          "Your setup.",
+          "Your Saiph."
+        ],
+        "accent": 2,
+        "sub": "Free self-hosting. Your server and private network required.",
+        "kind": "hub"
+      },
+      "scenes": [
+        {
+          "at": 0,
+          "tag": "FOR THE HOME-SERVER CROWD",
+          "lines": [
+            "Your server.",
+            "Your setup."
+          ],
+          "accent": 0,
+          "sub": "Run Saiph Hub on Linux or a Raspberry Pi.",
+          "kind": "hub"
+        },
+        {
+          "at": 4,
+          "tag": "SAIPH HUB",
+          "lines": [
+            "Your devices.",
+            "Your own",
+            "Hub."
+          ],
+          "accent": 2,
+          "sub": "Connect your Android and Windows/Linux computers.",
+          "kind": "cloud",
+          "qualifier": "Self-hosted Hub required"
+        },
+        {
+          "at": 8,
+          "tag": "SELF-HOSTED",
+          "lines": [
+            "Free",
+            "self-hosting."
+          ],
+          "accent": 0,
+          "sub": "Your server + private network required. Explore the beta.",
+          "kind": "deskflow",
+          "qualifier": "Self-hosted Hub required · Deskflow installed separately"
+        }
+      ]
+    },
+    {
+      "id": "06-six-second-intro",
+      "name": "Six seconds of Saiph",
+      "duration": 6,
+      "theme": "violet",
+      "audience": "Broad Android/PC discovery and short supporting placements",
+      "source": "README.md: text clipboard and platform support",
+      "hypothesis": "This six-second cut has a higher completion rate than 02-day-in-sync with the same audience. Duration makes this a format test, not proof of a stronger message.",
+      "headline": "Your devices. Connected.",
+      "primary": "Text clipboard across Android, Windows and Linux. Meet Saiph. Explore the beta.",
+      "short": "Copy there. Paste here. Saiph connects Android and PC. Beta.",
+      "alternates": [
+        "Meet your shared clipboard.",
+        "Your Android and PC, connected."
+      ],
+      "poster": {
+        "lines": [
+          "Your devices.",
+          "Connected."
+        ],
+        "accent": 1,
+        "sub": "Clipboard, notifications and files. Meet Saiph.",
+        "kind": "clipboard"
+      },
+      "scenes": [
+        {
+          "at": 0,
+          "tag": "TEXT CLIPBOARD WITH SAIPH",
+          "lines": [
+            "Copy there.",
+            "Paste here."
+          ],
+          "accent": 1,
+          "sub": "Android meets your Windows or Linux PC.",
+          "kind": "clipboard"
+        },
+        {
+          "at": 3,
+          "tag": "MEET SAIPH",
+          "lines": [
+            "Your devices.",
+            "Connected."
+          ],
+          "accent": 1,
+          "sub": "Explore the beta at usesaiph.com",
+          "kind": "overview"
+        }
+      ]
+    }
+  ],
+  "carousel": [
+    {
+      "tag": "01 / ON YOUR PHONE",
+      "lines": [
+        "Copy that",
+        "link on",
+        "Android."
+      ],
+      "accent": 2,
+      "sub": "Text clipboard with Saiph.",
+      "kind": "clipboard"
+    },
+    {
+      "tag": "02 / ON YOUR COMPUTER",
+      "lines": [
+        "Paste it",
+        "on your",
+        "computer."
+      ],
+      "accent": 0,
+      "sub": "Windows or Linux. Your choice.",
+      "kind": "clipboard"
+    },
+    {
+      "tag": "03 / KEEP GOING",
+      "lines": [
+        "Notifications.",
+        "Photos.",
+        "Files."
+      ],
+      "accent": 2,
+      "sub": "Bring your phone into your computer workflow.",
+      "kind": "notifications"
+    },
+    {
+      "tag": "04 / MEET SAIPH",
+      "lines": [
+        "Your devices.",
+        "Connected."
+      ],
+      "accent": 1,
+      "sub": "Explore the beta at usesaiph.com",
+      "kind": "overview"
+    }
+  ]
+}

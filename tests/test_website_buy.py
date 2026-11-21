@@ -26,9 +26,9 @@ def test_landing_sells_one_product_with_one_main_button_and_no_downloads():
     # Start your free trial is the main button while trials run; Buy now is the
     # main button otherwise (site.js steps it back only when a trial is offered).
     assert re.search(r'<a class="btn primary trial-now" data-link="trial-start"[^>]*>Start your free trial</a>', INDEX)
-    assert re.search(r'<div class="trial-cta" data-trial-shown hidden>', INDEX)
+    assert re.search(r'<div class="trial-cta center" data-trial-shown hidden>', INDEX)
     assert re.search(r'<a class="btn primary buy-now" data-link="buy"[^>]*>Buy now</a>', INDEX)
-    assert '<strong data-trial>Free for 30 days, no card needed</strong>' in INDEX
+    assert '<strong data-trial>14 days free, then €9.99/month.</strong>' in INDEX
     # The Cloud page's two-price box, as a plan choice with monthly preselected.
     assert re.search(r'id="plan-monthly" value="monthly" checked', INDEX)
     assert 'id="plan-yearly" value="yearly"' in INDEX and 'Save about' in INDEX
@@ -38,12 +38,15 @@ def test_landing_sells_one_product_with_one_main_button_and_no_downloads():
     assert 'href="self-host.html"' in INDEX and 'href="hosted.html"' in INDEX
 
 
-def test_footer_legal_links_and_accessibility_are_kept_on_every_page():
+def test_compact_footer_and_header_are_shared_on_every_page():
     for page in sorted((ROOT / 'website').glob('*.html')):
         text = page.read_text(encoding='utf-8')
         assert '&copy; <span data-year>2026</span> Crios' in text or '© <span data-year>2026</span> Crios' in text, page.name
-        for link in ('privacy.html', 'account-privacy.html', 'terms.html', 'refunds.html', 'contact.html'):
-            assert f'href="{link}"' in text, (page.name, link)
+        footer = re.search(r'<nav aria-label="Footer">(.*?)</nav>', text, re.S)[1]
+        assert re.findall(r'href="([^"]+)"', footer) == ['downloads.html', 'self-host.html', 'privacy.html', 'contact.html']
+        assert 'Privacy &amp; terms' in footer
+        header = re.search(r'<nav class="nav-links" aria-label="Main">(.*?)</nav>', text, re.S)[1]
+        assert re.findall(r'>([^<]+)</a>', header) == ['Features', 'Self-host', 'Download', 'Account']
         assert 'data-consent-open' in text, page.name
         assert 'index.html#download' not in text and 'index.html#features' not in text, page.name
         scripts = re.findall(r'<script src="assets/([a-z]+)\.js"></script>', text)
@@ -58,10 +61,10 @@ def test_demo_and_comparison_moved_to_the_cloud_page():
     assert 'data-link="buy" data-plan="monthly"' in hosted and 'data-link="buy" data-plan="yearly"' in hosted
 
 
-def test_landing_keeps_the_animated_device_demo_below_the_trial_button():
-    # Owner, 20 Oct 2026: the device animation is important on the landing page too.
+def test_landing_shows_the_animated_device_demo_before_the_trial_button():
+    # Owner, 27 Oct 2026: keep the animation and put the trial action below it.
     assert 'class="showcase" id="demo"' in INDEX and 'data-stage' in INDEX and 'assets/stage.js' in INDEX
-    assert INDEX.index('data-link="trial-start"') < INDEX.index('data-stage') < INDEX.index('data-plan-picker')
+    assert INDEX.index('data-stage') < INDEX.index('data-link="trial-start"') < INDEX.index('data-plan-picker')
 
 
 def test_website_csp_allows_only_googles_analytics_hosts_and_spares_the_callback():

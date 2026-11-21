@@ -12,13 +12,14 @@ import socket
 import subprocess
 import sys
 import time
+from . import child_process
 
 NO_WINDOW = {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}
 OFFLINE_SECONDS = 30  # Hub unreachable this long, with no network route, before reconnecting.
 RETRY_SECONDS = 60
 
 
-def _run(command, runner=subprocess.run):
+def _run(command, runner=child_process.run):
     try:
         result = runner(command, capture_output=True, timeout=15, check=False, stdin=subprocess.DEVNULL, **NO_WINDOW)
     except (OSError, subprocess.TimeoutExpired):
@@ -61,7 +62,7 @@ def windows_active(output, names):
     return next((name for name in names if name in values), None)
 
 
-def profiles(runner=subprocess.run):
+def profiles(runner=child_process.run):
     if sys.platform == "win32":
         output = _run(["netsh", "wlan", "show", "profiles"], runner)
         return windows_profiles(output) if output else []
@@ -71,7 +72,7 @@ def profiles(runner=subprocess.run):
     return []
 
 
-def active(runner=subprocess.run, names=()):
+def active(runner=child_process.run, names=()):
     if sys.platform == "win32":
         output = _run(["netsh", "wlan", "show", "interfaces"], runner)
         return windows_active(output, names) if output else None
@@ -103,7 +104,7 @@ def validate_options(options):
 
 
 class Hotspot:
-    def __init__(self, settings, *, runner=subprocess.run, clock=time.monotonic, route=has_route):
+    def __init__(self, settings, *, runner=child_process.run, clock=time.monotonic, route=has_route):
         self.settings, self.runner, self.clock, self.route = settings, runner, clock, route
         self.offline_since = None
         self.next_attempt = 0

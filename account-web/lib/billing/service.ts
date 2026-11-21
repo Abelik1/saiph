@@ -39,19 +39,20 @@ export const BETA_CHECKOUT_NOTICE="Saiph Cloud is a beta service: expect bugs, m
 /** How this Checkout was reached: the price-test variant (standard "a" when no
  * test runs) and, only after the visitor's Accept on usesaiph.com, the Google
  * Analytics client ID used to report the purchase (lib/ga.mjs). */
-export type CheckoutContext={variant?:string;test?:string|null;analyticsClientId?:string|null};
+export type CheckoutContext={variant?:string;test?:string|null;analyticsClientId?:string|null;cardTrial?:{days:number;ref:string}};
 /** Checkout-session-only metadata for funnel counting; subscriptions and customers never get it. */
 function funnelMetadata(plan:Plan,context:CheckoutContext):Record<string,string> {
-  return {saiph_plan:plan.key,...(context.test?{saiph_price_test:context.test,saiph_variant:plan.variant}:{}),
+  return {saiph_plan:plan.key,...(context.cardTrial?{saiph_trial:"card-v1",saiph_trial_ref:context.cardTrial.ref}:{}),...(context.test?{saiph_price_test:context.test,saiph_variant:plan.variant}:{}),
     ...(context.analyticsClientId?{saiph_ga:context.analyticsClientId}:{})};
 }
 export async function checkout(stripe:Stripe,store:BillingStore,config:BillingConfig,subject:string,planKey:PlanKey,context:CheckoutContext={}) {
   const plan=planFor(config,planKey,context.variant);
+  if (context.cardTrial && (planKey!=="monthly" || context.cardTrial.days!==14 || !/^[a-f0-9]{32}$/.test(context.cardTrial.ref))) throw new Error("Trial rejected");
   await verifyPrice(stripe,config,plan);
   // Subscribing during the free trial keeps the remaining free days: the first
   // charge is taken when the trial ends (Stripe status "trialing" until then).
   // A database without migration 0004 has no trials to carry; subscribing still works.
-  const trialEnd=carriedTrialEnd(await store.trialFacts(subject,null).then(facts=>facts.stored,()=>null),Math.floor(Date.now()/1000));
+  const trialEnd=context.cardTrial?null:carriedTrialEnd(await store.trialFacts(subject,null).then(facts=>facts.stored,()=>null),Math.floor(Date.now()/1000));
   await store.getOrCreateCustomer(subject,async()=>{
     const customer=await stripe.customers.create({metadata:metadata(config,subject)},{idempotencyKey:customerIdempotency(config.accountId,subject)});
     assertCustomer(customer,config,subject);return customer.id;
@@ -61,6 +62,9 @@ export async function checkout(stripe:Stripe,store:BillingStore,config:BillingCo
     // Serialize provider inspection and create under the persistent customer lock.
     const subscriptions=await stripe.subscriptions.list({customer:mapping.customerId,status:"all",limit:100});
     if (subscriptions.has_more) throw new Error("Subscription reconciliation required");
+    // A canceled trial/paid subscription still consumes eligibility, including
+    // while its webhook has not reached our database yet.
+    if (context.cardTrial && subscriptions.data.some(s=>!["incomplete","incomplete_expired"].includes(s.status))) throw new TrialUnavailable("subscribed");
     if (subscriptions.data.some(s=>!["canceled","incomplete_expired"].includes(s.status))) throw new BillingConflict("Existing subscription must be managed in portal");
     const sessions=await stripe.checkout.sessions.list({customer:mapping.customerId,status:"open",limit:100});
     if (sessions.has_more) throw new Error("Checkout reconciliation required");
@@ -72,18 +76,23 @@ export async function checkout(stripe:Stripe,store:BillingStore,config:BillingCo
       const items=await stripe.checkout.sessions.listLineItems(session.id,{limit:2,expand:["data.price.product"]});
       if (items.has_more || items.data.length!==1 || items.data[0].quantity!==1 || !planForPrice(config,items.data[0].price?.id)
         || items.data[0].price?.livemode!==config.livemode || resourceId(items.data[0].price.product,"prod")!==config.productId) throw new Error("Checkout price binding rejected");
-      if (items.data[0].price.id===plan.priceId) return stripeUrl(session.url,"checkout");
+      const sameTrial=context.cardTrial ? session.metadata?.saiph_trial==="card-v1" && session.metadata?.saiph_trial_ref===context.cardTrial.ref
+        : !session.metadata?.saiph_trial;
+      if (items.data[0].price.id===plan.priceId && sameTrial) return stripeUrl(session.url,"checkout");
       // The other plan was chosen: close the unfinished session before opening a new one.
       await stripe.checkout.sessions.expire(session.id);
     }
     const session=await stripe.checkout.sessions.create({mode:"subscription",customer:mapping.customerId,
-      line_items:[{price:plan.priceId,quantity:1}],allowed_payment_method_types:["card"],
-      metadata:{...metadata(config,subject),...funnelMetadata(plan,context)},subscription_data:{metadata:metadata(config,subject),...(trialEnd?{trial_end:trialEnd}:{})},
-      custom_text:{submit:{message:BETA_CHECKOUT_NOTICE}},
+      integration_identifier:"saiph-checkout-"+subjectReference(config.accountId+":"+mapping.customerId+":"+plan.priceId+":"+JSON.stringify(funnelMetadata(plan,context)))
+        .slice(0,8).replace(/[0-9]/g,digit=>String.fromCharCode(103+Number(digit))),
+      line_items:[{price:plan.priceId,quantity:1}],allowed_payment_method_types:["card"],payment_method_collection:"always",
+      metadata:{...metadata(config,subject),...funnelMetadata(plan,context)},subscription_data:{metadata:{...metadata(config,subject),...(context.cardTrial?{saiph_trial:"card-v1"}:{})},
+        ...(context.cardTrial?{trial_period_days:context.cardTrial.days,trial_settings:{end_behavior:{missing_payment_method:"cancel" as const}}}:trialEnd?{trial_end:trialEnd}:{})},
+      custom_text:{submit:{message:(context.cardTrial?"14 days free, then €9.99 every month unless you cancel before the trial ends. Cancel in Manage billing on your account page. ":"")+BETA_CHECKOUT_NOTICE}},
       ...(config.livemode?{consent_collection:{terms_of_service:"required" as const}}:{}),
       ...(config.automaticTax?{automatic_tax:{enabled:true},customer_update:{address:"auto" as const},billing_address_collection:"required" as const}:{}),
-      success_url:config.origin+"/account?checkout=returned",cancel_url:config.origin+"/account?checkout=cancelled"},
-      {idempotencyKey:"saiph-checkout-v4-"+subjectReference(config.accountId+":"+mapping.customerId+":"+plan.priceId+":"+Math.floor(Date.now()/1800000)+(trialEnd?":trial:"+trialEnd:"")
+      success_url:config.origin+"/account?checkout=returned",cancel_url:config.origin+(context.cardTrial?"/trial?checkout=cancelled":"/account?checkout=cancelled")},
+      {idempotencyKey:"saiph-checkout-v5-"+subjectReference(config.accountId+":"+mapping.customerId+":"+plan.priceId+":"+Math.floor(Date.now()/1800000)+(trialEnd?":trial:"+trialEnd:"")
         +":"+JSON.stringify(funnelMetadata(plan,context)))});
     if (session.livemode!==config.livemode || resourceId(session.customer,"cus")!==mapping.customerId || !validMetadata(session.metadata,config,subject)) throw new Error("Checkout binding rejected");
     return stripeUrl(session.url,"checkout");

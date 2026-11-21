@@ -19,6 +19,14 @@ def dashboard(tmp_path):
     return built
 
 
+def test_electron_fixtures_cannot_enable_live_services(tmp_path):
+    directory = tmp_path / "electron-live"
+    with pytest.raises(SystemExit) as error:
+        desktop_ui.main(["--shell", "electron", "--live", "--fixture", "phone", "--session", str(directory)])
+    assert error.value.code == 2
+    assert not directory.exists()
+
+
 def test_new_session_uses_fresh_profile_and_local_endpoint(tmp_path, monkeypatch):
     directory = tmp_path / "session"
     session = desktop_ui.create_session(directory, dashboard(tmp_path), live=False)

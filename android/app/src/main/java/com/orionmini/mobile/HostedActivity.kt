@@ -44,6 +44,8 @@ class HostedActivity : ComponentActivity() {
     private var saving = ""
     private var poll: Job? = null
     private var settingsPage = false
+    /** Open cloud: the received files page, opened from the home screen's tile. */
+    private var cloudPage = false
     /** The open Settings category page; null shows the category list and search. */
     private var settingsCategory: SettingsCatalog.Category? = null
     private var settingsQuery = ""
@@ -54,6 +56,7 @@ class HostedActivity : ComponentActivity() {
     private var googleSignIn = true
     private var shownWaiting = false
     private var shownStage = HostedSetup.Stage.SCAN
+    private var shownAccess: HostedTrial.Access? = null
     private var busy = false
     private var actionError = ""
     /** Received-file ids the daily screen last drew; a change redraws it without a Refresh button. */
@@ -85,7 +88,13 @@ class HostedActivity : ComponentActivity() {
             loginError = "Sign-in did not complete. Try again, or use your browser app instead."
             if (!AppLock.locked(this)) render()
         } else lifecycleScope.launch {
-            try { withContext(Dispatchers.IO) { account.complete(response) }; loginError = "" }
+            try {
+                withContext(Dispatchers.IO) {
+                    account.complete(response)
+                    runCatching { runtime.prepareAccount() } // Trial outage never turns a successful login into an error.
+                }
+                loginError = ""
+            }
             catch (failure: CancellationException) { throw failure }
             catch (failure: Exception) {
                 val issue = HostedSignIn.issue(failure)
@@ -133,6 +142,7 @@ class HostedActivity : ComponentActivity() {
         returningFromSettings = state?.getBoolean("returningFromSettings") ?: false
         saving = state?.getString("saving") ?: ""
         settingsPage = state?.getBoolean("settingsPage") ?: false
+        cloudPage = state?.getBoolean("cloudPage") ?: false
         settingsCategory = state?.getString("settingsCategory")?.let { name -> SettingsCatalog.Category.entries.firstOrNull { it.name == name } }
         settingsQuery = state?.getString("settingsQuery") ?: ""
         welcomePage = state?.getBoolean("welcomePage") ?: intent.getBooleanExtra(SHOW_WELCOME, false)
@@ -149,7 +159,7 @@ class HostedActivity : ComponentActivity() {
         })
     }
     override fun onSaveInstanceState(state: Bundle) {
-        state.putBoolean("settingsPage", settingsPage); state.putString("saving", saving)
+        state.putBoolean("settingsPage", settingsPage); state.putBoolean("cloudPage", cloudPage); state.putString("saving", saving)
         state.putString("settingsCategory", settingsCategory?.name); state.putString("settingsQuery", settingsQuery)
         state.putBoolean("welcomePage", welcomePage)
         state.putBoolean("signingIn", signingIn); state.putString("loginState", loginState)
@@ -176,6 +186,10 @@ class HostedActivity : ComponentActivity() {
     private fun resumeUnlocked() {
         if (showingLock || !::status.isInitialized || returningFromSettings) { showingLock = false; returningFromSettings = false; render() }
         runtime.wake.trySend(Unit)
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) { runCatching { runtime.prepareAccount() } }
+            if (!isDestroyed && !AppLock.locked(this@HostedActivity)) render()
+        }
         UsageAnalytics.opened(this, "hosted")
         if (runtime.setupStage() == HostedSetup.Stage.HOME && account.signedIn() &&
             prefs.getBoolean("sharing_setup_complete", false) && permissionRequest.isEmpty()) UsageAnalytics.ask(this) { render() }
@@ -183,7 +197,7 @@ class HostedActivity : ComponentActivity() {
         // The waiting screen turns into the daily screen by itself once the computer approves.
         // Received files appear by themselves too; a changed list redraws the daily screen in place.
         poll = lifecycleScope.launch { while (isActive) {
-            if (!busy && permissionRequest.isEmpty() && !lock.prompting && (runtime.setupStage() != shownStage || (shownPage == "home" && receivedKeys() != shownOffers))) render()
+            if (!busy && permissionRequest.isEmpty() && !lock.prompting && (runtime.access != shownAccess || runtime.setupStage() != shownStage || (shownPage in setOf("home", "cloud") && receivedKeys() != shownOffers))) render()
             else {
                 status.text = statusLine()
                 for (item in runtime.lanReceived()) lanLines[item.id]?.text = lanLine(item)
@@ -370,6 +384,7 @@ class HostedActivity : ComponentActivity() {
             nearbyRoot != null || nearbyChoices != null -> { cancelNearby(); render() }
             settingsPage && settingsCategory != null -> { settingsCategory = null; render() }
             settingsPage -> { settingsPage = false; settingsQuery = ""; render() }
+            cloudPage -> { cloudPage = false; render() }
             else -> finish()
         }
     }
@@ -381,7 +396,7 @@ class HostedActivity : ComponentActivity() {
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
             setPadding(dp(10), dp(8), dp(10), dp(8)); minimumHeight = dp(64)
-            if (!showingLock && (settingsPage || pendingRoot != null)) addView(iconButton(com.castle.sefirah.R.drawable.saiph_ic_back, "Back", ::goBack))
+            if (!showingLock && (settingsPage || cloudPage || pendingRoot != null)) addView(iconButton(com.castle.sefirah.R.drawable.saiph_ic_back, "Back", ::goBack))
             addView(heading(title).apply { setPadding(dp(2), 0, dp(8), 0) },
                 LinearLayout.LayoutParams(0, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             if (!showingLock && !settingsPage && (prefs.contains("device_id") || account.signedIn())) {
@@ -412,10 +427,6 @@ class HostedActivity : ComponentActivity() {
         setContentView(frame)
         val pageScroll = scroll
         pageScroll.post { pageScroll.scrollTo(0, restoreScroll) }
-    }
-    /** A titled group of related controls on one surface. */
-    private fun group(title: String, build: LinearLayout.() -> Unit) {
-        root.addView(section(title)); root.addView(card().apply(build))
     }
     private fun LinearLayout.actions(vararg buttons: Button) = addView(buttonRow(*buttons))
     private fun dockActions(vararg buttons: Button) {
@@ -506,65 +517,6 @@ class HostedActivity : ComponentActivity() {
             render()
         })
     }
-    /**
-     * Photo gallery on or off. Turning it on needs the owner and Android's photo access, so the
-     * switch stays off until both are settled; the screen redraws then.
-     */
-    private fun LinearLayout.photoSwitch() {
-        val access = sefirah.network.orion.OrionPermissions.read(this@HostedActivity).photos
-        addView(settingSwitch("Photo gallery", "Recent photos on your computers.", runtime.photosShared()) { view, on ->
-            if (on == runtime.photosShared()) return@settingSwitch
-            if (on) { view.isChecked = false; allowPhotos() } else { runtime.setPhotosShared(false); render() }
-        }.apply {
-            if (runtime.photosShared()) addView(compactActions(
-                if (access) compactButton("Choose photos") { requestSharingPermissions("photos") }
-                else compactButton("Allow photo access") { requestSharingPermissions("photos") }))
-        })
-    }
-    /** Off by default: approved computers may act on texts and calls only after the owner turns this on here. */
-    private fun textsAndCalls() = group("Texts and calls") {
-        val on = runtime.textsAndCalls()
-        addView(settingSwitch("Texts and calls", "On your computers. Call audio stays on this phone.", on) { view, checked ->
-            if (checked == runtime.textsAndCalls()) return@settingSwitch
-            // Unchanged until the owner is verified and Android access is settled; the screen redraws then.
-            if (checked) { view.isChecked = false; allowPhone() } else { runtime.setTextsAndCalls(false); render() }
-        })
-        if (on && PHONE_PERMISSIONS.any { !granted(it) }) {
-            addView(text("Some Android access is missing.", UiType.META, Palette.WARN).apply { setPadding(0, dp(4), 0, 0) })
-            addView(compactActions(compactButton("Allow access") { allowPhone() }))
-        }
-        addView(disclosure("Learn more") {
-            addView(featureRow(sefirah.common.R.drawable.ic_chat, "Texts", "Read and reply to one-to-one texts, or start one."))
-            addView(featureRow(sefirah.common.R.drawable.ic_call, "Calls", "Answer, decline or dial from your computer."))
-            addView(text("Every approved computer on your account can use these while this is on.", UiType.META, Palette.MUTED).apply { setPadding(0, dp(4), 0, 0) })
-        })
-    }
-    /** On by default, like Phone Link: battery, network and sound in the computer's header, with its quick actions. */
-    private fun statusAndControls() = group("Status and quick controls") {
-        val shared = runtime.statusShared()
-        addView(settingSwitch("Share phone status", "Battery, signal and sound mode on your computers.", shared) { _, checked ->
-            if (checked != runtime.statusShared()) { runtime.setStatusShared(checked); render() }
-        })
-        if (shared) {
-            if (!sefirah.network.orion.PhoneQuickControls.policyAccess(this@HostedActivity)) {
-                addView(text("Sound mode and Do Not Disturb need Do Not Disturb access.", UiType.META, Palette.MUTED).apply { setPadding(0, dp(4), 0, 0) })
-                addView(compactActions(compactButton("Allow Do Not Disturb access") {
-                    openSharingSettings(Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS))
-                }))
-            }
-            if (!sefirah.network.orion.OrionPermissions.read(this@HostedActivity).notifications)
-                addView(text("Music controls need notification access.", UiType.META, Palette.MUTED).apply { setPadding(0, dp(8), 0, 0) })
-        }
-        addView(divider())
-        addView(settingSwitch("Sync over mobile data", if (runtime.mobileDataAllowed()) "Also syncs on mobile data." else "Wi-Fi only. Pauses on metered networks.",
-            runtime.mobileDataAllowed()) { _, checked ->
-            if (checked != runtime.mobileDataAllowed()) { runtime.setMobileData(checked); render() }
-        })
-        addView(disclosure("Learn more") {
-            addView(featureRow(sefirah.common.R.drawable.ic_battery, "Phone status", "Battery, Wi-Fi, Bluetooth, signal and sound mode."))
-            addView(featureRow(sefirah.common.R.drawable.ic_volume_up_fill, "Quick actions", "Find phone, sound mode, Do Not Disturb and music."))
-        })
-    }
     private fun field(label: String, value: String = "", into: LinearLayout = root): EditText {
         val labelView = text(label, UiType.BODY, Palette.MUTED).apply { setPadding(dp(2), dp(8), 0, dp(6)) }
         into.addView(labelView)
@@ -575,6 +527,7 @@ class HostedActivity : ComponentActivity() {
         }
     }
     private fun render() {
+        shownAccess = runtime.access
         val enrolled = prefs.contains("device_id")
         if (enrolled || account.signedIn()) welcomePage = false
         // A recreated activity may outlive an interrupted enrollment job.
@@ -586,6 +539,7 @@ class HostedActivity : ComponentActivity() {
             nearbyRoot != null -> "nearby"
             nearbyChoices != null -> "choose"
             settingsPage -> "settings" + (settingsCategory?.let { ":" + it.name } ?: "")
+            cloudPage && enrolled && runtime.enabled() -> "cloud"
             shownStage == HostedSetup.Stage.RECOVERY -> "recovery"
             welcomePage || (!enrolled && !account.signedIn()) -> "welcome"
             waitingForApproval() -> "waiting"
@@ -594,7 +548,7 @@ class HostedActivity : ComponentActivity() {
             enrolled -> "home"
             else -> "connect"
         }
-        shell(if (settingsPage) settingsCategory?.title ?: "Settings" else "Saiph", page)
+        shell(if (settingsPage) settingsCategory?.title ?: "Settings" else if (page == "cloud") "Received files" else "Saiph", page)
         if (busy) {
             // Keep comparison on screen until its action finishes; reject double taps.
             val currentFrame = window.decorView
@@ -652,54 +606,18 @@ class HostedActivity : ComponentActivity() {
             })
             if (enrolled) retirementAction()
         } else if (enrolled) {
-            // Daily use first: the features people start, then what is shared.
+            // The home screen is a remote: big tiles, smaller actions, then computers. Settings sit behind the gear.
             shownOffers = receivedKeys()
-            lanLines.clear()
-            root.addView(quickActions(
-                QuickAction(sefirah.common.R.drawable.ic_videocam, "Use as webcam") { startActivity(Intent(this@HostedActivity, PhoneCameraActivity::class.java)) },
-                QuickAction(sefirah.common.R.drawable.ic_desktop_windows, "Share screen") { startActivity(Intent(this@HostedActivity, PhoneScreenActivity::class.java)) },
-                QuickAction(sefirah.common.R.drawable.ic_upload, "Send a file") { sendFile.launch(arrayOf("*/*")) }))
-            group("Photos and files") {
-                photoSwitch()
-                addView(divider())
-                addView(text("Received files", UiType.BODY, bold = true).apply { androidx.core.view.ViewCompat.setAccessibilityHeading(this, true) })
-                val direct = runtime.lanReceived()
-                if (runtime.offers.isEmpty() && direct.isEmpty()) addView(text("Files from your computers appear here.", UiType.META, Palette.MUTED).apply { setPadding(0, dp(4), 0, 0) })
-                // Files received over the local network: progress, then the same Save choices; a failure says why.
-                direct.forEachIndexed { index, item ->
-                    if (index > 0) addView(divider())
-                    addView(text(item.name).apply { setPadding(0, dp(8), 0, 0) })
-                    addView(text(lanLine(item), UiType.META, if (item.state == "failed") Palette.TEXT else Palette.MUTED).also { lanLines[item.id] = it })
-                    val id = "lan:" + item.id
-                    when {
-                        item.state == "ready" && android.os.Build.VERSION.SDK_INT >= 29 -> addView(compactActions(compactButton("Save to Downloads") {
-                            action { val saved = runtime.saveToDownloads(id); withContext(Dispatchers.Main) { message(HostedTransferText.saved(saved)); render() } }
-                        }.apply { contentDescription = "Save ${item.name} to Downloads" },
-                            compactButton("Save as…") { saving = id; saveFile.launch(item.name) }.apply { contentDescription = "Save ${item.name} as" }))
-                        item.state == "ready" -> addView(compactActions(compactButton("Save file") { saving = id; saveFile.launch(item.name) }.apply { contentDescription = "Save ${item.name}" }))
-                        else -> addView(compactActions(compactButton(if (item.state == "failed") "Dismiss" else "Stop") { runtime.dismissReceived(id); render() }
-                            .apply { contentDescription = (if (item.state == "failed") "Dismiss " else "Stop receiving ") + item.name }))
-                    }
-                }
-                runtime.offers.forEachIndexed { index, (id, name) ->
-                    if (index > 0 || direct.isNotEmpty()) addView(divider())
-                    addView(text(name).apply { setPadding(0, dp(8), 0, 0) })
-                    // One tap saves to Downloads → Saiph; Save as… still lets the owner choose.
-                    if (android.os.Build.VERSION.SDK_INT >= 29) {
-                        addView(compactActions(compactButton("Save to Downloads") {
-                            action { val saved = runtime.saveToDownloads(id); withContext(Dispatchers.Main) { message(HostedTransferText.saved(saved)) } }
-                        }.apply { contentDescription = "Save $name to Downloads" },
-                            compactButton("Save as…") { saving = id; saveFile.launch(name) }.apply { contentDescription = "Save $name as" }))
-                    } else addView(compactActions(compactButton("Save file") { saving = id; saveFile.launch(name) }.apply { contentDescription = "Save $name" }))
-                }
-            }
-            textsAndCalls()
-            statusAndControls()
-            group("Phone notifications") {
-                val allowed = sefirah.network.orion.OrionPermissions.read(this@HostedActivity).notifications
-                addView(settingsRow(sefirah.common.R.drawable.ic_notifications, if (allowed) "Shared with your computers" else "Show them on your computers",
-                    if (allowed) "Manage in Android settings" else "Allow notification access", external = true) { notificationAccess() })
-            }
+            ClipboardBubble.sync(this)
+            if (cloudPage) { receivedFilesScreen(); return }
+            val waiting = runtime.offers.size + runtime.lanReceived().count { it.state == "ready" }
+            root.addView(remoteTiles(
+                RemoteTile(sefirah.common.R.drawable.ic_videocam, "Use as webcam") { startActivity(Intent(this@HostedActivity, PhoneCameraActivity::class.java)) },
+                RemoteTile(sefirah.common.R.drawable.ic_desktop_windows, "Share screen") { startActivity(Intent(this@HostedActivity, PhoneScreenActivity::class.java)) },
+                RemoteTile(sefirah.common.R.drawable.ic_upload, "Send a file") { sendFile.launch(arrayOf("*/*")) },
+                RemoteTile(com.castle.sefirah.R.drawable.saiph_ic_cloud, "Open cloud", if (waiting > 0) "$waiting new" else null) { cloudPage = true; render() }))
+            root.addView(homeActions { sendClipboard() })
+            computersSection()
         } else {
             root.addView(setupProgress(1))
             setupIntro(SetupArtwork.Scene.SCAN, "Connect to your computer", "On your computer: Saiph → Phone → Add a device. On the same Wi-Fi, find it here; otherwise scan its QR code.")
@@ -714,9 +632,82 @@ class HostedActivity : ComponentActivity() {
             setupDock.addView(buttonRow(setupLink("Use a different account") { action { account.signOut() } }))
         }
     }
+    /** Computers online now with Ring and Lock, then sleeping ones with Wake. Each computer answers for its own settings. */
+    private fun computersSection() {
+        val computers = runtime.computers()
+        val sleeping = CloudWake.targets(this).filter { it.id !in computers }
+        if (computers.isEmpty() && sleeping.isEmpty()) return
+        val list = devicesCard(root)
+        computers.forEach { (id, name) ->
+            fun say(sent: Boolean, doing: String) = message(if (sent) "$doing $name\u2026" else "Saiph is reconnecting. Nothing was sent.")
+            list.addDeviceRow(deviceRow(sefirah.common.R.drawable.ic_desktop_windows, name, "Online",
+                deviceAction(sefirah.common.R.drawable.ic_notifications, "Ring") { say(OrionComputers.ring(this, null, id), "Ringing") },
+                deviceAction(sefirah.common.R.drawable.ic_lock, "Lock") { say(OrionComputers.lock(this, null, id), "Locking") }))
+        }
+        sleeping.forEach { target ->
+            list.addDeviceRow(deviceRow(sefirah.common.R.drawable.ic_desktop_windows, target.name, "Asleep or off",
+                deviceAction(sefirah.common.R.drawable.ic_power_settings_new, "Wake") {
+                    lifecycleScope.launch {
+                        val sent = withContext(Dispatchers.IO) { CloudWake.send(target) }
+                        message(if (sent) "Wake signal sent to ${target.name}. This works on the same Wi-Fi when the computer allows waking."
+                            else "The wake signal could not be sent. Connect to the same Wi-Fi as ${target.name}.")
+                    }
+                }))
+        }
+    }
+    /** Open cloud: files your computers sent, with Save. A new file redraws the page by itself. */
+    private fun receivedFilesScreen() {
+        lanLines.clear()
+        val direct = runtime.lanReceived()
+        if (runtime.offers.isEmpty() && direct.isEmpty()) {
+            root.addView(card().apply { addView(text("Files from your computers appear here.", UiType.BODY, Palette.MUTED)) })
+            return
+        }
+        root.addView(card().apply {
+            // Files received over the local network: progress, then the same Save choices; a failure says why.
+            direct.forEachIndexed { index, item ->
+                if (index > 0) addView(divider())
+                addView(text(item.name, UiType.BODY, bold = true))
+                addView(text(lanLine(item), UiType.META, if (item.state == "failed") Palette.TEXT else Palette.MUTED).also { lanLines[item.id] = it })
+                val id = "lan:" + item.id
+                when {
+                    item.state == "ready" && android.os.Build.VERSION.SDK_INT >= 29 -> addView(compactActions(compactButton("Save to Downloads") {
+                        action { val saved = runtime.saveToDownloads(id); withContext(Dispatchers.Main) { message(HostedTransferText.saved(saved)); render() } }
+                    }.apply { contentDescription = "Save ${item.name} to Downloads" },
+                        compactButton("Save as…") { saving = id; saveFile.launch(item.name) }.apply { contentDescription = "Save ${item.name} as" }))
+                    item.state == "ready" -> addView(compactActions(compactButton("Save file") { saving = id; saveFile.launch(item.name) }.apply { contentDescription = "Save ${item.name}" }))
+                    else -> addView(compactActions(compactButton(if (item.state == "failed") "Dismiss" else "Stop") { runtime.dismissReceived(id); render() }
+                        .apply { contentDescription = (if (item.state == "failed") "Dismiss " else "Stop receiving ") + item.name }))
+                }
+            }
+            runtime.offers.forEachIndexed { index, (id, name) ->
+                if (index > 0 || direct.isNotEmpty()) addView(divider())
+                addView(text(name, UiType.BODY, bold = true))
+                // One tap saves to Downloads → Saiph; Save as… still lets the owner choose.
+                if (android.os.Build.VERSION.SDK_INT >= 29) {
+                    addView(compactActions(compactButton("Save to Downloads") {
+                        action { val saved = runtime.saveToDownloads(id); withContext(Dispatchers.Main) { message(HostedTransferText.saved(saved)) } }
+                    }.apply { contentDescription = "Save $name to Downloads" },
+                        compactButton("Save as…") { saving = id; saveFile.launch(name) }.apply { contentDescription = "Save $name as" }))
+                } else addView(compactActions(compactButton("Save file") { saving = id; saveFile.launch(name) }.apply { contentDescription = "Save $name" }))
+            }
+        })
+    }
+    /** Sends the clipboard now; the first time, offers the bubble so sending works from any app. */
+    private fun sendClipboard() = ClipboardBubble.sendNow(this) { result ->
+        if (result != sefirah.clipboard.ClipboardSend.SENT || !ClipboardBubble.shouldOffer(this) || isFinishing) return@sendNow
+        ClipboardBubble.offered(this)
+        android.app.AlertDialog.Builder(this).setTitle("Send from any app?")
+            .setMessage("Show a small Saiph bubble over other apps. Copy something, tap the bubble, and it goes to your computer.")
+            .setNegativeButton("Not now", null)
+            .setPositiveButton("Show the bubble") { _, _ ->
+                ClipboardBubble.setEnabled(this, true)
+                if (!ClipboardBubble.allowed(this)) openSharingSettings(ClipboardBubble.overlaySettings(this))
+            }.show()
+    }
     /** Settings: search and a list of categories, or one category's page (SettingsCatalog.CLOUD). */
     private fun hostedSettings() {
-        val entries = SettingsCatalog.CLOUD.filter { it.id != "usage" || UsageAnalytics.available(this) }
+        val entries = SettingsCatalog.forBuild(SettingsCatalog.CLOUD, com.castle.sefirah.BuildConfig.PLAY_STORE).filter { it.id != "usage" || UsageAnalytics.available(this) }
         val category = settingsCategory
         if (category == null) {
             root.addView(settingsHome(entries, settingsQuery, { settingsQuery = it }, { settingsCategory = it; render() }) { entry ->
@@ -732,7 +723,7 @@ class HostedActivity : ComponentActivity() {
         fun androidSettings(target: Intent) { runCatching { startActivity(target) }.onFailure { message("Open Android Settings to manage Saiph permissions.") } }
         when (category) {
             SettingsCatalog.Category.ACCOUNT -> {
-                page.linkItem("subscription", "Plans and billing on your Saiph account page", external = true) { openPolicy(HostedSignIn.PLANS_URL) }
+                if (!com.castle.sefirah.BuildConfig.PLAY_STORE) page.linkItem("subscription", "Plans and billing on your Saiph account page", external = true) { openPolicy(HostedSignIn.PLANS_URL) }
                 if (syncing) page.item("sign_in", if (account.signedIn()) "Signed in to your Saiph account." else "Sign in again to resume syncing. Your device approval is kept.") {
                     if (account.signedIn()) addView(compactActions(compactButton("Sign out", Tone.SECONDARY) { action { account.signOut() } }))
                     else {
@@ -759,10 +750,18 @@ class HostedActivity : ComponentActivity() {
                         addView(compactActions(compactButton("Remove this phone from your account", Tone.DANGER) { confirmRetire() }))
                     }
                 }
+                // Both builds (Google Play User Data policy): the account site's deletion page.
+                val deletion = AppPolicy.deletionUrl(com.castle.sefirah.BuildConfig.ACCOUNT_ORIGIN)
+                if (deletion != null) page.linkItem("delete_account", "Ask us to delete your Saiph account and its data. Opens in your browser.", external = true) { openPolicy(deletion) }
+                else page.item("delete_account", "To delete your Saiph account and its data, email ${AppPolicy.SUPPORT_EMAIL} from the address you sign in with.")
             }
             SettingsCatalog.Category.CONNECTION -> {
                 page.switchItem("sync", if (syncing) "Turning sync off keeps your account and device approval." else "Sync is off. Your account and device approval are kept.", syncing) { _, on ->
                     if (on != runtime.enabled()) toggleHosted()
+                }
+                page.switchItem("mobile_data", if (runtime.mobileDataAllowed()) "Also syncs on mobile data." else "Wi-Fi only. Pauses on metered networks.",
+                    runtime.mobileDataAllowed()) { _, checked ->
+                    if (checked != runtime.mobileDataAllowed()) { runtime.setMobileData(checked); render() }
                 }
                 if (syncing && enrolled) page.linkItem("background", "Manage battery restrictions. Android may limit clipboard access in the background.", external = true) {
                     androidSettings(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
@@ -805,7 +804,8 @@ class HostedActivity : ComponentActivity() {
                 page.switchItem("clipboard", "Copy on one device and paste on another. Android may limit clipboard access while Saiph is in the background.",
                     shared.getBoolean("clipboard_enabled", true), build = {
                         runtime.clipboardNotice.takeIf { it.isNotEmpty() }?.let { addView(text(it, UiType.META, Palette.WARN).apply { setPadding(0, dp(4), 0, 0) }) }
-                    }) { _, on -> shared.edit().putBoolean("clipboard_enabled", on).apply(); runtime.wake.trySend(Unit) }
+                    }) { _, on -> shared.edit().putBoolean("clipboard_enabled", on).apply(); runtime.wake.trySend(Unit); ClipboardBubble.sync(this) }
+                page.clipboardControls(this, ::openSharingSettings) { render() }
             }
             SettingsCatalog.Category.CAMERA -> {
                 page.linkItem("webcam", "Use this phone's camera on your computer over the same Wi-Fi.") {
@@ -816,7 +816,14 @@ class HostedActivity : ComponentActivity() {
                 }
             }
             SettingsCatalog.Category.STATUS -> page.switchItem("status_sharing", "Battery, Wi-Fi, Bluetooth, signal and sound mode on your computers, and their quick actions: find this phone, sound mode and Do Not Disturb.",
-                runtime.statusShared()) { _, on -> runtime.setStatusShared(on) }
+                runtime.statusShared(), build = {
+                    if (runtime.statusShared() && !sefirah.network.orion.PhoneQuickControls.policyAccess(this@HostedActivity)) {
+                        addView(text("Sound mode and Do Not Disturb need Do Not Disturb access.", UiType.META, Palette.MUTED).apply { setPadding(0, dp(4), 0, 0) })
+                        addView(compactActions(compactButton("Allow Do Not Disturb access") { openSharingSettings(Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)) }))
+                    }
+                    if (runtime.statusShared() && !sefirah.network.orion.OrionPermissions.read(this@HostedActivity).notifications)
+                        addView(text("Music controls need notification access.", UiType.META, Palette.MUTED).apply { setPadding(0, dp(8), 0, 0) })
+                }) { _, on -> if (on != runtime.statusShared()) { runtime.setStatusShared(on); render() } }
             SettingsCatalog.Category.PRIVACY -> {
                 page.item("app_lock") { addView(lock.toggle()) }
                 val events = runtime.securityEvents()
@@ -829,7 +836,7 @@ class HostedActivity : ComponentActivity() {
                     addView(settingsRow(null, "Terms", null, external = true) { openPolicy(AppPolicy.TERMS_URL) })
                 }
             }
-            SettingsCatalog.Category.ABOUT -> page.item("updates", "Saiph ${com.castle.sefirah.BuildConfig.VERSION_NAME} (build ${com.castle.sefirah.BuildConfig.VERSION_CODE}). Updates come from your Saiph account.") {
+            SettingsCatalog.Category.ABOUT -> page.item("updates", "Saiph ${com.castle.sefirah.BuildConfig.VERSION_NAME} (build ${com.castle.sefirah.BuildConfig.VERSION_CODE}). ${if (com.castle.sefirah.BuildConfig.PLAY_STORE) "Updates come from Google Play." else "Updates come from your Saiph account."}") {
                 updateSettings().forEach(::addView)
             }
         }
@@ -837,14 +844,14 @@ class HostedActivity : ComponentActivity() {
         settingsTarget = ""
     }
     private fun trialNotice() {
-        val notice = HostedTrial.notice(runtime.access, System.currentTimeMillis() / 1000) ?: return
+        val notice = HostedTrial.notice(runtime.access, System.currentTimeMillis() / 1000, com.castle.sefirah.BuildConfig.PLAY_STORE) ?: return
         root.addView(card(strong = notice.state != "trial").apply {
             addView(cardTitle(notice.title))
             addView(body(notice.message))
-            actions(button(notice.action, notice.state != "trial") {
+            notice.action?.let { label -> actions(button(label, notice.state != "trial") {
                 runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(HostedSignIn.PLANS_URL))) }
                     .onFailure { message("Enable a browser to view Saiph plans.") }
-            })
+            }) }
         })
     }
     /** One welcome screen owns the plan, sign-in and self-hosted routes. */
@@ -857,16 +864,18 @@ class HostedActivity : ComponentActivity() {
             actionsOnRoot(button("Use browser app instead", tone = Tone.TONAL) { signIn(browserApp = true, google = googleSignIn) }.apply { isEnabled = !signingIn })
         }
         val signedIn = account.signedIn()
-        if (!signedIn && !enrolled) dockActions(button("Subscribe", true) {
+        if (!signedIn && !enrolled) root.addView(body(if (com.castle.sefirah.BuildConfig.PLAY_STORE) "Already have Saiph Cloud? Continue with the same Google account you use on your computer."
+            else "Already started a free trial, subscribed or activated an invitation? Continue with the same Google account you used on the website and your computer."))
+        dockActions(button(if (signingIn) "Waiting for sign-in…" else if (signedIn) "Continue setup" else "Continue with Google", true) { signIn(google = true) }.apply { isEnabled = !signingIn })
+        if (!signedIn && !enrolled && !com.castle.sefirah.BuildConfig.PLAY_STORE) dockActions(button("View plans and free trial", tone = Tone.TONAL) {
             runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(HostedSignIn.PLANS_URL))) }
                 .onFailure { message("Enable a browser to view Saiph plans.") }
         })
-        dockActions(button(if (signingIn) "Waiting for sign-in…" else if (signedIn) "Continue setup" else "Continue with Google", primary = signedIn) { signIn(google = true) }.apply { isEnabled = !signingIn })
         if (!enrolled) setupDock.addView(buttonRow(setupLink("Self-hosted") { useOwnHub() }.apply { isEnabled = !signingIn }))
         if (!signedIn && !enrolled) root.addView(disclosure("Other sign-in options") {
             addView(body("Use your existing sign-in method to keep the same account."))
             actions(button("Use email or another provider", tone = Tone.TONAL) { signIn(google = false) }.apply { isEnabled = !signingIn })
-            addView(body("Start your free trial (no card needed) or activate an invitation on your Saiph account page, then continue with that account."))
+            if (!com.castle.sefirah.BuildConfig.PLAY_STORE) addView(body("Start a 14-day free trial with a card, then €9.99/month unless you cancel, or activate an invitation on your Saiph account page. Continue here with that account."))
         })
         if (!runtime.enabled() && !enrolled) {
             // Custom builds retain manual configuration outside the normal account flow.
@@ -900,7 +909,8 @@ class HostedActivity : ComponentActivity() {
         }
     }
     /** What the received-files list shows; a change redraws it. Progress alone only updates its line. */
-    private fun receivedKeys() = runtime.offers.map { it.first } + runtime.lanReceived().map { it.id + ":" + it.state }
+    private fun receivedKeys() = runtime.offers.map { it.first } + runtime.lanReceived().map { it.id + ":" + it.state } +
+        runtime.computers().keys.map { "computer:$it" }
     private fun lanLine(item: LanTransfers.Incoming) = when (item.state) {
         "receiving" -> "Receiving from ${item.computer} over your network · ${if (item.size > 0) item.received * 100 / item.size else 100}%"
         "failed" -> item.error
@@ -937,7 +947,8 @@ class HostedActivity : ComponentActivity() {
             addView(cardTitle("Approve this phone"))
             addView(body(if (nearbyCompared.isNotEmpty() && nearbyDelivered) "On your computer, check the code $nearbyCompared again and choose Codes match, approve."
                 else "On your computer, compare every group of this code and approve."))
-            if (runtime.fingerprint.isNotEmpty()) addView(securityCode(runtime.fingerprint))
+            if (nearbyCompared.isNotEmpty() && nearbyDelivered) addView(securityCode(nearbyCompared))
+            else if (runtime.fingerprint.isNotEmpty()) addView(securityCode(runtime.fingerprint))
             addView(text("Waiting for your computer…", UiType.META, Palette.MUTED))
             addView(disclosure("Phone not appearing?") {
                 actions(button("Send a fresh request", tone = Tone.TONAL) {

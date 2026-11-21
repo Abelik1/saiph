@@ -18,15 +18,15 @@ class OrionLockTileService : TileService() {
     @Inject lateinit var link: OrionLink
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     override fun onStartListening() {
-        qsTile?.apply { label = "Lock computer"; state = if (link.status.value == "Online") Tile.STATE_INACTIVE else Tile.STATE_UNAVAILABLE; updateTile() }
+        qsTile?.apply { label = "Lock computer"; state = if (link.status.value == "Online" || OrionComputers.cloud(this@OrionLockTileService)) Tile.STATE_INACTIVE else Tile.STATE_UNAVAILABLE; updateTile() }
     }
     override fun onClick() {
         scope.launch {
-            val computers = withContext(Dispatchers.IO) { runCatching { OrionComputers.remote(this@OrionLockTileService) }.getOrNull() }
+            val computers = withContext(Dispatchers.IO) { runCatching { OrionComputers.targets(this@OrionLockTileService, "remote") }.getOrNull() }
             when {
                 computers.isNullOrEmpty() -> Toast.makeText(this@OrionLockTileService, "No computer allows locking from this phone. Turn it on in Saiph's Phone remote settings.", Toast.LENGTH_LONG).show()
                 computers.size == 1 -> Toast.makeText(this@OrionLockTileService,
-                    if (OrionComputers.lock(link, computers.single().first)) "Locking ${computers.single().second}…" else "Saiph is reconnecting. Nothing was sent.", Toast.LENGTH_SHORT).show()
+                    if (OrionComputers.lock(this@OrionLockTileService, link, computers.single().first)) "Locking ${computers.single().second}…" else "Saiph is reconnecting. Nothing was sent.", Toast.LENGTH_SHORT).show()
                 else -> open()
             }
         }

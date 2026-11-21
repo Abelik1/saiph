@@ -12,6 +12,7 @@ import time
 from pathlib import Path
 
 from .storage import read_json, write_json
+from . import child_process
 
 
 def configure(root: Path, sources, *, repository="sftp:pi:/srv/orion-backups/desktop", offsite=None, executable="restic"):
@@ -28,7 +29,7 @@ def configure(root: Path, sources, *, repository="sftp:pi:/srv/orion-backups/des
             account = os.environ.get("USERNAME")
             if not account:
                 raise ValueError("Backup password permissions could not be secured.")
-            result = subprocess.run(["icacls", str(password), "/inheritance:r", "/grant:r", f"{account}:(F)"], capture_output=True, timeout=10)
+            result = child_process.run(["icacls", str(password), "/inheritance:r", "/grant:r", f"{account}:(F)"], capture_output=True, timeout=10)
             if result.returncode:
                 password.unlink()
                 raise ValueError("Backup password permissions could not be secured.")
@@ -46,7 +47,7 @@ def configure(root: Path, sources, *, repository="sftp:pi:/srv/orion-backups/des
 
 
 class BackupRunner:
-    def __init__(self, root, *, run=subprocess.run, clock=time.time):
+    def __init__(self, root, *, run=child_process.run, clock=time.time):
         self.root, self.run, self.clock = Path(root), run, clock
         self.lock = threading.Lock()
         self.thread = None

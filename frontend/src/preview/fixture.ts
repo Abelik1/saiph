@@ -24,7 +24,15 @@ function previewUpdate(): State["app_update"] {
     error: state === "failed" ? "Desktop download is incomplete or damaged" : "", checked_at: Math.floor(now / 1000) };
 }
 
+/** Marketing captures: /preview.html?call=ringing shows an incoming call; ?cloud=1 drops the
+ * Copy code button and Hub suggestions, which Saiph Cloud doesn't offer yet. */
+function previewOptions() {
+  const query = new URLSearchParams(window.location.search);
+  return { ringing: query.get("call") === "ringing", cloud: query.get("cloud") === "1" };
+}
+
 export function fixtureState(): State {
+  const options = previewOptions();
   const threads = people.map((name, i) => ({ id: "t" + i, device_id: "phone", thread: i, recipients: [name], message: { body: ["See you at 7?", "Thanks, got it", "Can you send the slides", "Your code is 482913", "Running 5 min late", "Lovely photo!"][i], timestamp: minutes(i * 37 + 3) } }));
   const messages = Array.from({ length: 14 }, (_, i) => ({
     id: "m" + i, message_id: i, device_id: "phone", thread: 0,
@@ -59,20 +67,21 @@ export function fixtureState(): State {
       ],
       notifications: [
         { id: "n1", device_id: "phone", key: "k1", app: "Messages", package: "msg", title: "Ada Byrne", text: "See you at 7?", timestamp: minutes(3), actions: [{ index: 0, label: "Mark as read" }], reply_key: "r1" },
-        { id: "n2", device_id: "phone", key: "k2", app: "Bank", package: "bank", title: "Sign-in code", text: "Your code is 482913. It expires in 10 minutes.", timestamp: minutes(9), actions: [], code: "482913" },
+        { id: "n2", device_id: "phone", key: "k2", app: "Bank", package: "bank", title: "Sign-in code", text: "Your code is 482913. It expires in 10 minutes.", timestamp: minutes(9), actions: [], ...(options.cloud ? {} : { code: "482913" }) },
         { id: "n3", device_id: "phone", key: "k3", app: "Calendar", package: "cal", title: "Team sync in 15 minutes", text: "Room 2 · Video link in invite", timestamp: minutes(14), actions: [{ index: 1, label: "Snooze" }] },
         { id: "n4", device_id: "phone", key: "k4", app: "Messages", package: "msg", title: "Liam Walsh", text: "Running a bit late. The train is stuck outside the station and nobody knows how long it will be, so start without me and I'll catch up when I get there. Save me a seat near the back!", timestamp: minutes(26), actions: [], reply_key: "r4" },
       ],
     },
     phone_features: {
-      threads, messages, photos, calls: [], files: [{ id: "f1", device_id: "phone", name: "Boarding pass.pdf", path: "", size: 184_320 }, { id: "f2", device_id: "phone", name: "Lease draft.docx", path: "", size: 52_480 }],
+      threads, messages, photos, files: [{ id: "f1", device_id: "phone", name: "Boarding pass.pdf", path: "", size: 184_320 }, { id: "f2", device_id: "phone", name: "Lease draft.docx", path: "", size: 52_480 }],
       media: [{ device_id: "phone", sessions: [{ source: "s", app: "Spotify", title: "Weightless", artist: "Marconi Union", playing: true, can_play: true, can_pause: true, can_next: true, can_previous: true, can_seek: false, position_ms: 0, length_ms: 0, volume: 50 }] }],
+      calls: options.ringing ? [{ device_id: "phone", state: "ringing", number: "+353 1 555 0199", name: "Unknown number" }] : [],
       ringers: [{ device_id: "phone", mode: "vibrate" }],
       call_logs: [{ device_id: "phone", calls: [{ number: "+353 1 555 0100", name: "Dentist", timestamp: minutes(80), duration: 120, type: "incoming" }, { number: "+353 87 555 0142", name: "", timestamp: minutes(260), duration: 0, type: "missed" }] }],
     },
     hub_inbox: {
       synced_at: new Date(minutes(2)).toISOString(), error: "",
-      items: [{ id: "h1", kind: "proposal", source: "calendar-assistant", title: "Dentist appointment", body: "Found in a message from your dentist.", link: "", proposal: { events: [{ title: "Dentist", start: new Date(now + 3 * 86_400_000).toISOString(), end: null, all_day: false, reminders: [1440], location: "", description: "" }] }, status: "new", decided_by: null, decided_at: null, result: "", created_at: new Date(minutes(40)).toISOString() }],
+      items: options.cloud ? [] : [{ id: "h1", kind: "proposal", source: "calendar-assistant", title: "Dentist appointment", body: "Found in a message from your dentist.", link: "", proposal: { events: [{ title: "Dentist", start: new Date(now + 3 * 86_400_000).toISOString(), end: null, all_day: false, reminders: [1440], location: "", description: "" }] }, status: "new", decided_by: null, decided_at: null, result: "", created_at: new Date(minutes(40)).toISOString() }],
     },
     handoffs: [],
     projects: [], transcripts: [], tasks: [], reminders: [], jobs: [], messages: [], emails: [], providers: {}, skills: [], plugins: [], ticker: [],

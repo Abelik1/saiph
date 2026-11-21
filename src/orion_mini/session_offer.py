@@ -40,6 +40,13 @@ listens on the network, asks a computer for an upload invitation with
    "size": int, "sha256": <hex>, "expires_at": <unix seconds>}
 and the computer answers with a "file" offer in mode "put" naming that ID.
 
+A phone can also ask first. From its camera page it sends {"type": "camera.request"}
+(hosted_features.CAMERA_REQUEST); the computer shows Accept/Decline, and Accept
+starts a camera session and sends its ordinary camera offer to that phone, which
+treats it as the answer and skips its own prompt. Decline sends nothing; the phone
+gives up after a minute. With Allow phone camera off, nothing appears and the computer
+answers {"type": "camera.off"} so the phone can say why at once.
+
 Closing an offer: once the desktop's waiting session is answered (by this offer,
 a scanned code), cancelled or expired, it sends
   {"type": "session.close", "version": 1, "id": <the offer's id>}

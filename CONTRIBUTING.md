@@ -55,12 +55,13 @@ Create and activate a Python virtual environment before installing dependencies.
 | --- | --- |
 | Desktop Python | `python -m pip install -e ".[dev,hosted]" -r hub/requirements-hosted.txt httpx`, then `python scripts/public-release/verify-public.py` |
 | Desktop frontend | `npm --prefix frontend ci`, then `npm --prefix frontend run test:unit` |
+| Electron shell | `npm --prefix desktop ci`, then `npm --prefix desktop test`; see [desktop/README.md](desktop/README.md) for native UI checks |
 | Hub | Install `hub/requirements-hosted.txt`, pytest and httpx; run `PYTHONPATH=hub python -m pytest hub/tests -q`. On PowerShell, set `$env:PYTHONPATH='hub'` before running `python -m pytest hub/tests -q` |
 | Account website | From `account-web/`, run `npm ci --ignore-scripts`, `npm test`, `npm run typecheck` and `npm run build`; follow its [local integration instructions](account-web/README.md) for affected HTTP/database behavior |
 | Android | Follow [android/README.MD](android/README.MD), [Android contribution guidance](android/CONTRIBUTING.md) and the independent build/test commands in [Android CI](.github/workflows/android.yml); use isolated caches, synthetic data and relevant JVM/lint checks |
 | Packaging | For affected desktop distribution code, run `python scripts/build-native.py --profile link` on the actual target OS and follow [release validation](docs/RELEASING.md) |
 
-Linux Qt/WebEngine requires system libraries listed in
+Linux Electron and legacy Qt compatibility tests require system libraries listed in
 [public CI](.github/workflows/public-ci.yml). Component READMEs and CI define
 additional prerequisites. Work on one component does not require operating
 someone else's hosted service or using maintainer credentials.

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { Client, DroppedFiles, FrameInfo } from "./types";
+import { electronClient, type ElectronBridge } from "./electronClient";
 
 type Signal<T> = {
   connect(fn: (value: T) => void): void;
@@ -17,6 +18,7 @@ type ChannelBridge = {
   frame?: Signal<string>;
 };
 type HostWindow = {
+  saiphDesktop?: ElectronBridge;
   qt?: { webChannelTransport: unknown };
   QWebChannel?: new (
     transport: unknown,
@@ -54,6 +56,11 @@ export function desktopClient(): Promise<Client> {
   if (connection) return connection;
   connection = new Promise<Client>((resolve, reject) => {
     const host = window as unknown as HostWindow;
+    if (host.saiphDesktop) {
+      try { resolve(electronClient(host.saiphDesktop, shareSnapshot)); }
+      catch (error) { reject(error); }
+      return;
+    }
     if (!host.qt?.webChannelTransport || !host.QWebChannel) {
       reject(
         new Error(

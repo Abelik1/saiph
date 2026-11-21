@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Launch the real Qt desktop for UI control, with a disposable data profile.
+"""Launch the real Qt or Electron desktop with a disposable UI-control profile.
 
 Use desktop-ui.cjs to inspect, click, fill, screenshot or run a Playwright flow.
 No installed app is restarted or attached. Background device/account workers are
@@ -14,10 +14,44 @@ from pathlib import Path
 import secrets
 import signal
 import socket
+import subprocess
 import sys
 from uuid import uuid4
 
 REPO = Path(__file__).resolve().parents[1]
+
+
+def run_electron(directory: Path, session: dict, dashboard: Path, show: bool, timeout: int, fixture: str, executable: Path | None = None) -> int:
+    """Launch the native Electron shell; live services require explicit --live."""
+    runtime = REPO / "desktop/node_modules/electron"
+    packaged = executable is not None
+    executable = executable.resolve(strict=True) if executable else runtime / "dist" / (runtime / "path.txt").read_text(encoding="utf-8").strip()
+    if not executable.is_file() or not packaged and not (REPO / "desktop/dist/main.cjs").is_file():
+        raise ValueError("Install and build desktop/ first; see desktop/README.md.")
+    session.update(shell="electron", source_dashboard=dashboard.resolve().as_uri(),
+                   dashboard="saiph-app://desktop/index.html", python=sys.executable,
+                   show=show, timeout=timeout, fixture=fixture, packaged=packaged)
+    write_session(directory, session)
+    environment(directory, session, show)
+    child_env = dict(os.environ)
+    for name in ("ELECTRON_RUN_AS_NODE", "NODE_OPTIONS"):
+        child_env.pop(name, None)
+    # The shell restarts itself to add this on Wayland; here that would lose the session's process.
+    wayland = sys.platform == "linux" and os.environ.get("DISPLAY") and (os.environ.get("WAYLAND_DISPLAY") or os.environ.get("XDG_SESSION_TYPE") == "wayland")
+    platform = [f"--ozone-platform={os.environ.get('ORION_MINI_ELECTRON_PLATFORM') or 'x11'}"] if wayland else []
+    child = subprocess.Popen([str(executable), *platform, *([] if packaged else [str(REPO / "desktop")]), "--ui-session", str(directory / "session.json")],
+                             cwd=REPO, env=child_env,
+                             creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0)
+    try:
+        return child.wait(timeout=timeout + 30)
+    finally:
+        if child.poll() is None:
+            child.terminate()
+            child.wait(timeout=10)
+        current = json.loads((directory / "session.json").read_text(encoding="utf-8"))
+        if current["status"] not in ("stopped", "failed"):
+            current["status"] = "failed"
+            write_session(directory, current)
 
 
 def create_session(directory: Path, dashboard: Path, live: bool, existing_profile: Path | None = None) -> dict:
@@ -80,6 +114,10 @@ def environment(directory: Path, session: dict, show: bool) -> None:
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--shell", choices=("qt", "electron"), default="electron")
+    parser.add_argument("--executable", type=Path, help="Electron bundle executable to test with this session's fresh profile.")
+    parser.add_argument("--fixture", choices=("empty", "phone"), default="empty",
+                        help="Synthetic phone data for the isolated Electron migration session.")
     parser.add_argument("--session", type=Path, default=REPO / "build" / "desktop-ui" / uuid4().hex,
                         help="New session directory; must not already exist.")
     parser.add_argument("--dashboard", type=Path, default=REPO / "frontend" / "dist" / "index.html")
@@ -91,12 +129,25 @@ def main(argv=None) -> int:
     options = parser.parse_args(argv)
     if options.timeout < 1:
         parser.error("--timeout must be positive")
+    if options.fixture != "empty" and options.live:
+        parser.error("Synthetic fixtures cannot be used with live services.")
+    if options.executable and options.shell != "electron":
+        parser.error("--executable requires --shell electron")
+    if options.fixture != "empty" and options.shell != "electron":
+        parser.error("--fixture currently requires --shell electron")
     directory = options.session.resolve()
     try:
         session = create_session(directory, options.dashboard, options.live, options.existing_profile)
     except (OSError, ValueError) as error:
         parser.error(str(error))
     write_session(directory, session)
+    if options.shell == "electron":
+        try:
+            return run_electron(directory, session, options.dashboard, options.show, options.timeout, options.fixture, options.executable)
+        except (OSError, ValueError) as error:
+            session["status"] = "failed"
+            write_session(directory, session)
+            parser.error(str(error))
     environment(directory, session, options.show)
     sys.path.insert(0, str(REPO / "src"))
 

@@ -5,6 +5,7 @@ import re
 import subprocess
 from pathlib import Path
 from .companion_tools import tool_path
+from . import child_process
 
 PACKAGE = 'com.orionmini.mobile'
 def worker_command(status):
@@ -26,8 +27,8 @@ class AdbWorker:
         self.status='Authorized debugging is unavailable.'
     def run(self,*args):
         if not self.adb:return ''
-        result=subprocess.run([self.adb,*args],capture_output=True,text=True,timeout=10,
-                              creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
+        result=child_process.run([self.adb,*args],capture_output=True,text=True,timeout=10,
+                                 creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
         return result.stdout if result.returncode==0 else ''
     def poll(self, paired, *, cloud=(), authorize=None):
         if not self.adb:return

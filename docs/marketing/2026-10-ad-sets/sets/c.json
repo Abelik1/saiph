@@ -1,0 +1,263 @@
+{
+  "name": "Set C: Enough.",
+  "group": "Pain point",
+  "angle": "Frustration: the workarounds people do every day, then the wall between phone and PC breaks",
+  "features": [
+    "Clipboard from phone to PC",
+    "Sign-in codes from the phone"
+  ],
+  "duration": 17.5,
+  "captions": [
+    {
+      "from": 0.1,
+      "to": 1.8,
+      "text": "Emailed yourself a link.<br>Again."
+    },
+    {
+      "from": 1.85,
+      "to": 4.6,
+      "text": "Walked across the room<br>for a sign-in code."
+    },
+    {
+      "from": 4.65,
+      "to": 6.2,
+      "text": "Typed it out by hand."
+    },
+    {
+      "from": 6.25,
+      "to": 8.5,
+      "text": "Copy on your phone."
+    },
+    {
+      "from": 8.55,
+      "to": 11.8,
+      "text": "Enough."
+    },
+    {
+      "from": 11.85,
+      "to": 13.35,
+      "text": "Ctrl+V on your PC."
+    },
+    {
+      "from": 13.4,
+      "to": 15.55,
+      "text": "Codes, texts,<br>your whole phone."
+    }
+  ],
+  "end": {
+    "from": 15.6,
+    "tag": "Your phone,<br>on your PC."
+  },
+  "stills": {
+    "portrait": {
+      "time": 9.4,
+      "caption": "Emailed yourself a link.<br>Again?",
+      "capLines": 2,
+      "tally": false
+    },
+    "square": {
+      "time": 9,
+      "caption": "Enough.",
+      "capLines": 1,
+      "tally": false
+    }
+  },
+  "cuts": [
+    {
+      "id": "rituals",
+      "feature": "Pain point hook",
+      "parts": [
+        [
+          0,
+          4.6
+        ],
+        [
+          8.55,
+          10.4
+        ],
+        [
+          15.6,
+          17.5
+        ]
+      ]
+    },
+    {
+      "id": "paste",
+      "feature": "Clipboard from phone to PC",
+      "parts": [
+        [
+          6.2,
+          13.4
+        ],
+        [
+          15.6,
+          17.5
+        ]
+      ]
+    },
+    {
+      "id": "code",
+      "feature": "Sign-in codes from the phone",
+      "parts": [
+        [
+          1.8,
+          4.6
+        ],
+        [
+          13.4,
+          17.5
+        ]
+      ]
+    }
+  ],
+  "audio": {
+    "voice": "pFZP5JQG7iQjIQuC4Bku",
+    "voiceSettings": {
+      "stability": 0.5
+    },
+    "lines": [
+      {
+        "at": 0.05,
+        "text": "[sighs] Emailed yourself a link... again."
+      },
+      {
+        "at": 2.2,
+        "text": "Walked across the room for a sign-in code."
+      },
+      {
+        "at": 4.4,
+        "text": "Typed it out by hand."
+      },
+      {
+        "at": 6.1,
+        "text": "Well, now you don't have to."
+      },
+      {
+        "at": 9.6,
+        "text": "Copy on your phone. Paste on your PC."
+      },
+      {
+        "at": 12.5,
+        "text": "Codes, texts, your whole phone, on your laptop."
+      },
+      {
+        "at": 16.0,
+        "text": "Without ever picking it up."
+      }
+    ],
+    "sfx": [
+      {
+        "at": 0.05,
+        "prompt": "a single computer mouse click, then a soft email open sound",
+        "seconds": 0.6,
+        "gain": -8
+      },
+      {
+        "at": 1.8,
+        "prompt": "footsteps walking quickly across a wooden floor in a quiet room, indoor, close",
+        "seconds": 2.8,
+        "gain": -6
+      },
+      {
+        "at": [
+          2.3,
+          3.5,
+          13.4
+        ],
+        "prompt": "a very soft, muffled, low phone vibration hum on a wooden desk, gentle and quiet, distant, short",
+        "seconds": 0.6,
+        "gain": -18
+      },
+      {
+        "at": 4.65,
+        "prompt": "slow hesitant typing on a laptop keyboard, a few keys, then two backspaces, close-up",
+        "seconds": 1.6,
+        "gain": -5
+      },
+      {
+        "at": [
+          6.95,
+          7.3
+        ],
+        "prompt": "a single soft fingertip tap on a smartphone glass screen, close-up, quiet, clean",
+        "seconds": 0.5,
+        "gain": -4
+      },
+      {
+        "at": 7.55,
+        "prompt": "a tiny soft digital confirmation blip, modern user interface sound, clean, short",
+        "seconds": 0.5,
+        "gain": -8
+      },
+      {
+        "at": 7.95,
+        "prompt": "a fast rising cinematic energy whoosh building to an impact, short",
+        "seconds": 0.6,
+        "gain": -6
+      },
+      {
+        "at": 8.5,
+        "prompt": "a large pane of glass shattering in slow motion, cinematic, shards ringing and tinkling as they fall, huge reverb",
+        "seconds": 4,
+        "gain": -17
+      },
+      {
+        "at": 8.55,
+        "prompt": "a deep cinematic boom impact with sub bass, trailer hit",
+        "seconds": 2,
+        "gain": -15
+      },
+      {
+        "at": [
+          9.2,
+          12.25,
+          14.2
+        ],
+        "prompt": "a deep resonant glowing synth string pluck with a shimmering airy tail, cinematic, clean",
+        "seconds": 1.6,
+        "gain": -9
+      },
+      {
+        "at": [
+          12,
+          12.15
+        ],
+        "prompt": "a single mechanical laptop keyboard key press, close-up, crisp soft click",
+        "seconds": 0.5,
+        "gain": -3
+      },
+      {
+        "at": 13.9,
+        "prompt": "a soft modern desktop notification chime, two gentle notes, clean",
+        "seconds": 0.8,
+        "gain": -8
+      },
+      {
+        "at": 14.45,
+        "prompt": "fast typing of six digits on a laptop keyboard, close-up, crisp",
+        "seconds": 0.8,
+        "gain": -5
+      },
+      {
+        "at": 15.45,
+        "prompt": "one soft warm felt piano chord ringing out naturally in a quiet room, calm and pleasant, acoustic, no synth, no whoosh",
+        "seconds": 2.4,
+        "gain": -9
+      }
+    ],
+    "music": {
+      "prompt": "Tense minimal electronic pulse with a ticking clock feel that builds frustration, then halfway through it opens into a wide, confident, uplifting cinematic synth swell, 100 bpm, no vocals",
+      "gain": -18
+    },
+    "model": "eleven_v3",
+    "maxPause": 0.15,
+    "oneTake": true,
+    "seed": 1,
+    "tempo": 1.2
+  },
+  "copy": {
+    "primary": "Emailing yourself links. Walking across the room for a code. Typing a link letter by letter. Enough.",
+    "headline": "Your phone, on your PC",
+    "description": "14 days free, then €9.99/month"
+  }
+}

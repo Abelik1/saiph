@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // The two paths from usesaiph.com (docs/LANDING_CONVERSION.md):
-//   Start your free trial: /trial → Google sign-in → back to /trial → trial starts.
+//   Start your free trial: /trial → Google sign-in → /trial → Stripe card checkout.
 //   Buy now: /buy/<plan> → Google sign-in → back to /buy/<plan> → Stripe Checkout.
-// Only these exact return paths survive sign-in; anything else goes to /account.
+// Only these exact return paths (and /account/delete) survive sign-in; anything
+// else goes to /account.
 
 export const BUY_PLANS = /** @type {const} */ (["monthly", "yearly"]);
 const OFFER = /^[a-d]$/;
@@ -43,12 +44,29 @@ export function parseBuyTarget(value, appBaseUrl) {
   return { plan: /** @type {"monthly"|"yearly"} */ (match[1]), offer };
 }
 
+/** The account deletion page the Android app opens (app/account/delete). */
+export const DELETE_PAGE = "/account/delete";
+
+/**
+ * Whether a return target is exactly this site's deletion page, with no query.
+ * @param {unknown} value @param {string} appBaseUrl
+ */
+export function isDeleteTarget(value, appBaseUrl) {
+  if (typeof value !== "string" || value.length > 200) return false;
+  let url;
+  try { url = new URL(value, appBaseUrl); } catch { return false; }
+  return url.origin === new URL(appBaseUrl).origin && !url.username && !url.password && !url.hash
+    && url.pathname === DELETE_PAGE && url.search === "";
+}
+
 /**
  * Where a completed sign-in goes: straight back to the chosen plan, marked so
- * the page can count the sign-in once, or the account page as before.
+ * the page can count the sign-in once; back to the deletion page, which must
+ * not pass through the account overview and its plans; or the account page.
  * @param {unknown} returnTo @param {string} appBaseUrl
  */
 export function afterSignIn(returnTo, appBaseUrl) {
+  if (isDeleteTarget(returnTo, appBaseUrl)) return new URL(DELETE_PAGE, appBaseUrl);
   const target = parseBuyTarget(returnTo, appBaseUrl);
   if (!target) return new URL("/account", appBaseUrl);
   const url = new URL(target.plan === "trial" ? "/trial" : buyPath(target.plan, target.offer), appBaseUrl);

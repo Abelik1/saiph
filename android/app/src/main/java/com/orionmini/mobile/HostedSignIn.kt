@@ -6,10 +6,14 @@ import java.net.URI
 /** Provider routing changes the browser destination, never the token issuer or account identity. */
 internal object HostedSignIn {
     const val PLANS_URL = "https://usesaiph.com/hosted.html"
+    fun scope(refresh: Boolean) = "openid email" + if (refresh) " offline_access" else ""
     fun parameters(issuer: String, audience: String, google: Boolean = true): Map<String, String> = buildMap {
         put("audience", audience)
-        if (google && URI(issuer).host?.lowercase()?.endsWith(".auth0.com") == true)
+        if (google && URI(issuer).host?.lowercase()?.endsWith(".auth0.com") == true) {
             put("connection", "google-oauth2")
+            // Always ask which Google account: browser sessions outlive signing out of Saiph.
+            put("prompt", "select_account")
+        }
     }
     /** Never display provider bodies, URLs, tokens or arbitrary exception text. */
     fun issue(failure: Throwable): HostedSignInIssue =

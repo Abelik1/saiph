@@ -1,0 +1,17 @@
+{
+  "name": "saiph-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "license": "AGPL-3.0-or-later",
+  "main": "dist/main.cjs",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test dist/*.test.cjs ../tests/packaging/electron_versions.test.cjs"
+  },
+  "devDependencies": {
+    "@electron/packager": "20.3.0",
+    "@types/node": "24.13.3",
+    "electron": "44.10.2",
+    "typescript": "6.0.2"
+  }
+}

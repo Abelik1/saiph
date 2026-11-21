@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Saiph render test: type layer</title>
+<!-- The same type layer goes over both renders, so the comparison is only about the 3D picture. -->
+<style>
+  html, body { margin: 0; background: transparent; overflow: hidden; }
+  body { width: var(--w); height: var(--h); position: relative; color: #f3f7fb;
+    font-family: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif; }
+  .line { position: absolute; left: 0; right: 0; text-align: center; font-weight: 650; letter-spacing: -0.03em;
+    text-shadow: 0 2px 30px rgba(4, 7, 12, .85), 0 0 2px rgba(4, 7, 12, .6); will-change: opacity, transform; }
+  .headline { font-size: 96px; line-height: 1.02; }
+  .end { position: absolute; left: 0; right: 0; display: grid; justify-items: center; gap: 18px; text-align: center; }
+  .brand { display: flex; align-items: center; gap: 18px; font-size: 64px; font-weight: 600; letter-spacing: -0.02em; }
+  .brand svg { width: 86px; height: 86px; }
+  .tag { font-size: 60px; font-weight: 650; letter-spacing: -0.03em; line-height: 1.05; }
+  .platforms { font-size: 34px; color: #a9bccf; letter-spacing: 0.01em; }
+  .pill { margin-top: 10px; padding: 18px 34px; border-radius: 999px; font-size: 34px; font-weight: 600; color: #04121a;
+    background: linear-gradient(120deg, #22d3ee, #7dd3fc 55%, #a78bfa); }
+  body.still .headline { font-size: 84px; }
+  body.still .brand { font-size: 44px; } body.still .brand svg { width: 58px; height: 58px; }
+</style>
+</head>
+<body>
+<div class="line headline" id="a">Shot on your phone.</div>
+<div class="line headline" id="b">Already on your PC.</div>
+<div class="end" id="end">
+  <div class="brand">
+    <svg viewBox="0 0 40 40" aria-hidden="true"><defs><linearGradient id="s" x1="8" y1="29" x2="32" y2="11" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#22d3ee"/><stop offset=".5" stop-color="#e7edf4"/><stop offset="1" stop-color="#a78bfa"/></linearGradient><radialGradient id="g"><stop offset="0" stop-color="#67e8f9" stop-opacity=".55"/><stop offset="1" stop-color="#67e8f9" stop-opacity="0"/></radialGradient></defs><circle cx="20" cy="20" r="11" fill="url(#g)"/><path d="M8 29Q15.3 26.5 20 20Q24.7 13.5 32 11" fill="none" stroke="url(#s)" stroke-width="1.6" stroke-linecap="round"/><circle cx="8" cy="29" r="2.6" fill="#67e8f9"/><circle cx="20" cy="20" r="3" fill="#e7edf4"/><circle cx="32" cy="11" r="2.6" fill="#a78bfa"/></svg>
+    <span>saiph</span>
+  </div>
+  <div class="tag">Your devices. Connected.</div>
+  <div class="platforms">Android · Windows · Linux</div>
+  <div class="pill">14 days free · usesaiph.com</div>
+</div>
+<script>
+  const q = new URLSearchParams(location.search);
+  const W = Number(q.get("w") || 1080), H = Number(q.get("h") || 1920), still = q.get("still") === "1";
+  document.body.style.setProperty("--w", W + "px");
+  document.body.style.setProperty("--h", H + "px");
+  document.body.classList.toggle("still", still);
+  const $ = (id) => document.getElementById(id);
+  const clamp = (x) => Math.min(1, Math.max(0, x));
+  const ease = (x) => { x = clamp(x); return x * x * (3 - 2 * x); };
+  // Visible from a to b with fades of length f; returns opacity and a small rise.
+  const beat = (t, a, b, f = 0.35) => Math.min(ease((t - a) / f), 1 - ease((t - (b - f)) / f));
+  function place(el, top, o, rise) {
+    el.style.top = top + "px";
+    el.style.opacity = o;
+    el.style.transform = `translateY(${(1 - o) * rise}px)`;
+  }
+  window.setTime = (t) => {
+    if (still) {
+      place($("a"), H * 0.075, 1, 0);
+      place($("b"), H * 0.075 + 92, 1, 0);
+      const end = $("end");
+      [...end.children].forEach((c) => { c.style.display = c.classList.contains("brand") || c.classList.contains("pill") ? "" : "none"; });
+      end.style.gridAutoFlow = "column"; end.style.alignItems = "center"; end.style.justifyContent = "center"; end.style.gap = "36px";
+      place(end, H * 0.86, 1, 0);
+      return;
+    }
+    place($("a"), H * 0.17, beat(t, 0.3, 2.5), 30);
+    place($("b"), H * 0.17, beat(t, 5.9, 8.3), 30);
+    place($("end"), H * 0.69, beat(t, 8.45, 10.6, 0.45), 40);
+  };
+  window.setTime(Number(q.get("t") || 0));
+  window.ready = true;
+</script>
+</body>
+</html>

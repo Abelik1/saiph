@@ -49,8 +49,17 @@
     link(a, betaUrl, "Android beta invitations are not open");
     if (betaUrl) a.dataset.signin = "firebase";
   });
+  // Empty until Saiph's Google Play listing is public.
+  const playUrl = cfg.androidPlayUrl === "https://play.google.com/store/apps/details?id=com.orionmini.mobile" ? cfg.androidPlayUrl : "";
+  document.querySelectorAll('[data-link="android-play"]').forEach((a) => {
+    link(a, playUrl, "Coming soon to Google Play");
+    const go = a.querySelector(".go");
+    if (!playUrl && go) { go.textContent = "Coming soon"; go.classList.add("muted"); }
+  });
   const betaAccountUrl = /^https:\/\/[a-z0-9.-]+\/account$/.test(cfg.betaAccountUrl || "") ? cfg.betaAccountUrl : "";
-  document.querySelectorAll("[data-beta-access]").forEach((el) => { el.hidden = !betaAccountUrl; });
+  const published = cfg.sourceVisibility === "public" && Boolean(cfg.releasesUrl) && Boolean((cfg.release || {}).sourceCommit);
+  // A published release makes every installer a free download; the account no longer holds them.
+  document.querySelectorAll("[data-beta-access]").forEach((el) => { el.hidden = !betaAccountUrl || published; });
   document.querySelectorAll('[data-link="beta-account"]').forEach((a) => link(a, betaAccountUrl, "Beta access invitations are not open"));
   document.querySelectorAll('[data-link="releases"]').forEach((a) => link(a, cfg.releasesUrl, "Releases coming soon"));
   // With subscriptions open, installers for every platform are in the subscriber's account.
@@ -72,6 +81,15 @@
       go.textContent = "Coming soon";
       go.classList.add("muted");
     }
+  });
+  // The header's Download link fetches the Windows installer at once on Windows; elsewhere
+  // it opens the downloads page. Before a release it stays on the downloads page.
+  const nav = window.navigator || {};
+  const onWindows = /Windows/.test((nav.userAgentData && nav.userAgentData.platform) || nav.userAgent || "");
+  const windowsInstaller = published && cfg.downloads && cfg.downloads.windows;
+  if (onWindows && windowsInstaller) document.querySelectorAll(".download-nav").forEach((a) => {
+    a.href = windowsInstaller;
+    a.dataset.download = "windows";
   });
 
   // A free trial is started on the account page; the site only says it is offered.
@@ -223,11 +241,11 @@
   document.querySelectorAll('[data-link="waitlist"]').forEach((a) => link(a, waitlistReady ? cfg.waitlistUrl : "", "Email signup is not open yet"));
   document.querySelectorAll('[data-link="processor-privacy"]').forEach((a) => link(a, waitlistReady ? waitlist.processorPrivacyUrl : "", "Provider information is not activated yet"));
   const release = cfg.release || {};
-  const releaseReady = cfg.sourceVisibility === "public" && Boolean(cfg.releasesUrl) && Boolean(release.sourceCommit);
+  const releaseReady = published;
   if (subscribeUrl && !releaseReady) fill("[data-release-status]", "Installers for Windows, Linux and Android are in your Saiph account. Subscribe to Saiph Cloud or activate an invitation code, then download them there. No compilation or personal server is required.");
   else if (betaAccountUrl && !releaseReady) fill("[data-release-status]", "Beta installers are available from your Saiph account. Sign in and activate your invitation code. No compilation or personal server is required.");
   document.querySelectorAll("[data-release-details]").forEach((el) => { el.hidden = !releaseReady; });
-  if (releaseReady) fill("[data-release-status]", "Downloads are pinned to " + release.tag + ". Read the release notes and verify your download before installing.");
+  if (releaseReady) fill("[data-release-status]", "Free to download. When Saiph opens, sign in to Saiph Cloud or choose Self-hosted. This is " + release.tag + "; read the release notes and verify your download before installing.");
   fill("[data-release-tag]", release.tag);
   fill("[data-release-commit]", release.sourceCommit);
   const releaseLinks = {checksums: release.checksumsUrl, "source-metadata": release.sourceMetadataUrl,

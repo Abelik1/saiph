@@ -48,8 +48,12 @@ paths = [
   '''(^|[\\/])account-web[\\/]tests[\\/]billing-withdraw\.test\.mjs$''',
   '''(^|[\\/])account-web[\\/]tests[\\/]billing-trial\.test\.mjs$''',
   '''(^|[\\/])account-web[\\/]tests[\\/]billing-trial-admin\.test\.mjs$''',
+  '''(^|[\\/])account-web[\\/]tests[\\/]billing-card-trial\.test\.mjs$''',
+  '''(^|[\\/])account-web[\\/]tests[\\/]trial-http-smoke\.mjs$''',
+  '''(^|[\\/])account-web[\\/]tests[\\/]app-trial\.test\.mjs$''',
   '''(^|[\\/])account-web[\\/]tests[\\/]buy-funnel\.test\.mjs$''',
   '''(^|[\\/])account-web[\\/]tests[\\/]http-smoke\.mjs$''',
+  '''(^|[\\/])account-web[\\/]tests[\\/]account-deletion\.test\.mjs$''',
 ]
 regexTarget = "secret"
 # rk_live_/sk_live_synthetic123 test that live mode needs a live restricted key

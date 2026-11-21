@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS saiph_billing.schema_migrations (
     );
 DO $saiph_history$
 BEGIN
-  IF EXISTS (SELECT 1 FROM saiph_billing.schema_migrations WHERE NOT ((version=1 AND file='0001_billing.sql' AND sha256='1dcf27bc1a7e8b5b617dbea9a55afd8fabf1829d2854c9b9dda5072aaca8345f') OR (version=2 AND file='0002_billing_lifecycle.sql' AND sha256='3c11e9eae5bfaae7e7e473dadde4a88c15ff8e078e654d6fd7829d533616c36a') OR (version=3 AND file='0003_paid_hosted.sql' AND sha256='e156e85386e79105f09d5c1c0ad8ca3f9964fd3760aa813c5cb68db479d07e63') OR (version=4 AND file='0004_free_trial.sql' AND sha256='a6d9ff17e8390d9589dbca761fb069c353dd77772a07d7ce7e00860682b886cb') OR (version=5 AND file='0005_trial_extension.sql' AND sha256='bab9b2353644a505ef0968f3026baea0d8d4151019e95f29f883f937ac7db585') OR (version=6 AND file='0006_funnel_counts.sql' AND sha256='8cd1f424bc238878388176cf682231193941df3ed7b196e83e60d3361fd12d41'))) THEN
+  IF EXISTS (SELECT 1 FROM saiph_billing.schema_migrations WHERE NOT ((version=1 AND file='0001_billing.sql' AND sha256='1dcf27bc1a7e8b5b617dbea9a55afd8fabf1829d2854c9b9dda5072aaca8345f') OR (version=2 AND file='0002_billing_lifecycle.sql' AND sha256='3c11e9eae5bfaae7e7e473dadde4a88c15ff8e078e654d6fd7829d533616c36a') OR (version=3 AND file='0003_paid_hosted.sql' AND sha256='e156e85386e79105f09d5c1c0ad8ca3f9964fd3760aa813c5cb68db479d07e63') OR (version=4 AND file='0004_free_trial.sql' AND sha256='a6d9ff17e8390d9589dbca761fb069c353dd77772a07d7ce7e00860682b886cb') OR (version=5 AND file='0005_trial_extension.sql' AND sha256='bab9b2353644a505ef0968f3026baea0d8d4151019e95f29f883f937ac7db585') OR (version=6 AND file='0006_funnel_counts.sql' AND sha256='8cd1f424bc238878388176cf682231193941df3ed7b196e83e60d3361fd12d41') OR (version=7 AND file='0007_card_trial_claims.sql' AND sha256='ad2898554dff57924184a7f580edd1ec095fef8df936ff736bdd538a5203bd52') OR (version=8 AND file='0008_deletion_requests.sql' AND sha256='9b343b91b180ec000d47e15eb9492c4e330deb781c1e80603181ff7a0e935155'))) THEN
     RAISE EXCEPTION 'Applied migration differs from reviewed history';
   END IF;
 END;
@@ -322,4 +322,58 @@ CREATE TABLE saiph_billing.funnel_daily (
   END IF;
 END;
 $saiph_migration_6$;
+DO $saiph_migration_7$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM saiph_billing.schema_migrations WHERE version=7) THEN
+-- Reservations prevent multiple card trials across accounts/mailbox aliases.
+-- They never grant access; verified Stripe subscription events do that.
+CREATE TABLE saiph_billing.card_trial_claims (
+    stripe_account_id text NOT NULL CHECK (stripe_account_id ~ '^acct_[A-Za-z0-9]+$'),
+    auth_subject text NOT NULL CHECK (length(auth_subject) BETWEEN 1 AND 255),
+    email_key text NOT NULL CHECK (email_key ~ '^[a-f0-9]{64}$'),
+    trial_ref text NOT NULL CHECK (trial_ref ~ '^[a-f0-9]{32}$'),
+    reserved_at bigint NOT NULL CHECK (reserved_at > 0),
+    PRIMARY KEY (stripe_account_id, auth_subject),
+    UNIQUE (stripe_account_id, email_key),
+    UNIQUE (trial_ref)
+);
+
+CREATE FUNCTION saiph_billing.protect_card_trial_claim() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+    RAISE EXCEPTION 'Card trial claims are permanent' USING ERRCODE = '23514';
+END;
+$$;
+CREATE TRIGGER protect_card_trial_claim
+BEFORE UPDATE OR DELETE ON saiph_billing.card_trial_claims
+FOR EACH ROW EXECUTE FUNCTION saiph_billing.protect_card_trial_claim();
+
+    INSERT INTO saiph_billing.schema_migrations (version,file,sha256) VALUES (7,'0007_card_trial_claims.sql','ad2898554dff57924184a7f580edd1ec095fef8df936ff736bdd538a5203bd52');
+  END IF;
+END;
+$saiph_migration_7$;
+DO $saiph_migration_8$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM saiph_billing.schema_migrations WHERE version=8) THEN
+-- Account deletion requests from /account/delete (Google Play User Data policy).
+-- One row per signed-in account: repeating a pending request keeps the first
+-- time. The owner marks a request done once the account and data are removed.
+CREATE TABLE saiph_billing.deletion_requests (
+    stripe_account_id text NOT NULL CHECK (stripe_account_id ~ '^acct_[A-Za-z0-9]+$'),
+    auth_subject text NOT NULL CHECK (length(auth_subject) BETWEEN 1 AND 255),
+    auth_issuer text NOT NULL CHECK (auth_issuer ~ '^https://[a-z0-9.-]+/$' AND length(auth_issuer) <= 255),
+    requested_at bigint NOT NULL CHECK (requested_at > 0),
+    state text NOT NULL DEFAULT 'pending' CHECK (state IN ('pending', 'done')),
+    completed_at bigint CHECK (completed_at IS NULL OR completed_at >= requested_at),
+    CHECK ((state = 'done') = (completed_at IS NOT NULL)),
+    PRIMARY KEY (stripe_account_id, auth_subject)
+);
+CREATE INDEX deletion_requests_pending
+    ON saiph_billing.deletion_requests (stripe_account_id, requested_at)
+    WHERE state = 'pending';
+
+    INSERT INTO saiph_billing.schema_migrations (version,file,sha256) VALUES (8,'0008_deletion_requests.sql','9b343b91b180ec000d47e15eb9492c4e330deb781c1e80603181ff7a0e935155');
+  END IF;
+END;
+$saiph_migration_8$;
 COMMIT;

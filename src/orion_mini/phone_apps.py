@@ -11,6 +11,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from . import child_process
 
 PACKAGE = re.compile(r"[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+")
 # scrcpy --list-apps prints " * Name   package" (system) or " - Name   package" (user).
@@ -41,7 +42,7 @@ def _serial(serial):
     return serial
 
 
-def list_apps(adb, serial, runner=subprocess.run):
+def list_apps(adb, serial, runner=child_process.run):
     env = {**os.environ, "ADB": str(adb)}
     try:
         result = runner([_scrcpy(), "--serial", _serial(serial), "--list-apps"], env=env, capture_output=True,
@@ -54,7 +55,7 @@ def list_apps(adb, serial, runner=subprocess.run):
     return {"apps": apps}
 
 
-def open_app(adb, serial, package, name="", runner=subprocess.Popen):
+def open_app(adb, serial, package, name="", runner=child_process.popen):
     if not isinstance(package, str) or not PACKAGE.fullmatch(package) or len(package) > 200:
         raise ValueError("Choose an app from the list.")
     title = "".join(c for c in str(name or package) if c.isprintable())[:60] + " · Phone"

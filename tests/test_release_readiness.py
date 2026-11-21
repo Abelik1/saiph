@@ -123,6 +123,47 @@ def refresh_package_review(package, review):
     review.write_text(json.dumps(approval))
 
 
+def test_electron_needs_its_own_package_bound_review_and_notices(tmp_path):
+    package, review, _ = fixture(tmp_path)
+    app = package / 'app'
+    service = app / 'resources/service'
+    (service / '_internal').mkdir(parents=True)
+    (service / 'SaiphService.exe').write_bytes(b'MZ synthetic service')
+    for leaf in ('distribution-release.json', 'distribution-profile.json'):
+        (service / '_internal' / leaf).write_bytes((app / '_internal' / leaf).read_bytes())
+    (app / '_internal/desktop-runtime.json').write_text(json.dumps({
+        'schema': 1, 'runtime': 'electron', 'electron_version': '44.10.2',
+        'service': 'resources/service/SaiphService.exe', 'frontend': 'resources/app/frontend',
+    }))
+    for leaf in ('package.json', 'dist/main.cjs', 'dist/preload.cjs', 'frontend/index.html', 'frontend/screen.html'):
+        asset = app / 'resources/app' / leaf
+        asset.parent.mkdir(parents=True, exist_ok=True)
+        asset.write_text('synthetic application content')
+    license_dir = package / 'licenses'
+    (license_dir / 'electron').mkdir()
+    notices = []
+    for leaf in ('LICENSE', 'LICENSES.chromium.html'):
+        (app / leaf).write_text('synthetic notice')
+        relative = 'electron/' + leaf
+        (license_dir / relative).write_bytes((app / leaf).read_bytes())
+        notices.append(relative)
+    inventory = license_dir / 'inventory.json'
+    inventory.write_text(json.dumps({**json.loads(inventory.read_text()), 'desktop': [
+        {'name': 'electron', 'version': '44.10.2', 'notices': notices},
+    ]}))
+    refresh_package_review(package, review)
+    assert readiness.check(package, review)['problems'] == ['Release review needs passing evidence: electron_distribution']
+    approval = json.loads(review.read_text())
+    approval['checks']['electron_distribution'] = approval['checks'].pop('qt_replacement')
+    review.write_text(json.dumps(approval))
+    assert readiness.check(package, review)['ready']
+
+    (license_dir / 'electron/LICENSES.chromium.html').write_text('different notice')
+    refresh_package_review(package, review)
+    with pytest.raises(ValueError, match='mismatched Electron notice'):
+        readiness.check(package, review)
+
+
 def test_metadata_only_package_cannot_pass_review(tmp_path):
     package, review, sources = fixture(tmp_path)
     (package / 'app/Saiph.exe').unlink()

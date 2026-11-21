@@ -54,14 +54,17 @@ def local_address(value):
 
 
 def lan_addresses():
-    from PySide6.QtNetwork import QNetworkAddressEntry, QNetworkInterface
+    import psutil
+    import socket
     values = []
-    for interface in QNetworkInterface.allInterfaces():
-        flags = interface.flags()
-        if not flags & QNetworkInterface.InterfaceFlag.IsUp or flags & QNetworkInterface.InterfaceFlag.IsLoopBack:
+    states = psutil.net_if_stats()
+    for name, addresses in psutil.net_if_addrs().items():
+        if name not in states or not states[name].isup:
             continue
-        for entry in interface.addressEntries():
-            value = entry.ip().toString()
+        for entry in addresses:
+            if entry.family != socket.AF_INET:
+                continue
+            value = entry.address
             if local_address(value) and value not in values:
                 values.append(value)
     return values[:8]
@@ -263,8 +266,7 @@ class CameraSession:
                 self.stop('Phone camera disconnected. Start a new session when you are ready.', expected_session=epoch)
 
     def _process(self, connection, epoch, width, height, pending, slot):
-        from PySide6.QtCore import Qt
-        from PySide6.QtGui import QImage, QTransform, QPainter
+        from .images import camera_pixels
         try:
             while True:
                 with pending:
@@ -280,25 +282,7 @@ class CameraSession:
                     sink = self.sink
                 # Decoding also proves the phone's JPEG is a whole, valid image
                 # before the dashboard is offered it.
-                decoded = QImage.fromData(image, 'JPEG')
-                if decoded.isNull():
-                    raise ValueError('Camera image could not be decoded.')
-                source_dimensions = (decoded.width(), decoded.height())
-                rgba = None
-                if sink:
-                    # Only the virtual webcam needs upright pixels at its fixed output size.
-                    if rotation:
-                        decoded = decoded.transformed(QTransform().rotate(rotation))
-                    if decoded.width() == width and decoded.height() == height:
-                        canvas = decoded.convertToFormat(QImage.Format.Format_RGBA8888)
-                    else:
-                        canvas = QImage(width, height, QImage.Format.Format_RGBA8888)
-                        canvas.fill(Qt.GlobalColor.black)
-                        fitted = decoded.scaled(width, height, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-                        painter = QPainter(canvas)
-                        painter.drawImage((width - fitted.width()) // 2, (height - fitted.height()) // 2, fitted)
-                        painter.end()
-                    rgba = bytes(canvas.constBits())
+                source_dimensions, rgba = camera_pixels(image, width, height, rotation, sink)
                 with self.lock:
                     # Stop/replace may run while a frame decodes. Never publish
                     # or write that old frame into a replacement session.

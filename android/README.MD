@@ -27,6 +27,10 @@ The current application ID is `com.orionmini.mobile`. Internal package names,
 An update must use the existing signing certificate to preserve installed identity
 and pairing. Uninstalling the existing app removes its private data and device key.
 
+Supported native ABIs are `arm64-v8a` and `x86_64` on Android 8.0/API26 or newer.
+The app packages the backup runtime for both. Do not add a 32-bit ABI without
+building and accepting its matching runtime first.
+
 The [independent enrollment guide](docs/ORION_UNIFIED_ANDROID_SETUP.md) explains
 the invitation flow and permission limits. The public snapshot has no owner-specific Hub defaults or private milestone records.
 

@@ -1,0 +1,202 @@
+{
+  "title": "Shot on your phone. Already on your PC.",
+  "note": "Shared scene for the renderer comparison. Units are scene metres, y is up (three.js axes); the Blender script converts to z-up. Both renderers read this file, so devices, camera and timing match exactly.",
+  "duration": 10,
+  "fps": 30,
+  "formats": {
+    "story": {
+      "width": 1080,
+      "height": 1920
+    },
+    "still": {
+      "width": 1080,
+      "height": 1350,
+      "time": 4.6
+    }
+  },
+  "colors": {
+    "background": "#04070c",
+    "wave1": "#22d3ee",
+    "wave2": "#67e8f9",
+    "wave3": "#a78bfa",
+    "star": "#e7edf4",
+    "body": "#1a2230"
+  },
+  "phone": {
+    "position": [
+      -0.6,
+      -0.25,
+      1.3
+    ],
+    "rotation": [
+      -0.15,
+      0.32,
+      0.04
+    ],
+    "size": [
+      0.78,
+      1.64,
+      0.085
+    ],
+    "radius": 0.11,
+    "screenInset": 0.035,
+    "screen": "assets/phone-screen.png"
+  },
+  "laptop": {
+    "position": [
+      0.45,
+      -1.05,
+      -1.9
+    ],
+    "rotation": [
+      0,
+      -0.32,
+      0
+    ],
+    "base": [
+      3.1,
+      0.09,
+      2.05
+    ],
+    "lid": [
+      3.1,
+      2.02,
+      0.06
+    ],
+    "lidOpen": 1.86,
+    "radius": 0.05,
+    "screen": "../../images/readme/desktop-photos.png",
+    "screenBefore": "assets/laptop-before.png",
+    "screenSize": [
+      2.88,
+      1.8
+    ],
+    "tile": {
+      "u": 0.3256,
+      "v": 0.4412,
+      "w": 0.1265,
+      "h": 0.2024
+    }
+  },
+  "photo": {
+    "image": "assets/photo.png",
+    "size": 0.62
+  },
+  "strings": {
+    "count": 34,
+    "xRange": [
+      -8,
+      8
+    ],
+    "zRange": [
+      -10,
+      3.6
+    ],
+    "baseY": -1.45,
+    "swell": 0.6,
+    "segments": 160,
+    "drift": 0.25
+  },
+  "hero": {
+    "pluck": 2.4,
+    "launch": 2.7,
+    "arrive": 5.7,
+    "amplitude": 0.16,
+    "decay": 1.1,
+    "lift": 1.25
+  },
+  "ripple": {
+    "start": 2.4,
+    "speed": 2.6,
+    "width": 0.9,
+    "height": 0.22
+  },
+  "camera": {
+    "hfov": 0.62,
+    "keys": [
+      {
+        "t": 0.0,
+        "pos": [
+          0.2,
+          2.2,
+          9.5
+        ],
+        "look": [
+          0.0,
+          -0.4,
+          -0.4
+        ],
+        "focus": 9.0
+      },
+      {
+        "t": 2.6,
+        "pos": [
+          -0.4,
+          1.0,
+          6.0
+        ],
+        "look": [
+          -0.45,
+          -0.25,
+          0.7
+        ],
+        "focus": 5.0
+      },
+      {
+        "t": 5.6,
+        "pos": [
+          0.5,
+          1.4,
+          6.2
+        ],
+        "look": [
+          0.2,
+          -0.1,
+          -0.8
+        ],
+        "focus": 6.5
+      },
+      {
+        "t": 7.8,
+        "pos": [
+          0.7,
+          0.6,
+          3.6
+        ],
+        "look": [
+          0.55,
+          -0.2,
+          -1.9
+        ],
+        "focus": 5.0
+      },
+      {
+        "t": 10.0,
+        "pos": [
+          0.0,
+          2.4,
+          10.5
+        ],
+        "look": [
+          0.1,
+          -0.5,
+          -0.6
+        ],
+        "focus": 10.0
+      }
+    ],
+    "fstop": 2.2
+  },
+  "backdrop": {
+    "image": "assets/backdrop.png",
+    "position": [
+      0,
+      3,
+      -16
+    ],
+    "size": [
+      48,
+      30
+    ]
+  }
+}

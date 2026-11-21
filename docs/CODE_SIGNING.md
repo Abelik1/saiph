@@ -29,6 +29,10 @@ describe the actual shipping network/privacy behavior and the applicable externa
 services. This document does not claim that all processing stays on the desktop.
 
 SignPath Foundation is the chosen provider, but the project has not been accepted.
+The owner reaffirmed this choice on 25 October 2026 while operating as a sole
+trader. The intended Google Play developer name is Crios; Foundation signing uses
+the Foundation's certificate identity. Account signup, approval and a signed build
+remain pending.
 Its [current terms](https://signpath.org/terms.html) require reviewed project
 eligibility, specific team roles, release approval and policy disclosures. Add its
 required acknowledgement only after acceptance. An application draft, the release
@@ -44,6 +48,12 @@ because eligibility and prices change.
 | [Azure Artifact Signing](https://learn.microsoft.com/en-us/azure/artifact-signing/quickstart) (formerly Trusted Signing) | **No.** Public Trust is available to organizations in the EU, but individual developers must be in the US or Canada | Basic about USD 9.99/month (third-party listings; confirm on Azure pricing) | Validated organization | Best: OIDC from GitHub Actions, no key handling |
 | [SignPath Foundation](https://signpath.org/terms.html) | **Probably, once the public repository and a released build exist.** OSI licence (AGPL qualifies), no proprietary code, automated verifiable builds, MFA, named roles, per-release manual approval, "verifiable reputation" for executables, discretionary acceptance | Free | SignPath Foundation (not Saiph or the maintainer) | Good: official GitHub Action, HSM keys, build-origin checks |
 | [Certum Open Source Code Signing](https://shop.certum.eu/open-source-code-signing-on-simplysign.html) (SimplySign cloud) | **Yes.** Issued to an individual as "Open Source Developer, NAME" | From EUR 49 (cloud; listed out of stock on 2026-10-11) or EUR 69 (card and reader). Validity capped at 459 days from 2026-02-27 | Maintainer's name | Weak: SimplySign needs a phone-generated one-time code, so unattended CI signing means storing a TOTP seed or signing on an attended runner |
+
+Rechecked 2026-10-25: Microsoft's quickstart (updated 2026-10-08) still lists Public
+Trust for organizations in the EU, UK and other listed countries, and for individual
+developers only in the US and Canada. A registered Irish company is therefore the
+route to Artifact Signing; the workflow would then switch from SignPath to Azure's
+signing action with GitHub OIDC.
 
 **Recommendation:** apply to SignPath Foundation as soon as the clean public
 repository and a first unsigned public preview exist. It is free, keeps keys out
@@ -67,15 +77,19 @@ Points to raise with SignPath before applying:
 
 ## Release workflow
 
-[`.github/workflows/release-windows.yml`](../.github/workflows/release-windows.yml)
-runs only when the maintainer starts it on `main`. It stops immediately unless
-every value below is set. In order, it:
+[`.github/workflows/public-release.yml`](../.github/workflows/public-release.yml)
+runs only when the maintainer starts it on `main`, and builds every desktop and Hub
+release file on GitHub-hosted runners from that exact public commit. Until SignPath
+accepts the project it is run with **sign** off: the Windows installer is unsigned
+and its release notes say so. With **sign** on, its Windows job stops immediately
+unless every value below is set. In order, it:
 
 1. builds Link with `scripts/build-native.py`, which already writes `ProductName`
    `Saiph` and the exact `ProductVersion` that SignPath enforces;
-2. uploads `dist/Saiph/` and requests a signature for `Saiph.exe` only
+2. uploads `dist/Saiph/` and requests a signature for `Saiph.exe` and its service
+   `resources/service/SaiphService.exe` only
    ([`docs/signing/signpath-app.xml`](signing/signpath-app.xml));
-3. accepts the returned bundle only if `Saiph.exe` is the single changed file
+3. accepts the returned bundle only if those two are the only changed files
    (`scripts/public-release/check-signed-bundle.py`);
 4. packages that signed bundle into the installer, so `package-manifest.json`
    hashes the signed executable. The packager adds `OrionMini.exe`, a byte copy
@@ -85,8 +99,8 @@ every value below is set. In order, it:
    installer finds its payload just before the Authenticode certificate table,
    and the builder aligns it so signing adds no padding;
 6. verifies both signatures, publisher, certificate fingerprint, timestamp and
-   version with `verify-windows-signatures.py`, then writes checksums and evidence
-   marked `signed-candidate`.
+   version with `verify-windows-signatures.py`, then adds the signed installer and
+   `windows-signatures.json` to the draft release with the other platforms' files.
 
 Each signing request waits up to an hour for a maintainer to approve it in SignPath.
 

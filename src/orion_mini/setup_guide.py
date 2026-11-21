@@ -12,7 +12,8 @@ import sys
 LINKS = {
     "scrcpy": "https://github.com/Genymobile/scrcpy/releases/tag/v3.3.4",
     "deskflow": "https://github.com/deskflow/deskflow/releases/tag/v1.27.0",
-    "android": "https://appdistribution.firebase.google.com/testerapps",
+    "android": "https://usesaiph.com/downloads.html",
+    "downloads": "https://usesaiph.com/downloads.html",
     "adb": "https://developer.android.com/tools/releases/platform-tools",
     # Phone camera: OBS Studio's Virtual Camera on Windows, v4l2loopback on Linux.
     "obs": "https://obsproject.com/download",

@@ -126,7 +126,7 @@ export function PhoneCamera({ camera, config, client, cloudPhone }: {
       <ItemContent>
         <ItemTitle>Phone camera {(live || legacyLive) && <Badge tone="good">Live</Badge>}</ItemTitle>
         <ItemDescription>{legacyLive ? "Your phone camera is running." : live ? camera?.local_preview ? "Camera preview · audio is off." : "Choose Saiph Camera in your meeting app."
-          : "Use your phone as a webcam. Keep both devices on the same Wi-Fi."}</ItemDescription>
+          : "Use your phone as a webcam. Keep both devices on the same Wi-Fi. You can also tap Use as webcam on the phone and accept here."}</ItemDescription>
       </ItemContent>
     </Item>
     {!live && !legacyLive && !code && !waiting && <div className="grid gap-3">
@@ -146,7 +146,7 @@ export function PhoneCamera({ camera, config, client, cloudPhone }: {
         {offer?.sent && <p role="status" className="m-0 text-center text-sm">Sent to {offer.sent}. On your phone, tap <strong>Start camera</strong> in Saiph's notification and confirm with your screen lock.</p>}
         {offer?.error && <p role="alert" className="m-0 text-center text-sm text-muted-foreground">{offer.error}</p>}
         {cloudPhone && offer && <Action variant="ghost" size="sm" run={() => send(code.session, cloudPhone)}>Send to {cloudPhone.name} again</Action>}
-        <QrImage modules={code.modules} label="Camera session QR code" width={offer?.sent ? 160 : 240} />
+        <QrImage modules={code.modules} label="Camera session QR code" width={offer?.sent ? 280 : 360} />
         <p className="m-0 text-center text-sm">{offer?.sent ? "Or scan instead: " : "On your phone: "}Saiph → Use phone as webcam → Scan computer's camera code.</p>
         <small className="text-muted-foreground" role="timer">Works once · expires in {remaining}s. Keep this code private.</small>
       </> : <p role="status">Camera code expired. Close it and start a new session.</p>}

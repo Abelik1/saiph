@@ -14,7 +14,7 @@ export function HostedSignIn({ client, hosted }: { client: Client; hosted: Hoste
   const signingIn = hosted.account?.status === "signing_in";
   return <>
     <p>{signingIn ? "Finish signing in in your browser, then return to Saiph." : "Use the same Saiph account on your phone and computer."}</p>
-    {!signingIn && !hosted.identity && <p className="muted">New to Saiph Cloud? Start your free trial (no card needed) or subscribe on the Saiph website with the account you sign in with here.</p>}
+    {!signingIn && !hosted.identity && <p className="muted">New to Saiph Cloud? Start a 14-day free trial with a card, then €9.99/month unless you cancel. Use the Saiph website with the account you sign in with here.</p>}
     <Action variant="default" disabled={!hosted.configured || signingIn || hosted.self_hosted_paired}
       run={() => signInToSaiph(client, hosted)}>{signingIn ? "Waiting for sign-in…" : "Continue with Google"}</Action>
     {!signingIn && <Disclosure className="mt-3" summary="Other sign-in options">

@@ -23,9 +23,10 @@ export default function Privacy() {
       </section>
       <section className="prose-section">
         <span className="step-number">03</span>
-        <div><h2>Stripe sandbox and billing records</h2>
-      <p>Billing handlers accept test-mode Stripe resources only and are disabled unless configured for owner testing. Enter only Stripe test payment details. Stripe Checkout and its billing portal receive payment/billing details directly; this application does not store full card numbers or security codes.</p>
+        <div><h2>Stripe and billing records</h2>
+      <p>When billing is enabled, Stripe Checkout and its billing portal receive your email, card and billing details directly. Stripe uses your email for transactional billing messages, including trial-ending reminders. This application does not store full card numbers or security codes. In a labelled test environment, use test payment details only.</p>
       <p>The billing database stores the Auth0 subject, Stripe account/customer/subscription/price identifiers, status and billing/cancellation dates, creation/observation times, and minimal event receipts for replay protection. Stripe metadata contains a derived account reference, which remains linked personal data. The billing schema does not store full webhook payloads. Login/payment does not approve devices or grant content keys.</p>
+      <p>Requesting a trial also stores a reservation containing your account identifier, reservation time, random reference and a keyed hash of your verified email address. The hash groups mailbox aliases to prevent repeated trials; the reservation can remain if you leave checkout unfinished. The billing database does not store your email address itself. Earlier no-card trial records keep their original start/end dates and terms.</p>
       </div>
       </section>
       <section className="prose-section">
@@ -38,7 +39,7 @@ export default function Privacy() {
       <section className="prose-section">
         <span className="step-number">05</span>
         <div><h2>Retention and deletion</h2>
-      <p>No self-service account deletion or automatic billing purge is implemented. The current database protects customer mappings against deletion; a reviewed maintenance process is required before public use. Deleting an Auth0 user does not automatically remove local, Stripe, support or backup records.</p>
+      <p>To delete your account, cancel any subscription first, then request deletion on the <a href="/account/delete">account deletion page</a> (or email support@usesaiph.com). We delete your Auth0 login, your Saiph Cloud account with its device records and encrypted content, and billing records except those tax law requires us to keep, within 30 days. The request is recorded and carried out by the operator; there is no automatic billing purge. The current database protects customer mappings against deletion; a reviewed maintenance process is required before public use. Deleting an Auth0 user does not automatically remove local, Stripe, support or backup records.</p>
       <p>Proposed targets, pending approval and tested procedures: account/profile data within 30 days after closure, security logs after 30 days and resolved routine correspondence after 12 months. Required Irish business tax records generally need six years; the precise records and retention trigger require confirmation. Provider backup windows, event-replay retention and any narrowly scoped legal holds remain to be settled. Cancellation, refund and erasure are distinct operations.</p>
       </div>
       </section>

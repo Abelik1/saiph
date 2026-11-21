@@ -77,6 +77,7 @@ class HostedRuntime private constructor(private val context: Context) {
     private val receipts = CommandReceipts(context)
     /** Sealed answers for one device each: file requests, refusals and withdrawals (LanFiles.kt). */
     private val replies = ArrayBlockingQueue<Pair<String, JsonObject>>(32)
+    private val REMOTE_REQUESTS = setOf("computer.ring", "remote.catalog.request", "remote.command", CameraAsk.TYPE)
     /** Files directly over the local network; incoming ones wait in private storage for Save. */
     internal val lan = LanTransfers(File(context.noBackupFilesDir, "lan-files")) { target, payload ->
         if (replies.offer(target to payload)) wake.trySend(Unit)
@@ -86,6 +87,7 @@ class HostedRuntime private constructor(private val context: Context) {
     @Volatile internal var access: HostedTrial.Access? = null
     private var accessAt = 0L
         private set
+    private var trialAttemptAt = 0L
     @Volatile var requestCode = ""
         private set
     @Volatile var fingerprint = ""
@@ -280,7 +282,7 @@ class HostedRuntime private constructor(private val context: Context) {
         statusPublisher.reset(); mediaSent.clear(); pauseAnnounced = false
         replies.clear(); lan.clear()
         offers = emptyList(); status = if (enabled()) "Sign in again" else "Off"
-        access = null; accessAt = 0L
+        access = null; accessAt = 0L; trialAttemptAt = 0L
     }
     /** Refresh the free trial notice; failures keep the last answer (an older service has no /v1/access). */
     private fun refreshAccess(token: String, force: Boolean) {
@@ -288,6 +290,26 @@ class HostedRuntime private constructor(private val context: Context) {
         if (!force && accessAt != 0L && now - accessAt < HostedTrial.REFRESH_MILLIS) return
         val answer = runCatching { transport!!.access(token) }.getOrNull() ?: return
         access = HostedTrial.parse(answer); accessAt = now
+    }
+    /** Runs before pairing too: a first sign-in must not need an already-approved phone. */
+    suspend fun prepareAccount() = mutex.withLock {
+        if (!enabled() || !HostedAccount.get(context).signedIn() || pausedOnMobileData()) return@withLock
+        val epoch = generation
+        val token = HostedAccount.get(context).token()
+        prepareAccess(token, epoch)
+    }
+    private fun prepareAccess(token: String, epoch: Int) {
+        if (!HostedAccountAccess.available(context)) return
+        if (access?.let { it.entitled || it.trialUntil != null } == true) return
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (trialAttemptAt != 0L && now - trialAttemptAt < 60_000) return
+        trialAttemptAt = now
+        val answer = runCatching { HostedAccountAccess.refresh(context, token) {
+            epoch == generation && enabled() && HostedAccount.get(context).signedIn()
+        } }.getOrNull() ?: return
+        if (epoch == generation && enabled() && HostedAccount.get(context).signedIn()) {
+            access = answer; accessAt = now
+        }
     }
     fun configure(origin: String, issuer: String, audience: String, client: String, refresh: Boolean) {
         check(!enabled() && !prefs.contains("device_id")) { "Turn off and retire the existing identity before changing deployment." }
@@ -384,6 +406,19 @@ class HostedRuntime private constructor(private val context: Context) {
         return queued
     }
     /**
+     * Find this computer and Phone remote for one approved computer, the same commands a Hub phone
+     * sends. The computer decides: it rings unless its owner turned that off, and takes remote
+     * controls only from phones on its Phone remote list, answering every request either way.
+     */
+    fun enqueueRemote(target: String, value: JsonObject): Boolean {
+        if (!enabled() || status != "Connected" || !HostedAccount.get(context).signedIn() || target !in members) return false
+        val type = (value["type"] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: return false
+        if (type !in REMOTE_REQUESTS || value.toString().length > 4096) return false
+        return replies.offer(target to value).also { if (it) wake.trySend(Unit) }
+    }
+    /** Approved computers that subscribed recently, by name: the ones online now. */
+    fun computers(): Map<String, String> = subscribers()
+    /**
      * Texts and calls for one subscribed computer; false when off, not permitted,
      * not subscribed or the queue is full. Call state and answers go first.
      */
@@ -398,7 +433,13 @@ class HostedRuntime private constructor(private val context: Context) {
     }
     suspend fun step() = mutex.withLock {
         if (!enabled()) { invalidate(); return@withLock }
-        if (!prefs.contains("device_id")) { status = "Scan or paste the root code"; return@withLock }
+        if (!prefs.contains("device_id")) {
+            if (HostedAccount.get(context).signedIn() && !pausedOnMobileData()) {
+                val epoch = generation
+                runCatching { prepareAccess(HostedAccount.get(context).token(), epoch) }
+            }
+            status = "Scan or paste the root code"; return@withLock
+        }
         val epoch = generation
         fun gate() { check(epoch == generation && enabled() && HostedAccount.get(context).signedIn()) }
         // Sync over mobile data is off and the phone is on a metered network: tell
@@ -416,6 +457,7 @@ class HostedRuntime private constructor(private val context: Context) {
             return@withLock
         }
         // After a refusal, look again each pass so a new subscription clears the notice at once.
+        prepareAccess(token, epoch)
         refreshAccess(token, force = status == HostedTrial.PAUSED)
         try { transport!!.refreshTrust(token) } catch (_: Exception) {
             // A transient submit/offer failure must not strand a signed-in phone.
@@ -447,6 +489,7 @@ class HostedRuntime private constructor(private val context: Context) {
         runCatching { watchMembers(current) }
         members = current.currentMembers().keys - current.deviceId
         subscriptions.keys.retainAll(members) // A revoked computer stops receiving at once.
+        CloudWake.retain(context, members)
         SessionOffers.retain(subscribers().keys)
         lan.clear(keep = members)
         RequestPrompts.sync(context)
@@ -545,6 +588,17 @@ class HostedRuntime private constructor(private val context: Context) {
                     val command = HostedNotificationFrames.command(payload)
                     if (command != null && receipts.claim("hosted:$id")) runCatching { notificationCommand?.invoke(command) }
                 }
+                // How to wake that computer later from this phone (CloudWake.kt).
+                "computer.wake" -> if (source in members) CloudWake.remember(context, source, label(source), payload)
+                // The asked computer has Allow phone camera off: end this phone's wait now.
+                CameraAsk.OFF -> if (source in members) {
+                    val page = CameraAsk.offListener
+                    if (page != null && CameraAsk.answers(source)) android.os.Handler(android.os.Looper.getMainLooper()).post { page() }
+                }
+                // A computer's Phone remote answer: its apps, or what a control did. Display data only.
+                "remote.catalog", "remote.result" -> if (source in members) runCatching {
+                    OrionRemote.receive(buildJsonObject { put("type", type); put("source", source); put("payload", JsonObject(payload - "type")) })
+                }
                 // A computer, root or not, asks for texts and calls under its display name.
                 HostedPhoneFrames.SUBSCRIBE -> HostedPhoneFrames.subscribe(payload)?.let { name ->
                     if (source in members) subscriptions[source] = name to System.currentTimeMillis()
@@ -571,8 +625,12 @@ class HostedRuntime private constructor(private val context: Context) {
                         if (source in members && offer.file.mode == "get" && receipts.claim("offer:${offer.id}")) lan.receive(offer, source, deviceName(source))
                         else if (source in members && offer.file.mode == "put") lan.answered(offer.file.request, source, offer)
                     } else if (source in subscribers()) when (offer.service) {
-                        "camera" -> if (receipts.claim("offer:${offer.id}") && SessionOffers.put(offer, label(source), source))
-                            RequestPrompts.show(context, offer, label(source))
+                        "camera" -> if (receipts.claim("offer:${offer.id}") && SessionOffers.put(offer, label(source), source)) {
+                            // The answer to "use me as your webcam" from the open camera page: no second prompt.
+                            val page = CameraAsk.listener
+                            if (page != null && CameraAsk.answers(source)) android.os.Handler(android.os.Looper.getMainLooper()).post { page(offer.id) }
+                            else RequestPrompts.show(context, offer, label(source))
+                        }
                         "screen" -> if (PhoneScreenActivity.offersAllowed(context) &&
                             receipts.claim("offer:${offer.id}") && SessionOffers.put(offer, label(source), source))
                             RequestPrompts.show(context, offer, label(source))

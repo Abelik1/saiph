@@ -173,6 +173,11 @@ class UpdateActivity : ComponentActivity() {
 
 /** Settings > Version and updates, on both the Saiph account and the Hub settings pages. */
 fun android.app.Activity.updateSettings(): List<View> {
+    if (com.castle.sefirah.BuildConfig.PLAY_STORE) return listOf(compactActions(compactButton("Open in Google Play") {
+        val listing = "details?id=$packageName"
+        runCatching { startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("market://$listing"))) }
+            .onFailure { runCatching { startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://play.google.com/store/apps/$listing"))) } }
+    }))
     val check = compactButton("Check for updates") { startActivity(android.content.Intent(this, UpdateActivity::class.java)) }
     val automatic = settingSwitch("Check automatically", "Get a notification when an update is published. Saiph never installs one without your confirmation.",
         UpdateNotices.automatic(this)) { _, on -> UpdateNotices.setAutomatic(this, on) }

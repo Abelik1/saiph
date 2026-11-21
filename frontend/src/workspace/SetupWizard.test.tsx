@@ -102,7 +102,7 @@ describe("Setup guide", () => {
     const call = vi.fn();
     render(<SetupWizard state={state} client={{ call } as unknown as Client} close={vi.fn()} />);
     expect(screen.getByRole("button", { name: "Continue with Google" })).toBeDisabled();
-    expect(screen.getByRole("status")).toHaveTextContent("Download the current beta");
+    expect(screen.getByRole("status")).toHaveTextContent("Download Saiph from usesaiph.com");
     expect(screen.queryByRole("textbox")).toBeNull();
     expect(call).not.toHaveBeenCalled();
   });
@@ -146,5 +146,23 @@ describe("Setup guide", () => {
     expect(screen.getByRole("dialog", { name: "Saiph setup" })).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Set up later" }));
     await waitFor(() => expect(call).toHaveBeenCalledWith("settings.save", { setup: { completed: true } }));
+  });
+  it.each(["computer", "phone"] as const)("describes an approved %s accurately when finishing without a live phone", async (kind) => {
+    const value = { ...hubState(false), setup: { ...setup, mode: "hosted" }, hosted: {
+      available: true, enabled: true, identity: true, configured: true, status: "active", role: "root",
+      account: { status: "signed_in", error: "", refresh_tokens: false },
+      roster: { expires_at: 1900000000, version: 1, clock_warning: false, members: [
+        { id: "other-device", label: "Other device", root: false, self: false, kind, fingerprint: "SYNTHETIC" },
+      ] },
+    } } as unknown as State;
+    render(<SetupWizard state={value} client={{ call: vi.fn().mockResolvedValue({}) } as unknown as Client} close={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await screen.findByRole("heading", { name: "Optional tools", level: 1 });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    expect(screen.getByRole("heading", { name: "Setup saved" })).toHaveFocus();
+    expect(screen.queryByText("Your devices now work together.")).toBeNull();
+    expect(screen.queryByText("Your phone is connected.")).toBeNull();
+    expect(screen.getByText(kind === "phone" ? "Your phone is approved. Keep Saiph open on both devices to connect."
+      : "No phone has been added yet. Add one any time from the Phone page.")).toBeVisible();
   });
 });

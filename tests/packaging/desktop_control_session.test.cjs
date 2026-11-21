@@ -25,3 +25,20 @@ test("only ready loopback sessions can be controlled", () => {
     fs.rmdirSync(directory);
   }
 });
+
+test("Electron custom-origin control stays restricted to isolated sessions", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "saiph-electron-session-"));
+  const file = path.join(directory, "session.json");
+  const valid = { schema: 1, status: "ready", pid: 1234, nonce: "a".repeat(48), shell: "electron",
+    endpoint: "http://127.0.0.1:9467", dashboard: "saiph-app://desktop/index.html", mode: "isolated",
+    source_dashboard: "file:///synthetic/index.html", profile: path.join(directory, "profile"), existing_profile: false };
+  try {
+    fs.writeFileSync(file, JSON.stringify(valid));
+    assert.equal(readSession(file).shell, "electron");
+    for (const change of [{ mode: "unapproved" }, { installed: true }, { existing_profile: true },
+      { profile: directory }, { dashboard: "saiph-app://other/index.html" }, { shell: "other" }]) {
+      fs.writeFileSync(file, JSON.stringify({ ...valid, ...change }));
+      assert.throws(() => readSession(file));
+    }
+  } finally { fs.unlinkSync(file); fs.rmdirSync(directory); }
+});

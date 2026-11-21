@@ -56,7 +56,7 @@ describe("isolated PostgreSQL billing transactions", { skip: !databaseUrl ? "Run
     await runMigrations(pool, migrations);
   });
   beforeEach(async () => {
-    await pool.query("TRUNCATE saiph_billing.trials, saiph_billing.grant_state, saiph_billing.disputes, saiph_billing.customer_creation_intents, saiph_billing.processed_events, saiph_billing.subscriptions, saiph_billing.customers");
+    await pool.query("TRUNCATE saiph_billing.deletion_requests, saiph_billing.card_trial_claims, saiph_billing.trials, saiph_billing.grant_state, saiph_billing.disputes, saiph_billing.customer_creation_intents, saiph_billing.processed_events, saiph_billing.subscriptions, saiph_billing.customers");
   });
   after(async () => { await pool?.end(); });
 
@@ -389,7 +389,7 @@ describe("isolated PostgreSQL billing transactions", { skip: !databaseUrl ? "Run
       VALUES ($1,'sub_synthetic',$2,'price_synthetic','active',1000,false,null,null,100,'evt_first')`, [accountId, customerId]);
     await pool.query(`INSERT INTO saiph_billing.processed_events (stripe_account_id,stripe_event_id,stripe_customer_id,stripe_subscription_id,event_type,event_created,outcome)
       VALUES ($1,'evt_first',$2,'sub_synthetic','customer.subscription.created',100,'applied')`, [accountId, customerId]);
-    assert.deepEqual(await runMigrations(pool, migrations), [3, 4, 5, 6]);
+    assert.deepEqual(await runMigrations(pool, migrations), [3, 4, 5, 6, 7, 8]);
     assert.deepEqual(await runMigrations(pool, migrations), []);
     const [candidate] = await store().grantCandidates();
     assert.equal(candidate.subscriptionId, "sub_synthetic");
@@ -437,6 +437,35 @@ describe("isolated PostgreSQL billing transactions", { skip: !databaseUrl ? "Run
   });
 
   const keyA = "a".repeat(64), keyB = "b".repeat(64);
+  const reserve = (subject,emailKey,extra={}) => store().reserveCardTrial({subject,emailKey,now:1000,cap:null,
+    ref:(subject===owner?"a":"b").repeat(32),...extra});
+
+  test("card reservations survive retries, block aliases, and never create a legacy access grant",async()=>{
+    const first=await reserve(owner,keyA,{cap:1});
+    assert.equal(first.outcome,"reserved");
+    assert.deepEqual(await reserve(owner,keyA,{cap:1,ref:"c".repeat(32)}),first,"retry keeps its place even at the cap");
+    assert.equal((await reserve(owner,keyB)).outcome,"used","changing email cannot replace an account's claim");
+    assert.equal((await reserve("auth0|alias",keyA)).outcome,"used");
+    assert.equal((await reserve("auth0|late",keyB,{cap:1})).outcome,"full");
+    assert.equal((await store().trialFacts("auth0|alias",keyA)).emailUsed,true);
+    assert.equal((await store().trialFacts(owner,keyA)).started,0,"own reservation does not block resuming at the cap");
+    assert.equal((await pool.query("SELECT count(*) FROM saiph_billing.trials")).rows[0].count,"0");
+    assert.deepEqual(await store().trialGrantCandidates(),[]);
+    await assert.rejects(pool.query("DELETE FROM saiph_billing.card_trial_claims"),{code:"23514"});
+  });
+
+  test("card reservations serialize concurrent aliases/cap and honor earlier no-card trials",async()=>{
+    await trial(owner,keyA);
+    assert.equal((await reserve(owner,keyA)).outcome,"used");
+    assert.equal((await reserve("auth0|alias",keyA)).outcome,"used");
+    const results=await Promise.all(Array.from({length:6},(_,i)=>reserve("auth0|card-racer-"+i,
+      (i+2).toString(16).repeat(64),{cap:3,ref:(i+2).toString(16).repeat(32)})));
+    assert.equal(results.filter(r=>r.outcome==="reserved").length,2,"legacy trial consumes one of three places");
+    assert.equal(results.filter(r=>r.outcome==="full").length,4);
+    const same=await Promise.all([reserve("auth0|same-a","f".repeat(64),{ref:"e".repeat(32)}),
+      reserve("auth0|same-b","f".repeat(64),{ref:"f".repeat(32)})]);
+    assert.deepEqual(same.map(r=>r.outcome).sort(),["reserved","used"]);
+  });
   const trial = (subject, emailKey, extra = {}) => store().startTrial({ subject, emailKey, now: 1000, days: 14, cap: null,
     ref: (subject === owner ? "1" : subject.length.toString(16)).padStart(32, "0"), ...extra });
 
@@ -552,5 +581,50 @@ describe("isolated PostgreSQL billing transactions", { skip: !databaseUrl ? "Run
     const report = await billingReport(pool, { stripeAccountId: accountId, plans: { monthly: "price_synthetic", yearly: "price_yearly" }, minCell: 1 });
     assert.deepEqual(report.funnel.total.steps, { signin_view: 3, signin_done: 1, checkout_started: 0, purchase: 1 });
     assert.deepEqual(report.funnel.trial.steps, { signin_view: 0, signin_done: 0, trial_started: 1 });
+  });
+  const issuer = "https://synthetic.eu.auth0.com/";
+  test("a deletion request is stored once per account, keeps its first time, and reopens after completion", async () => {
+    const first = await store().requestDeletion({ subject: owner, issuer, now: 1000 });
+    assert.deepEqual(first, { outcome: "recorded", requestedAt: 1000, subscriptionRenews: false });
+    const repeats = await Promise.all([1, 2, 3].map((i) => store().requestDeletion({ subject: owner, issuer, now: 1000 + i })));
+    assert.deepEqual(repeats.map((r) => [r.outcome, r.requestedAt]), [["pending", 1000], ["pending", 1000], ["pending", 1000]]);
+    assert.equal((await pool.query("SELECT count(*) FROM saiph_billing.deletion_requests")).rows[0].count, "1");
+    assert.deepEqual(await store().deletionStatus(owner), { request: { state: "pending", requestedAt: 1000, completedAt: null }, subscriptionRenews: false });
+    assert.deepEqual(await store().deletionStatus("auth0|nobody"), { request: null, subscriptionRenews: false });
+    assert.deepEqual(await store().pendingDeletions(), [{ subject: owner, issuer, requestedAt: 1000, subscriptionRenews: false }]);
+    assert.deepEqual(await store().completeDeletion({ subject: owner, now: 5000 }), { outcome: "done" });
+    assert.deepEqual(await store().completeDeletion({ subject: owner, now: 6000 }), { outcome: "not_found" }, "already done");
+    assert.deepEqual(await store().completeDeletion({ subject: "auth0|nobody", now: 6000 }), { outcome: "not_found" });
+    assert.deepEqual((await store().deletionStatus(owner)).request, { state: "done", requestedAt: 1000, completedAt: 5000 });
+    assert.deepEqual(await store().pendingDeletions(), []);
+    // Someone signing up again with the same Google account can ask again.
+    assert.equal((await store().requestDeletion({ subject: owner, issuer, now: 9000 })).outcome, "recorded");
+    assert.deepEqual((await store().deletionStatus(owner)).request, { state: "pending", requestedAt: 9000, completedAt: null });
+    // Another Stripe account's scope sees nothing.
+    assert.deepEqual(await createBillingStore(pool, { stripeAccountId: "acct_other" }).pendingDeletions(), []);
+    await assert.rejects(store().requestDeletion({ subject: owner, issuer: "http://evil.test/", now: 1 }), { code: "INVALID_ISSUER" });
+    await assert.rejects(store().requestDeletion({ subject: "", issuer, now: 1 }), { code: "INVALID_SUBJECT" });
+    await assert.rejects(pool.query("UPDATE saiph_billing.deletion_requests SET state='done'"), { code: "23514" }, "done needs a completion time");
+    await assert.rejects(pool.query("UPDATE saiph_billing.deletion_requests SET state='gone', completed_at=9001"), { code: "23514" });
+  });
+  test("a deletion request notes a renewing subscription but is still recorded; a scheduled cancellation does not count", async () => {
+    await bind();
+    await store().applyEvent(event("evt_renewing", 200, { type: "customer.subscription.created" }), async () => snapshot("active"));
+    const recorded = await store().requestDeletion({ subject: owner, issuer, now: 1000 });
+    assert.deepEqual(recorded, { outcome: "recorded", requestedAt: 1000, subscriptionRenews: true });
+    assert.equal((await store().pendingDeletions())[0].subscriptionRenews, true);
+    await store().applyEvent(event("evt_cancelling", 300), async () => snapshot("active", { cancelAtPeriodEnd: true }));
+    assert.equal((await store().deletionStatus(owner)).subscriptionRenews, false);
+    assert.equal((await store().pendingDeletions())[0].subscriptionRenews, false);
+  });
+  test("without migration 0008 deletion calls say the migration is pending", async () => {
+    await pool.query("DROP TABLE saiph_billing.deletion_requests");
+    try {
+      await assert.rejects(store().deletionStatus(owner), { code: "MIGRATION_PENDING" });
+      await assert.rejects(store().requestDeletion({ subject: owner, issuer, now: 1000 }), { code: "MIGRATION_PENDING" });
+      await assert.rejects(store().pendingDeletions(), { code: "MIGRATION_PENDING" });
+    } finally {
+      await pool.query(migrations.find((migration) => migration.version === 8).sql);
+    }
   });
 });

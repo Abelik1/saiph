@@ -42,6 +42,7 @@ import androidx.core.app.ActivityCompat.shouldShowRequestPermissionRationale
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
+import com.castle.sefirah.BuildConfig
 import com.castle.sefirah.navigation.Graph
 import com.castle.sefirah.presentation.common.components.LocationPermissionRationaleDialog
 import com.castle.sefirah.presentation.settings.SettingsViewModel
@@ -85,11 +86,12 @@ fun TrustedNetworkScreen(rootNavController: NavHostController) {
             val isForegroundGranted = permissions.entries.all { it.value }
             viewModel.updatePermissionStates()
             if (isForegroundGranted) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && !BuildConfig.PLAY_STORE) {
                     // Request background location if foreground is granted
                     backgroundLocationRequester.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
                 } else {
-                    // For Android 9 and below, no background permission needed
+                    // Android 9 and below need no background permission, and the Google Play
+                    // build reads Wi-Fi names with foreground location only, while Saiph is open.
                     viewModel.saveTrustAllNetworks(false)
                 }
             }

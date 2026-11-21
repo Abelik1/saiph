@@ -72,7 +72,7 @@ gradle.projectsEvaluated {
                             def id = component.id
                             if (id instanceof ModuleComponentIdentifier) {
                                 def module = "${id.group}:${id.module}".toString()
-                                if (floors.containsKey(module) || module == 'org.jetbrains.kotlin:kotlin-gradle-plugin') {
+                                if (floors.containsKey(module)) {
                                     rows.add("${project.path}|${pair[1]}${configuration.name}|$module|${id.version}".toString())
                                     if (floors.containsKey(module) && compareVersion(id.version, floors[module]) < 0) {
                                         failures.add("$module:${id.version} is below ${floors[module]}".toString())
@@ -105,7 +105,6 @@ gradle.projectsEvaluated {
             report.parentFile.mkdirs()
             report.text = JsonOutput.prettyPrint(JsonOutput.toJson([schema: 1, dependencies: rows, failures: failures])) + '\n'
             println("Dependency security: ${rows.size()} resolved module/configuration entries; ${failures.size()} failures.")
-            println('Kotlin KAPT advisory remains documented; its version is reported but not waived as patched.')
             if (!failures.empty) throw new GradleException(failures.join('\n'))
         }
     }

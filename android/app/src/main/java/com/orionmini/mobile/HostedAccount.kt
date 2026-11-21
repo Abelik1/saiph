@@ -23,8 +23,9 @@ class HostedAccount private constructor(private val context: Context) {
         fun get(context: Context): HostedAccount = instance ?: synchronized(this) {
             instance ?: HostedAccount(context.applicationContext).also { instance = it }
         }
-        const val REDIRECT = "https://usesaiph.com/android/oauth2redirect"
-        private const val LEGACY_REDIRECT = "com.orionmini.mobile.hosted:/oauth2redirect"
+        // Each app has its own verified callback, so Saiph and Saiph Unlocked never answer for each other.
+        val REDIRECT: String = com.castle.sefirah.BuildConfig.AUTH_REDIRECT
+        private val LEGACY_REDIRECT = com.castle.sefirah.BuildConfig.APPLICATION_ID + ".hosted:/oauth2redirect"
     }
     private val prefs get() = context.getSharedPreferences("orion_hosted", 0)
     private val tokenLock = Mutex()
@@ -48,7 +49,7 @@ class HostedAccount private constructor(private val context: Context) {
         val parameters = HostedSignIn.parameters(prefs.getString("issuer", "")!!, prefs.getString("audience", "")!!, google)
         val builder = AuthorizationRequest.Builder(configuration(), prefs.getString("client_id", "")!!, ResponseTypeValues.CODE, Uri.parse(REDIRECT))
             .setAdditionalParameters(parameters)
-        if (prefs.getBoolean("refresh_tokens", false)) builder.setScope("offline_access")
+        builder.setScope(HostedSignIn.scope(prefs.getBoolean("refresh_tokens", false)))
         val request = builder.build()
         check(request.codeVerifier != null && request.codeVerifierChallengeMethod == "S256")
         generation++ // A newer browser attempt supersedes any in-flight token exchange.

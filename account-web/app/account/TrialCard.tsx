@@ -38,14 +38,11 @@ export default function TrialCard({trial, now = Math.floor(Date.now() / 1000)}: 
   if (trial.state === "available") return <section className="card featured string-edge" aria-labelledby="trial-title">
     <div className="card-head">
       <div><p className="eyebrow">Free trial</p><h2 id="trial-title">Try Saiph Cloud free for {plural(trial.days, "day")}</h2></div>
-      <span className="pill info plain">No card needed</span>
+      <span className="pill info plain">Card required</span>
     </div>
-    <p>Connect your computer and phone through Saiph Cloud straight away. When the trial ends, Cloud pauses until you subscribe; nothing is deleted and nothing is charged automatically.</p>
-    <form method="post" action="/api/billing/trial">
-      <input type="hidden" name="trial" value="start" />
-      <button className="block" type="submit">Start free trial</button>
-    </form>
-    <p className="fine after">One free trial per person. By starting it you agree to the <a href="https://usesaiph.com/terms.html">Cloud terms</a>.</p>
+    <p>Then €9.99/month, billed automatically unless you cancel before the trial ends. Add your card in Stripe Checkout to start. No VAT is added.</p>
+    <a className="button block" href="/trial">Start your free trial</a>
+    <p className="fine after">One free trial per person. We will email a reminder before billing begins. Cancel in Manage billing on your account page. <a href="https://usesaiph.com/terms.html#trial">Cloud terms</a>.</p>
   </section>;
   if (trial.state !== "used" && trial.state !== "full" && trial.state !== "sign_in_again") return null;
   const [title, body] = refusals[trial.state];

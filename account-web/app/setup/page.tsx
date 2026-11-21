@@ -6,41 +6,72 @@ export const metadata: Metadata = { title: "Setup guide" };
 
 export default function Setup() {
   return <>
-    <div className="page-head">
-      <div>
-        <p className="eyebrow">Beta setup guide</p>
-        <h1>Connect your computer <span className="gradient-text">and phone.</span></h1>
-        <p className="lede">You need an Android phone and a Windows or Linux computer. Saiph hosts the connection for you. You do not need a server or Tailscale.</p>
-      </div>
-    </div>
+    <div className="page-head"><div>
+      <h1>Connect your computer and phone.</h1>
+      <p className="lede">You need an Android phone and a Windows or Linux computer. Use the same account on the website and both apps. You do not need a server or Tailscale.</p>
+    </div></div>
     <div className="guide">
-    <nav className="guide-nav" aria-label="On this page">
-      <p>On this page</p>
-      <a href="#activate">Activate</a><a href="#install">Install</a><a href="#computer">Your computer</a>
-      <a href="#phone">Your phone</a><a href="#share">What to share</a><a href="#webcam">Phone as webcam</a><a href="#help">If setup stops</a>
-    </nav>
-    <div>
-    <ol className="timeline">
-      <li id="activate"><h2>Activate your invitation</h2><p><Link href="/account">Sign in to your account</Link> and enter your invitation code. Use the same sign-in account on both devices. Your code provides temporary access without payment.</p></li>
-      <li id="install"><h2>Install the beta apps</h2><p>Download the desktop installer and Android APK from your account. Use those builds: they include the connection settings. Keep existing Saiph installations until you have checked how to preserve their pairing and keys.</p><p>Windows beta installers do not yet have a trusted publisher signature. Check the supplied checksum before installing.</p></li>
-      <li id="computer"><h2>Set up your computer</h2><p>Open Saiph. Its setup guide starts the first time: choose <b>Saiph account</b>, sign in with your browser, then choose <b>Set up this computer</b> so it becomes the device that approves your others. If Saiph was already set up, run the guide again from Settings → General → Setup guide, or use Settings → Connections → Saiph Cloud preview. Then show the computer’s root approval code.</p><p>Your computer approves devices and renews their access. Keep it online regularly; syncing stops after 12 hours without renewal.</p><p>Using Saiph on more than one computer? Set up one of them first as described here. On each other computer, sign in with the same account in Settings → Saiph Cloud, choose <b>Join as another computer</b>, paste the first computer’s root code, compare the fingerprint and approve the new computer on the first one.</p></li>
-      <li id="phone"><h2>Connect your phone</h2><p>Open Saiph Cloud preview on your phone, turn it on and sign in with the same account. Paste the computer’s root code. Compare every group of the full fingerprint on the phone with the computer before confirming.</p><p>Show the phone’s device request and enter it in the computer’s “Device request code” field. Compare the phone fingerprint, give it a name and approve it. Account sign-in alone never approves a device.</p></li>
-      <li id="share"><h2>Choose what to share</h2><p>For the photo gallery, open <b>Files and photos → Allow photos</b> on your phone and grant Android access. Up to 100 recent accessible photos appear in <b>Phone → Photos</b> on the desktop; originals download when you open or save them.</p><p>Enable phone notification access if you want notifications on your computer. Allow Saiph’s own notifications to see its connection status. Android can restrict background clipboard access and battery use; follow the phone’s permission guidance.</p><p>Start with harmless clipboard text in both directions, then a test notification and a small file. Files and photos are shared by explicitly choosing them.</p><p>For texts and calls on your computer, turn on <b>Texts and calls</b> in Saiph Cloud preview on your phone and allow the messages, phone and contacts access it asks for. Your computer’s Phone page then shows your conversations and calls: reply to one person, start a new text, answer or decline a ringing call, or dial a number on your phone. They stay end-to-end encrypted. This part of the beta is new: try it with a friend’s number before relying on it. Picture messages, group replies, hearing calls through the computer, image clipboard is outside this beta.</p></li>
-    </ol>
-    <section className="card" id="webcam" aria-labelledby="webcam-title"><h2 id="webcam-title">Optional: use your phone as a webcam</h2>
-      <p>Saiph can show your phone’s camera as a webcam in video calls. The video goes straight from the phone to your computer over a USB cable or your Wi‑Fi; it does not pass through Saiph Cloud and needs no server or Tailscale. The phone needs Android 12 or later. The installers do not include the tools it uses, so it needs a one-time setup. If the Phone page on your computer has no <b>Find my phone</b> button, your desktop app is too old for this; wait for the next beta update.</p>
-      <ol>
-        <li><b>On the phone:</b> open Settings → About phone and tap <b>Build number</b> seven times to turn on Developer options. In Developer options turn on <b>USB debugging</b>, or <b>Wireless debugging</b> to use Wi‑Fi instead of a cable.</li>
-        <li><b>On the computer:</b> install <a href="https://github.com/Genymobile/scrcpy/releases/tag/v3.3.4">scrcpy</a> 2.2 or later; it includes adb. On Windows also install <a href="https://obsproject.com/download">OBS Studio</a>. On Linux install v4l2loopback (on Debian or Ubuntu: <code>sudo apt install v4l2loopback-dkms</code>); older distribution scrcpy packages cannot use the phone camera.</li>
-        <li><b>In Saiph:</b> open Settings → Devices → Phone camera, tick <b>Use my phone as a webcam</b> and follow <b>One-time camera setup</b>. It shows the OBS scene to create on Windows or the virtual webcam command for Linux, and where to enter the scrcpy path.</li>
-        <li><b>Allow your computer:</b> connect the cable, unlock the phone and tap <b>Allow</b>. For Wi‑Fi, tap <b>Pair device with pairing code</b> on the phone and enter the address and code under <b>Connect over Wi‑Fi</b> in Saiph, then connect with the address at the top of the Wireless debugging screen.</li>
-        <li><b>Start it:</b> on the Phone page choose <b>Find my phone</b>, then <b>Use phone as webcam</b>. In your meeting app pick <b>OBS Virtual Camera</b> (Windows) or <b>Saiph Phone</b> (Linux). Stop it from the Phone page when you are done. Microphone audio is not sent.</li>
-      </ol>
-      <p>Wireless debugging turns off when the phone changes Wi‑Fi or restarts; turn it on again and reconnect with the new address. This feature has not yet been tested on physical devices in the beta, so please tell us what happens.</p>
-    </section>
-    <section className="card" id="help"><h2>If setup stops</h2><p>Check that all three sign-ins use the same account, your invitation is still active and both devices have internet access. Expired approval codes can be regenerated on the computer. If Android asks for deployment identifiers, use the Cloud beta build from your account.</p><p>For a bug report, note your device, app version, the step and the error text. Keep invitation codes, approval codes, fingerprints, tokens and personal content out of public reports. Contact the person who invited you.</p><p>Keep your computer’s keys: lost root-key recovery and transferring the root to another computer are not available yet. Uninstalling or deleting app data can remove device keys.</p></section>
-    <div className="actions"><Link className="button" href="/account">Back to your account</Link></div>
-    </div>
+      <nav className="guide-nav" aria-label="On this page">
+        <p>On this page</p>
+        <a href="#activate">Get Cloud access</a><a href="#install">Install both apps</a><a href="#computer">Your computer</a>
+        <a href="#phone">Connect your phone</a><a href="#share">First share</a><a href="#webcam">Phone as webcam</a><a href="#help">If setup stops</a>
+      </nav>
+      <div>
+        <ol className="timeline">
+          <li id="activate"><h2>Get Cloud access</h2>
+            <p><Link href="/account">Open your account</Link> to start an available free trial, subscribe, or activate an invitation code. If your access is already active, go straight to downloads.</p>
+            <p>Signing in gives you an account. You still approve each device on your computer before it can share content.</p>
+          </li>
+          <li id="install"><h2>Install on your computer and phone</h2>
+            <p>Download the Windows or Linux app and Android APK from your account. Install both: these builds include the connection settings. Keep this guide open while you switch to the apps.</p>
+            <p>Windows beta installers do not yet have a trusted publisher signature. Check the supplied checksum before installing. If you already use Saiph, read the upgrade instructions first: uninstalling or clearing app data can remove your keys and pairing.</p>
+          </li>
+          <li id="computer"><h2>Start on your computer</h2>
+            <p>Open Saiph → <b>Phone</b>. Choose <b>Continue with Google</b> and use the account with Cloud access, then return to Saiph. Choose <b>Set up this computer</b> to make it your main computer.</p>
+            <p>Your main computer approves your other devices and renews their access. Keep it online regularly; syncing stops after 12 hours without renewal.</p>
+            <details className="more"><summary>Already have a main computer?</summary>
+              <p>Choose <b>Join as another computer</b> instead. Follow the in-app instructions and approve the new computer on your main one. Add phones from your main computer’s Phone tab.</p>
+            </details>
+          </li>
+          <li id="phone"><h2>Find, compare and approve</h2>
+            <p><b>On your computer:</b> keep Phone open. If you already have a phone connected, choose <b>Add a device</b>.</p>
+            <p><b>On your phone:</b> open Saiph, review the privacy and terms, and choose <b>Continue with Google</b> using the same account. On the same Wi-Fi, tap <b>Find my computer</b>. Compare the six-digit code on both screens, then confirm on the phone and choose <b>Codes match, approve</b> on the computer.</p>
+            <p><b>Using the QR code instead?</b> Tap <b>Scan QR code</b> on your phone and scan the computer’s QR. Compare every group of the computer’s security code before trusting it. The phone’s request then appears on the computer: choose <b>Review and approve</b>, compare the phone’s full security code, give it a name and approve it.</p>
+            <p>If any code differs, cancel. Keep both apps open until the computer says <b>Phone connected</b>. Signing in alone never approves a device.</p>
+            <details className="more"><summary>Cannot scan, or the phone does not appear?</summary>
+              <p>On the computer, open <b>Can’t scan? Copy a code instead</b>. On the phone, open <b>Paste a code instead</b>. For a missing request, use <b>Phone not appearing?</b> on the phone and <b>My device hasn’t appeared</b> on the computer. Compare the full security codes before approval.</p>
+            </details>
+          </li>
+          <li id="share"><h2>Try your first share</h2>
+            <p>In Saiph on your phone, choose <b>Send a file</b> and select a small, harmless file. On the computer, open <b>Phone → Files</b> and check that it arrives.</p>
+            <p>Choose photos, notifications, texts and calls during the phone’s sharing setup. Each is optional: choose <b>Not now</b> to skip it and change it later in Settings. Android permissions and Saiph’s sharing switches both need to allow a feature.</p>
+            <p>For photos, turn on photo sharing and choose the photos Android allows Saiph to read. For notifications, allow notification access in Android Settings. Texts and calls need their own phone permissions; call audio stays on your phone.</p>
+            <p>Android can restrict background clipboard access and battery use. Follow the phone’s permission guidance, then test harmless clipboard text in both directions before relying on it.</p>
+          </li>
+        </ol>
+        <section className="card" id="webcam" aria-labelledby="webcam-title">
+          <h2 id="webcam-title">Optional: use your phone as a webcam</h2>
+          <p>This is separate from connecting your account. Keep the phone and computer on the same Wi-Fi; camera video stays on your local network.</p>
+          <ol>
+            <li>On your computer, open <b>Phone → Webcam</b> and choose <b>Use phone as webcam</b>, or <b>Preview camera</b> to try it.</li>
+            <li>On your phone, accept Saiph’s camera request and confirm with your screen lock. Or open <b>Use as webcam</b> on your phone, then accept on your computer or scan its camera code. Allow Android camera access when asked.</li>
+            <li>When the preview appears, choose <b>Saiph Camera</b> in your meeting app. Stop the camera in Saiph when you finish.</li>
+          </ol>
+          <p>The integrated meeting-app webcam needs the Windows Saiph build. Camera preview works without that integration. If it is unavailable, follow the explanation in the app; installing debugging tools is not part of account setup.</p>
+        </section>
+        <section className="card" id="help"><h2>If setup stops</h2>
+          <dl>
+            <dt><b>Signed in, but no Cloud access?</b></dt><dd>Check <Link href="/account">your account</Link> for an active trial, subscription or invitation. Check that all three sign-ins use the same account.</dd>
+            <dt><b>Computer not found on Wi-Fi?</b></dt><dd>Keep its Phone connection screen open. Try Scan QR code instead; both devices still need internet access.</dd>
+            <dt><b>QR code expired?</b></dt><dd>Choose Refresh QR code on the computer and scan the new one.</dd>
+            <dt><b>Approved, but not connected?</b></dt><dd>Keep Saiph open on the phone, turn on syncing and check internet access on both devices. Approval is saved; leaving the setup screen does not remove it.</dd>
+            <dt><b>Permission denied?</b></dt><dd>Open Android Settings → Apps → Saiph → Permissions, then return to Saiph. Notification access has its own Android settings page. You can keep using features you have allowed.</dd>
+          </dl>
+          <p>For help, note the device, app version, step and error text. Keep invitation codes, approval codes, tokens and personal content out of public reports. <a href="https://usesaiph.com/contact.html">Contact support</a>.</p>
+          <p>Keep your main computer’s keys: lost root-key recovery and transferring the root to another computer are not available yet.</p>
+        </section>
+        <div className="actions"><Link className="button" href="/account">Open your account and downloads</Link></div>
+      </div>
     </div>
   </>;
 }

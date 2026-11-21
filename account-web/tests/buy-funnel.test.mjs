@@ -144,7 +144,7 @@ test("Checkout charges the variant shown, counts the start and reports it only w
   assert.deepEqual(params.metadata, {saiph_billing: "owner-sandbox-v1", saiph_subject_ref: subjectReference(config.ownerSubject),
     saiph_account: config.accountId, saiph_plan: "yearly", saiph_price_test: "2026-11-price", saiph_variant: "b", saiph_ga: "123456789.1790000000"});
   assert.equal(params.subscription_data.metadata.saiph_ga, undefined, "the subscription never gets analytics IDs");
-  assert.match(options.idempotencyKey, /^saiph-checkout-v4-/);
+  assert.match(options.idempotencyKey, /^saiph-checkout-v5-/);
   assert.deepEqual(f.calls.counts, [{step: "checkout_started", plan: "yearly", test: "2026-11-price", variant: "b"}]);
   assert.equal(f.calls.analytics.length, 1);
   assert.equal(f.calls.analytics[0].client_id, "123456789.1790000000");
@@ -222,38 +222,9 @@ test("a purchase is counted once, from the verified webhook, and reported only w
   assert.equal(g.calls.analytics.length, 0);
 });
 
-test("Start your free trial returns to /trial only, and a real start is counted once", async () => {
-  assert.deepEqual(parseBuyTarget("/trial", origin), {plan: "trial", offer: null});
-  assert.equal(parseBuyTarget("/trial?days=365", origin), null);
-  assert.equal(parseBuyTarget("/trial/start", origin), null);
-  assert.equal(afterSignIn("/trial", origin).href, origin + "/trial?signed_in=1");
-  const {trialAction} = await import("../lib/billing/http.ts");
-  const trialEnv = {...env, SAIPH_TRIAL_SECRET: "t".repeat(40), SAIPH_TRIAL_DAYS: "30"};
-  const make = (existing) => {
-    const counts = [], analytics = [];
-    const store = {countFunnel: async (c) => { counts.push(c); }, grantCandidates: async () => [],
-      trialGrantCandidates: async () => [], withTrialGrant: async (_s, push) => ({until: await push({}, 1)}),
-      startTrial: async ({subject, now, days}) => ({outcome: existing ? "exists" : "started",
-        trial: {subject, ref: "a".repeat(32), startedAt: existing ? now - 86400 : now, endsAt: now + days * 86400, dirty: false, pushedUntil: null}})};
-    const deps = {env: trialEnv, createStripe: () => ({}), pushGrant: async () => true, withStore: async (_c, callback) => callback(store),
-      getSession: async () => ({user: {sub: config.ownerSubject, trialKey: "e".repeat(64)}}),
-      analyticsFetch: async (_url, init) => { analytics.push(JSON.parse(init.body)); return new Response(null, {status: 204}); }};
-    return {counts, analytics, deps};
-  };
-  const start = (cookie) => new Request(origin + "/api/billing/trial", {method: "POST", body: "trial=start",
-    headers: {origin, "sec-fetch-site": "same-origin", "content-type": "application/x-www-form-urlencoded", ...(cookie ? {cookie} : {})}});
-  const fresh = make(false);
-  assert.equal((await trialAction(start(consentCookie), fresh.deps)).status, 303);
-  assert.deepEqual(fresh.counts, [{step: "trial_started", plan: "trial", test: null, variant: "a"}]);
-  assert.equal(fresh.analytics.length, 1);
-  assert.equal(fresh.analytics[0].events[0].name, "trial_start");
-  assert.deepEqual(fresh.analytics[0].events[0].params, {engagement_time_msec: 1, plan: "trial"});
-  const again = make(true);
-  assert.equal((await trialAction(start(consentCookie), again.deps)).status, 303);
-  assert.deepEqual(again.counts, [], "pressing again is not a second trial");
-  assert.equal(again.analytics.length, 0);
-  const declined = make(false);
-  await trialAction(start(`saiph_consent=v1.denied.${NOW}; _ga=GA1.1.123456789.1790000000`), declined.deps);
-  assert.equal(declined.counts.length, 1);
-  assert.equal(declined.analytics.length, 0, "nothing to Google without Accept");
+test("trial sign-in retains the fixed /trial return path",()=>{
+  assert.deepEqual(parseBuyTarget("/trial",origin),{plan:"trial",offer:null});
+  assert.equal(parseBuyTarget("/trial?days=365",origin),null);
+  assert.equal(parseBuyTarget("/trial/start",origin),null);
+  assert.equal(afterSignIn("/trial",origin).href,origin+"/trial?signed_in=1");
 });

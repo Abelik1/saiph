@@ -6,7 +6,7 @@
   const settings = cfg.analytics || {};
   const privacy = cfg.privacy || {};
   const origins = new Set(["https://usesaiph.com", "https://www.usesaiph.com"]);
-  const pages = new Set(["/", "/index.html", "/self-host.html", "/hosted.html", "/downloads.html",
+  const pages = new Set(["/", "/index.html", "/self-host.html", "/hosted.html", "/downloads.html", "/install-android.html",
     "/waitlist.html", "/privacy.html", "/account-privacy.html", "/terms.html", "/refunds.html", "/contact.html"]);
   const privacyFields = ["controllerName", "controllerCountry", "contactEmail", "updatedAt",
     "hostingRetention", "hostingTransfers", "contactProcessing"];

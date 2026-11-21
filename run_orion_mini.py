@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 if __name__ == "__main__":
     try:
-        from orion_mini.app import main
+        from orion_mini.electron_launcher import main
         raise SystemExit(main())
     except Exception:
         import os

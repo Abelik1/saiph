@@ -55,4 +55,17 @@ class HostedTrialTest {
             """{"entitled":false,"until":null,"kinds":[],"extra":1}""",
         )) assertNull(json, parse(json))
     }
+
+    @Test fun thePlayBuildNeverLinksToBuyingElsewhere() {
+        val now = 1_800_000_000L
+        val trial = parse("""{"entitled":true,"until":${now + 86_400},"kinds":["trial"],"trial_until":${now + 86_400}}""")
+        val ended = parse("""{"entitled":false,"until":null,"kinds":[],"trial_until":${now - 1}}""")
+        val none = parse("""{"entitled":false,"until":null,"kinds":[]}""")
+        for (access in listOf(trial, ended, none)) {
+            val notice = HostedTrial.notice(access, now, playStore = true)!!
+            assertNull(notice.action)
+            assertFalse(notice.message.contains("website") || notice.message.contains("ubscribe"))
+            assertEquals(HostedTrial.notice(access, now)!!.state, notice.state)
+        }
+    }
 }

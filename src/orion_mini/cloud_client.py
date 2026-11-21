@@ -27,6 +27,7 @@ import time
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 from urllib.parse import urlsplit
 from uuid import UUID
+from . import child_process
 
 
 def linux_install_helper():
@@ -44,7 +45,7 @@ def _linux_rpc_request(value, *, timeout=20):
     if len(payload) > 16384:
         raise ValueError('The private file sync request is unsupported.')
     try:
-        result = subprocess.run(['/usr/bin/python3', '-I', str(helper)], input=payload,
+        result = child_process.run(['/usr/bin/python3', '-I', str(helper)], input=payload,
             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=timeout, env=_linux_environment())
         if result.returncode or len(result.stdout) > 128:
             raise ValueError()
@@ -206,8 +207,8 @@ if($a.Count -ne 1){'{"known":false}'}else{
 @{known=$true;action=@{Execute=$a[0].Execute;Arguments=$a[0].Arguments}}|ConvertTo-Json -Compress}}
 catch{if($_.FullyQualifiedErrorId -like 'CmdletizationQuery_NotFound*'){'{"known":true}'}else{'{"known":false}'}}"""
     try:
-        result = subprocess.run([str(powershell), '-NoProfile', '-NonInteractive', '-Command', script],
-                                capture_output=True, timeout=10, creationflags=subprocess.CREATE_NO_WINDOW)
+        result = child_process.run([str(powershell), '-NoProfile', '-NonInteractive', '-Command', script],
+                                   capture_output=True, timeout=10, creationflags=subprocess.CREATE_NO_WINDOW)
         if result.returncode or len(result.stdout) > 16384:
             return None, False
         data = json.loads(result.stdout.decode('utf-8-sig'))
@@ -253,12 +254,12 @@ def _restrict_windows(path: Path):
     """Secure an EMPTY new object before writing; never use account display names."""
     options = {'capture_output': True, 'timeout': 10, 'creationflags': subprocess.CREATE_NO_WINDOW}
     system = Path(os.environ.get('SystemRoot', 'C:/Windows')) / 'System32'
-    identity = subprocess.run([str(system / 'whoami.exe'), '/user', '/fo', 'csv', '/nh'], **options)
+    identity = child_process.run([str(system / 'whoami.exe'), '/user', '/fo', 'csv', '/nh'], **options)
     matches = re.findall(rb'"(S-1-[0-9-]+)"', identity.stdout)
     if identity.returncode or len(matches) != 1:
         raise OSError('Private permissions could not be secured.')
     grant = '*' + matches[0].decode('ascii') + (':(OI)(CI)(F)' if path.is_dir() else ':(F)')
-    result = subprocess.run([str(system / 'icacls.exe'), str(path), '/inheritance:r', '/grant:r', grant], **options)
+    result = child_process.run([str(system / 'icacls.exe'), str(path), '/inheritance:r', '/grant:r', grant], **options)
     if result.returncode:
         raise OSError('Private permissions could not be secured.')
 
@@ -369,7 +370,7 @@ class SeafileClient:
             if not helper.is_file() or not pkexec:
                 raise ValueError('Operating-system installation approval is unavailable. Use the Seafile instructions in Advanced.')
             try:
-                result = subprocess.run([pkexec, '/bin/sh', str(helper)], stdin=subprocess.DEVNULL,
+                result = child_process.run([pkexec, '/bin/sh', str(helper)], stdin=subprocess.DEVNULL,
                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=600, env=_linux_environment())
                 executable = installed_linux_cli()
                 if result.returncode or not executable:
@@ -397,8 +398,8 @@ class SeafileClient:
             portable.mkdir(mode=0o700)
             system = Path(os.environ.get('SystemRoot', 'C:/Windows')) / 'System32'
             # Administrative extraction installs no global package/startup task.
-            result = subprocess.run([str(system / 'msiexec.exe'), '/a', str(installer), '/qn',
-                                     'TARGETDIR=' + str(portable)], stdin=subprocess.DEVNULL,
+            result = child_process.run([str(system / 'msiexec.exe'), '/a', str(installer), '/qn',
+                                        'TARGETDIR=' + str(portable)], stdin=subprocess.DEVNULL,
                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=120,
                                     creationflags=subprocess.CREATE_NO_WINDOW)
             if result.returncode:
@@ -479,9 +480,9 @@ class SeafileClient:
             command += ['-c', str(config), '-d', str(data)]
         options = {'creationflags': subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == 'nt' else {'start_new_session': True}
         try:
-            subprocess.Popen(command, env=environment, cwd=executable.parent,
-                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                             stderr=subprocess.DEVNULL, **options)
+            child_process.popen(command, env=environment, cwd=executable.parent,
+                                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL, **options)
         except OSError:
             raise ValueError('The official file sync app could not open. Your profile is unchanged.') from None
         return {'opened': True}
@@ -518,7 +519,7 @@ class SeafileClient:
                                    'stderr': subprocess.DEVNULL, 'timeout': 30, 'env': environment}
                 # Upstream initializes only this new Orion-owned directory.
                 for arguments in (['init', '-c', str(config), '-d', str(private)], ['start', '-c', str(config)]):
-                    result = subprocess.run([str(self.executable), *arguments], **command_options)
+                    result = child_process.run([str(self.executable), *arguments], **command_options)
                     if result.returncode:
                         raise ValueError
                     if arguments[0] == 'start':
@@ -549,8 +550,8 @@ class SeafileClient:
                 if started:
                     # Only this call's newly reserved, initialized profile.
                     try:
-                        subprocess.run([str(self.executable), 'stop', '-c', str(private / 'ccnet')],
-                                       **command_options)
+                        child_process.run([str(self.executable), 'stop', '-c', str(private / 'ccnet')],
+                                          **command_options)
                     except (OSError, subprocess.SubprocessError):
                         pass
                 raise ValueError('File sync setup did not finish. Existing profiles were preserved; inspect the new private setup in Advanced.') from None
@@ -682,8 +683,8 @@ def _verify_installer_signature(path: Path):
     script = "Import-Module ([IO.Path]::Combine($PSHOME,'Modules','Microsoft.PowerShell.Security','Microsoft.PowerShell.Security.psd1')) -ErrorAction Stop; " \
              "$s=Get-AuthenticodeSignature -LiteralPath $env:ORION_CLOUD_INSTALLER; " \
              "if($s.Status -eq 'Valid' -and $s.SignerCertificate.Subject -match '(^|, )O=Seafile Ltd\\.(,|$)'){exit 0}; exit 1"
-    result = subprocess.run([str(system / 'WindowsPowerShell/v1.0/powershell.exe'), '-NoProfile',
-                             '-NonInteractive', '-Command', script],
+    result = child_process.run([str(system / 'WindowsPowerShell/v1.0/powershell.exe'), '-NoProfile',
+                                '-NonInteractive', '-Command', script],
                             env={**os.environ, 'ORION_CLOUD_INSTALLER': str(path)},
                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                             stderr=subprocess.DEVNULL, timeout=30, creationflags=subprocess.CREATE_NO_WINDOW)
@@ -727,10 +728,10 @@ def _worker_request(value: dict, *, timeout=15) -> str:
                    if key.lower() not in {'http_proxy', 'https_proxy', 'all_proxy', 'no_proxy'}}
     options = {'creationflags': subprocess.CREATE_NO_WINDOW} if os.name == 'nt' else {}
     try:
-        # subprocess.run kills and waits for this child on timeout. No owner
+        # child_process.run kills and waits for this child on timeout. No owner
         # daemon is stopped, and native errors/output never enter logs or UI.
-        result = subprocess.run(_worker_command(), input=payload, stdout=subprocess.PIPE,
-                                stderr=subprocess.DEVNULL, timeout=timeout, env=environment, **options)
+        result = child_process.run(_worker_command(), input=payload, stdout=subprocess.PIPE,
+                                   stderr=subprocess.DEVNULL, timeout=timeout, env=environment, **options)
         if result.returncode or len(result.stdout) > 128:
             raise ValueError
         answer = json.loads(result.stdout)
@@ -966,8 +967,8 @@ def _start_owned(private: Path, marker: dict):
     environment = {key: value for key, value in os.environ.items()
                    if key.lower() not in {'http_proxy', 'https_proxy', 'all_proxy', 'no_proxy'}}
     environment['PATH'] = str(Path(os.environ.get('SystemRoot', 'C:/Windows')) / 'System32')
-    return subprocess.Popen([str(binary / 'seaf-daemon.exe'), '-c', str(private / 'ccnet'),
-                             '-d', str(private / 'data'), '-w', str(folder)],
+    return child_process.popen([str(binary / 'seaf-daemon.exe'), '-c', str(private / 'ccnet'),
+                                '-d', str(private / 'data'), '-w', str(folder)],
                             cwd=private, env=environment, stdin=subprocess.DEVNULL,
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                             creationflags=subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP)
@@ -978,11 +979,7 @@ def _linux_environment() -> dict:
     environment = {key: value for key, value in os.environ.items()
                    if key.lower() not in {'http_proxy', 'https_proxy', 'all_proxy', 'no_proxy'}
                    and key not in {'PYTHONHOME', 'PYTHONPATH', 'CCNET_CONF_DIR', 'SEAFILE_DATA_DIR'}}
-    original = environment.pop('LD_LIBRARY_PATH_ORIG', None)
-    environment.pop('LD_LIBRARY_PATH', None)
-    if original:
-        environment['LD_LIBRARY_PATH'] = original
-    return environment
+    return child_process.system_environment(environment, drop_library_path=True)
 
 
 def _read_linux_owned(private: Path) -> tuple[dict, Path]:
@@ -1055,9 +1052,9 @@ def _resume_linux_owned(private: Path):
                     return
             finally:
                 os.close(pid_fd)
-        result = subprocess.run([marker['executable'], 'start', '-c', str(private / 'ccnet')],
-                                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                timeout=30, env=_linux_environment())
+        result = child_process.run([marker['executable'], 'start', '-c', str(private / 'ccnet')],
+                                   stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                   timeout=30, env=_linux_environment())
         if result.returncode:
             raise ValueError('The private file sync daemon did not restart.')
         # Keep our start lock until the upstream daemon is reachable, avoiding

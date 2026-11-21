@@ -1,0 +1,350 @@
+name: Public release
+# Maintainer-started only, on main. Builds the desktop for Windows and Linux and the
+# self-hosted Hub from this exact public commit, then opens a draft GitHub release with
+# checksums and source. scripts/public-release/finish-release.py adds the Android APK,
+# publishes the draft and points the website's downloads at it.
+#
+# With "sign" ticked, the Windows executable and installer are signed through SignPath
+# Foundation in the protected windows-signing environment (docs/CODE_SIGNING.md).
+# Without it the Windows installer is unsigned, and the release notes say so.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Semantic version, for example 0.1.0-beta.13
+        required: true
+      build_number:
+        description: Increasing Windows build number (0-65535)
+        required: true
+      sign:
+        description: Sign the Windows build through SignPath
+        type: boolean
+        default: false
+      prerelease:
+        description: Mark the release as a pre-release (beta)
+        type: boolean
+        default: true
+permissions:
+  contents: read
+concurrency:
+  group: public-release
+  cancel-in-progress: false
+env:
+  QT_QPA_PLATFORM: offscreen
+  VITE_ORION_PROFILE: link
+  RELEASE_VERSION: ${{ inputs.version }}
+  RELEASE_BUILD: ${{ inputs.build_number }}
+jobs:
+  check:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - name: Require a new valid version and the public Saiph Cloud settings
+        shell: python
+        env:
+          HOSTED_CONFIG: ${{ vars.SAIPH_HOSTED_CONFIG }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          import json, os, re, subprocess
+          version, build = os.environ['RELEASE_VERSION'], os.environ['RELEASE_BUILD']
+          if not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.-]+)?', version):
+              raise SystemExit('Version must be an explicit semantic version')
+          if not re.fullmatch(r'[0-9]{1,5}', build) or int(build) > 65535:
+              raise SystemExit('Build number must be 0-65535')
+          try:
+              config = json.loads(os.environ['HOSTED_CONFIG'])
+          except ValueError:
+              raise SystemExit('Set the repository variable SAIPH_HOSTED_CONFIG to the five public Saiph Cloud settings') from None
+          if set(config) != {'service_url', 'issuer', 'audience', 'desktop_client_id', 'android_client_id'}:
+              raise SystemExit('SAIPH_HOSTED_CONFIG must hold exactly the five public Saiph Cloud settings')
+          tags = subprocess.run(['git', 'ls-remote', '--tags', f'https://github.com/{os.environ["REPOSITORY"]}', f'refs/tags/v{version}'],
+                                check=True, capture_output=True, text=True).stdout
+          if tags.strip():
+              raise SystemExit(f'v{version} is already released; choose a new version')
+
+  windows:
+    needs: check
+    if: ${{ !inputs.sign }}
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/desktop-build
+        with:
+          qt: '6.11.2'
+          version: ${{ inputs.version }}
+          build-number: ${{ inputs.build_number }}
+          hosted-config: ${{ vars.SAIPH_HOSTED_CONFIG }}
+      - name: Wrap and audit the unsigned bundle
+        run: python scripts/packaging/build-desktop-distribution.py --platform windows-x86_64 --version "$env:RELEASE_VERSION" --output build/release-distribution
+      - name: Gather release files
+        run: python scripts/public-release/collect-release.py --distribution build/release-distribution --platform windows-x86_64 --version "$env:RELEASE_VERSION" --output build/release-files
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-windows-x86_64
+          retention-days: 7
+          if-no-files-found: error
+          path: build/release-files/
+
+  windows-signed:
+    needs: check
+    if: ${{ inputs.sign }}
+    runs-on: windows-latest
+    timeout-minutes: 120
+    # Configure required reviewers on this environment; it holds SIGNPATH_API_TOKEN.
+    environment: windows-signing
+    permissions:
+      contents: read
+      actions: read # SignPath reads this run's details and downloads the uploaded artifact.
+    steps:
+      - name: Require complete signing configuration
+        shell: python
+        env:
+          SIGNPATH_ORGANIZATION_ID: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          SIGNPATH_PROJECT_SLUG: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          SIGNPATH_SIGNING_POLICY_SLUG: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          SIGNPATH_APP_CONFIGURATION: ${{ vars.SIGNPATH_APP_CONFIGURATION }}
+          SIGNPATH_INSTALLER_CONFIGURATION: ${{ vars.SIGNPATH_INSTALLER_CONFIGURATION }}
+          SAIPH_SIGNING_PUBLISHER: ${{ vars.SAIPH_SIGNING_PUBLISHER }}
+          SAIPH_SIGNING_CERTIFICATE_SHA256: ${{ vars.SAIPH_SIGNING_CERTIFICATE_SHA256 }}
+          HAS_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN != '' }}
+        run: |
+          import os, re
+          names = ['SIGNPATH_ORGANIZATION_ID', 'SIGNPATH_PROJECT_SLUG', 'SIGNPATH_SIGNING_POLICY_SLUG',
+                   'SIGNPATH_APP_CONFIGURATION', 'SIGNPATH_INSTALLER_CONFIGURATION',
+                   'SAIPH_SIGNING_PUBLISHER', 'SAIPH_SIGNING_CERTIFICATE_SHA256']
+          missing = [name for name in names if not os.environ.get(name)]
+          if os.environ.get('HAS_TOKEN') != 'true':
+              missing.append('SIGNPATH_API_TOKEN (environment secret)')
+          if missing:
+              raise SystemExit('Signing is not configured; see docs/CODE_SIGNING.md. Missing: ' + ', '.join(missing))
+          if not re.fullmatch(r'[0-9a-f]{64}', os.environ['SAIPH_SIGNING_CERTIFICATE_SHA256']):
+              raise SystemExit('SAIPH_SIGNING_CERTIFICATE_SHA256 must be 64 lowercase hex characters')
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/desktop-build
+        with:
+          qt: '6.11.2'
+          version: ${{ inputs.version }}
+          build-number: ${{ inputs.build_number }}
+          hosted-config: ${{ vars.SAIPH_HOSTED_CONFIG }}
+
+      # 1. Sign the project executable before packaging; package-manifest.json hashes it.
+      - id: unsigned-app
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: unsigned-app-${{ inputs.version }}
+          retention-days: 1
+          if-no-files-found: error
+          path: dist/Saiph/
+      - name: Request executable signature (maintainer approves in SignPath)
+        uses: signpath/github-action-submit-signing-request@c92b958760219087e01f8d67a1669ed57afe2627 # v2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_APP_CONFIGURATION }}
+          github-artifact-id: ${{ steps.unsigned-app.outputs.artifact-id }}
+          parameters: |
+            version: ${{ toJSON(inputs.version) }}
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: build/signed-app
+      - name: Accept only the signed project desktop and service executables
+        run: python scripts/public-release/check-signed-bundle.py --unsigned dist/Saiph --signed build/signed-app
+
+      # 2. Package the signed executable, then sign the finished installer.
+      - name: Wrap and audit the signed bundle
+        run: python scripts/packaging/build-desktop-distribution.py --bundle build/signed-app --platform windows-x86_64 --version "$env:RELEASE_VERSION" --output build/release-distribution
+      - id: unsigned-installer
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: unsigned-installer-${{ inputs.version }}
+          retention-days: 1
+          if-no-files-found: error
+          path: build/release-distribution/Saiph-Link-${{ inputs.version }}-windows-x86_64.exe
+      - name: Request installer signature (maintainer approves in SignPath)
+        uses: signpath/github-action-submit-signing-request@c92b958760219087e01f8d67a1669ed57afe2627 # v2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_INSTALLER_CONFIGURATION }}
+          github-artifact-id: ${{ steps.unsigned-installer.outputs.artifact-id }}
+          parameters: |
+            version: ${{ toJSON(inputs.version) }}
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: build/signed-installer
+
+      # 3. Verify both signatures against independently configured publisher values.
+      - name: Verify signatures, publisher, timestamp and version
+        env:
+          SAIPH_SIGNING_PUBLISHER: ${{ vars.SAIPH_SIGNING_PUBLISHER }}
+          SAIPH_SIGNING_CERTIFICATE_SHA256: ${{ vars.SAIPH_SIGNING_CERTIFICATE_SHA256 }}
+        run: |
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\10.*\x64\signtool.exe" | Sort-Object FullName | Select-Object -Last 1
+          if (-not $signtool) { throw 'Windows SDK SignTool is absent' }
+          New-Item -ItemType Directory -Force build/signed-release | Out-Null
+          python scripts/public-release/verify-windows-signatures.py `
+            --installer "build/signed-installer/Saiph-Link-$env:RELEASE_VERSION-windows-x86_64.exe" `
+            --executable "build/release-distribution/package-$env:RELEASE_VERSION-windows-x86_64/app/Saiph.exe" `
+            --service "build/release-distribution/package-$env:RELEASE_VERSION-windows-x86_64/app/resources/service/SaiphService.exe" `
+            --publisher "$env:SAIPH_SIGNING_PUBLISHER" --certificate-sha256 "$env:SAIPH_SIGNING_CERTIFICATE_SHA256" `
+            --version "$env:RELEASE_VERSION" --signtool $signtool.FullName --output build/signed-release/windows-signatures.json
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Gather release files with the signed installer
+        run: |
+          Copy-Item -Force "build/signed-installer/Saiph-Link-$env:RELEASE_VERSION-windows-x86_64.exe" build/release-distribution/
+          python scripts/public-release/collect-release.py --distribution build/release-distribution --platform windows-x86_64 --version "$env:RELEASE_VERSION" --output build/release-files --extra build/signed-release/windows-signatures.json
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-windows-x86_64
+          retention-days: 7
+          if-no-files-found: error
+          path: build/release-files/
+
+  linux:
+    needs: check
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/desktop-build
+        with:
+          qt: '6.8.3'
+          version: ${{ inputs.version }}
+          build-number: ${{ inputs.build_number }}
+          hosted-config: ${{ vars.SAIPH_HOSTED_CONFIG }}
+      - name: Wrap and audit the bundle with its no-terminal setup
+        run: python scripts/packaging/build-desktop-distribution.py --platform linux-x86_64 --version "$RELEASE_VERSION" --output build/release-distribution --linux-setup
+      - name: Check the Linux setup wraps the identical archive and installs in isolation
+        run: |
+          set -eu
+          setup="build/release-distribution/Saiph-Link-$RELEASE_VERSION-linux-x86_64.run"
+          archive="build/release-distribution/Saiph-Link-$RELEASE_VERSION-linux-x86_64.tar.gz"
+          package="build/release-distribution/package-$RELEASE_VERSION-linux-x86_64"
+          sh "$setup" --extract "$RUNNER_TEMP/saiph-setup-extract"
+          cmp "$archive" "$RUNNER_TEMP/saiph-setup-extract/$(basename "$archive")"
+          ORION_INSTALL_ISOLATED=1 ORION_INSTALL_ROOT="$RUNNER_TEMP/saiph-setup-install" XDG_CACHE_HOME="$RUNNER_TEMP/saiph-setup-cache" sh "$setup" --text
+          installed="$RUNNER_TEMP/saiph-setup-install/current"
+          cmp "$installed/package-manifest.json" "$package/package-manifest.json"
+          cmp "$installed/app/saiph" "$package/app/saiph"
+      - name: Gather release files
+        run: python scripts/public-release/collect-release.py --distribution build/release-distribution --platform linux-x86_64 --version "$RELEASE_VERSION" --output build/release-files
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-linux-x86_64
+          retention-days: 7
+          if-no-files-found: error
+          path: build/release-files/
+
+  hub:
+    needs: check
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r hub/requirements-hosted.txt 'tink==1.16.1' pytest httpx
+      - run: PYTHONPATH=hub python -m pytest hub/tests -q
+      - name: Package the self-hosted Hub from this commit
+        run: |
+          set -eu
+          mkdir -p "$RUNNER_TEMP/release-files"
+          archive="$RUNNER_TEMP/release-files/Saiph-Hub-$RELEASE_VERSION.tar.gz"
+          python scripts/build-orion-server.py --git --release "$RELEASE_VERSION" --source-commit "$GITHUB_SHA" --output "$archive"
+          python scripts/build-orion-server.py --verify --release "$RELEASE_VERSION" --output "$archive" > /dev/null
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-hub
+          retention-days: 7
+          if-no-files-found: error
+          path: ${{ runner.temp }}/release-files/
+
+  publish:
+    needs: [windows, windows-signed, linux, hub]
+    # One of the two Windows jobs is always skipped.
+    if: >-
+      ${{ !cancelled() && needs.linux.result == 'success' && needs.hub.result == 'success'
+      && (needs.windows.result == 'success' || needs.windows-signed.result == 'success') }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    permissions:
+      contents: write # Creates the draft release.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: build/release
+      - name: Record exact source, build evidence and checksums
+        shell: python
+        env:
+          SIGNED: ${{ inputs.sign }}
+        run: |
+          import json, os, subprocess, sys
+          from pathlib import Path
+          commit, version = os.environ['GITHUB_SHA'], os.environ['RELEASE_VERSION']
+          output = Path('build/release')
+          subprocess.run(['git', 'archive', '--format=tar.gz', '--prefix', f'saiph-{version}/',
+                          '--output', str(output / f'Saiph-source-{version}.tar.gz'), commit], check=True)
+          signed = os.environ['SIGNED'] == 'true'
+          evidence = {'schema': 1, 'source_commit': commit, 'version': version, 'build': int(os.environ['RELEASE_BUILD']),
+                      'run_id': os.environ['GITHUB_RUN_ID'], 'runtime': sys.version,
+                      'windows_signing': 'signpath' if signed else 'unsigned',
+                      'limits': ['Built and checked on GitHub-hosted runners only; no clean-machine installation, '
+                                 'SmartScreen reputation, independent security review or physical acceptance']}
+          (output / 'build-evidence.json').write_text(json.dumps(evidence, indent=2) + '\n', encoding='utf-8')
+          command = [sys.executable, 'scripts/public-release/release-checksums.py', str(output), '--source-commit', commit]
+          subprocess.run(command, check=True)
+          subprocess.run(command + ['--verify'], check=True)
+          windows = ('The Windows installer is signed through SignPath Foundation.' if signed else
+                     'The Windows installer is not yet signed, so Windows shows a "Windows protected your PC" warning: '
+                     'choose More info, then Run anyway. Check its SHA-256 against SHA256SUMS first.')
+          notes = f'''Saiph {version}, built from {commit}.
+
+          Install Saiph, then choose **Saiph Cloud** (sign in to your Saiph account) or **Self-hosted** (your own Hub) when it opens. Saiph Cloud is subscribed to at https://usesaiph.com.
+
+          {windows}
+
+          Verify any download:
+
+          ```text
+          # Windows PowerShell
+          Get-FileHash -Algorithm SHA256 .\\downloaded-file
+          # Linux
+          sha256sum ./downloaded-file
+          ```
+
+          Compare the result with the file's line in SHA256SUMS. `Saiph-source-{version}.tar.gz` is the exact source of every file here.
+          '''
+          Path('build/release-notes.md').write_text(notes, encoding='utf-8')
+      - name: Open the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRERELEASE: ${{ inputs.prerelease }}
+        run: |
+          set -eu
+          flags=""
+          if [ "$PRERELEASE" = "true" ]; then flags="--prerelease"; fi
+          gh release create "v$RELEASE_VERSION" --repo "$GITHUB_REPOSITORY" --draft $flags --target "$GITHUB_SHA" \
+            --title "Saiph $RELEASE_VERSION" --notes-file build/release-notes.md build/release/*
+          echo "Draft release v$RELEASE_VERSION is ready. Next: python scripts/public-release/finish-release.py --tag v$RELEASE_VERSION --android-apk <signed APK>" >> "$GITHUB_STEP_SUMMARY"

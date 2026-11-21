@@ -21,7 +21,7 @@ class AppUpdateTest {
     private val apkHash = sha(apk)
 
     private fun hosted(vararg changes: Pair<String, String?>): String {
-        val fields = linkedMapOf("schema" to "1", "package" to "\"com.orionmini.mobile\"", "version_code" to "3575000",
+        val fields = linkedMapOf("schema" to "1", "package" to "\"${UpdateManifest.PACKAGE}\"", "version_code" to "3575000",
             "version_name" to "\"0.9.8\"", "sha256" to "\"$apkHash\"", "bytes" to "${apk.size}", "min_sdk" to "26",
             "notes" to "\"Faster photo sync.\\nFixes the widget.\"")
         changes.forEach { (key, value) -> if (value == null) fields.remove(key) else fields[key] = value }

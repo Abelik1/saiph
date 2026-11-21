@@ -202,13 +202,14 @@ def test_invalid_profile_rejected_before_any_listener_or_sink(options):
 def test_slow_decode_does_not_block_preview_reads_and_cannot_publish_after_stop(monkeypatch):
     value = CameraSession(Sink, addresses=lambda: ['192.168.1.7'])
     entered, release = threading.Event(), threading.Event()
-    real_decode = QImage.fromData
+    from orion_mini import images
+    real_decode = images.camera_pixels
     def slow_decode(*args):
         entered.set()
         assert release.wait(3)
         return real_decode(*args)
     image = packet()
-    monkeypatch.setattr(QImage, 'fromData', slow_decode)
+    monkeypatch.setattr(images, 'camera_pixels', slow_decode)
     value.start(preview=True, resolution='1080p', fps=20, quality='high')
     try:
         with client(value) as phone:

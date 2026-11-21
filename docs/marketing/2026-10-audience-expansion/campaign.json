@@ -1,0 +1,336 @@
+{
+  "date": "2026-10-19",
+  "destination": "https://usesaiph.com",
+  "ads": [
+    {
+      "id": "01-student-comic",
+      "name": "Notes that make it into your draft",
+      "audience": "Students and self-directed learners",
+      "design": "comic",
+      "format": "Three-panel illustrated comic",
+      "kicker": "STUDY FLOW",
+      "lines": [
+        "Your notes have",
+        "places to be."
+      ],
+      "sub": [
+        "Capture on your phone.",
+        "Continue on your computer."
+      ],
+      "duration": 12,
+      "qualifier": [
+        "Beta · Android + Windows / Linux"
+      ],
+      "headline": "Your notes, on your laptop",
+      "primary": "Lecture notes on Android. Your draft on a laptop. Saiph helps move text and photos between them. Explore the beta.",
+      "short": "From phone notes to laptop drafts. Saiph connects the two. Beta.",
+      "source": "README.md: text/image clipboard and photo/file transfer; USER_GUIDE: explicit sharing",
+      "hypothesis": "The student comic produces a higher landing-page visit rate than the general compatibility card among matched student-oriented placements.",
+      "alternates": [
+        "The note is on your phone. The essay is on your laptop.",
+        "Give your notes a way across."
+      ]
+    },
+    {
+      "id": "02-creator-photo",
+      "name": "Capture to creation",
+      "audience": "Creators, hobby photographers and people building presentations",
+      "design": "photo",
+      "format": "Reverse-zoom photo story",
+      "kicker": "KEEP CREATING",
+      "lines": [
+        "Shot on your phone.",
+        "Ready for the edit."
+      ],
+      "sub": [
+        "Send the photo to your computer.",
+        "Keep your project moving."
+      ],
+      "duration": 12,
+      "qualifier": [
+        "Beta · Android + Windows / Linux",
+        "Cloud relay: up to 19.9 MB per file."
+      ],
+      "headline": "From phone photo to next edit",
+      "primary": "The shot is on your Android. The next edit is on your computer. Send photos across with Saiph. Explore the beta.",
+      "short": "Your shot. Your next edit. Send photos from Android to your computer.",
+      "source": "README.md: photos/files transfer; Cloud relay limit 19.9 MB; larger files direct on the same network",
+      "hypothesis": "The reverse-zoom photo story produces a higher completed-view rate than the student comic in a matched creative-hobby audience.",
+      "alternates": [
+        "The photo is ready. Is your computer?",
+        "Capture here. Create there."
+      ]
+    },
+    {
+      "id": "03-desk-focus",
+      "name": "The alert comes to you",
+      "audience": "Freelancers, writers and people working at a personal desk",
+      "design": "focus",
+      "format": "Notification-led motion poster",
+      "kicker": "AT YOUR DESK",
+      "lines": [
+        "Stay with",
+        "your screen."
+      ],
+      "sub": [
+        "Phone notifications,",
+        "on the computer you are using."
+      ],
+      "duration": 12,
+      "qualifier": [
+        "Beta · Android + Windows / Linux",
+        "Notification access permission required."
+      ],
+      "headline": "Phone alerts on your computer",
+      "primary": "Writing, planning, creating? See your Android notifications on your Windows or Linux computer with Saiph. Beta.",
+      "short": "Let phone alerts come to your computer. Saiph for Android + PC. Beta.",
+      "source": "README.md: desktop notifications; USER_GUIDE: notification permission and controls",
+      "hypothesis": "The notification-led animation produces a higher landing-page visit rate than the compatibility card in matched desk-work placements.",
+      "alternates": [
+        "Your phone has an update. Your screen can show it.",
+        "A phone alert. Right where you are."
+      ]
+    },
+    {
+      "id": "04-everyday-links",
+      "name": "The email-to-yourself detour",
+      "audience": "Everyday Android and PC users who move links and short notes",
+      "design": "beforeafter",
+      "format": "Before/after split-screen loop",
+      "kicker": "EVERYDAY FLOW",
+      "lines": [
+        "Still emailing",
+        "yourself links?"
+      ],
+      "sub": [
+        "Copy on your Android.",
+        "Paste on your computer."
+      ],
+      "duration": 8,
+      "qualifier": [
+        "Beta · Android + Windows / Linux"
+      ],
+      "headline": "Give links a simpler route",
+      "primary": "That link does not need another email to yourself. Copy on Android and paste on Windows or Linux with Saiph. Beta.",
+      "short": "Copy here. Paste there. Give links a simpler route with Saiph. Beta.",
+      "source": "README.md: cross-device text clipboard; no timing or productivity measurements claimed",
+      "hypothesis": "The email-detour loop produces a higher landing-page visit rate than the general compatibility card in matched broad Android/PC audiences.",
+      "alternates": [
+        "Another email to yourself?",
+        "Your clipboard can cross devices."
+      ]
+    },
+    {
+      "id": "05-two-computers",
+      "name": "One desk, two operating systems",
+      "audience": "Developers, hobbyists and Windows/Linux multi-computer users",
+      "design": "dualos",
+      "format": "Animated cursor journey and system diagram",
+      "kicker": "MIXED DESK",
+      "lines": [
+        "Two computers.",
+        "One set of hands."
+      ],
+      "sub": [
+        "Move your keyboard and mouse",
+        "across a Windows and Linux desk."
+      ],
+      "duration": 8,
+      "qualifier": [
+        "Beta · Self-hosted Hub + private network",
+        "Requires separately installed Deskflow."
+      ],
+      "headline": "One keyboard. Two computers.",
+      "primary": "Windows on one side. Linux on the other. Connect your desk through Saiph’s Deskflow integration. Self-hosted Hub required.",
+      "short": "Two computers. One keyboard. Saiph + Deskflow. Self-hosted Hub required.",
+      "source": "README.md and docs/ORION_DESKFLOW.md: separate Deskflow install, self-hosted Hub and private network",
+      "hypothesis": "The cursor journey produces a higher self-hosting-guide click rate than the Hub blueprint among matched Windows/Linux hobbyist audiences.",
+      "alternates": [
+        "Keep both computers in the flow.",
+        "A desk that crosses operating systems."
+      ]
+    },
+    {
+      "id": "06-homelab-blueprint",
+      "name": "Bring your own Hub",
+      "audience": "Home-server enthusiasts and people who prefer hosting their own tools",
+      "design": "blueprint",
+      "format": "Blueprint network poster",
+      "kicker": "YOUR OWN SETUP",
+      "lines": [
+        "Your desk.",
+        "Your own Hub."
+      ],
+      "sub": [
+        "Connect your devices through",
+        "a server you run."
+      ],
+      "duration": 0,
+      "qualifier": [
+        "Beta · Your server + private network required",
+        "Android + Windows / Linux"
+      ],
+      "headline": "Run the connection yourself",
+      "primary": "Prefer running your own tools? Connect Android, Windows and Linux through a Saiph Hub on your own server and private network.",
+      "short": "Your server. Your devices. Explore Saiph self-hosting.",
+      "source": "README.md and docs/ORION_SELF_HOSTED_SERVER.md: self-hosted Hub on Linux/Pi and private Tailscale/Headscale network",
+      "hypothesis": "The blueprint poster produces a higher self-hosting-guide click rate than the general compatibility card in matched home-server placements.",
+      "alternates": [
+        "Your phone. Your computers. Your server.",
+        "Give your home server a place on your desk."
+      ]
+    },
+    {
+      "id": "07-newcomer-compatibility",
+      "name": "Yes, these devices can connect",
+      "audience": "Newcomers who do not follow ecosystem or operating-system debates",
+      "design": "faq",
+      "format": "Compatibility card and four-card explainer",
+      "kicker": "START HERE",
+      "lines": [
+        "Android. PC.",
+        "Yes, together."
+      ],
+      "sub": [
+        "Clipboard, notifications, photos",
+        "and files across your devices."
+      ],
+      "duration": 0,
+      "qualifier": [
+        "Beta · Android + Windows / Linux"
+      ],
+      "headline": "Android and PC, connected",
+      "primary": "An Android phone and a Windows or Linux computer? Saiph connects your clipboard, notifications, photos and files. Explore the beta.",
+      "short": "Android + Windows or Linux. Connect your everyday devices with Saiph. Beta.",
+      "source": "README.md: supported platforms and core feature table; excludes iPhone, macOS and ChromeOS",
+      "hypothesis": "The compatibility card produces a higher landing-page visit rate than the ecosystem-comparison hook among matched broad Android/PC audiences.",
+      "alternates": [
+        "What if your devices worked together?",
+        "Start with the phone and computer you have."
+      ]
+    },
+    {
+      "id": "08-keep-your-devices",
+      "name": "Keep the setup you like",
+      "audience": "People happy with their existing Android phone and Windows/Linux laptop",
+      "design": "keep",
+      "format": "Bold device poster",
+      "kicker": "KEEP YOUR SETUP",
+      "lines": [
+        "Love your devices?",
+        "Keep them."
+      ],
+      "sub": [
+        "Connect the Android and computer",
+        "you already use."
+      ],
+      "duration": 0,
+      "qualifier": [
+        "Beta · Android + Windows / Linux"
+      ],
+      "headline": "Connect the setup you already like",
+      "primary": "You like your phone. You like your computer. Bring them together with Saiph for Android, Windows and Linux. Explore the beta.",
+      "short": "Keep the phone. Keep the computer. Connect them with Saiph. Beta.",
+      "source": "README.md: Android and Windows/Linux support; no savings, hardware lifetime or universal compatibility claims",
+      "hypothesis": "The keep-your-setup poster produces a higher landing-page visit rate than the ecosystem-comparison hook in matched broad Android/PC audiences.",
+      "alternates": [
+        "Your phone. Your laptop. Working together.",
+        "Make more of the setup you like."
+      ]
+    }
+  ],
+  "carousels": [
+    {
+      "id": "study",
+      "ad": "01-student-comic",
+      "caption": "Capture a note on Android. Send text or a photo to your computer. Continue your draft. Saiph beta for Android with Windows or Linux.",
+      "cards": [
+        {
+          "lines": [
+            "Capture the idea."
+          ],
+          "sub": [
+            "A note or photo, on your phone."
+          ],
+          "design": "comic"
+        },
+        {
+          "lines": [
+            "Move it across."
+          ],
+          "sub": [
+            "Copy text or send a photo",
+            "to your computer."
+          ],
+          "design": "beforeafter"
+        },
+        {
+          "lines": [
+            "Continue the draft."
+          ],
+          "sub": [
+            "Your notes, beside your work."
+          ],
+          "design": "comic"
+        },
+        {
+          "lines": [
+            "Connect your",
+            "study setup."
+          ],
+          "sub": [
+            "Saiph for Android + Windows / Linux."
+          ],
+          "design": "faq"
+        }
+      ]
+    },
+    {
+      "id": "first-look",
+      "ad": "07-newcomer-compatibility",
+      "caption": "Start with the Android phone and Windows or Linux computer you have. Copy and paste, bring notifications to your screen, and send photos and files. Explore Saiph beta at usesaiph.com.",
+      "cards": [
+        {
+          "lines": [
+            "Will it work with",
+            "my devices?"
+          ],
+          "sub": [
+            "Android with Windows or Linux."
+          ],
+          "design": "faq"
+        },
+        {
+          "lines": [
+            "Can I move a link?"
+          ],
+          "sub": [
+            "Copy on one device.",
+            "Paste on another."
+          ],
+          "design": "beforeafter"
+        },
+        {
+          "lines": [
+            "What about photos?"
+          ],
+          "sub": [
+            "Send them from phone to computer.",
+            "Cloud relay: up to 19.9 MB per file."
+          ],
+          "design": "photo"
+        },
+        {
+          "lines": [
+            "Where do I start?"
+          ],
+          "sub": [
+            "Explore Saiph beta at usesaiph.com.",
+            "Choose Cloud or self-host your Hub."
+          ],
+          "design": "keep"
+        }
+      ]
+    }
+  ]
+}

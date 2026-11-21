@@ -19,7 +19,8 @@ internal object HostedTrial {
     const val PAUSED = "Paused: no Cloud access"
 
     data class Access(val entitled: Boolean, val until: Long?, val kinds: List<String>, val trialUntil: Long?)
-    data class Notice(val state: String, val daysLeft: Int?, val title: String, val message: String, val action: String)
+    /** [action] is null in the Google Play build, which never links to buying outside Google Play. */
+    data class Notice(val state: String, val daysLeft: Int?, val title: String, val message: String, val action: String?)
 
     private val KINDS = setOf("admin", "beta", "paid", "trial")
 
@@ -43,8 +44,9 @@ internal object HostedTrial {
     }
 
     /** Null when there is nothing to say (a subscription or invitation is active, or access is unknown). */
-    fun notice(access: Access?, nowSeconds: Long): Notice? {
+    fun notice(access: Access?, nowSeconds: Long, playStore: Boolean = false): Notice? {
         access ?: return null
+        if (playStore) return playNotice(access, nowSeconds)
         val trialUntil = access.trialUntil
         if (access.entitled) {
             if (access.kinds != listOf("trial") || trialUntil == null || nowSeconds >= trialUntil) return null
@@ -56,6 +58,19 @@ internal object HostedTrial {
             "Subscribe on the Saiph website to reconnect. Nothing was deleted: your devices, approvals and data are kept.", "Subscribe")
         return Notice("none", null, "No Saiph Cloud access yet",
             "Start your free trial or subscribe on the Saiph website with this same account.", "Start free trial or subscribe")
+    }
+
+    /** The same states for the Google Play build, without a way to buy outside Google Play. */
+    private fun playNotice(access: Access, nowSeconds: Long): Notice? {
+        val trialUntil = access.trialUntil
+        if (access.entitled) {
+            if (access.kinds != listOf("trial") || trialUntil == null || nowSeconds >= trialUntil) return null
+            val days = maxOf(1L, (trialUntil - nowSeconds + 86_399) / 86_400).toInt()
+            return Notice("trial", days, "Free trial: $days ${if (days == 1) "day" else "days"} left", "Nothing is charged automatically.", null)
+        }
+        if (trialUntil != null) return Notice("trial_ended", 0, "Your free trial has ended",
+            "Saiph Cloud is paused on this account. Nothing was deleted: your devices, approvals and data are kept.", null)
+        return Notice("none", null, "No Saiph Cloud access yet", "This account has no Saiph Cloud plan.", null)
     }
 
     /** Whether the service is refusing this account, so Cloud is paused rather than waiting. */

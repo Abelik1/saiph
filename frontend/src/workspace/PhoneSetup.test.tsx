@@ -68,6 +68,12 @@ describe("Phone setup", () => {
     // Approval is not connection: the wizard waits, says when the phone connects, and leaves on Done.
     expect(await screen.findByRole("heading", { name: "Phone approved" })).toBeVisible();
     expect(screen.getByText("Waiting for your phone to connect…")).toBeVisible();
+    // An older online phone with the same chosen name must not complete this phone's setup.
+    view.rerender(<Phone state={{ ...initial, phone: { ...initial.phone!, devices: [
+      { id: "older-phone", name: "My phone", hosted: true, online: true, last_seen_at: null, capabilities: ["files"] },
+    ] } }} client={bridge} />);
+    expect(screen.getByRole("heading", { name: "Phone approved" })).toBeVisible();
+    expect(screen.queryByRole("heading", { name: "Phone connected" })).toBeNull();
     const connected = { ...initial, phone: { ...initial.phone!, devices: [{ id: offered.device_id, name: "My phone", hosted: true, online: true, last_seen_at: null, capabilities: ["files"] }] } };
     view.rerender(<Phone state={connected} client={bridge} />);
     expect(screen.getByRole("heading", { name: "Phone connected" })).toBeVisible();

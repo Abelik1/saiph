@@ -23,6 +23,7 @@ import subprocess
 import sys
 import threading
 from pathlib import Path
+from . import child_process
 
 RELAY = "SaiphNetwork.exe"
 START_SECONDS = 5
@@ -34,7 +35,8 @@ def relay_path(executable=None, platform=None) -> Path | None:
     """The installed relay for this installed release, or None (source run, Linux, older install)."""
     if (platform or sys.platform) != "win32" or (executable is None and not getattr(sys, "frozen", False)):
         return None
-    app = Path(executable or sys.executable).resolve().parent
+    from .paths import desktop_executable
+    app = Path(executable or desktop_executable()).resolve().parent
     # <root>\releases\<version>\app\saiph.exe
     if app.name.lower() != "app" or app.parent.parent.name.lower() != "releases":
         return None
@@ -64,7 +66,7 @@ class Relay:
             pass
 
 
-def start(path: Path, target: int, *, popen=subprocess.Popen, loopback=False) -> Relay | None:
+def start(path: Path, target: int, *, popen=child_process.popen, loopback=False) -> Relay | None:
     """Start the relay for one loopback listener; None if it does not report a port in time."""
     arguments = [str(path), "--target", str(target), "--parent", str(os.getpid())]
     if loopback:
@@ -145,9 +147,9 @@ def evaluate(value) -> str:
     return "ask" if not rules else "unknown"
 
 
-def firewall_state(program: Path, *, run=subprocess.run) -> str:
+def firewall_state(program: Path, *, run=child_process.run) -> str:
     """Read (never change) Windows Firewall's inbound rules for `program` on the current networks."""
-    if sys.platform != "win32" and run is subprocess.run:
+    if sys.platform != "win32" and run is child_process.run:
         return "unknown"
     quoted = str(program).replace("'", "''")
     try:
@@ -171,6 +173,6 @@ def firewall_notice(state: str) -> str:
     return ""
 
 
-def open_firewall_settings(*, popen=subprocess.Popen):
+def open_firewall_settings(*, popen=child_process.popen):
     """Windows Security's "Allow an app through firewall" page; the owner decides there."""
     popen(FIREWALL_SETTINGS, creationflags=_NO_WINDOW)

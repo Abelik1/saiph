@@ -11,6 +11,7 @@ import re
 import stat
 
 REVIEW_CHECKS = ('native_notices', 'wheel_provenance', 'qt_replacement', 'supported_runtime')
+ELECTRON_REVIEW_CHECKS = ('native_notices', 'wheel_provenance', 'electron_distribution', 'supported_runtime')
 
 
 def package_entries(root):
@@ -50,6 +51,40 @@ def local_file(root, relative):
     if not target.resolve().is_relative_to(root) or not target.is_file():
         raise ValueError('Missing local evidence file: ' + relative)
     return target
+
+
+def check_electron(package, platform, files, inventory):
+    marker = json.loads(local_file(package, 'app/_internal/desktop-runtime.json').read_text(encoding='utf-8'))
+    service = 'resources/service/' + ('SaiphService.exe' if platform.startswith('windows') else 'SaiphService')
+    version = marker.get('electron_version')
+    if (marker.get('schema') != 1 or marker.get('runtime') != 'electron'
+            or not isinstance(version, str) or not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', version)
+            or marker.get('service') != service or marker.get('frontend') != 'resources/app/frontend'):
+        raise ValueError('Invalid Electron runtime descriptor')
+    with local_file(package, 'app/' + service).open('rb') as source:
+        magic = source.read(4)
+    if (platform.startswith('windows') and magic[:2] != b'MZ') or (platform.startswith('linux') and magic != b'\x7fELF'):
+        raise ValueError('Electron service executable does not match package platform')
+    for leaf in ('distribution-release.json', 'distribution-profile.json'):
+        if (local_file(package, 'app/resources/service/_internal/' + leaf).read_bytes()
+                != local_file(package, 'app/_internal/' + leaf).read_bytes()):
+            raise ValueError('Electron and service release metadata disagree')
+    for leaf in ('package.json', 'dist/main.cjs', 'dist/preload.cjs', 'frontend/index.html', 'frontend/screen.html'):
+        local_file(package, 'app/resources/app/' + leaf)
+    if any(part.lower().startswith(('qt6', 'libqt6', 'pyside6', 'shiboken6'))
+           for name in files if name.startswith('app/') for part in name.split('/')):
+        raise ValueError('Electron package still contains a Qt runtime')
+    desktop = inventory.get('desktop', [])
+    if len(desktop) != 1 or desktop[0].get('name') != 'electron' or desktop[0].get('version') != version:
+        raise ValueError('Missing or mismatched Electron licence inventory')
+    notices = desktop[0].get('notices', [])
+    for leaf in ('LICENSE', 'LICENSES.chromium.html'):
+        relative = 'electron/' + leaf
+        if (relative not in notices or digest(local_file(package / 'licenses', relative))
+                != digest(local_file(package, 'app/' + leaf))):
+            raise ValueError('Missing or mismatched Electron notice: ' + leaf)
+    for notice in notices:
+        local_file(package / 'licenses', notice)
 
 
 def check(package, review_path=None, qt_source_dir=None):
@@ -104,10 +139,16 @@ def check(package, review_path=None, qt_source_dir=None):
         raise ValueError('Frozen release/profile metadata does not match the native package')
     inventory = json.loads(local_file(package, 'licenses/inventory.json').read_text(encoding='utf-8'))
     native = json.loads(local_file(package, 'licenses/native-provenance.json').read_text(encoding='utf-8'))
+    electron = ('app/_internal/desktop-runtime.json' in expected or bool(inventory.get('desktop'))
+                or any(name.startswith('app/resources/service/') for name in expected))
+    if electron:
+        check_electron(package, platform, expected, inventory)
     problems = []
     if manifest.get('profile') != 'link':
         problems.append('Public release must use the reviewed Link profile.')
     local_file(package, 'licenses/Saiph-LICENSE.txt')
+    if not inventory['python']:
+        problems.append('Python dependency licence inventory is empty.')
     for group in ('python', 'frontend'):
         for item in inventory[group]:
             if not item.get('notices'):
@@ -124,21 +165,23 @@ def check(package, review_path=None, qt_source_dir=None):
     for item in runtime.get('notices', []):
         if digest(local_file(package / 'licenses', item['path'])) != item['sha256']:
             problems.append('Build interpreter notice hash changed.')
-    retained = native.get('retained_qt_source_evidence') or {}
-    qt = native.get('build_environment_versions', {}).get('PySide6_Essentials', '')
-    expected_archives = {module + '-everywhere-src-' + qt + '.tar.xz' for module in
-                         ('qtbase', 'qtdeclarative', 'qtwebengine', 'qtwebchannel', 'qtpositioning', 'qtshadertools', 'qtsvg')}
-    expected_archives.add('pyside-setup-everywhere-src-' + qt + '.tar.xz')
-    archives = retained.get('archives', [])
-    if (not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', qt) or retained.get('version') != qt
-            or not retained.get('complete') or len(archives) != len(expected_archives)
-            or {item.get('archive') for item in archives} != expected_archives or not qt_source_dir):
-        problems.append('Supply the complete retained matching Qt/PySide source archives.')
-    else:
-        for archive in archives:
-            source = local_file(qt_source_dir, archive['archive'])
-            if source.stat().st_size != archive['bytes'] or digest(source) != archive['sha256']:
-                problems.append('Matching source archive changed: ' + archive['archive'])
+    if not electron:
+        retained = native.get('retained_qt_source_evidence') or {}
+        qt = native.get('build_environment_versions', {}).get('PySide6_Essentials', '')
+        expected_archives = {module + '-everywhere-src-' + qt + '.tar.xz' for module in
+                             ('qtbase', 'qtdeclarative', 'qtwebengine', 'qtwebchannel', 'qtpositioning', 'qtshadertools', 'qtsvg')}
+        expected_archives.add('pyside-setup-everywhere-src-' + qt + '.tar.xz')
+        archives = retained.get('archives', [])
+        if (not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', qt) or retained.get('version') != qt
+                or not retained.get('complete') or len(archives) != len(expected_archives)
+                or {item.get('archive') for item in archives} != expected_archives or not qt_source_dir):
+            problems.append('Supply the complete retained matching Qt/PySide source archives.')
+        else:
+            for archive in archives:
+                source = local_file(qt_source_dir, archive['archive'])
+                if source.stat().st_size != archive['bytes'] or digest(source) != archive['sha256']:
+                    problems.append('Matching source archive changed: ' + archive['archive'])
+    review_checks = ELECTRON_REVIEW_CHECKS if electron else REVIEW_CHECKS
     review = None
     if review_path:
         review_path = Path(review_path)
@@ -147,7 +190,7 @@ def check(package, review_path=None, qt_source_dir=None):
                 or not str(review.get('reviewed_at', '')).strip()
                 or review.get('package_manifest_sha256') != digest(manifest_path)):
             raise ValueError('Review must identify its reviewer, date and exact package manifest hash')
-        for name in REVIEW_CHECKS:
+        for name in review_checks:
             approval = review.get('checks', {}).get(name, {})
             evidence = approval.get('evidence', [])
             if approval.get('result') != 'pass' or not evidence:
@@ -158,7 +201,7 @@ def check(package, review_path=None, qt_source_dir=None):
     else:
         problems.extend(inventory.get('unresolved', []))
         problems.extend(native.get('remaining_review', []))
-        problems.append('Complete the package-bound native notices, wheel provenance, Qt replacement and runtime review.')
+        problems.append('Complete the package-bound review checks: ' + ', '.join(review_checks))
     return {'format': 'saiph-release-readiness', 'schema': 1, 'ready': not problems,
             'package_manifest_sha256': digest(manifest_path), 'problems': problems,
             'scope': 'Native notice/source/review evidence only. Windows signatures, final checksums and clean-machine acceptance are separate gates.'}
