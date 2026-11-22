@@ -17,8 +17,10 @@ export default async function BetaAccount(props: Props) {
 const installers: [string, string, string, IconName][] = [
   ["windows", "Windows", "Installer for Windows 10 and 11", "windows"],
   ["linux", "Linux", "Desktop app for Linux", "linux"],
-  ["android", "Android", "APK for Android phones", "android"],
+  ["android", "Android", "Saiph Unlocked APK · every feature", "android"],
 ];
+// The standalone APK is the direct flavor: its own app ID, so it can sit next to the Play app.
+const UNLOCKED_NOTE = "Saiph Unlocked is the standalone APK: a separate app, installed from this download instead of Google Play. It has features Google Play doesn’t allow, such as sending each copy to your computer automatically, backing up all files and full-screen Find my phone, and it installs its own updates after you confirm.";
 const PLAY_BETA = "https://usesaiph.com/downloads.html#android-beta";
 const PLAY_STORE = "https://play.google.com/store/apps/details?id=com.orionmini.mobile";
 // The closed test's tester list is this open Google Group; joining it is how anyone applies.
@@ -85,9 +87,10 @@ export function BetaAccountView({access, billing, notice}: Props & {access: Acce
           <p>{play === PLAY_BETA ? "Android installs through the Google Play beta below." : "Android installs from Google Play."}</p>
           <form method="post" action="/api/beta/download">
             <input type="hidden" name="artifact" value="android" />
-            <button className="ghost small" type="submit">Standalone Android APK</button>
+            <button className="ghost small" type="submit">Saiph Unlocked (Android APK)</button>
           </form>
         </div>}
+        <p className="fine after">{UNLOCKED_NOTE} <a href="https://usesaiph.com/install-android.html">How to install Saiph Unlocked</a>.</p>
         <div className="card-foot"><Icon name="info" /><span>Windows installers don&rsquo;t have a trusted publisher signature yet. Check the checksum before installing.</span></div>
         <details className="more">
           <summary>Source code, licences and checksums</summary>
