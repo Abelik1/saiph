@@ -10,7 +10,8 @@ import {euros, resolveOffer} from "../../../lib/billing/price-test.mjs";
 import {buyPath, isPlan, offerValue} from "../../../lib/buy.mjs";
 import {countStep} from "../../../lib/funnel";
 import {readConsent, readGaConfig} from "../../../lib/ga.mjs";
-import {GoogleMark, Icon, Mark, Notice} from "../../ui";
+import {EmailSignIn, GoogleMark, Icon, Mark, Notice} from "../../ui";
+import {emailStart} from "../../../lib/policy.mjs";
 import {GA_SCRIPT, HANDOFF_SCRIPT} from "../../funnel-scripts";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {title: "Buy Saiph Cloud"};
@@ -61,6 +62,7 @@ export default async function Buy({params, searchParams}: Props) {
     event: signedIn ? "login" : "signin_view",
     params: {...(signedIn ? {method: one(query.signed_in) === "1" ? "google" : "session"} : {}), plan,
       ...(test ? {price_test: test, price_variant: variant} : {})}} : null;
+  const start = buyPath(plan, offer).replace(/^\/buy\/(monthly|yearly)/, "/buy/$1/start");
   return <section className="buy-page" aria-labelledby="buy-title">
     <div className="card featured buy-card">
       <Mark id="buy" size={40} />
@@ -74,12 +76,15 @@ export default async function Buy({params, searchParams}: Props) {
         <input type="hidden" name="plan" value={plan} />
         {offer && <input type="hidden" name="offer" value={offer} />}
         <button className="block" type="submit"><Icon name="card" />Continue to payment</button>
-      </form> : <a className="google-button" href={buyPath(plan, offer).replace(/^\/buy\/(monthly|yearly)/, "/buy/$1/start")}>
-        <GoogleMark /> Continue with Google
-      </a>}
+      </form> : <>
+        <a className="google-button" href={start}>
+          <GoogleMark /> Continue with Google
+        </a>
+        <EmailSignIn href={emailStart(start)} />
+      </>}
       <p className="fine after">{signedIn
         ? "Stripe's payment page shows the price again before you pay. Cancel any time; you can withdraw within 14 days for a full refund."
-        : "Your subscription belongs to the Google account you choose, so your devices can use it. Next is Stripe's secure payment page. No password, nothing else to fill in."}</p>
+        : "Your subscription belongs to the account you sign in with, so your devices can use it. Next is Stripe's secure payment page."}</p>
       {!signedIn && <p className="fine">
         <a href={buyPath(other, offer)}>Switch to {other} instead</a> · <a href="https://usesaiph.com/terms.html">Terms</a> · <a href="/privacy">Privacy</a>
       </p>}
