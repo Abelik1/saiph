@@ -24,8 +24,10 @@ def test_published_bundle_contains_association_and_minimal_callback(tmp_path):
         assert entry['relation'] == ['delegate_permission/common.handle_all_urls']
         target = entry['target']
         assert target['namespace'] == 'android_app'
-        assert len(target['sha256_cert_fingerprints']) == 1
-        assert re.fullmatch(r'(?:[0-9A-F]{2}:){31}[0-9A-F]{2}', target['sha256_cert_fingerprints'][0])
+        assert 1 <= len(target['sha256_cert_fingerprints']) <= 2
+        assert all(re.fullmatch(r'(?:[0-9A-F]{2}:){31}[0-9A-F]{2}', fp) for fp in target['sha256_cert_fingerprints'])
+    # Google Play re-signs the Play app with its app signing key; that key must come first.
+    assert association[0]['target']['sha256_cert_fingerprints'][0] == 'E5:F3:29:25:59:DF:64:CC:09:62:F7:99:7D:9D:A2:3E:57:D6:98:1D:03:05:51:FB:F7:BA:12:60:77:ED:F4:BA'
     for name in ('android/oauth2redirect.html', 'android/unlocked/oauth2redirect.html'):
         page = (output / name).read_text(encoding='utf-8')
         parsed = site.Page(page)
