@@ -86,6 +86,21 @@ def test_google_route_keeps_pkce_and_audience_without_affecting_custom_issuers(c
         assert params["state"] == [attempt._state]
 
 
+@pytest.mark.parametrize("issuer,connection", [
+    ("https://synthetic.eu.auth0.com/", ["Username-Password-Authentication"]),
+    ("https://synthetic.example/", None),
+])
+def test_email_route_opens_the_email_form_with_the_same_pkce_and_audience(config, issuer, connection):
+    from dataclasses import replace
+    with LoginAttempt(replace(config, issuer=issuer, email=True), browser_opener=lambda url: True) as attempt:
+        params = parse_qs(urlsplit(attempt.begin()).query)
+        assert params.get("connection") == connection
+        assert params.get("prompt") == (["login"] if connection else None)
+        assert params["audience"] == [config.audience]
+        assert params["code_challenge_method"] == ["S256"]
+        assert params["state"] == [attempt._state]
+
+
 def get(url, headers=None):
     try:
         response = urlopen(Request(url, headers=headers or {}), timeout=3)
@@ -316,3 +331,11 @@ def test_configuration_rejects_unsafe_or_missing_values(config, change):
     from dataclasses import asdict
     with pytest.raises(ValueError):
         HostedLoginConfig(**{**asdict(config), **change})
+
+
+def test_config_refuses_two_sign_in_routes_at_once(config):
+    from dataclasses import replace
+    with pytest.raises(ValueError):
+        replace(config, google=True, email=True)
+    with pytest.raises(ValueError):
+        replace(config, email="yes")

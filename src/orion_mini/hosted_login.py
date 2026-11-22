@@ -27,6 +27,8 @@ from .hosted_login_page import login_page
 
 
 CALLBACK_PATH = "/orion/auth/callback"
+# Auth0's email-and-password connection (sign-up, verification and password reset on its page).
+EMAIL_CONNECTION = "Username-Password-Authentication"
 
 
 class LoginError(Exception):
@@ -78,6 +80,7 @@ class HostedLoginConfig:
     callback_port: int = 49172
     refresh_tokens: bool = False
     google: bool = False
+    email: bool = False
 
     def __post_init__(self) -> None:
         issuer = urlsplit(self.issuer)
@@ -92,6 +95,7 @@ class HostedLoginConfig:
             or type(self.callback_port) is not int or not 1024 <= self.callback_port <= 65535
             or type(self.refresh_tokens) is not bool
             or type(self.google) is not bool
+            or type(self.email) is not bool or (self.google and self.email)
         ):
             raise ValueError("Fixed HTTPS issuer, API audience and public native client ID are required")
 
@@ -130,6 +134,18 @@ class LoginAttempt:
     @property
     def redirect_uri(self) -> str:
         return self._redirect_uri
+
+    def _route(self) -> dict[str, str]:
+        """Auth0 only: pick the sign-in page. Google always asks which account, because Auth0
+        and Google keep their browser sessions after Saiph signs out; email always shows the
+        email form, even after a Google sign-in in the same browser."""
+        if not (urlsplit(self.config.issuer).hostname or "").endswith(".auth0.com"):
+            return {}
+        if self.config.google:
+            return {"connection": "google-oauth2", "prompt": "select_account"}
+        if self.config.email:
+            return {"connection": EMAIL_CONNECTION, "prompt": "login"}
+        return {}
 
     def begin(self) -> str:
         """Start a single loopback attempt, open the browser and return its URL."""
@@ -217,10 +233,7 @@ class LoginAttempt:
                 audience=self.config.audience,
                 nonce=self._nonce,
                 response_mode="query",
-                # Always ask which Google account: Auth0 and Google keep their browser sessions
-                # after Saiph signs out, so a wrong account could otherwise never be changed.
-                **({"connection": "google-oauth2", "prompt": "select_account"} if self.config.google
-                   and urlsplit(self.config.issuer).hostname.endswith(".auth0.com") else {}),
+                **self._route(),
             )
             if state != self._state:
                 raise LoginError()

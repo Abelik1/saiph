@@ -189,10 +189,11 @@ its account service first. Existing paired phones keep their identity and
 approved-device controls. Until approval, the Scan screen also offers
 **Use a different account**.
 
-Google is the direct normal sign-in route for the bundled Auth0 deployment;
-Auth0 still issues the same Saiph tokens through AppAuth with state and PKCE.
-Keep **Other sign-in options** available for existing accounts that used email or
-another provider, and preserve custom non-Auth0 issuers. A matching email alone
+**Continue with Google** and **Continue with email** are the two direct sign-in routes
+for the bundled Auth0 deployment (Google's account chooser, or Auth0's
+email-and-password form with sign-up and password reset); Auth0 still issues the
+same Saiph tokens through AppAuth with state and PKCE. Preserve custom non-Auth0
+issuers. A matching email alone
 does not establish that two provider accounts have the same identity. Remember
 the provider only after accepting a current grant, and reuse it when an approved
 phone needs to sign in again; legacy profiles keep their original provider picker. Google

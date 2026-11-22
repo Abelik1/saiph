@@ -100,6 +100,13 @@ def test_provider_choice_reaches_attempt_without_changing_token_configuration():
     account.begin_sign_in(google=False)
     account._thread.join(3)
     assert configs[-1].google is False
+    account.begin_sign_in(email=True)
+    account._thread.join(3)
+    assert (configs[-1].email, configs[-1].google) == (True, False)
+    assert account.config == original and original.email is False
+    for bad in ({"email": "yes"}, {"google": True, "email": True}):
+        with pytest.raises(ValueError):
+            account.begin_sign_in(**bad)
 
 
 def test_encrypted_refresh_token_survives_restart_but_not_context_substitution(tmp_path):
