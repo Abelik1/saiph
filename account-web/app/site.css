@@ -183,6 +183,8 @@ button:disabled { background: var(--muted); border-color: var(--border); color: 
 .steps li::before { content: counter(step); display: grid; place-items: center; width: 30px; height: 30px; margin-bottom: 18px; border-radius: 50%; border: 1px solid var(--secondary-border); background: var(--secondary); color: var(--secondary-foreground); font: 600 .82rem var(--mono); }
 .steps h3 { margin-bottom: 8px; }
 .steps p { color: var(--muted-foreground); font-size: .92rem; margin: 0; }
+.steps.two { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 18px; }
+.steps .after-small { margin-top: 16px; }
 .section-title { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
 .section-title h2 { font-size: 1.2rem; }
 
@@ -302,7 +304,7 @@ button:disabled { background: var(--muted); border-color: var(--border); color: 
   .guide-nav { position: static; grid-auto-flow: column; overflow-x: auto; }
   .guide-nav p { display: none; }
   .guide-nav a { white-space: nowrap; border-left: 0; border-bottom: 1px solid var(--border); }
-  .steps { grid-template-columns: 1fr; }
+  .steps, .steps.two { grid-template-columns: 1fr; }
 }
 @media (max-width: 640px) {
   :root { --page: calc(100% - 32px); }
