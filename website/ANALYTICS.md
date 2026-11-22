@@ -211,7 +211,7 @@ lists in `assets/analytics.js`; anything else is dropped.
   and tag links like
   `https://usesaiph.com/?utm_source=reddit&utm_medium=paid_social&utm_campaign=2026-10-launch&utm_content=01-ecosystem-convenience`.
 - **Custom events** (Vercel Pro): `download_click` with `platform` (`windows`,
-  `linux`, `android` for the Firebase beta, `android_apk`, `server`),
+  `linux`, `android` for the Google Play test, `android_apk`, `server`),
   `buy_click` with `plan` (`monthly`, `yearly`), `cloud_click`, `account_click`
   and `github_click`. Each records which public
   page it happened on, never the link target. The `beforeSend` hook returns a

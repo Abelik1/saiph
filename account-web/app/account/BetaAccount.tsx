@@ -19,6 +19,8 @@ const installers: [string, string, string, IconName][] = [
   ["linux", "Linux", "Desktop app for Linux", "linux"],
   ["android", "Android", "APK for Android phones", "android"],
 ];
+const PLAY_BETA = "https://usesaiph.com/downloads.html#android-beta";
+const PLAY_STORE = "https://play.google.com/store/apps/details?id=com.orionmini.mobile";
 const extras: [string, string][] = [
   ["desktop_source", "Desktop source"], ["android_source", "Android source"], ["notices", "Licences and notices"],
   ["qt_sources_windows", "Qt and PySide sources (Windows)"], ["qt_sources_linux", "Qt and PySide sources (Linux)"], ["checksums", "Checksums"],
@@ -32,9 +34,10 @@ export function BetaAccountView({access, billing, notice}: Props & {access: Acce
   const source = access?.kinds == null ? null : paid && access.kinds.length > 1 ? "Subscription and invitation"
     : paid ? "Subscription" : trial ? "Free trial" : "Beta invitation";
   const offerTrial = billing !== null && billing !== "unavailable" && billing.trial.state === "available";
-  // Same invite-link shape the landing page accepts; Android installs through Firebase when set.
-  const firebaseUrl = process.env.SAIPH_ANDROID_BETA_URL ?? "";
-  const firebase = /^https:\/\/appdistribution\.firebase\.dev\/i\/[A-Za-z0-9]{8,64}$/.test(firebaseUrl) ? firebaseUrl : null;
+  // Android installs through Google Play: the website's beta steps (tester group, then the closed test)
+  // or, once public, the store listing. Anything else keeps the APK download.
+  const playUrl = process.env.SAIPH_ANDROID_BETA_URL ?? "";
+  const play = playUrl === PLAY_BETA || playUrl === PLAY_STORE ? playUrl : null;
   return <>
     <div className="page-head">
       <div>
@@ -67,16 +70,16 @@ export function BetaAccountView({access, billing, notice}: Props & {access: Acce
         <h2 id="downloads-title">Download Saiph</h2>
         <p>Install the beta builds from here: they already include the connection settings. These are development builds.</p>
         <div className="downloads">
-          {installers.map(([value, label, detail, icon]) => value === "android" && firebase
-            ? <a key={value} className="button download" href={firebase} rel="noreferrer">
-                <Icon name={icon} />{label}<span>Beta &middot; automatic updates via Firebase</span></a>
+          {installers.map(([value, label, detail, icon]) => value === "android" && play
+            ? <a key={value} className="button download" href={play} rel="noreferrer">
+                <Icon name={icon} />{label}<span>{play === PLAY_BETA ? "Beta on Google Play" : "Google Play"} &middot; automatic updates</span></a>
             : <form key={value} method="post" action="/api/beta/download">
               <input type="hidden" name="artifact" value={value} />
               <button className="download" type="submit"><Icon name={icon} />{label}<span>{detail}</span></button>
             </form>)}
         </div>
-        {firebase && <div className="fine after">
-          <p>Android installs through Firebase. Google asks for your email.</p>
+        {play && <div className="fine after">
+          <p>{play === PLAY_BETA ? "Android installs through Google Play: join the Saiph testers group, then the test, with the Google account on your phone." : "Android installs from Google Play."}</p>
           <form method="post" action="/api/beta/download">
             <input type="hidden" name="artifact" value="android" />
             <button className="ghost small" type="submit">Standalone Android APK</button>

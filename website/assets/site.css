@@ -256,6 +256,11 @@ a[aria-disabled="true"] { opacity: .55; cursor: default; pointer-events: none; }
 .download-btn .os span { font-size: .78rem; font-weight: 500; }
 .download-btn .go { font-size: .85rem; }
 .download-note { font-size: .85rem; margin: 14px 0 0; }
+.android-beta { margin-top: 18px; scroll-margin-top: 90px; }
+.android-beta ol { padding-left: 22px; margin: 10px 0; }
+.android-beta li { margin-bottom: 6px; }
+.android-beta a { color: var(--cyan); font-weight: 600; }
+.android-beta p { margin: 0; font-size: .85rem; }
 .download-secondary { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 24px; margin-top: 12px; font-size: .88rem; }
 @media (min-width: 820px) { .download-buttons { grid-template-columns: repeat(3, 1fr); } }
 @media (max-width: 819px) { .download-btn { flex-direction: row; align-items: center; justify-content: space-between; } }

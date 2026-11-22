@@ -94,6 +94,18 @@ function Get-AndroidSigningFingerprint([string]$Keytool, [string]$Keystore, [str
     return $fingerprint.Groups[1].Value.ToUpperInvariant()
 }
 
+# Saved passwords: Export-Clixml protects a SecureString with Windows DPAPI, so the file opens
+# only for the same Windows user on the same PC (scripts/android/save-release-passwords.ps1).
+function Read-AndroidSavedPassword([string]$Path, [string]$Name) {
+    if (-not $Path -or -not (Test-Path -LiteralPath $Path)) { return $null }
+    $saved = Import-Clixml -LiteralPath $Path
+    $secure = $saved[$Name]
+    if ($secure -isnot [Security.SecureString]) { throw "Saved release passwords have no '$Name' entry; run save-release-passwords.ps1 again." }
+    $pointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
+    try { return [Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer) }
+    finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer) }
+}
+
 function Read-AndroidReleasePassword([string]$Prompt, [bool]$Dialog = $false) {
     if (-not $Dialog) {
         $secure = Read-Host $Prompt -AsSecureString
