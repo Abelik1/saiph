@@ -6,8 +6,10 @@
 # It builds, from this checkout:
 #   1. the website download: the "direct" APK, signed with the app signing key;
 #   2. the Google Play upload: the "play" app bundle (.aab), signed with the upload key.
-# Passwords are asked for here and live only in this process; nothing is written to disk
-# except the two outputs, their SHA-256 sums and each signer's certificate fingerprint.
+# Passwords are asked for here, or read from the DPAPI-protected file that
+# scripts\android\save-release-passwords.ps1 writes (when it exists). They live only in this
+# process; nothing is written to disk except the two outputs, their SHA-256 sums and each
+# signer's certificate fingerprint.
 param(
     [Parameter(Mandatory)] [string]$VersionName,
     [Parameter(Mandatory)] [int]$VersionCode,
@@ -19,6 +21,7 @@ param(
     [string]$UploadKeystore = 'E:\Saiph-private\saiph-play-upload.jks',
     [string]$UploadAlias = 'upload',
     [string]$Output = 'E:\Saiph-private\android-releases',
+    [string]$SavedPasswords = 'E:\Saiph-private\android-release-passwords.clixml',
     [switch]$SkipChecks
 )
 
@@ -111,16 +114,22 @@ function Fingerprint($keystore, $alias, $password) {
 }
 
 Step "Website download (direct APK), signed with $SigningKeystore"
-$signingPassword = Read-AndroidReleasePassword 'App signing key password' ([bool]$PasswordDialog)
-$signingFingerprint = Fingerprint $SigningKeystore $SigningAlias $signingPassword
-if (-not $signingFingerprint) { Stop-Release 'Wrong app signing password or alias.' }
+$signingPassword = Read-AndroidSavedPassword $SavedPasswords 'signing'
+$fromFile = [bool]$signingPassword
+if (-not $fromFile) { $signingPassword = Read-AndroidReleasePassword 'App signing key password' ([bool]$PasswordDialog) }
+else { Write-Host '  using the saved app signing password' }
+$signingFingerprint = try { Fingerprint $SigningKeystore $SigningAlias $signingPassword } catch { $null }
+if (-not $signingFingerprint) { Stop-Release $(if ($fromFile) { 'The saved app signing password is wrong; run scripts\android\save-release-passwords.ps1 again.' } else { 'Wrong app signing password or alias.' }) }
 Build ':app:assembleDirectRelease' $SigningKeystore $SigningAlias $signingPassword
 $signingPassword = $null
 
 Step "Google Play upload (play bundle), signed with $UploadKeystore"
-$uploadPassword = Read-AndroidReleasePassword 'Upload key password' ([bool]$PasswordDialog)
-$uploadFingerprint = Fingerprint $UploadKeystore $UploadAlias $uploadPassword
-if (-not $uploadFingerprint) { Stop-Release 'Wrong upload key password or alias.' }
+$uploadPassword = Read-AndroidSavedPassword $SavedPasswords 'upload'
+$fromFile = [bool]$uploadPassword
+if (-not $fromFile) { $uploadPassword = Read-AndroidReleasePassword 'Upload key password' ([bool]$PasswordDialog) }
+else { Write-Host '  using the saved upload key password' }
+$uploadFingerprint = try { Fingerprint $UploadKeystore $UploadAlias $uploadPassword } catch { $null }
+if (-not $uploadFingerprint) { Stop-Release $(if ($fromFile) { 'The saved upload key password is wrong; run scripts\android\save-release-passwords.ps1 again.' } else { 'Wrong upload key password or alias.' }) }
 Build ':app:bundlePlayRelease' $UploadKeystore $UploadAlias $uploadPassword
 $uploadPassword = $null
 
