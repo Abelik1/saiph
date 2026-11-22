@@ -21,6 +21,9 @@ const installers: [string, string, string, IconName][] = [
 ];
 const PLAY_BETA = "https://usesaiph.com/downloads.html#android-beta";
 const PLAY_STORE = "https://play.google.com/store/apps/details?id=com.orionmini.mobile";
+// The closed test's tester list is this open Google Group; joining it is how anyone applies.
+const TEST_GROUP = "https://groups.google.com/g/saiph-testers";
+const PLAY_TEST = "https://play.google.com/apps/testing/com.orionmini.mobile";
 const extras: [string, string][] = [
   ["desktop_source", "Desktop source"], ["android_source", "Android source"], ["notices", "Licences and notices"],
   ["qt_sources_windows", "Qt and PySide sources (Windows)"], ["qt_sources_linux", "Qt and PySide sources (Linux)"], ["checksums", "Checksums"],
@@ -71,15 +74,15 @@ export function BetaAccountView({access, billing, notice}: Props & {access: Acce
         <p>Install the beta builds from here: they already include the connection settings. These are development builds.</p>
         <div className="downloads">
           {installers.map(([value, label, detail, icon]) => value === "android" && play
-            ? <a key={value} className="button download" href={play} rel="noreferrer">
-                <Icon name={icon} />{label}<span>{play === PLAY_BETA ? "Beta on Google Play" : "Google Play"} &middot; automatic updates</span></a>
+            ? <a key={value} className="button download" href={play === PLAY_BETA ? "#android-beta" : play} rel="noreferrer">
+                <Icon name={icon} />{label}<span>{play === PLAY_BETA ? "Beta on Google Play · steps below" : "Google Play · automatic updates"}</span></a>
             : <form key={value} method="post" action="/api/beta/download">
               <input type="hidden" name="artifact" value={value} />
               <button className="download" type="submit"><Icon name={icon} />{label}<span>{detail}</span></button>
             </form>)}
         </div>
         {play && <div className="fine after">
-          <p>{play === PLAY_BETA ? "Android installs through Google Play: join the Saiph testers group, then the test, with the Google account on your phone." : "Android installs from Google Play."}</p>
+          <p>{play === PLAY_BETA ? "Android installs through the Google Play beta below." : "Android installs from Google Play."}</p>
           <form method="post" action="/api/beta/download">
             <input type="hidden" name="artifact" value="android" />
             <button className="ghost small" type="submit">Standalone Android APK</button>
@@ -95,6 +98,7 @@ export function BetaAccountView({access, billing, notice}: Props & {access: Acce
           </div>
         </details>
       </section>
+      {play === PLAY_BETA && <AndroidBeta entitled />}
     </> : <div className="split">
       <section className="card featured" aria-labelledby="beta-code-title">
         <div className="card-head">
@@ -115,7 +119,28 @@ export function BetaAccountView({access, billing, notice}: Props & {access: Acce
       <NextSteps />
     </div>}
     {billing && (access?.entitled || !offerTrial) && <div className="after"><SubscriptionCard view={billing} /></div>}
+    {!access?.entitled && play === PLAY_BETA && <AndroidBeta entitled={false} />}
   </>;
+}
+
+/** Anyone signed in can apply: join the open testers group, then opt in on Google Play. */
+export function AndroidBeta({entitled}: {entitled: boolean}) {
+  return <section className="card after" id="android-beta" aria-labelledby="android-beta-title">
+    <div className="card-head">
+      <div><p className="eyebrow">Android beta</p><h2 id="android-beta-title">Join the beta on Google Play</h2></div>
+      <span className="pill info plain">Open to everyone</span>
+    </div>
+    <p>The Android app is in a closed test on Google Play. Use the Google account that&rsquo;s on your phone for both steps.</p>
+    <ol className="steps two">
+      <li><h3>Join the testers group</h3><p>Sign in with Google, then choose <strong>Join group</strong>. Other testers can&rsquo;t see your email address.</p>
+        <a className="button secondary after-small" href={TEST_GROUP} rel="noreferrer">Open the Saiph testers group</a></li>
+      <li><h3>Join the test</h3><p>Choose <strong>Become a tester</strong>, then <strong>Download it on Google Play</strong> and install Saiph.</p>
+        <a className="button after-small" href={PLAY_TEST} rel="noreferrer">Join the test on Google Play</a></li>
+    </ol>
+    <p className="fine after">{entitled
+      ? "Your Cloud access covers the beta: sign in on your phone with this account."
+      : "Saiph needs Cloud access to connect your devices: start the free trial or subscribe above, or enter an invitation code."} You also need the desktop app on a Windows or Linux computer. Leave the group any time to stop testing.</p>
+  </section>;
 }
 
 function NextSteps() {
