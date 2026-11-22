@@ -73,9 +73,11 @@ def test_sign_in_selects_google_explicitly_and_keeps_legacy_route(tmp_path, monk
     monkeypatch.setattr(controller, "_account", lambda: SimpleNamespace(begin_sign_in=lambda **options: calls.append(options)))
     controller.sign_in(google=True)
     controller.sign_in()
-    assert calls == [{"google": True}, {}]
-    with pytest.raises(HostedError):
-        controller.sign_in(google="true")
+    controller.sign_in(email=True)
+    assert calls == [{"google": True}, {}, {"email": True}]
+    for bad in ({"google": "true"}, {"email": 1}, {"google": True, "email": True}):
+        with pytest.raises(HostedError):
+            controller.sign_in(**bad)
 
 
 @pytest.mark.parametrize("url", ["http://synthetic.example", "https://user:pass@synthetic.example",

@@ -119,14 +119,16 @@ class HostedAccount:
         with self._lock:
             return {"status": self.status, "refresh_tokens": self.config.refresh_tokens, "error": self.error}
 
-    def begin_sign_in(self, *, google: bool | None = None) -> str:
+    def begin_sign_in(self, *, google: bool | None = None, email: bool | None = None) -> str:
         """Open the system browser; the exchange completes on a worker thread."""
         with self._lock:
             if self._attempt is not None:
                 raise ValueError("Sign-in is already open in your browser.")
-            if google is not None and type(google) is not bool:
+            if any(value is not None and type(value) is not bool for value in (google, email)) or (google and email):
                 raise ValueError("Choose a sign-in method.")
-            attempt = self._attempt_factory(self.config if google is None else replace(self.config, google=google))
+            route = self.config if google is None and email is None else replace(
+                self.config, google=bool(google), email=bool(email))
+            attempt = self._attempt_factory(route)
             self._attempt = attempt
             self.error = ""
         try:

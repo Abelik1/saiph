@@ -17,6 +17,13 @@ describe("Hosted preview settings", () => {
     await waitFor(() => expect(call).toHaveBeenCalledWith("hosted.sign_in", { google: true }));
     expect(call.mock.calls.map(([method]) => method)).toEqual(["hosted.enable", "hosted.sign_in"]);
   });
+  it("offers email beside Google and opens the email form when chosen", async () => {
+    const call = setup(off);
+    fireEvent.click(screen.getByRole("button", {name: "Continue with email"}));
+    await waitFor(() => expect(call).toHaveBeenCalledWith("hosted.sign_in", { email: true }));
+    expect(call.mock.calls.map(([method]) => method)).toEqual(["hosted.enable", "hosted.sign_in"]);
+    expect(screen.queryByText("Other sign-in options")).toBeNull();
+  });
   it("turns Hosted back on without reopening the browser when the account is still signed in", async () => {
     const call = setup({...off, identity: true, account: {status: "signed_in", refresh_tokens: false, error: ""}});
     expect(screen.queryByText(/New to the beta/)).toBeNull();

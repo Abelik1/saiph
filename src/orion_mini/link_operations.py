@@ -402,7 +402,7 @@ class LinkOperations:
         if method == 'hosted.enable':
             return controller.set_enabled(args.get('enabled'))
         if method == 'hosted.sign_in':
-            return controller.sign_in(args.get('google', False))
+            return controller.sign_in(args.get('google', False), args.get('email', False))
         if method == 'hosted.sign_out':
             return controller.sign_out()
         if method == 'hosted.setup_root':

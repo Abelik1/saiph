@@ -7,12 +7,20 @@ import java.net.URI
 internal object HostedSignIn {
     const val PLANS_URL = "https://usesaiph.com/hosted.html"
     fun scope(refresh: Boolean) = "openid email" + if (refresh) " offline_access" else ""
-    fun parameters(issuer: String, audience: String, google: Boolean = true): Map<String, String> = buildMap {
+    /** Which sign-in page opens: Google's account chooser, Auth0's email-and-password form, or
+     * (for accounts made before the choice existed) Auth0's own page with every option. */
+    enum class Method { GOOGLE, EMAIL, ANY }
+    /** Auth0's email-and-password connection: sign-up, verification and password reset happen there. */
+    const val EMAIL_CONNECTION = "Username-Password-Authentication"
+    fun parameters(issuer: String, audience: String, method: Method = Method.GOOGLE): Map<String, String> = buildMap {
         put("audience", audience)
-        if (google && URI(issuer).host?.lowercase()?.endsWith(".auth0.com") == true) {
-            put("connection", "google-oauth2")
+        if (URI(issuer).host?.lowercase()?.endsWith(".auth0.com") != true) return@buildMap
+        when (method) {
             // Always ask which Google account: browser sessions outlive signing out of Saiph.
-            put("prompt", "select_account")
+            Method.GOOGLE -> { put("connection", "google-oauth2"); put("prompt", "select_account") }
+            // Always show the email form, even after a Google sign-in in the same browser.
+            Method.EMAIL -> { put("connection", EMAIL_CONNECTION); put("prompt", "login") }
+            Method.ANY -> Unit
         }
     }
     /** Never display provider bodies, URLs, tokens or arbitrary exception text. */

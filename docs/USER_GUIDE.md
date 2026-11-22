@@ -63,10 +63,10 @@ private invitation to connect this computer, then scan its phone pairing QR.
 
 On first use, review the linked privacy policy and Cloud terms, then choose **Agree and continue**. Usage sharing and Android permissions remain separate choices. The phone then opens one illustrated welcome screen. **Subscribe** opens Saiph's
 plans on the website. If you already have an account, **Continue with Google**
-opens Google sign-in directly for the bundled Auth0 service. Existing email or
-other-provider accounts can use **Other sign-in options** to keep their original
-account; using the same email with a different provider need not select the same
-Saiph account.
+opens Google sign-in, and **Continue with email** opens Saiph's email-and-password
+page (create an account, sign in or reset your password there). Use the same choice
+on every device: the same email address through Google and through a password are
+two different Saiph accounts.
 
 After sign-in, open **Phone → Add a device** on your computer and tap
 **Find my computer** (same Wi-Fi, six-digit comparison) or **Scan QR code** on the phone. **Paste a code instead** remains available.
