@@ -138,16 +138,17 @@ Run the offline website/release checks with Python 3.12:
 python -m pytest tests/test_website_release.py tests/test_website_downloads.py tests/test_public_release_metadata.py tests/test_release_readiness.py -q
 ```
 
-## Android beta invite
+## Android beta on Google Play
 
-Set `androidBetaUrl` to the Firebase App Distribution invite link for the outside
-tester group (`https://appdistribution.firebase.dev/i/...`; create it in the Firebase
-console under App Distribution > Invite links). The home and downloads pages then
-use Firebase as the primary Android install button; with the field empty the
-button stays disabled. The standalone APK is a secondary link.
-The builder accepts only that link shape. The invite page is Google's: it collects the
-tester's email, and the privacy page says so. Remove the link or disable it in the
-console to close beta signups.
+Until Saiph's store listing is public, Android testers install through Google Play's
+closed test. Its tester list is the open Google Group `saiph-testers@googlegroups.com`
+(anyone can join; only managers post or see members). Set both
+`androidTestGroupUrl` (`https://groups.google.com/g/saiph-testers`) and
+`androidTestUrl` (`https://play.google.com/apps/testing/com.orionmini.mobile`):
+the Downloads page then shows the two steps (join the group, join the test) and the
+Google Play card points at them. The builder accepts only those two links, and both
+or neither. Once `androidPlayUrl` holds the public store listing, the beta steps
+disappear and the card opens the store. Empty both fields to close beta signups.
 
 ## Legal/privacy preparation bundle
 

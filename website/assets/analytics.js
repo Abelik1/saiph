@@ -114,7 +114,7 @@
     const download = link.dataset.download;
     if (download) return ["download_click", { platform: download === "android" ? "android_apk" : download }];
     switch (link.dataset.link) {
-      case "android-beta": return ["download_click", { platform: "android" }];
+      case "android-test": return ["download_click", { platform: "android" }];
       case "trial-start": return ["trial_click"];
       case "subscribe": return link.dataset.trialPath && link.href.endsWith("/trial") ? ["trial_click"] : ["cloud_click"];
       case "buy": {

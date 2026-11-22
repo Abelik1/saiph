@@ -233,7 +233,7 @@ def test_button_clicks_queue_only_known_events_without_link_targets():
     result = run_loader(settings(), clicks=[
         {'href': 'https://github.com/synthetic/x/releases/download/v1/a.exe', 'data-download': 'windows'},
         {'href': 'https://github.com/synthetic/x/releases/download/v1/a.apk', 'data-download': 'android'},
-        {'href': 'https://appdistribution.firebase.dev/i/abcdefgh', 'data-link': 'android-beta'},
+        {'href': 'https://play.google.com/apps/testing/com.orionmini.mobile', 'data-link': 'android-test'},
         {'href': 'https://account.dev.usesaiph.com/account', 'data-link': 'subscribe'},
         {'href': 'https://account.dev.usesaiph.com/account', 'data-link': 'account'},
         {'href': 'https://github.com/synthetic/x', 'data-link': 'github'},

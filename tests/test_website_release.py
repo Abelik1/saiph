@@ -253,11 +253,14 @@ function element() {
 }
 const form = element(), details = element(), inactive = element(), contact = element(), subscribe = element();
 subscribe.dataset = {liveText: 'Subscribe', trialText: 'Start your free trial'};
-const beta = element(), betaBox = element(), status = element(), account = element(), trial = element();
+const beta = element(), betaGroup = element(), betaBox = element(), status = element(), account = element(), trial = element();
+const play = element(), playGo = element();
+play.querySelector = () => playGo; playGo.classList = {add() {}};
 const download = element(), betaAccess = element();
 download.href = 'downloads.html';
 const elements = {
-  '[data-link="android-beta"]': [beta], '[data-android-beta]': [betaBox],
+  '[data-link="android-test"]': [beta], '[data-link="android-test-group"]': [betaGroup],
+  '[data-android-test]': [betaBox], '[data-link="android-play"]': [play],
   '[data-link="waitlist"]': [form], '[data-waitlist-details]': [details],
   '[data-waitlist-inactive]': [inactive], '[data-privacy-contact]': [contact],
   '[data-link="subscribe"]': [subscribe], '[data-hosted-status]': [status],
@@ -270,7 +273,8 @@ vm.runInNewContext(fs.readFileSync(process.argv[1], 'utf8'), {window: {ORION_SIT
 console.log(JSON.stringify({form: form.href || '', disabled: form.attributes['aria-disabled'],
   hidden: details.hidden, inactiveHidden: inactive.hidden, contact: contact.href || '',
   subscribe: subscribe.href || '', subscribeText: subscribe.textContent, subscribeDisabled: subscribe.attributes['aria-disabled'] || '',
-  hostedStatus: status.textContent, beta: beta.href || '', betaHidden: betaBox.hidden,
+  hostedStatus: status.textContent, beta: beta.href || '', betaGroup: betaGroup.href || '', betaHidden: betaBox.hidden,
+  play: play.href || '', playGo: playGo.textContent,
   account: account.href || '', accountDisabled: account.attributes['aria-disabled'] || '',
   trial: trial.textContent, trialHidden: trial.hidden,
   download: download.href, downloadPlatform: download.dataset.download || '', betaAccessHidden: betaAccess.hidden}));
@@ -310,29 +314,42 @@ def test_site_script_draft_or_missing_contact_cannot_enable_signup(field, value)
     assert result['hidden'] is True and result['subscribe'] != 'waitlist.html'
 
 
-BETA_INVITE = 'https://appdistribution.firebase.dev/i/0123abcd4567ef89'
+PLAY_TEST_GROUP = 'https://groups.google.com/g/saiph-testers'
+PLAY_TEST = 'https://play.google.com/apps/testing/com.orionmini.mobile'
+PLAY_STORE = 'https://play.google.com/store/apps/details?id=com.orionmini.mobile'
 
 
-def test_android_beta_invite_is_optional_and_shown_when_configured(tmp_path):
-    assert site.validate_settings({}, 'preview')['androidBetaUrl'] == ''
-    assert site.validate_settings({'androidBetaUrl': BETA_INVITE}, 'preview')['androidBetaUrl'] == BETA_INVITE
+def test_android_beta_is_the_google_play_test_through_the_testers_group():
+    assert site.validate_settings({}, 'preview')['androidTestUrl'] == ''
     settings = json.loads((ROOT / 'website/landing-settings.json').read_text(encoding='utf-8'))
-    settings['androidBetaUrl'] = BETA_INVITE
+    assert settings['androidTestGroupUrl'] == PLAY_TEST_GROUP and settings['androidTestUrl'] == PLAY_TEST
     result = render_site_script(settings)
-    assert result['beta'] == BETA_INVITE and result['betaHidden'] is False
-    del settings['androidBetaUrl']
+    assert result['betaGroup'] == PLAY_TEST_GROUP and result['beta'] == PLAY_TEST and result['betaHidden'] is False
+    assert result['play'] == '#android-beta' and result['playGo'] == 'Join the beta on Google Play'
+    # The public store listing replaces the beta steps.
+    result = render_site_script({**settings, 'androidPlayUrl': PLAY_STORE})
+    assert result['play'] == PLAY_STORE and result['beta'] == '' and result['betaHidden'] is True
+    del settings['androidTestUrl'], settings['androidTestGroupUrl']
     result = render_site_script(settings)
-    assert result['beta'] == '' and result['betaHidden'] is True
+    assert result['beta'] == '' and result['betaGroup'] == '' and result['betaHidden'] is True
+    assert result['play'] == '' and result['playGo'] == 'Coming soon'
+    downloads = (ROOT / 'website/downloads.html').read_text(encoding='utf-8')
+    assert 'id="android-beta"' in downloads and 'firebase' not in downloads.lower()
 
 
-@pytest.mark.parametrize('value', ['https://example.com/i/0123abcd4567ef89',
-    'http://appdistribution.firebase.dev/i/0123abcd4567ef89',
-    'https://appdistribution.firebase.dev/i/0123abcd4567ef89?email=a@b.c',
-    'https://appdistribution.firebase.dev.evil.example/i/0123abcd4567ef89',
-    'https://appdistribution.firebase.dev/i/short', 'javascript:alert(1)', 42])
-def test_android_beta_invite_rejects_other_links(value):
-    with pytest.raises(ValueError, match='Firebase App Distribution'):
-        site.validate_settings({'androidBetaUrl': value}, 'preview')
+@pytest.mark.parametrize('group,test', [
+    ('https://groups.google.com/g/someone-else', PLAY_TEST),
+    (PLAY_TEST_GROUP, 'https://play.google.com/apps/testing/example.other'),
+    (PLAY_TEST_GROUP, 'https://appdistribution.firebase.dev/i/0123abcd4567ef89'),
+    (PLAY_TEST_GROUP, ''), ('', PLAY_TEST), (42, PLAY_TEST)])
+def test_android_beta_rejects_other_links(group, test):
+    with pytest.raises(ValueError, match='Android beta'):
+        site.validate_settings({'androidTestGroupUrl': group, 'androidTestUrl': test}, 'preview')
+
+
+def test_firebase_beta_setting_is_gone():
+    with pytest.raises(ValueError, match='Unknown website settings'):
+        site.validate_settings({'androidBetaUrl': 'https://appdistribution.firebase.dev/i/0123abcd4567ef89'}, 'preview')
 
 
 BETA_ACCOUNT = 'https://account.dev.usesaiph.com/account'
