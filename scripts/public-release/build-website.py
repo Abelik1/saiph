@@ -20,7 +20,7 @@ FILES = ('index.html', 'self-host.html', 'hosted.html', 'downloads.html', 'insta
          'assets/og-image.png')
 PLATFORMS = ('windows', 'linux', 'android', 'server')
 FIELDS = {'sourceVisibility', 'githubUrl', 'releasesUrl', 'downloads', 'subscribeUrl', 'waitlistUrl',
-          'androidBetaUrl', 'androidPlayUrl', 'betaAccountUrl', 'waitlistPrivacyUrl', 'waitlistNotice', 'hostedPrice', 'hostedPeriod', 'hostedPriceNote', 'hostedTrial', 'license', 'privacy', 'waitlist', 'release', 'analytics',
+          'androidTestGroupUrl', 'androidTestUrl', 'androidPlayUrl', 'betaAccountUrl', 'waitlistPrivacyUrl', 'waitlistNotice', 'hostedPrice', 'hostedPeriod', 'hostedPriceNote', 'hostedTrial', 'license', 'privacy', 'waitlist', 'release', 'analytics',
           'hostedYearlyPrice', 'ga4', 'priceTest'}
 
 
@@ -53,7 +53,8 @@ WAITLIST_FIELDS = ('processorName', 'processorPrivacyUrl', 'processingLocations'
                    'transferSafeguards', 'retention', 'withdrawal', 'consentText',
                    'noticeVersion', 'optInMode', *WAITLIST_CONTROLS)
 RELEASE_FIELDS = ('tag', 'sourceCommit', 'checksumsUrl', 'sourceMetadataUrl')
-FIREBASE_INVITE = re.compile(r'https://appdistribution\.firebase\.dev/i/[A-Za-z0-9]{8,64}')
+PLAY_TEST_GROUP = 'https://groups.google.com/g/saiph-testers'
+PLAY_TEST = 'https://play.google.com/apps/testing/com.orionmini.mobile'
 BETA_ACCOUNT = re.compile(r'https://[a-z0-9.-]+/account')
 # The trader's postal address is required on the contact page but kept out of Git:
 # the hosting build supplies it in SAIPH_TRADER_ADDRESS and only contact.html gets it.
@@ -129,7 +130,7 @@ def validate_settings(settings, mode):
         raise ValueError('Unknown website settings; do not copy deployment credentials into site config')
     config = {'sourceVisibility': 'private', 'githubUrl': '', 'releasesUrl': '',
               'downloads': {name: '' for name in PLATFORMS}, 'release': {},
-              'subscribeUrl': '', 'waitlistUrl': '', 'androidBetaUrl': '', 'androidPlayUrl': '', 'betaAccountUrl': '', 'waitlistPrivacyUrl': '', 'waitlistNotice': '',
+              'subscribeUrl': '', 'waitlistUrl': '', 'androidTestGroupUrl': '', 'androidTestUrl': '', 'androidPlayUrl': '', 'betaAccountUrl': '', 'waitlistPrivacyUrl': '', 'waitlistNotice': '',
               'privacy': {}, 'waitlist': {}, 'analytics': {'enabled': False, 'scriptPath': '/_vercel/insights/script.js'}, 'hostedPrice': '', 'hostedPeriod': '/ month', 'hostedPriceNote': '', 'hostedTrial': '',
               'hostedYearlyPrice': '', 'ga4': {'measurementId': ''}, 'priceTest': {'enabled': False, 'id': '', 'variants': {}},
               'license': {'core': 'AGPL-3.0-or-later', 'android': 'GPL-3.0-only'}}
@@ -169,9 +170,10 @@ def validate_settings(settings, mode):
             public_url(url)
     if config['androidPlayUrl'] not in ('', 'https://play.google.com/store/apps/details?id=com.orionmini.mobile'):
         raise ValueError("The Google Play link must be Saiph's own store listing")
-    if not isinstance(config['androidBetaUrl'], str) or (
-            config['androidBetaUrl'] and not FIREBASE_INVITE.fullmatch(config['androidBetaUrl'])):
-        raise ValueError('Android beta link must be a Firebase App Distribution invite link')
+    if config['androidTestGroupUrl'] not in ('', PLAY_TEST_GROUP) or config['androidTestUrl'] not in ('', PLAY_TEST):
+        raise ValueError("The Android beta links must be Saiph's tester group and Google Play test")
+    if bool(config['androidTestGroupUrl']) != bool(config['androidTestUrl']):
+        raise ValueError('Set both Android beta links or neither')
     if config['betaAccountUrl'] and not BETA_ACCOUNT.fullmatch(config['betaAccountUrl']):
         raise ValueError('Beta access link must be the HTTPS account /account page')
     if not isinstance(config['waitlistNotice'], str) or not isinstance(config['hostedPeriod'], str):

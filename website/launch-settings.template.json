@@ -9,7 +9,8 @@
     "server": ""
   },
   "release": {},
-  "androidBetaUrl": "",
+  "androidTestGroupUrl": "",
+  "androidTestUrl": "",
   "androidPlayUrl": "",
   "waitlistUrl": "",
   "waitlistPrivacyUrl": "privacy.html#waitlist",

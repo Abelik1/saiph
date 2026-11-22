@@ -43,18 +43,19 @@
       ? "Source is available on GitHub."
       : "The GitHub repository is private for now.";
   });
-  const betaUrl = /^https:\/\/appdistribution\.firebase\.dev\/i\/[A-Za-z0-9]{8,64}$/.test(cfg.androidBetaUrl || "") ? cfg.androidBetaUrl : "";
-  document.querySelectorAll("[data-android-beta]").forEach((el) => { el.hidden = !betaUrl; });
-  document.querySelectorAll('[data-link="android-beta"]').forEach((a) => {
-    link(a, betaUrl, "Android beta invitations are not open");
-    if (betaUrl) a.dataset.signin = "firebase";
-  });
   // Empty until Saiph's Google Play listing is public.
   const playUrl = cfg.androidPlayUrl === "https://play.google.com/store/apps/details?id=com.orionmini.mobile" ? cfg.androidPlayUrl : "";
+  // Before then, testers join the open Google Group that is the closed test's tester list, then opt in on Play.
+  const testReady = !playUrl && cfg.androidTestGroupUrl === "https://groups.google.com/g/saiph-testers"
+    && cfg.androidTestUrl === "https://play.google.com/apps/testing/com.orionmini.mobile";
+  document.querySelectorAll("[data-android-test]").forEach((el) => { el.hidden = !testReady; });
+  document.querySelectorAll('[data-link="android-test-group"]').forEach((a) => link(a, testReady ? cfg.androidTestGroupUrl : "", "The Android beta is not open"));
+  document.querySelectorAll('[data-link="android-test"]').forEach((a) => link(a, testReady ? cfg.androidTestUrl : "", "The Android beta is not open"));
   document.querySelectorAll('[data-link="android-play"]').forEach((a) => {
-    link(a, playUrl, "Coming soon to Google Play");
+    link(a, playUrl || (testReady ? "#android-beta" : ""), "Coming soon to Google Play");
     const go = a.querySelector(".go");
-    if (!playUrl && go) { go.textContent = "Coming soon"; go.classList.add("muted"); }
+    if (go && testReady) go.textContent = "Join the beta on Google Play";
+    if (go && !playUrl && !testReady) { go.textContent = "Coming soon"; go.classList.add("muted"); }
   });
   const betaAccountUrl = /^https:\/\/[a-z0-9.-]+\/account$/.test(cfg.betaAccountUrl || "") ? cfg.betaAccountUrl : "";
   const published = cfg.sourceVisibility === "public" && Boolean(cfg.releasesUrl) && Boolean((cfg.release || {}).sourceCommit);
@@ -258,10 +259,7 @@
   const signInNotes = {
     account: {title: "Sign in to download",
       body: "Saiph's installers are in your Saiph account. Next you'll sign in with Google, then choose your download on your account page.",
-      go: "Continue to sign in"},
-    firebase: {title: "Get the Android beta",
-      body: "The Android app installs through Firebase App Distribution. Google will ask you to sign in so it can send you the beta invitation and updates.",
-      go: "Continue to Google"}
+      go: "Continue to sign in"}
   };
   let signInDialog;
   function askToSignIn(a, note) {
