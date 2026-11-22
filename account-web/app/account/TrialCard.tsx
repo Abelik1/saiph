@@ -9,7 +9,7 @@ const plural = (count: number, word: string) => `${count} ${word}${count === 1 ?
 const refusals = {
   used: ["A free trial was already used", "This email address has already had a free trial. Subscribe below to use Saiph Cloud."],
   full: ["Free trial places are taken", "All free trial places have been taken for now. You can still subscribe below."],
-  sign_in_again: ["Check your free trial", "Sign out and sign in again to see whether you can start a free trial."],
+  sign_in_again: ["Check your free trial", "Signed up with email? Open the confirmation link we emailed you first. Then sign out and sign in again to see whether you can start a free trial."],
 };
 
 /** Free trial offer and countdown, from the stored trial row only (lib/billing/trial.mjs). */

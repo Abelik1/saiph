@@ -79,7 +79,7 @@ export default async function DeleteAccount({ searchParams }: { searchParams: Pr
       <section className="card" aria-labelledby="what-title">
         <h2 id="what-title">What gets deleted</h2>
         <ul className="aside-list">
-          <li><Icon name="key" /><span><strong>Your sign-in.</strong> The Saiph login (held by our sign-in provider, Auth0) for the Google account you use with Saiph.</span></li>
+          <li><Icon name="key" /><span><strong>Your sign-in.</strong> The Saiph login held by our sign-in provider, Auth0: your Google sign-in, or your email address and password if you signed up with email.</span></li>
           <li><Icon name="devices" /><span><strong>Your Saiph Cloud account.</strong> Its device records and approvals, and the encrypted content your devices stored on the service.</span></li>
           <li><Icon name="card" /><span><strong>Billing records</strong>, except those tax law requires us to keep. Those are kept only as long as the law requires (generally six years in Ireland) and then deleted. Stripe keeps its own payment records under its own policy.</span></li>
         </ul>
@@ -99,8 +99,8 @@ export default async function DeleteAccount({ searchParams }: { searchParams: Pr
         <p>Online requests are not available on this site yet. Email {SUPPORT} from the address you sign in with, and we will delete your account within {DELETION_DAYS} days.</p>
       </section> : !session ? <section className="card" aria-labelledby="signin-title">
         <h2 id="signin-title">Sign in to request deletion</h2>
-        <p>Sign in with the Google account you use for Saiph, so we know which account to delete. You come straight back here.</p>
-        <div className="actions"><a className="button" href="/account/delete/sign-in">Sign in to continue</a></div>
+        <p>Sign in the way you sign in to Saiph, with Google or with your email and password, so we know which account to delete. You come straight back here.</p>
+        <div className="actions"><a className="button" href="/account/delete/sign-in">Sign in with Google</a><a className="button ghost" href="/account/delete/sign-in?with=email">Sign in with email</a></div>
         <p className="fine after">Cannot sign in? Email {SUPPORT} from the address you sign in with.</p>
       </section> : !allowed ? <section className="card">
         <h2>Requests by email</h2>

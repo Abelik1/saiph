@@ -36,3 +36,33 @@ test("sign-in goes straight to Google with fixed scopes and only the beta audien
   assert.deepEqual(loginParameters({audience: "https://api.saiph.test"}),
     {scope: "openid profile email", connection: "google-oauth2", audience: "https://api.saiph.test"});
 });
+
+test("start routes take only with=email, plus the route's own keys, and email changes only the connection", async () => {
+  const {signInMethod, methodParameters, emailStart, EMAIL_CONNECTION} = await import("../lib/policy.mjs");
+  const q = s => new URLSearchParams(s);
+  assert.equal(signInMethod(q("")), "google");
+  assert.equal(signInMethod(q("with=email")), "email");
+  for (const bad of ["with=google", "with=", "with=EMAIL", "with=email&with=email", "connection=google-oauth2", "with=email&returnTo=https://evil.test", "offer=a"])
+    assert.equal(signInMethod(q(bad)), null, bad);
+  assert.equal(signInMethod(q("offer=a&with=email"), ["offer"]), "email");
+  assert.equal(signInMethod(q("offer=a&offer=b"), ["offer"]), null);
+  assert.deepEqual(methodParameters("google"), {});
+  assert.deepEqual(methodParameters("email"), {connection: EMAIL_CONNECTION, prompt: "login"});
+  assert.equal(EMAIL_CONNECTION, "Username-Password-Authentication");
+  assert.equal(emailStart("/trial/start"), "/trial/start?with=email");
+  assert.equal(emailStart("/buy/monthly/start?offer=b"), "/buy/monthly/start?offer=b&with=email");
+});
+
+test("every sign-in start route reads with= and hands its method to Auth0", async () => {
+  const {readFile} = await import("node:fs/promises");
+  for (const route of ["../app/sign-in/route.ts", "../app/trial/start/route.ts", "../app/buy/[plan]/start/route.ts", "../app/account/delete/sign-in/route.ts"]) {
+    const source = await readFile(new URL(route, import.meta.url), "utf8");
+    assert.match(source, /const method = signInMethod\(/, route);
+    assert.match(source, /if \(!method\)|!method \|\|/, route);
+    assert.match(source, /authorizationParameters: methodParameters\(method\)/, route);
+    assert.equal((source.match(/startInteractiveLogin\(/g) || []).length, 1, route);
+  }
+  for (const [page, href] of [["../app/page.tsx", "/sign-in?with=email"], ["../app/trial/page.tsx", "/trial/start?with=email"], ["../app/buy/[plan]/page.tsx", "emailStart(start)"]]) {
+    assert.ok((await readFile(new URL(page, import.meta.url), "utf8")).includes(href), page);
+  }
+});

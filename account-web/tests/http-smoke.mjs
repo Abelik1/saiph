@@ -100,6 +100,7 @@ try {
  const buy=await request("/buy/yearly");assert.equal(buy.status,200);
  const buyHtml=await buy.text();
  assert.match(buyHtml,/€89\.99/);assert.match(buyHtml,/href="\/buy\/yearly\/start"/);assert.match(buyHtml,/Continue with Google/);
+ assert.match(buyHtml,/href="\/buy\/yearly\/start\?with=email"/);assert.match(buyHtml,/Continue with email/);
  assert.equal(buyHtml.includes("googletagmanager"),false);assert.doesNotMatch(buy.headers.get("content-security-policy"),/google/);
  checks.push({case:"buy page signed out shows the order and Google sign-in",status:200});
  for(const [path,cookie,status,location] of [["/buy/lifetime",undefined,404],["/buy/monthly/start?returnTo=https://evil.test",undefined,400],
@@ -107,7 +108,9 @@ try {
   // Signed in but billing storage is unreachable here: the account page explains, no checkout starts.
   ["/buy/monthly",ownerCookie,307,"/account"],
   // Trials are off in this environment: /trial says so and offers the plans; sign-in takes no query.
-  ["/trial/start?returnTo=https://evil.test",undefined,400],["/trial/start",ownerCookie,307,"https://account.saiph.test/trial"]]) {
+  ["/trial/start?returnTo=https://evil.test",undefined,400],["/trial/start?with=password",undefined,400],["/trial/start?with=email",ownerCookie,307,"https://account.saiph.test/trial"],
+  ["/buy/monthly/start?with=email&with=email",undefined,400],["/buy/monthly/start?offer=b&with=email",ownerCookie,307,"https://account.saiph.test/buy/monthly?offer=b"],
+  ["/sign-in?with=email&connection=google-oauth2",undefined,400],["/sign-in?with=email",ownerCookie,307,"https://account.saiph.test/account"],["/trial/start",ownerCookie,307,"https://account.saiph.test/trial"]]) {
   const r=await request(path,cookie);assert.equal(r.status,status,path);
   if(location)assert.equal(r.headers.get("location"),location,path);
   checks.push({case:path+(cookie?" signed in":""),status:r.status});
@@ -120,15 +123,15 @@ try {
  const hrefs=(html)=>[...html.matchAll(/<a [^>]*href="([^"]+)"/g)].map(match=>match[1]);
  const deletionOut=await request("/account/delete");assert.equal(deletionOut.status,200);
  const deletionOutHtml=await deletionOut.text();
- assert.match(deletionOutHtml,/What gets deleted/);assert.match(deletionOutHtml,/Sign in to continue/);
- assert.deepEqual(hrefs(deletionOutHtml).sort(),["#main","/account/delete/sign-in"]);
+ assert.match(deletionOutHtml,/What gets deleted/);assert.match(deletionOutHtml,/Sign in with Google/);assert.match(deletionOutHtml,/Sign in with email/);
+ assert.deepEqual(hrefs(deletionOutHtml).sort(),["#main","/account/delete/sign-in","/account/delete/sign-in?with=email"]);
  assert.equal(/Main navigation|\/buy\/|€|usesaiph\.com\/hosted/.test(deletionOutHtml),false);
  checks.push({case:"deletion page signed out explains and links only to its sign-in",status:200});
  for(const [label,cookie,expected] of [["owner, storage unavailable",ownerCookie,/We could not check your account just now/],["not permitted",otherCookie,/This sign-in cannot use the request form/]]) {
   const r=await request("/account/delete",cookie);assert.equal(r.status,200,label);const html=await r.text();
   assert.match(html,expected,label);assert.deepEqual(hrefs(html),["#main"],label);checks.push({case:"deletion page "+label,status:200});
  }
- for(const [path,cookie,status,location] of [["/account/delete/sign-in?returnTo=https://evil.test",undefined,400],["/account/delete/sign-in",ownerCookie,307,"https://account.saiph.test/account/delete"]]) {
+ for(const [path,cookie,status,location] of [["/account/delete/sign-in?returnTo=https://evil.test",undefined,400],["/account/delete/sign-in?with=email&returnTo=/account",undefined,400],["/account/delete/sign-in?with=email",ownerCookie,307,"https://account.saiph.test/account/delete"],["/account/delete/sign-in",ownerCookie,307,"https://account.saiph.test/account/delete"]]) {
   const r=await request(path,cookie);assert.equal(r.status,status,path);if(location)assert.equal(r.headers.get("location"),location,path);
   checks.push({case:path+(cookie?" signed in":""),status:r.status});
  }

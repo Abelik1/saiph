@@ -162,7 +162,7 @@ test("the deletion page says what is deleted, when, and to cancel first, and lin
   for (const fact of [/Auth0/,/Saiph Cloud account/,/device records/,/encrypted content/,/Billing records/,/tax law requires/,
     /Cancel any subscription first/,/Manage billing/,/DELETION_DAYS/,/Request deletion/]) assert.match(page,fact);
   const links=[...page.matchAll(/(?:href|action)=["{]([^"}]+)["}]/g)].map(match=>match[1]);
-  assert.deepEqual(links.sort(),["/account/delete/sign-in","/api/account/delete"]);
+  assert.deepEqual(links.sort(),["/account/delete/sign-in","/account/delete/sign-in?with=email","/api/account/delete"]);
   assert.doesNotMatch(page,/\/buy|\/trial|hosted\.html|pricing|€|\/api\/billing/i);
   assert.doesNotMatch(page,/<Link|SignOut|next\/link/,"no client links, and no sign-out (it returns to the home page)");
   const sign=await readFile(new URL("../app/account/delete/sign-in/route.ts",import.meta.url),"utf8");
