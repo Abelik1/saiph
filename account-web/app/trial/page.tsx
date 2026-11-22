@@ -9,7 +9,7 @@ import {maySubscribe, readBillingConfig} from "../../lib/billing/policy";
 import {readCardTrialConfig} from "../../lib/billing/trial.mjs";
 import {countStep} from "../../lib/funnel";
 import {readConsent, readGaConfig} from "../../lib/ga.mjs";
-import {GoogleMark, Icon, Mark, Notice} from "../ui";
+import {EmailSignIn, GoogleMark, Icon, Mark, Notice} from "../ui";
 import {GA_SCRIPT, HANDOFF_SCRIPT} from "../funnel-scripts";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {title: "Start your free trial"};
@@ -18,7 +18,7 @@ type Props = {searchParams: Promise<Record<string, string | string[] | undefined
 const json = (value: unknown) => JSON.stringify(value).replace(/</g, "\\u003c");
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
 
-/** Start your free trial from usesaiph.com: Google sign-in, then Stripe's
+/** Start your free trial from usesaiph.com: sign-in (Google or email), then Stripe's
  * card-required trial checkout. Anyone who cannot
  * start one (already used, subscribed, trials full or off) sees the account
  * page, which explains why and offers the plans. */
@@ -68,10 +68,13 @@ export default async function Trial({searchParams}: Props) {
       {signedIn ? <form id="handoff-form" method="post" action="/api/billing/trial">
         <input type="hidden" name="trial" value="start" />
         <button className="block" type="submit"><Icon name="card" />Continue to Stripe</button>
-      </form> : <a className="google-button" href="/trial/start"><GoogleMark /> Continue with Google</a>}
+      </form> : <>
+        <a className="google-button" href="/trial/start"><GoogleMark /> Continue with Google</a>
+        <EmailSignIn href="/trial/start?with=email" />
+      </>}
       <p className="fine after">{signedIn
         ? "Your trial starts after you complete Stripe Checkout. Then install Saiph on your computer and phone and use this same account."
-        : "Your trial belongs to the Google account you choose. Next, add your card on Stripe's secure checkout page."}</p>
+        : "Your trial belongs to the account you sign in with. With email, confirm your address first. Next, add your card on Stripe's secure checkout page."}</p>
       <p className="fine">Cancel any time in <strong>Manage billing</strong> on your account page. Cancel before the trial ends to avoid the first charge. We will email a reminder before billing begins.</p>
       <p className="fine">One free trial per person. Review the <a href="https://usesaiph.com/terms.html#trial">Cloud terms</a> before confirming your subscription in Stripe. <a href="/privacy">Privacy</a>{!signedIn && <> · <a href="/buy/monthly">Buy now instead</a></>}</p>
     </div>

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // The two paths from usesaiph.com (docs/LANDING_CONVERSION.md):
-//   Start your free trial: /trial → Google sign-in → /trial → Stripe card checkout.
-//   Buy now: /buy/<plan> → Google sign-in → back to /buy/<plan> → Stripe Checkout.
+//   Start your free trial: /trial → sign-in (Google or email) → /trial → Stripe card checkout.
+//   Buy now: /buy/<plan> → sign-in (Google or email) → back to /buy/<plan> → Stripe Checkout.
 // Only these exact return paths (and /account/delete) survive sign-in; anything
 // else goes to /account.
 

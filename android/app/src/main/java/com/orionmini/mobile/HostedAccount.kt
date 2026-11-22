@@ -42,11 +42,11 @@ class HostedAccount private constructor(private val context: Context) {
         return AuthorizationServiceConfiguration(Uri.parse(issuer + "authorize"), Uri.parse(issuer + "oauth/token"))
     }
     @Synchronized fun signedIn() = !prefs.getBoolean("signed_out", false) && ((access != null && expires > System.currentTimeMillis() + 60_000) || (prefs.getBoolean("refresh_tokens", false) && file.baseFile.exists()))
-    @Synchronized fun request(google: Boolean = true): AuthorizationRequest {
+    @Synchronized internal fun request(method: HostedSignIn.Method = HostedSignIn.Method.GOOGLE): AuthorizationRequest {
         check(prefs.getBoolean("enabled", false))
-        // Route directly to Google for the bundled Auth0 flow. Auth0 still issues
+        // Route directly to Google or the email form for the bundled Auth0 flow. Auth0 still issues
         // the Saiph token; state, PKCE, redirect and token validation stay unchanged.
-        val parameters = HostedSignIn.parameters(prefs.getString("issuer", "")!!, prefs.getString("audience", "")!!, google)
+        val parameters = HostedSignIn.parameters(prefs.getString("issuer", "")!!, prefs.getString("audience", "")!!, method)
         val builder = AuthorizationRequest.Builder(configuration(), prefs.getString("client_id", "")!!, ResponseTypeValues.CODE, Uri.parse(REDIRECT))
             .setAdditionalParameters(parameters)
         builder.setScope(HostedSignIn.scope(prefs.getBoolean("refresh_tokens", false)))

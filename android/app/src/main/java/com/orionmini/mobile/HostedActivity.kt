@@ -53,7 +53,7 @@ class HostedActivity : ComponentActivity() {
     private var settingsTarget = ""
     private var welcomePage = false
     private var signingIn = false
-    private var googleSignIn = true
+    private var signInMethod = HostedSignIn.Method.GOOGLE
     private var shownWaiting = false
     private var shownStage = HostedSetup.Stage.SCAN
     private var shownAccess: HostedTrial.Access? = null
@@ -148,7 +148,7 @@ class HostedActivity : ComponentActivity() {
         welcomePage = state?.getBoolean("welcomePage") ?: intent.getBooleanExtra(SHOW_WELCOME, false)
         intent.removeExtra(SHOW_WELCOME)
         loginState = state?.getString("loginState")
-        googleSignIn = state?.getBoolean("googleSignIn") ?: true
+        signInMethod = state?.getString("signInMethod")?.let { name -> HostedSignIn.Method.entries.firstOrNull { it.name == name } } ?: HostedSignIn.Method.GOOGLE
         pendingRoot = state?.getString("pendingRootCode")?.let { code -> state.getString("pendingRootFingerprint")?.let { PendingRoot(code, it) } }
         signingIn = state?.getBoolean("signingIn") == true && loginState != null &&
             loginState == prefs.getString("pending_state", null) &&
@@ -163,7 +163,7 @@ class HostedActivity : ComponentActivity() {
         state.putString("settingsCategory", settingsCategory?.name); state.putString("settingsQuery", settingsQuery)
         state.putBoolean("welcomePage", welcomePage)
         state.putBoolean("signingIn", signingIn); state.putString("loginState", loginState)
-        state.putBoolean("googleSignIn", googleSignIn)
+        state.putString("signInMethod", signInMethod.name)
         state.putString("permissionRequest", permissionRequest)
         state.putBoolean("returningFromSettings", returningFromSettings)
         // Only public keys and a signature: safe to keep across a rotation while the owner compares.
@@ -221,10 +221,10 @@ class HostedActivity : ComponentActivity() {
         lock.confirm(reason, requireScreenLock, failure = ::message, success = run)
     private fun message(value: String) = Toast.makeText(this, value, Toast.LENGTH_LONG).show()
     /** AppAuth owns the browser round trip and verifies state and PKCE for either browser mode. */
-    private fun signIn(browserApp: Boolean = false, google: Boolean = true) {
+    private fun signIn(browserApp: Boolean = false, method: HostedSignIn.Method = HostedSignIn.Method.GOOGLE) {
         if (signingIn || busy) return
         if (account.signedIn()) { welcomePage = false; render(); return }
-        welcomePage = false; googleSignIn = google; signingIn = true; loginState = null; loginError = ""; render()
+        welcomePage = false; signInMethod = method; signingIn = true; loginState = null; loginError = ""; render()
         lifecycleScope.launch {
             try {
                 withContext(Dispatchers.IO) {
@@ -235,7 +235,7 @@ class HostedActivity : ComponentActivity() {
                     .setBrowserMatcher { browser -> !browser.useCustomTab }.build() else AppAuthConfiguration.DEFAULT
                 val service = AuthorizationService(this@HostedActivity, configuration)
                 authorizationService = service
-                val request = account.request(google)
+                val request = account.request(method)
                 loginState = request.state
                 login.launch(service.getAuthorizationRequestIntent(request))
             } catch (failure: CancellationException) {
@@ -861,22 +861,19 @@ class HostedActivity : ComponentActivity() {
             if (signingIn) "Finish signing in, then return here." else if (enrolled) "Your phone is waiting for approval." else "Your phone and computer, together.")
         if (loginError.isNotEmpty()) {
             root.addView(text(loginError, UiType.BODY, Palette.WARN).apply { accessibilityLiveRegion = android.view.View.ACCESSIBILITY_LIVE_REGION_POLITE })
-            actionsOnRoot(button("Use browser app instead", tone = Tone.TONAL) { signIn(browserApp = true, google = googleSignIn) }.apply { isEnabled = !signingIn })
+            actionsOnRoot(button("Use browser app instead", tone = Tone.TONAL) { signIn(browserApp = true, method = signInMethod) }.apply { isEnabled = !signingIn })
         }
         val signedIn = account.signedIn()
-        if (!signedIn && !enrolled) root.addView(body(if (com.castle.sefirah.BuildConfig.PLAY_STORE) "Already have Saiph Cloud? Continue with the same Google account you use on your computer."
-            else "Already started a free trial, subscribed or activated an invitation? Continue with the same Google account you used on the website and your computer."))
-        dockActions(button(if (signingIn) "Waiting for sign-in…" else if (signedIn) "Continue setup" else "Continue with Google", true) { signIn(google = true) }.apply { isEnabled = !signingIn })
+        if (!signedIn && !enrolled) root.addView(body(if (com.castle.sefirah.BuildConfig.PLAY_STORE) "Already have Saiph Cloud? Continue with the same account you use on your computer."
+            else "Already started a free trial, subscribed or activated an invitation? Continue with the same account you used on the website and your computer."))
+        dockActions(button(if (signingIn) "Waiting for sign-in…" else if (signedIn) "Continue setup" else "Continue with Google", true) { signIn(method = HostedSignIn.Method.GOOGLE) }.apply { isEnabled = !signingIn })
+        if (!signedIn && !enrolled && !signingIn) dockActions(button("Continue with email", tone = Tone.TONAL) { signIn(method = HostedSignIn.Method.EMAIL) })
         if (!signedIn && !enrolled && !com.castle.sefirah.BuildConfig.PLAY_STORE) dockActions(button("View plans and free trial", tone = Tone.TONAL) {
             runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(HostedSignIn.PLANS_URL))) }
                 .onFailure { message("Enable a browser to view Saiph plans.") }
         })
         if (!enrolled) setupDock.addView(buttonRow(setupLink("Self-hosted") { useOwnHub() }.apply { isEnabled = !signingIn }))
-        if (!signedIn && !enrolled) root.addView(disclosure("Other sign-in options") {
-            addView(body("Use your existing sign-in method to keep the same account."))
-            actions(button("Use email or another provider", tone = Tone.TONAL) { signIn(google = false) }.apply { isEnabled = !signingIn })
-            if (!com.castle.sefirah.BuildConfig.PLAY_STORE) addView(body("Start a 14-day free trial with a card, then €9.99/month unless you cancel, or activate an invitation on your Saiph account page. Continue here with that account."))
-        })
+        if (!signedIn && !enrolled && !com.castle.sefirah.BuildConfig.PLAY_STORE) root.addView(body("New? Start a 14-day free trial with a card, then €9.99/month unless you cancel, or activate an invitation on your Saiph account page. Continue here with that account."))
         if (!runtime.enabled() && !enrolled) {
             // Custom builds retain manual configuration outside the normal account flow.
             if (!runtime.hasPackagedDefaults()) {

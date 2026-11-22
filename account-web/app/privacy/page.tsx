@@ -17,7 +17,7 @@ export default function Privacy() {
       <section className="prose-section">
         <span className="step-number">02</span>
         <div><h2>Auth0 and essential cookies</h2>
-      <p>Auth0 (Okta) handles sign-in and receives identity/login information, network/device metadata and authentication events. Enabled identity connections, tenant region and log retention must be confirmed. The portal requests the openid, profile and email sign-in scopes, but saves only the authenticated subject in its session user profile to check its owner.</p>
+      <p>Auth0 (Okta) handles sign-in and receives identity/login information, network/device metadata and authentication events. Sign-in uses Google or an Auth0 email-and-password account; for the latter Auth0 stores the address and a password hash and sends the confirmation and password-reset emails, and Saiph never receives the password. Tenant region and log retention must be confirmed. The portal requests the openid, profile and email sign-in scopes, but saves only the authenticated subject in its session user profile to check its owner.</p>
       <p>The secure, HTTP-only, host-only, SameSite Lax session cookie is transient, non-rolling and limited to one hour. Sign-in also uses temporary transaction cookies. Auth0 maintains a separate session on its domain. Local sign-out does not erase provider records. Essential authentication is separate from advertising or marketing consent.</p>
       </div>
       </section>

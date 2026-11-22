@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { getAuth0 } from "../lib/auth";
 import {readBetaConfig} from "../lib/beta-policy.mjs";
-import { GoogleMark, Icon, Mark, Notice, Strings } from "./ui";
+import { EmailSignIn, GoogleMark, Icon, Mark, Notice, Strings } from "./ui";
 export const dynamic = "force-dynamic";
 
 export default function Home() {
@@ -36,9 +36,12 @@ export default function Home() {
               : "Sign in to view your account and your test subscription. This preview is open to its owner only."}
           </p>
           {configured ? (
-            <a className="google-button" href="/auth/login">
-              <GoogleMark /> Continue with Google
-            </a>
+            <>
+              <a className="google-button" href="/auth/login">
+                <GoogleMark /> Continue with Google
+              </a>
+              <EmailSignIn href="/sign-in?with=email" />
+            </>
           ) : (
             <Notice tone="neutral" title="Sign-in is being set up">
               Account access opens once configuration is complete.
