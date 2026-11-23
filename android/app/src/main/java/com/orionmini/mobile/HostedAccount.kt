@@ -46,9 +46,12 @@ class HostedAccount private constructor(private val context: Context) {
         check(prefs.getBoolean("enabled", false))
         // Route directly to Google or the email form for the bundled Auth0 flow. Auth0 still issues
         // the Saiph token; state, PKCE, redirect and token validation stay unchanged.
-        val parameters = HostedSignIn.parameters(prefs.getString("issuer", "")!!, prefs.getString("audience", "")!!, method)
+        val issuer = prefs.getString("issuer", "")!!
+        val parameters = HostedSignIn.parameters(issuer, prefs.getString("audience", "")!!, method)
         val builder = AuthorizationRequest.Builder(configuration(), prefs.getString("client_id", "")!!, ResponseTypeValues.CODE, Uri.parse(REDIRECT))
             .setAdditionalParameters(parameters)
+        // AppAuth rejects prompt as an additional parameter; it has its own setter.
+        HostedSignIn.prompt(issuer, method)?.let { builder.setPrompt(it) }
         builder.setScope(HostedSignIn.scope(prefs.getBoolean("refresh_tokens", false)))
         val request = builder.build()
         check(request.codeVerifier != null && request.codeVerifierChallengeMethod == "S256")
