@@ -12,17 +12,26 @@ internal object HostedSignIn {
     enum class Method { GOOGLE, EMAIL, ANY }
     /** Auth0's email-and-password connection: sign-up, verification and password reset happen there. */
     const val EMAIL_CONNECTION = "Username-Password-Authentication"
+    /** Extra query parameters for Auth0. AppAuth builds its own parameters (prompt, scope, state,
+     * redirect_uri and so on) and refuses them here, so [prompt] travels through the builder. */
     fun parameters(issuer: String, audience: String, method: Method = Method.GOOGLE): Map<String, String> = buildMap {
         put("audience", audience)
-        if (URI(issuer).host?.lowercase()?.endsWith(".auth0.com") != true) return@buildMap
+        if (!auth0(issuer)) return@buildMap
         when (method) {
-            // Always ask which Google account: browser sessions outlive signing out of Saiph.
-            Method.GOOGLE -> { put("connection", "google-oauth2"); put("prompt", "select_account") }
-            // Always show the email form, even after a Google sign-in in the same browser.
-            Method.EMAIL -> { put("connection", EMAIL_CONNECTION); put("prompt", "login") }
+            Method.GOOGLE -> put("connection", "google-oauth2")
+            Method.EMAIL -> put("connection", EMAIL_CONNECTION)
             Method.ANY -> Unit
         }
     }
+    /** The OpenID prompt for AuthorizationRequest.Builder.setPrompt, or null for none. */
+    fun prompt(issuer: String, method: Method = Method.GOOGLE): String? = if (!auth0(issuer)) null else when (method) {
+        // Always ask which Google account: browser sessions outlive signing out of Saiph.
+        Method.GOOGLE -> "select_account"
+        // Always show the email form, even after a Google sign-in in the same browser.
+        Method.EMAIL -> "login"
+        Method.ANY -> null
+    }
+    private fun auth0(issuer: String) = URI(issuer).host?.lowercase()?.endsWith(".auth0.com") == true
     /** Never display provider bodies, URLs, tokens or arbitrary exception text. */
     fun issue(failure: Throwable): HostedSignInIssue =
         (failure as? HostedSignInException)?.issue ?: HostedSignInIssue.UNAVAILABLE
